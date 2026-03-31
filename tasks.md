@@ -222,18 +222,18 @@
 ## Phase 4：语言运行时核心实现（Node/Python/Java）
 
 ### T015 定义 RuntimeProvider trait 与 core 编排
-- [ ] **T015：实现 runtime 抽象接口与 core 调度层** #core #runtime
+- [x] **T015：实现 runtime 抽象接口与 core 调度层** #core #runtime
   - **描述**：抽象安装/卸载/切换/远程查询/解析能力。
   - **依赖**：T004,T012,T013
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-core/src/runtime/*.rs`
   - **验收**：Node/Python/Java 可通过统一接口被调用。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：在 `envr-domain` 定义 `RuntimeProvider` trait 与 `RuntimeKind/VersionSpec/InstallRequest` 等通用类型；在 `envr-core/src/runtime/service.rs` 实现按语言路由的 `RuntimeService`，并接入 Node/Python/Java provider 最小实现以验证统一调用链路。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：当前阶段 provider 仅提供最小可编译实现，具体 remote/index/install 流程将在后续 T016+ 逐步填充；`auto`/镜像/下载等能力通过后续组合注入到 provider。
+    - 验收结果：`cargo test --workspace --all-targets` 通过；Node/Python/Java provider 均可通过 `RuntimeService::with_defaults()` 被统一调用。
 
 ### T016 Node 远程索引与版本解析
 - [ ] **T016：实现 Node 版本索引抓取、筛选、LTS 解析** #runtime #node

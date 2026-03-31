@@ -230,7 +230,11 @@ dependencies = [
 name = "envr-core"
 version = "0.1.0"
 dependencies = [
+ "envr-domain",
  "envr-error",
+ "envr-runtime-java",
+ "envr-runtime-node",
+ "envr-runtime-python",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -239,6 +243,9 @@ dependencies = [
 [[package]]
 name = "envr-domain"
 version = "0.1.0"
+dependencies = [
+ "envr-error",
+]
 
 [[package]]
 name = "envr-download"
@@ -309,10 +316,18 @@ version = "0.1.0"
 [[package]]
 name = "envr-runtime-java"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-error",
+]
 
 [[package]]
 name = "envr-runtime-node"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-error",
+]
 
 [[package]]
 name = "envr-runtime-php"
@@ -321,6 +336,10 @@ version = "0.1.0"
 [[package]]
 name = "envr-runtime-python"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-error",
+]
 
 [[package]]
 name = "envr-runtime-rust"

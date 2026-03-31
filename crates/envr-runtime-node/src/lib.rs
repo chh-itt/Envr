@@ -1,14 +1,55 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use envr_domain::runtime::{
+    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
+    VersionSpec,
+};
+use envr_error::{EnvrError, EnvrResult};
+
+pub struct NodeRuntimeProvider;
+
+impl NodeRuntimeProvider {
+    pub fn new() -> Self {
+        Self
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Default for NodeRuntimeProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+impl RuntimeProvider for NodeRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Node
+    }
+
+    fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(vec![])
+    }
+
+    fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
+        Ok(None)
+    }
+
+    fn set_current(&self, _version: &RuntimeVersion) -> EnvrResult<()> {
+        Err(EnvrError::Runtime("not implemented".to_string()))
+    }
+
+    fn list_remote(&self, _filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(vec![])
+    }
+
+    fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
+        Ok(ResolvedVersion {
+            version: RuntimeVersion(spec.0.clone()),
+        })
+    }
+
+    fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        Ok(RuntimeVersion(request.spec.0.clone()))
+    }
+
+    fn uninstall(&self, _version: &RuntimeVersion) -> EnvrResult<()> {
+        Err(EnvrError::Runtime("not implemented".to_string()))
     }
 }
