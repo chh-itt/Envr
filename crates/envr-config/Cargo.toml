@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 envr-error = { path = "../envr-error" }
+envr-platform = { path = "../envr-platform" }
 serde = { workspace = true }
 toml = { workspace = true }
 regex = { workspace = true }
