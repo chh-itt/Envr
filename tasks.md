@@ -62,18 +62,18 @@
     - 验收结果：本地 `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 均可执行；CI 中可生成覆盖率报告。
 
 ### T004 统一错误模型
-- [ ] **T004：实现 `envr-error` 统一错误与错误码** #error
+- [x] **T004：实现 `envr-error` 统一错误与错误码** #error
   - **描述**：建立跨 CLI/GUI/core 可共享错误结构与分类。
   - **依赖**：T001,T002
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-error/src/*`
   - **验收**：核心 crate 能统一返回/转换错误；错误码可序列化。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：在 `envr-error` 定义统一 `EnvrError`、`ErrorCode`、`EnvrResult<T>` 与 `ErrorPayload`；错误码支持 `serde` 序列化，错误支持 `std::io::Error` 自动转换并可导出错误链。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：错误主体不直接做序列化（避免携带不可序列化底层错误类型），统一通过 `ErrorPayload` 对外输出可序列化结构。
+    - 验收结果：`envr-core` 已接入统一错误返回并验证 `io` 错误可转换；`ErrorCode` 序列化测试通过。
 
 ### T005 日志与可观测基础
 - [ ] **T005：统一日志初始化与运行日志文件输出** #logging
