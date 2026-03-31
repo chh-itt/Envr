@@ -150,18 +150,18 @@
 ## Phase 3：下载引擎与镜像系统
 
 ### T010 下载任务模型与状态机
-- [ ] **T010：实现下载任务状态机（queued/running/failed/cancelled/done）** #download
+- [x] **T010：实现下载任务状态机（queued/running/failed/cancelled/done）** #download
   - **描述**：定义任务生命周期、重试策略、取消机制。
   - **依赖**：T004,T008
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-download/src/task.rs`
   - **验收**：状态迁移单元测试与属性测试通过。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `envr-download/src/task.rs`，实现任务状态机（Queued/Running/Failed/Cancelled/Done）、指数退避重试策略、取消令牌；提供状态迁移与失败重试的明确返回值（下一次重试延迟）。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：本阶段仅建模与状态迁移，不绑定具体网络/IO runtime；取消机制先用轻量 `AtomicBool` token，后续下载引擎可与异步取消点对接。
+    - 验收结果：状态迁移单元测试通过；属性测试（随机操作序列）通过；`cargo test -p envr-download` 通过。
 
 ### T011 HTTP 下载与断点续传
 - [ ] **T011：实现流式下载、断点续传、限速和超时控制** #download
