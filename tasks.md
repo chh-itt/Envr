@@ -34,18 +34,18 @@
     - 验收结果：`cargo metadata` 通过，所有 crate 可被 workspace 正常识别。
 
 ### T002 workspace 统一依赖与 feature 策略
-- [ ] **T002：配置 `workspace.dependencies` 与 feature 白名单** #deps
+- [x] **T002：配置 `workspace.dependencies` 与 feature 白名单** #deps
   - **描述**：将核心依赖集中管理，限制默认特性，避免版本漂移。
   - **依赖**：T001
   - **输入文档**：`refactor docs/07-依赖选择与原则.md`
   - **输出文件**：`Cargo.toml`（workspace 依赖段）
   - **验收**：`cargo tree -d` 无关键重复版本；依赖策略可追踪。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：在根 `Cargo.toml` 新增 `workspace.dependencies`，集中定义 `serde/tokio/reqwest/thiserror/clap` 等核心依赖，并统一 `default-features = false` + 显式 feature 白名单。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：先建立全局基线依赖策略，具体 crate 在后续任务按需通过 `workspace = true` 接入，避免当前阶段过早绑定实现细节。
+    - 验收结果：`cargo tree -d --workspace` 通过，未发现关键重复版本；策略通过 `workspace.metadata.envr.dependency_policy` 可追踪。
 
 ### T003 CI 与质量门禁
 - [ ] **T003：接入 fmt/clippy/test/coverage 流程** #ci #quality
