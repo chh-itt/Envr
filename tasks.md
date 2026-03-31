@@ -134,18 +134,18 @@
     - 验收结果：读写一致性单测通过；损坏/非法配置可恢复默认；`cargo test -p envr-config` 通过。
 
 ### T009 平台抽象（链接、PATH、脚本）
-- [ ] **T009：实现 `envr-platform` 的 OS 抽象能力** #platform #shim
+- [x] **T009：实现 `envr-platform` 的 OS 抽象能力** #platform #shim
   - **描述**：封装硬链接/软链接、PATH 注入、shell 配置写入。
   - **依赖**：T006
   - **输入文档**：`refactor docs/04-shim-设计.md`
   - **输出文件**：`crates/envr-platform/src/*`
   - **验收**：平台测试通过；幂等执行不重复污染 PATH。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：在 `envr-platform` 增加 `links/path/shell` 模块：支持硬/软链接创建（替换式幂等）、PATH 去重拼接、以及可识别注入块的 shell 配置写入/移除（幂等不重复污染）。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：先以“文件层注入块”实现跨平台可测试的幂等能力；Windows 系统级 PATH API 注入后续在需要时再补齐。
+    - 验收结果：`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test -p envr-platform` 通过；注入与移除单测验证幂等。
 
 ## Phase 3：下载引擎与镜像系统
 

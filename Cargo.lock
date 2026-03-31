@@ -111,6 +111,7 @@ name = "envr-platform"
 version = "0.1.0"
 dependencies = [
  "envr-error",
+ "tempfile",
 ]
 
 [[package]]
