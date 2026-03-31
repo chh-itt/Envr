@@ -276,6 +276,12 @@ dependencies = [
 [[package]]
 name = "envr-mirror"
 version = "0.1.0"
+dependencies = [
+ "envr-config",
+ "envr-error",
+ "reqwest",
+ "serde",
+]
 
 [[package]]
 name = "envr-platform"

@@ -192,18 +192,18 @@
     - 验收结果：SHA256 已知向量测试通过；zip 路径穿越用例被拒绝；`cargo test -p envr-download` 通过。
 
 ### T013 镜像注册中心与策略
-- [ ] **T013：实现官方/国内镜像注册、manual/auto/official 策略** #mirror
+- [x] **T013：实现官方/国内镜像注册、manual/auto/official 策略** #mirror
   - **描述**：支持预设镜像、自定义镜像、策略切换。
   - **依赖**：T008
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-mirror/src/*`
   - **验收**：各策略可返回正确 URL；非法镜像被拦截。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：在 `envr-mirror` 实现 `MirrorRegistry`（预设 official + 国内镜像占位）、URL 校验（仅 http/https、禁止凭据）、以及基于 `Settings.mirror.mode` 的策略选择（official/manual/auto/offline）；提供 `join_url` 生成资源 URL 并校验路径。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：`auto` 策略的“测速选最快”将在 T014 实现；本任务先实现可运行的默认选择（优先非官方预设，否则 official）以便后续模块联调。
+    - 验收结果：策略选择与非法镜像拦截单测通过；`cargo test -p envr-mirror` 通过。
 
 ### T014 镜像测速与自动选择
 - [ ] **T014：实现镜像健康检查和自动最优选择** #mirror #download
