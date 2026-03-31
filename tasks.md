@@ -178,18 +178,18 @@
     - 验收结果：`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test -p envr-download` 通过；下载引擎可编译并可在后续任务接入实际下载用例验证续传稳定性。
 
 ### T012 校验与解压模块
-- [ ] **T012：实现 SHA256 校验与 zip/tar 解压** #download
+- [x] **T012：实现 SHA256 校验与 zip/tar 解压** #download
   - **描述**：下载后做完整性校验并原子安装到目标目录。
   - **依赖**：T011
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-download/src/checksum.rs`,`extract.rs`
   - **验收**：错误包被拒绝；解压路径安全校验通过。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `checksum.rs`（文件 SHA256 计算与校验）与 `extract.rs`（zip/tar/tar.gz 安全解压，拒绝绝对路径与 `..` 穿越）；提供 `extract_archive_atomic` 先解压到临时目录再原子替换目标目录。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：为保证安全默认拒绝路径穿越与绝对路径条目；原子安装在 Windows 上采用“先删除旧目录再 rename”策略，后续如需保留旧版本可扩展为备份策略。
+    - 验收结果：SHA256 已知向量测试通过；zip 路径穿越用例被拒绝；`cargo test -p envr-download` 通过。
 
 ### T013 镜像注册中心与策略
 - [ ] **T013：实现官方/国内镜像注册、manual/auto/official 策略** #mirror
