@@ -20,18 +20,18 @@
 ## Phase 1：工程初始化与约束落地
 
 ### T001 创建 workspace 根结构
-- [ ] **T001：创建 `envr` workspace 骨架** #workspace
+- [x] **T001：创建 `envr` workspace 骨架** #workspace
   - **描述**：创建 root `Cargo.toml`、`crates/` 目录、基础 README 与目录约定。
   - **依赖**：无
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`Cargo.toml`、`crates/*` 空 crate
   - **验收**：`cargo metadata` 成功；所有 crate 被 workspace 识别。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 workspace 根 `Cargo.toml`（`members = ["crates/*"]`），并创建 `crates/` 下全部基础空 crate（lib/bin）。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：按照总体架构文档先完整建空骨架，后续任务再逐步填充各 crate 实现细节。
+    - 验收结果：`cargo metadata` 通过，所有 crate 可被 workspace 正常识别。
 
 ### T002 workspace 统一依赖与 feature 策略
 - [ ] **T002：配置 `workspace.dependencies` 与 feature 白名单** #deps
