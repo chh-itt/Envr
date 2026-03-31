@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 envr-error = { path = "../envr-error" }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
