@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 envr-error = { path = "../envr-error" }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }

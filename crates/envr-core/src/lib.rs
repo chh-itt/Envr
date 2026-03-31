@@ -1,3 +1,5 @@
+pub mod logging;
+
 use envr_error::{EnvrError, EnvrResult};
 use std::path::Path;
 

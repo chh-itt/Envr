@@ -76,18 +76,18 @@
     - 验收结果：`envr-core` 已接入统一错误返回并验证 `io` 错误可转换；`ErrorCode` 序列化测试通过。
 
 ### T005 日志与可观测基础
-- [ ] **T005：统一日志初始化与运行日志文件输出** #logging
+- [x] **T005：统一日志初始化与运行日志文件输出** #logging
   - **描述**：实现分级日志、文件落盘、CLI/GUI 共用初始化入口。
   - **依赖**：T004
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-core/src/logging.rs` 等
   - **验收**：CLI/GUI 启动均可产生日志；错误链完整输出。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `crates/envr-core/src/logging.rs` 作为统一日志入口，支持分级日志（`RUST_LOG` + `EnvFilter`）、终端输出与按日滚动文件落盘；CLI/GUI 启动时统一调用 `init_logging`。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：在 T006 之前先采用默认 `./.envr/logs`（可由 `ENVR_LOG_DIR` 覆盖）避免路径策略阻塞当前任务；错误主体通过 `format_error_chain` 统一展开输出。
+    - 验收结果：`envr-cli` 与 `envr-gui` 启动均会写入日志文件；`format_error_chain` 测试验证完整错误链可展开输出。
 
 ## Phase 2：配置系统与平台抽象
 
