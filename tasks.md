@@ -92,18 +92,18 @@
 ## Phase 2：配置系统与平台抽象
 
 ### T006 配置目录与路径约定
-- [ ] **T006：实现跨平台配置目录规范** #config #platform
+- [x] **T006：实现跨平台配置目录规范** #config #platform
   - **描述**：定义运行时根、缓存、日志、配置文件默认位置。
   - **依赖**：T001,T004
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-platform/src/paths.rs`
   - **验收**：Win/macOS/Linux 路径规则单元测试通过。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `envr-platform/src/paths.rs`，定义 `EnvrPaths`（runtime/config/cache/log/settings）与 `compute_paths`（可用模拟 env 做纯函数测试）；提供 `current_platform_paths` 供运行时使用。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：路径规则优先支持通过 `ENVR_ROOT` 覆盖，避免平台差异阻塞调试；Linux 按 `XDG_DATA_HOME` 优先，其次 `~/.local/share`；macOS 使用 `~/Library/Application Support`；Windows 优先 `APPDATA`。
+    - 验收结果：Win/macOS/Linux 路径规则单元测试通过；`cargo test -p envr-platform` 通过。
 
 ### T007 `.envr.toml` / `.envr.local.toml` 解析器
 - [ ] **T007：实现标准 TOML 项目配置加载与合并** #config #shim

@@ -95,6 +95,9 @@ version = "0.1.0"
 [[package]]
 name = "envr-platform"
 version = "0.1.0"
+dependencies = [
+ "envr-error",
+]
 
 [[package]]
 name = "envr-runtime-bun"
