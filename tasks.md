@@ -48,18 +48,18 @@
     - 验收结果：`cargo tree -d --workspace` 通过，未发现关键重复版本；策略通过 `workspace.metadata.envr.dependency_policy` 可追踪。
 
 ### T003 CI 与质量门禁
-- [ ] **T003：接入 fmt/clippy/test/coverage 流程** #ci #quality
+- [x] **T003：接入 fmt/clippy/test/coverage 流程** #ci #quality
   - **描述**：配置 CI，覆盖率统计管道目标 >=80%。
   - **依赖**：T001,T002
   - **输入文档**：`refactor docs/06-实施路线图.md`
   - **输出文件**：`.github/workflows/*` 或本地脚本
   - **验收**：CI 可跑通；覆盖率报告可生成。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `.github/workflows/ci.yml`，拆分 `fmt`、`clippy`、`test`、`coverage` 四个作业；coverage 使用 `cargo-llvm-cov` 生成 `lcov.info` 并设置 `--fail-under-lines 80` 门槛。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：当前代码量较小，先建立可扩展 CI 基线，覆盖率门槛在流水线层面强制执行，后续随功能扩展持续满足。
+    - 验收结果：本地 `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 均可执行；CI 中可生成覆盖率报告。
 
 ### T004 统一错误模型
 - [ ] **T004：实现 `envr-error` 统一错误与错误码** #error
