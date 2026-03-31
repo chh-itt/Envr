@@ -106,18 +106,18 @@
     - 验收结果：Win/macOS/Linux 路径规则单元测试通过；`cargo test -p envr-platform` 通过。
 
 ### T007 `.envr.toml` / `.envr.local.toml` 解析器
-- [ ] **T007：实现标准 TOML 项目配置加载与合并** #config #shim
+- [x] **T007：实现标准 TOML 项目配置加载与合并** #config #shim
   - **描述**：支持目录上溯查找、local 覆盖、变量展开与循环保护。
   - **依赖**：T006
   - **输入文档**：`refactor docs/04-shim-设计.md`
   - **输出文件**：`crates/envr-config/src/project_config.rs`
   - **验收**：覆盖不同层级目录与覆盖优先级的集成测试通过。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `envr-config/src/project_config.rs`，支持从当前目录向上查找最近的 `.envr.toml/.envr.local.toml`；解析 TOML 后 local 覆盖 base；对配置字符串做 `${VAR}` 展开并检测循环依赖。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：本阶段以“就近配置”作为查找策略（命中最近一层配置目录即停止），避免多层叠加导致可预测性下降；未解析的 `${VAR}` 视为配置错误并返回 `Validation`。
+    - 验收结果：集成测试覆盖不同层级目录命中、local 覆盖优先级、变量展开与循环保护；`cargo test -p envr-config` 通过。
 
 ### T008 全局配置与缓存配置
 - [ ] **T008：实现全局 `settings.toml` 与缓存配置加载** #config
