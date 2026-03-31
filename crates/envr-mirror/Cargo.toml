@@ -6,5 +6,8 @@ edition = "2024"
 [dependencies]
 envr-error = { path = "../envr-error" }
 envr-config = { path = "../envr-config" }
+envr-platform = { path = "../envr-platform" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 reqwest = { workspace = true }
+tokio = { workspace = true }

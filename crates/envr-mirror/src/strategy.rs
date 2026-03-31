@@ -35,12 +35,8 @@ pub fn resolve_mirror(
             Ok(ResolvedMirror::Mirror(m))
         }
         MirrorMode::Auto => {
-            // T014 will implement probing; for now pick the first non-official preset if exists, otherwise official.
-            let mut candidates = registry.list();
-            candidates.retain(|m| !m.is_official);
-            if let Some(m) = candidates.first() {
-                return Ok(ResolvedMirror::Mirror((*m).clone()));
-            }
+            // Auto selection with probing is implemented in `probe::resolve_mirror_auto` (async).
+            // Keep this sync function conservative: fallback to official.
             let m = registry
                 .get(&MirrorId("official".to_string()))
                 .cloned()

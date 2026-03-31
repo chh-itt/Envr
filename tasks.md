@@ -206,18 +206,18 @@
     - 验收结果：策略选择与非法镜像拦截单测通过；`cargo test -p envr-mirror` 通过。
 
 ### T014 镜像测速与自动选择
-- [ ] **T014：实现镜像健康检查和自动最优选择** #mirror #download
+- [x] **T014：实现镜像健康检查和自动最优选择** #mirror #download
   - **描述**：对候选镜像做延迟/可用性评分并缓存结果。
   - **依赖**：T013
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-mirror/src/probe.rs`
   - **验收**：可用镜像能被选中；不可用镜像自动降级。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `envr-mirror/src/probe.rs`，对候选镜像做 HEAD 探测并记录可用性与延迟；结果缓存到平台 cache 目录（TTL 控制），`auto` 策略可基于缓存/探测结果选择延迟最低的可用镜像并在不可用时降级到 official。
+    - 相关提交/PR：本次提交
+    - 遇到的问题/决策：探测以镜像 base URL 为健康检查入口（200/404 视为可达），具体资源路径探测将在后续 runtime/index 确定后增强；同步 `resolve_mirror` 保持保守（fallback official），异步 auto 选择通过 `probe::resolve_mirror_auto` 提供。
+    - 验收结果：缓存比较与选择逻辑单测通过；`cargo test -p envr-mirror` 通过。
 
 ## Phase 4：语言运行时核心实现（Node/Python/Java）
 
