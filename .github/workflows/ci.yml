@@ -53,7 +53,7 @@ jobs:
         run: cargo test --workspace --all-targets
 
   coverage:
-    name: Coverage (llvm-cov)
+    name: Coverage (T044 / cargo envr-cov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,8 +65,5 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Generate coverage report
-        run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info --summary-only
-
-      - name: Enforce coverage >= 80%
-        run: cargo llvm-cov --workspace --all-features --fail-under-lines 80 --summary-only
+      - name: Enforce in-scope coverage >= 80%
+        run: cargo envr-cov --fail-under-lines 80

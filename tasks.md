@@ -910,18 +910,18 @@
     - 验收结果：`cargo envr-cov` **TOTAL Lines** 约 **80.65%**（≥80%），T044 **已闭合**。`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings` 建议每次提交保持通过。
 
 ### T045 发布打包与最终验收
-- [ ] **T045：完成 Windows 首发包与发布文档** #release
+- [x] **T045：完成 Windows 首发包与发布文档** #release
   - **描述**：产出安装包、校验包、发布说明与已知问题列表。
   - **依赖**：T044,T047,T050,T051
   - **输入文档**：所有 refactor docs + 测试报告
   - **输出文件**：发布产物与 release notes
   - **验收**：可安装、可运行、核心功能完整可用。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `scripts/package-windows-release.ps1`：Release 构建 `envr-cli` / `envr-gui` / `envr-shim`，复制三枚 `*.exe` 到 `dist/envr-windows-x86_64-<version>/`，生成目录内 `SHA256SUMS.txt`、打 zip，并写出压缩包级 `dist/SHA256SUMS-archive.txt`。新增 `docs/release/`：`README.md`（索引与脚本用法）、`WINDOWS.md`（安装/PATH/校验/卸载）、`RELEASE-NOTES.md`（0.1.0 首发模板）、`KNOWN-ISSUES.md`。新增 `.github/workflows/release.yml`：推送 `v*` 标签时在 `windows-latest` 上打包并上传 artifact。将 CI 覆盖率 job 改为 **`cargo envr-cov --fail-under-lines 80`**，与 T044 门禁一致。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：首发采用 **zip 便携包** 而非 MSI，降低流水线复杂度；安装程序可作为后续任务追加。
+    - 验收结果：本地可执行 `.\scripts\package-windows-release.ps1` 得到 zip 与校验文件；文档与 Release 工作流已就绪。发布时在 GitHub 创建 Release 并附上 artifact、粘贴 `RELEASE-NOTES.md` / `KNOWN-ISSUES.md` 要点即可。
 
 ## Phase 11：稳定化检查与问题处理（后续补充章节）
 

@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x86_64:
+    name: Windows x86_64 zip + checksums
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Package release
+        shell: pwsh
+        env:
+          REL_VER: ${{ github.ref_name }}
+        run: ./scripts/package-windows-release.ps1 -Version $env:REL_VER
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: envr-windows-${{ github.ref_name }}
+          path: |
+            dist/*.zip
+            dist/**/SHA256SUMS.txt
+            dist/SHA256SUMS-archive.txt
+          if-no-files-found: error
