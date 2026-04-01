@@ -1,6 +1,7 @@
 use envr_config::project_config::{ProjectConfig, load_project_config};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::{EnvSnapshot, current_platform_paths};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// Process context for resolving a shim (runtime data root + config search directory).
@@ -301,15 +302,30 @@ fn java_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
-/// Resolve a core shim to a filesystem executable path.
-pub fn resolve_core_shim(invoked_as: &str, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
-    let base = normalize_invoked_basename(invoked_as);
-    let Some(cmd) = parse_core_command(&base) else {
-        return Err(EnvrError::Runtime(format!(
-            "unknown shim command {base:?} (only core tools are supported here)"
-        )));
+/// Interprets OS arguments: either `node ...` when argv0 is `node(.exe)`, or `envr-shim node ...`
+/// when argv0 is the shim binary name.
+pub fn parse_shim_invocation(args: &[OsString]) -> EnvrResult<(CoreCommand, Vec<OsString>)> {
+    let Some(arg0) = args.first() else {
+        return Err(EnvrError::Runtime("missing program name (argv0)".into()));
     };
+    let base0 = normalize_invoked_basename(&arg0.to_string_lossy());
+    if let Some(cmd) = parse_core_command(&base0) {
+        return Ok((cmd, args.iter().skip(1).cloned().collect()));
+    }
+    if args.len() >= 2 {
+        let base1 = normalize_invoked_basename(&args[1].to_string_lossy());
+        if let Some(cmd) = parse_core_command(&base1) {
+            return Ok((cmd, args.iter().skip(2).cloned().collect()));
+        }
+    }
+    Err(EnvrError::Runtime(format!(
+        "could not determine core tool from argv0={arg0:?} argv1={argv1:?}",
+        argv1 = args.get(1)
+    )))
+}
 
+/// Resolve a core tool to a filesystem executable path.
+pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     let cfg = load_project_config(&ctx.working_dir)?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
@@ -333,10 +349,47 @@ pub fn resolve_core_shim(invoked_as: &str, ctx: &ShimContext) -> EnvrResult<Reso
     })
 }
 
+/// Resolve from argv0 basename only (when the shim binary is a copy named `node`, etc.).
+pub fn resolve_core_shim(invoked_as: &str, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
+    let base = normalize_invoked_basename(invoked_as);
+    let Some(cmd) = parse_core_command(&base) else {
+        return Err(EnvrError::Runtime(format!(
+            "unknown shim command {base:?} (only core tools are supported here)"
+        )));
+    };
+    resolve_core_shim_command(cmd, ctx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
     use std::fs;
+
+    #[test]
+    fn parse_invocation_argv0_basename() {
+        let args = vec![
+            OsString::from("node"),
+            OsString::from("-e"),
+            OsString::from("0"),
+        ];
+        let (cmd, rest) = parse_shim_invocation(&args).expect("parse");
+        assert_eq!(cmd, CoreCommand::Node);
+        assert_eq!(rest.len(), 2);
+    }
+
+    #[test]
+    fn parse_invocation_dispatch_subcommand() {
+        let args = vec![
+            OsString::from("envr-shim"),
+            OsString::from("python3"),
+            OsString::from("-c"),
+            OsString::from("pass"),
+        ];
+        let (cmd, rest) = parse_shim_invocation(&args).expect("parse");
+        assert_eq!(cmd, CoreCommand::Python);
+        assert_eq!(rest, vec![OsString::from("-c"), OsString::from("pass")]);
+    }
 
     #[test]
     fn pick_version_major_prefers_latest_minor() {

@@ -336,18 +336,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T023 `envr-shim` 二进制入口
-- [ ] **T023：实现 shim 二进制入口与跨平台进程替换执行** #shim
+- [x] **T023：实现 shim 二进制入口与跨平台进程替换执行** #shim
   - **描述**：Windows 与 Unix 路径差异处理，保留参数透传。
   - **依赖**：T022
   - **输入文档**：二版 `wx-shim` 实现
   - **输出文件**：`crates/envr-shim/src/main.rs`
   - **验收**：命令透传行为和退出码保持正确。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-shim-core` 增加 `parse_shim_invocation`（argv0 为工具名如 `node`，或 `envr-shim <tool> …`）与 `resolve_core_shim_command`；`envr-shim` 解析后注入 `ResolvedShim.extra_env`，Unix 使用 `CommandExt::exec` 替换进程，Windows 使用 `Command::status` 并 `exit` 子进程返回码（无码时用 `0xFF`）。集成测试 `tests/smoke.rs`（`cfg(unix)`）验证 `envr-shim python3` 与退出码透传；`envr-shim-core` 单测覆盖两种 argv 形态。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：Windows 无 `execve` 等价物，采用 spawn 转发退出码；端到端 smoke 仅 Unix（脚本 chmod + symlink）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T024 shim 文件生成与刷新
 - [ ] **T024：实现 shims 生成、删除、全局包自动刷新** #shim #node
