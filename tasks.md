@@ -790,18 +790,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T052 防闪烁与防弹跳专项优化
-- [ ] **T052：实现 UI 稳定性优化（减少冗余刷新/闪烁/弹跳）** #gui #perf #ux
+ - [x] **T052：实现 UI 稳定性优化（减少冗余刷新/闪烁/弹跳）** #gui #perf #ux
   - **描述**：限制高频重绘、稳定布局占位、优化异步加载占位策略。
   - **依赖**：T051,T040
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/*`,`crates/envr-ui/src/*`
   - **验收**：主要页面无明显闪烁与布局跳动，操作体验稳定。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：将全局鼠标事件订阅改为“仅拖拽下载面板时启用”，避免后台持续派发 Event 造成无效重绘；Runtime 切换时同 kind 不重复触发 refresh；保持下载面板为浮层（`stack`）叠加，避免显示/隐藏影响主内容布局。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ## Phase 9：性能优化与体验打磨
 

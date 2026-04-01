@@ -140,12 +140,17 @@ pub fn run() -> iced::Result {
     application("Envr", update, view)
         .default_font(configured_default_font())
         .theme(|state| gui_theme::iced_theme(state.tokens()))
-        .subscription(|_state| {
-            Subscription::batch([
-                iced::time::every(Duration::from_millis(400))
-                    .map(|_| Message::Download(DownloadMsg::Tick)),
-                iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))),
-            ])
+        .subscription(|state| {
+            let tick = iced::time::every(Duration::from_millis(400))
+                .map(|_| Message::Download(DownloadMsg::Tick));
+            if state.downloads.dragging {
+                Subscription::batch([
+                    tick,
+                    iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))),
+                ])
+            } else {
+                tick
+            }
         })
         .centered()
         .window_size((960.0, 640.0))
@@ -544,6 +549,9 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
     match msg {
         EnvCenterMsg::PickKind(k) => {
+            if state.env_center.kind == k {
+                return Task::none();
+            }
             state.env_center.kind = k;
             gui_ops::refresh_runtimes(k)
         }
