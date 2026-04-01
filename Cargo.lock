@@ -292,6 +292,7 @@ dependencies = [
  "envr-domain",
  "envr-error",
  "envr-platform",
+ "envr-shim-core",
  "serde_json",
  "tempfile",
  "tracing",

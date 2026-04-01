@@ -14,11 +14,12 @@ pub fn kind_label(kind: RuntimeKind) -> &'static str {
 }
 
 pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
-    let root = runtime_root()?;
+    let root = effective_runtime_root()?;
     RuntimeService::with_runtime_root(root)
 }
 
-fn runtime_root() -> Result<PathBuf, EnvrError> {
+/// Data directory for envr runtimes (honours `ENVR_RUNTIME_ROOT`, then platform defaults).
+pub(crate) fn effective_runtime_root() -> Result<PathBuf, EnvrError> {
     if let Ok(p) = std::env::var("ENVR_RUNTIME_ROOT")
         && !p.is_empty()
     {

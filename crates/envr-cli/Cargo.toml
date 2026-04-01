@@ -14,6 +14,7 @@ envr-core = { path = "../envr-core" }
 envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
+envr-shim-core = { path = "../envr-shim-core" }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 

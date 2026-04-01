@@ -87,6 +87,9 @@ pub enum Command {
     Remote {
         #[arg(value_name = "LANG")]
         lang: Option<String>,
+        /// Limit remote versions to those whose labels start with this prefix
+        #[arg(long, value_name = "PREFIX")]
+        prefix: Option<String>,
     },
     /// Run diagnostics and environment checks
     Doctor,

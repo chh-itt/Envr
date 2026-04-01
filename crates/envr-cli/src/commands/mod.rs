@@ -2,11 +2,13 @@
 
 mod common;
 mod current;
+mod doctor;
 mod install;
 mod list;
+mod remote;
+mod uninstall;
 mod use_cmd;
-
-use crate::cli::{Command, GlobalArgs, OutputFormat};
+mod which;
 
 pub fn dispatch(cli: crate::cli::Cli) -> i32 {
     let service = match common::runtime_service() {
@@ -15,35 +17,24 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
     };
 
     match cli.command {
-        Command::Install {
+        crate::cli::Command::Install {
             lang,
             runtime_version,
         } => install::run(&cli.global, &service, lang, runtime_version),
-        Command::Use {
+        crate::cli::Command::Use {
             lang,
             runtime_version,
         } => use_cmd::run(&cli.global, &service, lang, runtime_version),
-        Command::List { lang } => list::run(&cli.global, &service, lang),
-        Command::Current { lang } => current::run(&cli.global, &service, lang),
-        Command::Uninstall { .. } => stub_not_implemented(&cli.global, "uninstall"),
-        Command::Which { .. } => stub_not_implemented(&cli.global, "which"),
-        Command::Remote { .. } => stub_not_implemented(&cli.global, "remote"),
-        Command::Doctor => stub_not_implemented(&cli.global, "doctor"),
-    }
-}
-
-fn stub_not_implemented(g: &GlobalArgs, cmd: &str) -> i32 {
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            println!(
-                r#"{{"success":false,"code":"NOT_IMPLEMENTED","message":"command `{cmd}` is not yet implemented","data":null,"diagnostics":[]}}"#
-            );
+        crate::cli::Command::List { lang } => list::run(&cli.global, &service, lang),
+        crate::cli::Command::Current { lang } => current::run(&cli.global, &service, lang),
+        crate::cli::Command::Uninstall {
+            lang,
+            runtime_version,
+        } => uninstall::run(&cli.global, &service, lang, runtime_version),
+        crate::cli::Command::Which { name } => which::run(&cli.global, name),
+        crate::cli::Command::Remote { lang, prefix } => {
+            remote::run(&cli.global, &service, lang, prefix)
         }
-        OutputFormat::Text => {
-            if !g.quiet {
-                eprintln!("envr: `{cmd}` is not yet implemented (see T027+)");
-            }
-        }
+        crate::cli::Command::Doctor => doctor::run(&cli.global, &service),
     }
-    1
 }

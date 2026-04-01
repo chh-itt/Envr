@@ -394,18 +394,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T027 扩展命令实现（uninstall/which/remote/doctor）
-- [ ] **T027：实现可运维命令集** #cli #doctor
+- [x] **T027：实现可运维命令集** #cli #doctor
   - **描述**：完成卸载、可执行路径定位、远程列表、诊断修复建议。
   - **依赖**：T026
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/commands/*`
   - **验收**：可定位常见环境问题并给出可执行建议。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `commands/{uninstall,remote,which,doctor}.rs`。`uninstall` 调 `RuntimeService::uninstall`；`remote` 支持可选 `LANG` 与 `--prefix`（`RemoteFilter`），无 LANG 时汇总三语言（需网络）；`which` 借助 `envr-shim-core` 的 `parse_core_command`/`resolve_core_shim_command` 解析 `node|npm|npx|python|pip|java|javac` 真实路径（text 仅 stdout 打路径，额外 env 写 stderr；JSON 带 `extra_env`）；`doctor` 检查数据根存在与可写、`shims` 与 PATH 建议、各语言已安装数与 `current` 缺失时提示 `envr use`，有问题时进程退出码 1。`parse_core_command` 从 `envr-shim-core` 对外 re-export。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：`remote` 全量会发起多次上游请求，适合脚本按需带 `LANG`；`doctor` 的写探针在只读目录会报 issue。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T028 JSON 输出契约与错误输出统一
 - [ ] **T028：实现 text/json 双输出一致性与错误编码映射** #cli #output
