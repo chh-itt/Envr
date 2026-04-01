@@ -1,4 +1,4 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::RuntimeKind;
@@ -29,44 +29,9 @@ pub(crate) fn effective_runtime_root() -> Result<PathBuf, EnvrError> {
 }
 
 pub fn print_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            let p = err.to_payload();
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": false,
-                    "code": p.code,
-                    "message": p.message,
-                    "data": serde_json::Value::Null,
-                    "diagnostics": p.chain,
-                })
-            );
-        }
-        OutputFormat::Text => {
-            eprintln!("envr: {err}");
-        }
-    }
-    1
+    crate::output::emit_envr_error(g, err)
 }
 
 pub fn missing_positional(g: &GlobalArgs, cmd: &str, example: &str) -> i32 {
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": false,
-                    "code": "validation",
-                    "message": format!("missing arguments for `{cmd}` (example: {example})"),
-                    "data": serde_json::Value::Null,
-                    "diagnostics": [],
-                })
-            );
-        }
-        OutputFormat::Text => {
-            eprintln!("envr: missing arguments for `{cmd}` (example: {example})");
-        }
-    }
-    1
+    crate::output::emit_validation(g, cmd, example)
 }

@@ -408,18 +408,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T028 JSON 输出契约与错误输出统一
-- [ ] **T028：实现 text/json 双输出一致性与错误编码映射** #cli #output
+- [x] **T028：实现 text/json 双输出一致性与错误编码映射** #cli #output
   - **描述**：保证自动化脚本可稳定消费 CLI 输出。
   - **依赖**：T027,T004
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/output.rs`
   - **验收**：同一命令在两种格式下语义一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `output.rs`：`write_envelope`（`success`/`code`/`message`/`data`/`diagnostics`）、`emit_ok`、`emit_validation`、`emit_envr_error`（`ErrorCode`→稳定 `code` 字符串）、`emit_doctor`；`Io`/`Download`/`Mirror` 映射退出码 **2**，其余错误 **1**。各命令成功 JSON 统一带 `message`（如 `list_installed`、`doctor_ok`），成功时 `code` 为 null。`common` 的校验与错误打印委托到 `output`。集成测试 `json_envelope.rs` 校验契约并从 stdout 中选取 JSON 行（兼容 tracing 日志混排）。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：进程仍向 stdout 写 tracing，JSON 消费方需取首个 `{` 行或后续 T028+ 将日志限定 stderr。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T029 项目级命令（init/check/resolve）
 - [ ] **T029：实现项目配置相关命令** #cli #config

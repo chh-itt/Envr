@@ -1,5 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
+use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, parse_runtime_kind};
@@ -29,38 +30,27 @@ pub fn run(
         }
     }
 
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            let runtimes: Vec<_> = rows
-                .iter()
-                .map(|(k, vers)| {
-                    serde_json::json!({
-                        "kind": kind_label(*k),
-                        "versions": vers,
-                    })
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": true,
-                    "data": { "runtimes": runtimes },
-                    "diagnostics": [],
-                })
-            );
-        }
-        OutputFormat::Text => {
-            for (kind, versions) in rows {
-                println!("{} (remote):", kind_label(kind));
-                if versions.is_empty() {
-                    println!("  (none)");
-                } else {
-                    for v in versions {
-                        println!("  {v}");
-                    }
+    let runtimes: Vec<_> = rows
+        .iter()
+        .map(|(k, vers)| {
+            serde_json::json!({
+                "kind": kind_label(*k),
+                "versions": vers,
+            })
+        })
+        .collect();
+    let data = serde_json::json!({ "runtimes": runtimes });
+
+    output::emit_ok(g, "list_remote", data, || {
+        for (kind, versions) in rows {
+            println!("{} (remote):", kind_label(kind));
+            if versions.is_empty() {
+                println!("  (none)");
+            } else {
+                for v in versions {
+                    println!("  {v}");
                 }
             }
         }
-    }
-    0
+    })
 }

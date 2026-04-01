@@ -1,5 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
+use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
@@ -35,26 +36,13 @@ pub fn run(
 }
 
 fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": true,
-                    "message": "current_runtime_set",
-                    "data": {
-                        "kind": kind_label(kind),
-                        "version": v.0,
-                    },
-                    "diagnostics": [],
-                })
-            );
+    let data = serde_json::json!({
+        "kind": kind_label(kind),
+        "version": v.0,
+    });
+    output::emit_ok(g, "current_runtime_set", data, || {
+        if !g.quiet {
+            println!("{} current set to {}", kind_label(kind), v.0);
         }
-        OutputFormat::Text => {
-            if !g.quiet {
-                println!("{} current set to {}", kind_label(kind), v.0);
-            }
-        }
-    }
-    0
+    })
 }

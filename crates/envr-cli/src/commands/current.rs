@@ -1,5 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
+use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
@@ -23,34 +24,23 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService, lang: Option<String>) -> i3
         }
     }
 
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            let runtimes: Vec<_> = rows
-                .iter()
-                .map(|(k, ver)| {
-                    serde_json::json!({
-                        "kind": kind_label(*k),
-                        "version": ver,
-                    })
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": true,
-                    "data": { "current": runtimes },
-                    "diagnostics": [],
-                })
-            );
-        }
-        OutputFormat::Text => {
-            for (kind, version) in rows {
-                match version {
-                    Some(v) => println!("{}: {v}", kind_label(kind)),
-                    None => println!("{}: (none)", kind_label(kind)),
-                }
+    let runtimes: Vec<_> = rows
+        .iter()
+        .map(|(k, ver)| {
+            serde_json::json!({
+                "kind": kind_label(*k),
+                "version": ver,
+            })
+        })
+        .collect();
+    let data = serde_json::json!({ "current": runtimes });
+
+    output::emit_ok(g, "show_current", data, || {
+        for (kind, version) in rows {
+            match version {
+                Some(v) => println!("{}: {v}", kind_label(kind)),
+                None => println!("{}: (none)", kind_label(kind)),
             }
         }
-    }
-    0
+    })
 }

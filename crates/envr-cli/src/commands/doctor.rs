@@ -1,5 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
+use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::RuntimeKind;
@@ -84,61 +85,57 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
         rows.push((kind_label(kind), installed.len(), current.map(|v| v.0)));
     }
 
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            let kinds: Vec<_> = rows
-                .iter()
-                .map(|(k, n, cur)| {
-                    serde_json::json!({
-                        "kind": k,
-                        "installed_count": n,
-                        "current": cur,
-                    })
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_json::json!({
-                    "success": issues.is_empty(),
-                    "data": {
-                        "runtime_root": root.to_string_lossy(),
-                        "envr_runtime_root_env": env_override,
-                        "kinds": kinds,
-                        "issues": issues,
-                        "recommendations": recommendations,
-                    },
-                    "diagnostics": [],
-                })
-            );
-        }
-        OutputFormat::Text => {
-            println!("runtime root: {}", root.display());
-            if let Some(ref e) = env_override {
-                println!("ENVR_RUNTIME_ROOT: {e}");
-            }
-            println!();
-            for (kind, ic, cur) in &rows {
-                match cur {
-                    Some(v) => println!("{kind}: {ic} installed, current = {v}"),
-                    None => println!("{kind}: {ic} installed, current = (none)"),
-                }
-            }
-            if !issues.is_empty() {
-                println!("\nIssues:");
-                for i in &issues {
-                    println!("  - {i}");
-                }
-            }
-            if !recommendations.is_empty() && !g.quiet {
-                println!("\nSuggestions:");
-                for r in &recommendations {
-                    println!("  - {r}");
-                }
-            }
-        }
-    }
+    let kinds_json: Vec<_> = rows
+        .iter()
+        .map(|(k, n, cur)| {
+            serde_json::json!({
+                "kind": k,
+                "installed_count": n,
+                "current": cur,
+            })
+        })
+        .collect();
 
-    if issues.is_empty() { 0 } else { 1 }
+    let data = serde_json::json!({
+        "runtime_root": root.to_string_lossy(),
+        "envr_runtime_root_env": env_override,
+        "kinds": kinds_json,
+        "issues": issues,
+        "recommendations": recommendations,
+    });
+
+    let ok = issues.is_empty();
+    let (message, code_if_fail) = if ok {
+        ("doctor_ok", None)
+    } else {
+        ("environment checks found problems", Some("doctor_issues"))
+    };
+
+    output::emit_doctor(g, ok, message, code_if_fail, data, || {
+        println!("runtime root: {}", root.display());
+        if let Some(ref e) = env_override {
+            println!("ENVR_RUNTIME_ROOT: {e}");
+        }
+        println!();
+        for (kind, ic, cur) in &rows {
+            match cur {
+                Some(v) => println!("{kind}: {ic} installed, current = {v}"),
+                None => println!("{kind}: {ic} installed, current = (none)"),
+            }
+        }
+        if !issues.is_empty() {
+            println!("\nIssues:");
+            for i in &issues {
+                println!("  - {i}");
+            }
+        }
+        if !recommendations.is_empty() && !g.quiet {
+            println!("\nSuggestions:");
+            for r in &recommendations {
+                println!("  - {r}");
+            }
+        }
+    })
 }
 
 fn runtime_root_writable(root: &Path) -> bool {
