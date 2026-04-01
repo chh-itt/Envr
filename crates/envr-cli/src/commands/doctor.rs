@@ -4,7 +4,9 @@ use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::RuntimeKind;
-use std::path::Path;
+use envr_error::EnvrError;
+use serde_json::Value;
+use std::path::{Path, PathBuf};
 
 const ALL_KINDS: [RuntimeKind; 8] = [
     RuntimeKind::Node,
@@ -17,11 +19,47 @@ const ALL_KINDS: [RuntimeKind; 8] = [
     RuntimeKind::Bun,
 ];
 
-pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
-    let root = match common::effective_runtime_root() {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+/// Same payload as `envr doctor` JSON `data` field (for `diagnostics export` and tests).
+#[derive(Debug, Clone)]
+pub(crate) struct DoctorReport {
+    pub root: PathBuf,
+    pub env_override: Option<String>,
+    pub issues: Vec<String>,
+    pub recommendations: Vec<String>,
+    /// `(kind_label, installed_count, current_version)`
+    pub kinds: Vec<(String, usize, Option<String>)>,
+}
+
+impl DoctorReport {
+    pub fn ok(&self) -> bool {
+        self.issues.is_empty()
+    }
+
+    pub fn to_json(&self) -> Value {
+        let kinds_json: Vec<_> = self
+            .kinds
+            .iter()
+            .map(|(k, n, cur)| {
+                serde_json::json!({
+                    "kind": k,
+                    "installed_count": n,
+                    "current": cur,
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "runtime_root": self.root.to_string_lossy(),
+            "envr_runtime_root_env": self.env_override,
+            "kinds": kinds_json,
+            "issues": self.issues,
+            "recommendations": self.recommendations,
+        })
+    }
+}
+
+pub(crate) fn build_doctor_report(service: &RuntimeService) -> Result<DoctorReport, EnvrError> {
+    let root = common::effective_runtime_root()?;
 
     let env_override = std::env::var("ENVR_RUNTIME_ROOT")
         .ok()
@@ -63,14 +101,15 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
         }
     }
 
-    let mut rows: Vec<(&'static str, usize, Option<String>)> = Vec::new();
+    let mut kinds: Vec<(String, usize, Option<String>)> = Vec::new();
 
     for kind in ALL_KINDS {
+        let label = kind_label(kind).to_string();
         let installed = match service.list_installed(kind) {
             Ok(v) => v,
             Err(e) => {
                 issues.push(format!("{}: list_installed failed: {e}", kind_label(kind)));
-                rows.push((kind_label(kind), 0, None));
+                kinds.push((label, 0, None));
                 continue;
             }
         };
@@ -78,7 +117,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
             Ok(c) => c,
             Err(e) => {
                 issues.push(format!("{}: current failed: {e}", kind_label(kind)));
-                rows.push((kind_label(kind), installed.len(), None));
+                kinds.push((label, installed.len(), None));
                 continue;
             }
         };
@@ -91,29 +130,26 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
             ));
         }
 
-        rows.push((kind_label(kind), installed.len(), current.map(|v| v.0)));
+        kinds.push((label, installed.len(), current.map(|v| v.0)));
     }
 
-    let kinds_json: Vec<_> = rows
-        .iter()
-        .map(|(k, n, cur)| {
-            serde_json::json!({
-                "kind": k,
-                "installed_count": n,
-                "current": cur,
-            })
-        })
-        .collect();
+    Ok(DoctorReport {
+        root,
+        env_override,
+        issues,
+        recommendations,
+        kinds,
+    })
+}
 
-    let data = serde_json::json!({
-        "runtime_root": root.to_string_lossy(),
-        "envr_runtime_root_env": env_override,
-        "kinds": kinds_json,
-        "issues": issues,
-        "recommendations": recommendations,
-    });
+pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
+    let report = match build_doctor_report(service) {
+        Ok(r) => r,
+        Err(e) => return common::print_envr_error(g, e),
+    };
 
-    let ok = issues.is_empty();
+    let data = report.to_json();
+    let ok = report.ok();
     let (message, code_if_fail) = if ok {
         ("doctor_ok", None)
     } else {
@@ -121,26 +157,26 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
     };
 
     output::emit_doctor(g, ok, message, code_if_fail, data, || {
-        println!("runtime root: {}", root.display());
-        if let Some(ref e) = env_override {
+        println!("runtime root: {}", report.root.display());
+        if let Some(ref e) = report.env_override {
             println!("ENVR_RUNTIME_ROOT: {e}");
         }
         println!();
-        for (kind, ic, cur) in &rows {
+        for (kind, ic, cur) in &report.kinds {
             match cur {
                 Some(v) => println!("{kind}: {ic} installed, current = {v}"),
                 None => println!("{kind}: {ic} installed, current = (none)"),
             }
         }
-        if !issues.is_empty() {
+        if !report.issues.is_empty() {
             println!("\nIssues:");
-            for i in &issues {
+            for i in &report.issues {
                 println!("  - {i}");
             }
         }
-        if !recommendations.is_empty() && !g.quiet {
+        if !report.recommendations.is_empty() && !g.quiet {
             println!("\nSuggestions:");
-            for r in &recommendations {
+            for r in &report.recommendations {
                 println!("  - {r}");
             }
         }

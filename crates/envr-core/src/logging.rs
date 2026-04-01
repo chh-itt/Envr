@@ -12,11 +12,16 @@ fn default_log_dir() -> EnvrResult<PathBuf> {
     Ok(cwd.join(".envr").join("logs"))
 }
 
+/// Directory used by [`init_logging`] for rolling files (`ENVR_LOG_DIR` or `<cwd>/.envr/logs`).
+pub fn resolve_log_dir() -> EnvrResult<PathBuf> {
+    match env::var("ENVR_LOG_DIR") {
+        Ok(path) => Ok(PathBuf::from(path)),
+        Err(_) => default_log_dir(),
+    }
+}
+
 pub fn init_logging(app_name: &str) -> EnvrResult<LoggingGuard> {
-    let log_dir = match env::var("ENVR_LOG_DIR") {
-        Ok(path) => PathBuf::from(path),
-        Err(_) => default_log_dir()?,
-    };
+    let log_dir = resolve_log_dir()?;
 
     fs::create_dir_all(&log_dir).map_err(EnvrError::from)?;
 

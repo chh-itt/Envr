@@ -1,0 +1,41 @@
+﻿# cargo-deny policy (T904). Run: cargo deny check
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+    "RUSTSEC-2024-0384", # instant (via iced stack), no safe upgrade yet
+    "RUSTSEC-2024-0436", # paste (via wgpu/metal), no safe upgrade yet
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[licenses]
+version = 2
+confidence-threshold = 0.85
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "BSL-1.0",
+    "MPL-2.0",
+    "CC0-1.0",
+    "OpenSSL",
+    "NCSA",
+    "0BSD",
+    "CDLA-Permissive-2.0",
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

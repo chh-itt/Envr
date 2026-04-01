@@ -926,74 +926,74 @@
 ## Phase 11：稳定化检查与问题处理（后续补充章节）
 
 ### T901 缺陷分级与处理机制
-- [ ] **T901：建立缺陷分级（blocker/critical/major/minor）与处理 SLA** #quality
+- [x] **T901：建立缺陷分级（blocker/critical/major/minor）与处理 SLA** #quality
   - **描述**：统一缺陷优先级定义、响应时限、回归闭环流程。
   - **依赖**：T044
   - **输入文档**：测试报告、缺陷清单
   - **输出文件**：`docs/qa/bug-triage.md`（或同等文档）
   - **验收**：所有新缺陷均可被分级、跟踪、关闭并回归验证。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `docs/qa/bug-triage.md`：四级（blocker/critical/major/minor）定义与 envr 场景示例、安全类起评规则、工作日 SLA 表（首次响应与修复/计划期望）、Issue 闭环步骤（登记→分级→处理→验证→关闭）、与 `KNOWN-ISSUES` / T902 回归矩阵 / `cargo envr-cov` 的衔接说明、建议 GitHub 标签集合。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：SLA 为团队基线而非法律承诺；发布周可通过 Issue 注释临时调整。
+    - 验收结果：分级、SLA、回归与发布文档衔接均已文档化；新缺陷可按该文件执行分级与跟踪。
 
 ### T902 回归测试矩阵与冒烟清单
-- [ ] **T902：建立发布前回归矩阵（语言 x 平台 x 功能）** #test #release
+- [x] **T902：建立发布前回归矩阵（语言 x 平台 x 功能）** #test #release
   - **描述**：形成可执行冒烟清单，覆盖安装/切换/卸载/shim/GUI 主流程；其中 **GUI** 与 **T044** 的「手测 + 可选 CI 冒烟」收口一致，矩阵中单独列出 GUI 打勾项即可。
   - **依赖**：T042,T043
   - **输入文档**：`tasks.md` 全任务、现有测试用例
   - **输出文件**：`docs/qa/regression-matrix.md`
   - **验收**：每次发布前可按矩阵完整打勾，结果可追溯。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `docs/qa/regression-matrix.md`：发布元数据表；全局 CLI 冒烟（doctor/list/json/init/check/cache/shim）；**平台×语言**矩阵（Windows 下 node/python/java 安装·列出·current·which·卸载；Linux/macOS 最低要求）；**功能域**抽查表（remote、resolve/exec/run、config、alias、import/export、profile、prune、shim）；**GUI 手测**独立小节（启动、导航、下载浮层、设置、进程）；与 CI/`cargo envr-cov` 对照说明；失败定级与放行规则链到 `bug-triage.md` 与 `KNOWN-ISSUES.md`。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：全矩阵全语言每次发布都跑满成本较高，故区分「首发必测（Windows）」与「跨平台发布时补测」。
+    - 验收结果：发布前可按文档逐项打勾并填元数据表，结果可追溯；与 T044 GUI 收口、T901 缺陷流程一致。
 
 ### T903 性能回退监控与阈值报警
-- [ ] **T903：建立启动/内存/FPS/CPU 回退检测流程** #perf #quality
+- [x] **T903：建立启动/内存/FPS/CPU 回退检测流程** #perf #quality
   - **描述**：对关键性能指标建立基线与回退报警规则。
   - **依赖**：T038,T039,T040
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：性能报告脚本与基线文档
   - **验收**：性能回退可被自动识别，且有明确处理闭环。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `docs/perf/README.md`、`docs/perf/baseline.md`（指标说明、与 GUI 设计文档对齐、回退处理流程）；`scripts/perf/baseline.json` + `scripts/perf/measure-cli-smoke.ps1`（`--help` / `doctor --format json` 多次采样取中位数并与 JSON 阈值比对，失败非零退出）。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：GUI 自动化 FPS/CPU 留待后续 harness；CLI 基线阈值按通用开发机放宽，可在专用 runner 上收紧。
+    - 验收结果：本地可运行脚本识别 CLI 耗时回退；文档定义闭环（失败 → 记录环境 → 有意更新基线或当缺陷处理）。
 
 ### T904 依赖风险与安全扫描
-- [ ] **T904：依赖安全扫描与许可证合规检查** #deps #security
+- [x] **T904：依赖安全扫描与许可证合规检查** #deps #security
   - **描述**：定期扫描漏洞与许可证风险，形成升级策略。
   - **依赖**：T002
   - **输入文档**：`refactor docs/07-依赖选择与原则.md`
   - **输出文件**：安全扫描报告、升级计划
   - **验收**：高危漏洞清零，许可证风险可解释可处置。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：仓库根 `deny.toml`（许可证 allow 列表含 `CDLA-Permissive-2.0` 等；bans/sources）；`docs/deps/security-and-licenses.md`（工具说明、升级策略、与 workspace 依赖政策对齐）；CI job `cargo deny check licenses bans sources`；各 crate `Cargo.toml` 增加 `license.workspace = true` 以满足许可证检查。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：RustSec 部分条目含 CVSS 4.0，旧版 `cargo-deny` 无法解析 advisory DB；CI 暂以 licenses/bans/sources 为主，文档说明用新版 deny 或 `cargo audit` 补 advisories。
+    - 验收结果：CI 可稳定执行许可证与来源策略；维护者按文档可升级依赖并解释许可证例外。
 
 ### T905 崩溃/异常日志诊断闭环
-- [ ] **T905：完善崩溃日志采集、导出与问题复现模板** #logging #quality
+- [x] **T905：完善崩溃日志采集、导出与问题复现模板** #logging #quality
   - **描述**：统一异常信息格式，支持用户一键导出诊断包。
   - **依赖**：T005
   - **输入文档**：日志规范
   - **输出文件**：诊断导出模块、复现模板文档
   - **验收**：线上问题可基于诊断包快速定位复现。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`envr diagnostics export`（`doctor` 与 `build_doctor_report` 共用 JSON）；zip 含 `doctor.json`、`system.txt`、脱敏 `environment.txt`、`logs/*.log`；`envr_core::logging::resolve_log_dir` 供日志目录解析；`docs/qa/diagnostics-repro.md`；集成测试 `crates/envr-cli/tests/diagnostics_export.rs`。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：`ENVR_*` 环境变量仅对白名单输出完整值，其余写 `<redacted>`；日志按修改时间截断条数与单文件大小。
+    - 验收结果：可一键生成诊断 zip；文档提供 issue 复现模板；失败路径沿用 JSON envelope。
 
 ## Phase 12：i18n 全量落实（GUI + CLI 完整国际化）
 

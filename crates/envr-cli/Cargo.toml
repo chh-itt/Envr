@@ -2,6 +2,7 @@
 name = "envr-cli"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 autobins = false
 
 [[bin]]
@@ -19,7 +20,9 @@ envr-shim-core = { path = "../envr-shim-core" }
 serde_json = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 tempfile = { workspace = true }
+zip = { workspace = true }

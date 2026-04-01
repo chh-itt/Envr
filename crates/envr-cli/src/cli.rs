@@ -94,6 +94,9 @@ pub enum Command {
     },
     /// Run diagnostics and environment checks
     Doctor,
+    /// Export a diagnostics zip for bug reports (doctor JSON, env summary, recent logs)
+    #[command(subcommand)]
+    Diagnostics(DiagnosticsCmd),
     /// Create a starter `.envr.toml` in the given directory
     Init {
         /// Directory that will contain `.envr.toml`
@@ -243,6 +246,16 @@ pub enum ConfigCmd {
     Path,
     /// Print merged settings (defaults + file)
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DiagnosticsCmd {
+    /// Write `doctor.json`, `system.txt`, `environment.txt`, and recent `*.log` files into a zip
+    Export {
+        /// Output `.zip` path (default: `envr-diagnostics-<unix_secs>.zip` in cwd)
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

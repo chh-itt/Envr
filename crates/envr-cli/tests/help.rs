@@ -14,6 +14,7 @@ fn help_is_readable_and_lists_l1_commands() {
         "which",
         "remote",
         "doctor",
+        "diagnostics",
         "init",
         "check",
         "resolve",

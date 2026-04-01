@@ -7,6 +7,7 @@ mod child_env;
 mod common;
 mod config_cmd;
 mod current;
+mod diagnostics;
 mod doctor;
 mod env_cmd;
 mod exec;
@@ -107,6 +108,9 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
                     remote::run(&cli.global, &service, lang, prefix)
                 }
                 crate::cli::Command::Doctor => doctor::run(&cli.global, &service),
+                crate::cli::Command::Diagnostics(sub) => {
+                    diagnostics::run(&cli.global, &service, sub)
+                }
                 crate::cli::Command::Init { .. }
                 | crate::cli::Command::Check { .. }
                 | crate::cli::Command::Resolve { .. }

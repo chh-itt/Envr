@@ -1,0 +1,5 @@
+{
+  "help_ms_max": 800,
+  "doctor_json_ms_max": 3000,
+  "_comment": "Loose caps for mixed dev hardware; tighten on a dedicated perf runner if added to CI."
+}
