@@ -19,6 +19,13 @@ fn main() {
         }
     };
 
+    if let Ok(paths) = envr_platform::paths::current_platform_paths() {
+        let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+        let st = envr_config::settings::Settings::load_or_default_from(&settings_path)
+            .unwrap_or_default();
+        envr_core::i18n::init_from_settings(&st);
+    }
+
     tracing::info!("envr-cli started");
     let code = cli::run(cli);
     std::process::exit(code);

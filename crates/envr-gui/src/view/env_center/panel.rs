@@ -52,8 +52,16 @@ fn kind_label(kind: RuntimeKind) -> &'static str {
 
 pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
     let busy = state.busy;
-    let header = text("环境中心（Node / Python / Java）").size(20);
-    let intro = text("安装、切换与卸载与 CLI 共用 envr-core，无重复业务逻辑。").size(14);
+    let header = text(envr_core::i18n::tr(
+        "环境中心（Node / Python / Java）",
+        "Environment Center (Node / Python / Java)",
+    ))
+    .size(20);
+    let intro = text(envr_core::i18n::tr(
+        "安装、切换与卸载与 CLI 共用 envr-core，无重复业务逻辑。",
+        "Install/switch/uninstall share envr-core with CLI; no duplicated business logic.",
+    ))
+    .size(14);
 
     let mut kind_row = row![].spacing(8);
     for kind in [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java] {
@@ -70,24 +78,27 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         kind_row = kind_row.push(b);
     }
 
-    let refresh = button(text("刷新列表"))
+    let refresh = button(text(envr_core::i18n::tr("刷新列表", "Refresh")))
         .on_press_maybe((!busy).then_some(Message::EnvCenter(EnvCenterMsg::Refresh)))
         .padding([6, 12]);
 
     let cur_line = match &state.current {
-        Some(v) => format!("当前使用: {}", v.0),
-        None => "当前使用: （未设置）".to_string(),
+        Some(v) => format!("{} {}", envr_core::i18n::tr("当前使用:", "Current:"), v.0),
+        None => envr_core::i18n::tr("当前使用: （未设置）", "Current: (not set)").to_string(),
     };
 
     let install_row = row![
         text_input(
-            "版本 spec（与 CLI install 相同，如 20 / lts）",
+            envr_core::i18n::tr(
+                "版本 spec（与 CLI install 相同，如 20 / lts）",
+                "Version spec (same as CLI install, e.g. 20 / lts)",
+            ),
             &state.install_input
         )
         .on_input(|s| Message::EnvCenter(EnvCenterMsg::InstallInput(s)))
         .width(Length::Fill)
         .padding(8),
-        button(text("安装"))
+        button(text(envr_core::i18n::tr("安装", "Install")))
             .on_press_maybe(
                 (!busy && !state.install_input.trim().is_empty())
                     .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
@@ -99,7 +110,13 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
 
     let mut list_col = column![].spacing(6);
     if state.installed.is_empty() {
-        list_col = list_col.push(text("（暂无已安装版本，或点击刷新）").size(14));
+        list_col = list_col.push(
+            text(envr_core::i18n::tr(
+                "（暂无已安装版本，或点击刷新）",
+                "(No installed versions. Click Refresh.)",
+            ))
+            .size(14),
+        );
     } else {
         for ver in &state.installed {
             let active = state.current.as_ref() == Some(ver);
@@ -118,14 +135,15 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
 
             let row = row![
                 text(format!("{} {}", kind_label(state.kind), ver.0)).width(Length::Fill),
-                button(text("使用")).on_press_maybe(use_msg),
-                button(text("卸载")).on_press_maybe(uninstall_msg),
+                button(text(envr_core::i18n::tr("使用", "Use"))).on_press_maybe(use_msg),
+                button(text(envr_core::i18n::tr("卸载", "Uninstall")))
+                    .on_press_maybe(uninstall_msg),
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center);
 
             let note = if active {
-                Some(text("（当前）").size(13))
+                Some(text(envr_core::i18n::tr("（当前）", "(current)")).size(13))
             } else {
                 None
             };
@@ -141,14 +159,18 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     let body = column![
         header,
         intro,
-        text("运行时根可在启动前设置环境变量 ENVR_RUNTIME_ROOT，与 CLI 一致。").size(12),
+        text(envr_core::i18n::tr(
+            "运行时根可在启动前设置环境变量 ENVR_RUNTIME_ROOT，与 CLI 一致。",
+            "You can set ENVR_RUNTIME_ROOT before startup; same as CLI.",
+        ))
+        .size(12),
         kind_row,
         row![text(cur_line).size(15), refresh,]
             .spacing(14)
             .align_y(iced::Alignment::Center),
-        text("新安装").size(16),
+        text(envr_core::i18n::tr("新安装", "Install")).size(16),
         install_row,
-        text("已安装版本").size(16),
+        text(envr_core::i18n::tr("已安装版本", "Installed")).size(16),
         scrollable(list_col).height(Length::Fixed(260.0)),
     ]
     .spacing(tokens.content_spacing().round().max(8.0) as u16);

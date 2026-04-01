@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+envr-config = { path = "../envr-config" }
 envr-error = { path = "../envr-error" }
 envr-domain = { path = "../envr-domain" }
 envr-runtime-node = { path = "../envr-runtime-node" }

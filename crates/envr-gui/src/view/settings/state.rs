@@ -1,4 +1,4 @@
-use envr_config::settings::{FontMode, MirrorMode, Settings, SettingsCache};
+use envr_config::settings::{FontMode, LocaleMode, MirrorMode, Settings, SettingsCache};
 use envr_error::EnvrResult;
 
 /// In-memory editor bound to `settings.toml` via [`SettingsCache`].
@@ -10,6 +10,7 @@ pub struct SettingsViewState {
     pub max_conc_text: String,
     pub retry_text: String,
     pub font_family_draft: String,
+    pub locale_mode_draft: LocaleMode,
     pub last_message: Option<String>,
 }
 
@@ -27,6 +28,7 @@ impl SettingsViewState {
             max_conc_text: String::new(),
             retry_text: String::new(),
             font_family_draft: String::new(),
+            locale_mode_draft: LocaleMode::FollowSystem,
             last_message: None,
         };
         s.sync_from_cache().expect("initial settings sync");
@@ -41,6 +43,7 @@ impl SettingsViewState {
         self.max_conc_text = st.download.max_concurrent_downloads.to_string();
         self.retry_text = st.download.retry_max.to_string();
         self.font_family_draft = st.appearance.font.family.clone().unwrap_or_default();
+        self.locale_mode_draft = st.i18n.locale;
         Ok(())
     }
 
@@ -82,6 +85,8 @@ impl SettingsViewState {
         } else {
             s.appearance.font.family = None;
         }
+
+        s.i18n.locale = self.locale_mode_draft;
         s.validate()?;
         Ok(s)
     }

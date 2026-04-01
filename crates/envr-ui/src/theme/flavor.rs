@@ -31,6 +31,15 @@ impl UiFlavor {
             UiFlavor::Material3 => "Material 3（Linux）",
         }
     }
+
+    /// User-facing label (en).
+    pub fn label_en(self) -> &'static str {
+        match self {
+            UiFlavor::Fluent => "Fluent (Windows)",
+            UiFlavor::LiquidGlass => "Liquid Glass (macOS)",
+            UiFlavor::Material3 => "Material 3 (Linux)",
+        }
+    }
 }
 
 impl std::fmt::Display for UiFlavor {

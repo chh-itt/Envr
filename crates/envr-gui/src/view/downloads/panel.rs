@@ -20,13 +20,20 @@ pub enum DownloadMsg {
 
 pub fn download_dock(state: &DownloadPanelState, tokens: ThemeTokens) -> Element<'static, Message> {
     let header = row![
-        text("下载任务").size(16),
-        button(text(if state.expanded { "折叠" } else { "展开" }))
-            .on_press(Message::Download(DownloadMsg::ToggleExpand))
-            .padding([4, 10]),
-        button(text("添加演示下载"))
-            .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-            .padding([4, 10]),
+        text(envr_core::i18n::tr("下载任务", "Downloads")).size(16),
+        button(text(if state.expanded {
+            envr_core::i18n::tr("折叠", "Collapse")
+        } else {
+            envr_core::i18n::tr("展开", "Expand")
+        }))
+        .on_press(Message::Download(DownloadMsg::ToggleExpand))
+        .padding([4, 10]),
+        button(text(envr_core::i18n::tr(
+            "添加演示下载",
+            "Add demo download"
+        )))
+        .on_press(Message::Download(DownloadMsg::EnqueueDemo))
+        .padding([4, 10]),
     ]
     .spacing(12)
     .align_y(Alignment::Center);
@@ -38,7 +45,10 @@ pub fn download_dock(state: &DownloadPanelState, tokens: ThemeTokens) -> Element
     let mut body = column![header].spacing(10);
     if state.jobs.is_empty() {
         body = body.push(
-            text("暂无任务。点击「添加演示下载」使用与 CLI 相同的 envr-download 引擎（含取消 / 重试 / 进度）。")
+            text(envr_core::i18n::tr(
+                "暂无任务。点击「添加演示下载」使用与 CLI 相同的 envr-download 引擎（含取消 / 重试 / 进度）。",
+                "No jobs yet. Click \"Add demo download\" to run the same envr-download engine as the CLI (cancel/retry/progress).",
+            ))
                 .size(13),
         );
         return body.into();
@@ -66,30 +76,48 @@ fn job_row(job: &DownloadJob, _tokens: ThemeTokens) -> Element<'static, Message>
             let t = job.total_display();
             let eta = job
                 .eta_secs()
-                .map(|s| format!(" · 约剩余 {s}s"))
+                .map(|s| format!(" · {} {s}s", envr_core::i18n::tr("约剩余", "ETA")))
                 .unwrap_or_default();
             let sz = if t > 0 {
-                format!("{d} / {t} 字节")
+                format!("{d} / {t} {}", envr_core::i18n::tr("字节", "bytes"))
             } else {
-                format!("{d} 字节")
+                format!("{d} {}", envr_core::i18n::tr("字节", "bytes"))
             };
-            format!("进行中 · {sz} · {spd}{eta}")
+            format!(
+                "{} · {sz} · {spd}{eta}",
+                envr_core::i18n::tr("进行中", "Running")
+            )
         }
-        JobState::Done => format!("完成 · {} 字节", job.downloaded_display()),
-        JobState::Failed => format!("失败：{}", job.last_error.as_deref().unwrap_or("未知错误")),
-        JobState::Cancelled => "已取消".to_string(),
+        JobState::Done => format!(
+            "{} · {} {}",
+            envr_core::i18n::tr("完成", "Done"),
+            job.downloaded_display(),
+            envr_core::i18n::tr("字节", "bytes")
+        ),
+        JobState::Failed => format!(
+            "{}: {}",
+            envr_core::i18n::tr("失败", "Failed"),
+            job.last_error
+                .as_deref()
+                .unwrap_or(envr_core::i18n::tr("未知错误", "unknown error"))
+        ),
+        JobState::Cancelled => envr_core::i18n::tr("已取消", "Cancelled").to_string(),
     };
 
     let bar = progress_bar(0.0..=100.0, ratio);
 
     let mut actions = row![].spacing(8);
     if job.state == JobState::Running {
-        actions = actions
-            .push(button(text("取消")).on_press(Message::Download(DownloadMsg::Cancel(job.id))));
+        actions = actions.push(
+            button(text(envr_core::i18n::tr("取消", "Cancel")))
+                .on_press(Message::Download(DownloadMsg::Cancel(job.id))),
+        );
     }
     if job.state == JobState::Failed {
-        actions = actions
-            .push(button(text("重试")).on_press(Message::Download(DownloadMsg::Retry(job.id))));
+        actions = actions.push(
+            button(text(envr_core::i18n::tr("重试", "Retry")))
+                .on_press(Message::Download(DownloadMsg::Retry(job.id))),
+        );
     }
 
     column![

@@ -88,6 +88,20 @@ impl Default for ThemeMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LocaleMode {
+    FollowSystem,
+    ZhCn,
+    EnUs,
+}
+
+impl Default for LocaleMode {
+    fn default() -> Self {
+        defaults::locale_mode()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FontSettings {
     #[serde(default = "defaults::font_mode")]
@@ -132,6 +146,15 @@ pub struct Settings {
 
     #[serde(default)]
     pub mirror: MirrorSettings,
+
+    #[serde(default)]
+    pub i18n: I18nSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct I18nSettings {
+    #[serde(default = "defaults::locale_mode")]
+    pub locale: LocaleMode,
 }
 
 impl Settings {
@@ -330,7 +353,7 @@ fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
 }
 
 mod defaults {
-    use super::{FontMode, MirrorMode, ThemeMode};
+    use super::{FontMode, LocaleMode, MirrorMode, ThemeMode};
 
     pub fn max_concurrent_downloads() -> u32 {
         4
@@ -350,6 +373,10 @@ mod defaults {
 
     pub fn theme_mode() -> ThemeMode {
         ThemeMode::FollowSystem
+    }
+
+    pub fn locale_mode() -> LocaleMode {
+        LocaleMode::FollowSystem
     }
 }
 
@@ -385,6 +412,9 @@ mod tests {
             mirror: MirrorSettings {
                 mode: MirrorMode::Manual,
                 manual_id: Some("cn-fast".to_string()),
+            },
+            i18n: I18nSettings {
+                locale: LocaleMode::EnUs,
             },
         };
 

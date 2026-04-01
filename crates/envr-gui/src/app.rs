@@ -41,12 +41,20 @@ impl Route {
     ];
 
     fn label(self) -> &'static str {
-        match self {
-            Route::Dashboard => "仪表盘",
-            Route::Runtime => "运行时",
-            Route::Settings => "设置",
-            Route::About => "关于",
-        }
+        envr_core::i18n::tr(
+            match self {
+                Route::Dashboard => "仪表盘",
+                Route::Runtime => "运行时",
+                Route::Settings => "设置",
+                Route::About => "关于",
+            },
+            match self {
+                Route::Dashboard => "Dashboard",
+                Route::Runtime => "Runtimes",
+                Route::Settings => "Settings",
+                Route::About => "About",
+            },
+        )
     }
 }
 
@@ -92,6 +100,7 @@ pub enum Message {
 }
 
 pub fn run() -> iced::Result {
+    init_i18n();
     application("Envr", update, view)
         .default_font(configured_default_font())
         .theme(|state| gui_theme::iced_theme(state.tokens()))
@@ -102,6 +111,16 @@ pub fn run() -> iced::Result {
         .centered()
         .window_size((960.0, 640.0))
         .run()
+}
+
+fn init_i18n() {
+    let paths = match envr_platform::paths::current_platform_paths() {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+    envr_core::i18n::init_from_settings(&st);
 }
 
 fn configured_default_font() -> iced::Font {
@@ -143,7 +162,10 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Settings
                 && let Err(e) = state.settings.reload_from_disk()
             {
-                state.error = Some(format!("设置加载失败: {e}"));
+                state.error = Some(format!(
+                    "{}: {e}",
+                    envr_core::i18n::tr("设置加载失败", "Failed to load settings")
+                ));
             }
             Task::none()
         }
@@ -212,19 +234,44 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.settings.draft.appearance.theme_mode = m;
             Task::none()
         }
+        SettingsMsg::SetLocaleMode(m) => {
+            state.settings.locale_mode_draft = m;
+            // Apply immediately so all views re-render with new language.
+            let mut st = state.settings.draft.clone();
+            st.i18n.locale = m;
+            envr_core::i18n::init_from_settings(&st);
+            Task::none()
+        }
         SettingsMsg::Save => {
             state.settings.last_message = None;
             match state.settings.save() {
-                Ok(()) => state.settings.last_message = Some("已保存到 settings.toml。".into()),
-                Err(e) => state.settings.last_message = Some(format!("保存失败: {e}")),
+                Ok(()) => {
+                    state.settings.last_message =
+                        Some(envr_core::i18n::tr("已保存到 settings.toml。", "Saved.").into());
+                }
+                Err(e) => {
+                    state.settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("保存失败", "Save failed")
+                    ));
+                }
             }
             Task::none()
         }
         SettingsMsg::ReloadDisk => {
             state.settings.last_message = None;
             match state.settings.reload_from_disk() {
-                Ok(()) => state.settings.last_message = Some("已从磁盘重新加载。".into()),
-                Err(e) => state.settings.last_message = Some(format!("重新加载失败: {e}")),
+                Ok(()) => {
+                    state.settings.last_message = Some(
+                        envr_core::i18n::tr("已从磁盘重新加载。", "Reloaded from disk.").into(),
+                    );
+                }
+                Err(e) => {
+                    state.settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("重新加载失败", "Reload failed")
+                    ));
+                }
             }
             Task::none()
         }
@@ -429,7 +476,7 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
         row![
             text(message).size(14),
             horizontal_space(),
-            button(text("关闭")).on_press(Message::DismissError),
+            button(text(envr_core::i18n::tr("关闭", "Close"))).on_press(Message::DismissError),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -470,31 +517,49 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         }
         Route::Settings => {
             col = col.push(settings_view(&state.settings, tokens));
-            col = col.push(text("外观").size(17));
+            col = col.push(text(envr_core::i18n::tr("外观", "Appearance")).size(17));
             col = col.push(flavor_picker_row(state.flavor));
             col = col.push(
                 text(format!(
-                    "当前：{} · 圆角 md {:.1} · 阴影 blur {:.0} · 动效 {} ms",
+                    "{} {} · {} md {:.1} · {} blur {:.0} · {} {} ms",
+                    envr_core::i18n::tr("当前：", "Current:"),
                     state.flavor.label_zh(),
+                    envr_core::i18n::tr("圆角", "Radius"),
                     tokens.radius_md,
+                    envr_core::i18n::tr("阴影", "Shadow"),
                     tokens.shadow.blur_radius,
+                    envr_core::i18n::tr("动效", "Motion"),
                     tokens.motion.standard_ms
                 ))
                 .size(13),
             );
         }
         Route::Dashboard => {
-            col = col.push(text("总览与快捷入口（占位）。").size(15));
+            col = col.push(
+                text(envr_core::i18n::tr(
+                    "总览与快捷入口（占位）。",
+                    "Overview & shortcuts (placeholder).",
+                ))
+                .size(15),
+            );
         }
         Route::About => {
-            col = col.push(text("关于本应用。").size(15));
+            col = col.push(text(envr_core::i18n::tr("关于本应用。", "About this app.")).size(15));
         }
     }
 
     if state.route == Route::About {
         col = col.push(
-            button(text("触发全局错误示例")).on_press(Message::ReportError(
-                "示例：后台任务失败时可经此通道提示用户。".into(),
+            button(text(envr_core::i18n::tr(
+                "触发全局错误示例",
+                "Trigger global error (demo)",
+            )))
+            .on_press(Message::ReportError(
+                envr_core::i18n::tr(
+                    "示例：后台任务失败时可经此通道提示用户。",
+                    "Demo: background task failures can be surfaced here.",
+                )
+                .into(),
             )),
         );
     }
@@ -508,9 +573,12 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
 fn flavor_picker_row(active: UiFlavor) -> Element<'static, Message> {
     let mut r = row![].spacing(8);
     for flavor in UiFlavor::ALL {
-        let b = button(text(flavor.label_zh()))
-            .on_press(Message::SetFlavor(flavor))
-            .padding([8, 10]);
+        let b = button(text(envr_core::i18n::tr(
+            flavor.label_zh(),
+            flavor.label_en(),
+        )))
+        .on_press(Message::SetFlavor(flavor))
+        .padding([8, 10]);
         let b = if flavor == active {
             b.style(button::primary)
         } else {

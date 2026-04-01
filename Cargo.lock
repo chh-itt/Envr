@@ -834,6 +834,7 @@ dependencies = [
 name = "envr-core"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-error",
  "envr-runtime-java",

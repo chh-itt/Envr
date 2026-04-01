@@ -1,3 +1,4 @@
+pub mod i18n;
 pub mod logging;
 pub mod runtime;
 pub mod shim_service;

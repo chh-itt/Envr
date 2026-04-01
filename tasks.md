@@ -545,7 +545,7 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；设置页切换 Follow/Light/Dark 立即改变全局配色。
 
 ### T034.3 设置：语言（简体中文/English）
-- [ ] **T034.3：设置页加入语言切换（zh-CN / en-US）并全局生效** #gui #settings #i18n
+- [x] **T034.3：设置页加入语言切换（zh-CN / en-US）并全局生效** #gui #settings #i18n
   - **描述**：在设置中提供语言选择并持久化；切换后 GUI 立即刷新文本；CLI 与 GUI 共用同一 locale 解析与加载入口（避免两套语言状态）。
   - **依赖**：T034,T910
   - **输入文档**：旧项目 i18n 方案；`refactor docs/03-gui-设计.md`
@@ -557,12 +557,12 @@
     - GUI 可在 zh-CN/en-US 间切换并立即生效
     - 未配置时默认跟随系统语言（可回退到英文）
     - 切换语言不引入明显闪烁与布局跳动
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`envr-config` 增加 `i18n.locale`（`LocaleMode::{follow_system,zh_cn,en_us}`）并持久化；`envr-core::i18n` 提供共享的 locale 状态、`init_from_settings` 与 `tr(zh,en)`；CLI/GUI 启动时均从 `settings.toml` 初始化 locale；GUI 设置页增加语言切换按钮，切换时即时调用 `envr_core::i18n::init_from_settings` 并触发全局文案刷新。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：系统语言探测使用 `LC_ALL/LANG/LANGUAGE` 环境变量的启发式（跨平台、零依赖），FollowSystem 若无法判断则回退到英文。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；GUI 在 zh-CN/en-US 间切换可立即更新侧栏/设置/运行时中心/下载面板等主要文案。
 
 ## Phase 8：高级命令与扩展语言
 
