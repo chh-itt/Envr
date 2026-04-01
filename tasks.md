@@ -236,18 +236,18 @@
     - 验收结果：`cargo test --workspace --all-targets` 通过；Node/Python/Java provider 均可通过 `RuntimeService::with_defaults()` 被统一调用。
 
 ### T016 Node 远程索引与版本解析
-- [ ] **T016：实现 Node 版本索引抓取、筛选、LTS 解析** #runtime #node
+- [x] **T016：实现 Node 版本索引抓取、筛选、LTS 解析** #runtime #node
   - **描述**：支持按平台和架构过滤可安装版本。
   - **依赖**：T015
   - **输入文档**：旧项目与二版 Node 实现
   - **输出文件**：`crates/envr-runtime-node/src/index.rs`
   - **验收**：`remote/list` 与解析结果正确。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `index` 模块：`parse_node_index`、`release_has_platform`（对齐 `index.json` 中 `win-*` / `linux-*` / `osx-*-{tar,pkg}` 命名）、`list_remote_versions`（semver 降序 + `RemoteFilter.prefix`）、`resolve_node_version`（`latest`/`current`、`lts`、`lts-<codename>`、`lts/<name>`、精确版本、主版本与 `major.minor` 行最新补丁）；`NodeRuntimeProvider` 通过 blocking `reqwest` 拉取官方 `index.json` 并接入 `list_remote` / `resolve` / `install`（install 返回解析后的 canonical 版本）。`envr-core` 的 `RuntimeService` 单测不再默认请求 Node 官方索引（避免 CI/离线依赖网络），Node 行为由 `envr-runtime-node` 内嵌 JSON fixture 覆盖。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：平台识别以 `index.json` 的 `files` 为准（macOS 为 `osx-*` 而非 `darwin-*`）；可注入 `with_index_json_url` 便于后续与镜像基址组合（T017+）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T017 Node 安装/卸载/切换
 - [ ] **T017：实现 Node 版本安装、卸载、current 切换流程** #runtime #node
