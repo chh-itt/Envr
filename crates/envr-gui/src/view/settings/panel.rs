@@ -1,4 +1,4 @@
-use envr_config::settings::{FontMode, MirrorMode};
+use envr_config::settings::{FontMode, MirrorMode, ThemeMode};
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
 use iced::widget::{button, column, pick_list, row, text, text_input, toggler};
@@ -18,6 +18,7 @@ pub enum SettingsMsg {
     SetFontMode(FontMode),
     FontFamilyEdit(String),
     PickFontFamily(String),
+    SetThemeMode(ThemeMode),
     Save,
     ReloadDisk,
 }
@@ -122,6 +123,23 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .spacing(6)
     };
 
+    let mut theme_mode_row = row![text("主题").size(15)].spacing(8);
+    for (mode, label) in [
+        (ThemeMode::FollowSystem, "跟随系统"),
+        (ThemeMode::Light, "浅色"),
+        (ThemeMode::Dark, "深色"),
+    ] {
+        let b = button(text(label))
+            .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
+            .padding([6, 8]);
+        let b = if mode == state.draft.appearance.theme_mode {
+            b.style(button::primary)
+        } else {
+            b.style(button::secondary)
+        };
+        theme_mode_row = theme_mode_row.push(b);
+    }
+
     let dl_row = row![
         column![
             text("最大并发下载").size(13),
@@ -164,6 +182,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         cleanup,
         font_mode_row,
         font_custom,
+        theme_mode_row,
         text("下载").size(16),
         dl_row,
         actions,

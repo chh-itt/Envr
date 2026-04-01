@@ -74,6 +74,20 @@ pub enum FontMode {
     Custom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeMode {
+    FollowSystem,
+    Light,
+    Dark,
+}
+
+impl Default for ThemeMode {
+    fn default() -> Self {
+        defaults::theme_mode()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FontSettings {
     #[serde(default = "defaults::font_mode")]
@@ -97,6 +111,9 @@ impl Default for FontSettings {
 pub struct AppearanceSettings {
     #[serde(default)]
     pub font: FontSettings,
+
+    #[serde(default = "defaults::theme_mode")]
+    pub theme_mode: ThemeMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -313,7 +330,7 @@ fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
 }
 
 mod defaults {
-    use super::{FontMode, MirrorMode};
+    use super::{FontMode, MirrorMode, ThemeMode};
 
     pub fn max_concurrent_downloads() -> u32 {
         4
@@ -329,6 +346,10 @@ mod defaults {
 
     pub fn font_mode() -> FontMode {
         FontMode::Auto
+    }
+
+    pub fn theme_mode() -> ThemeMode {
+        ThemeMode::FollowSystem
     }
 }
 
@@ -355,6 +376,7 @@ mod tests {
                     mode: FontMode::Custom,
                     family: Some("Microsoft YaHei UI".to_string()),
                 },
+                theme_mode: ThemeMode::Dark,
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,

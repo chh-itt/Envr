@@ -1007,6 +1007,9 @@ version = "0.1.0"
 [[package]]
 name = "envr-ui"
 version = "0.1.0"
+dependencies = [
+ "envr-config",
+]
 
 [[package]]
 name = "equivalent"

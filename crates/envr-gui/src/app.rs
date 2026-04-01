@@ -7,7 +7,9 @@ use std::time::Duration;
 use envr_config::settings::{FontMode, Settings};
 use envr_download::task::CancelToken;
 use envr_ui::font;
-use envr_ui::theme::{ThemeTokens, UiFlavor, default_flavor_for_target, tokens_for};
+use envr_ui::theme::{
+    ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, tokens_for_scheme,
+};
 use iced::font::Family;
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Alignment, Element, Length, Padding, Task, Theme, application};
@@ -73,7 +75,8 @@ impl Default for AppState {
 
 impl AppState {
     fn tokens(&self) -> ThemeTokens {
-        tokens_for(self.flavor)
+        let scheme = scheme_for_mode(self.settings.draft.appearance.theme_mode);
+        tokens_for_scheme(self.flavor, scheme)
     }
 }
 
@@ -203,6 +206,10 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
         }
         SettingsMsg::PickFontFamily(s) => {
             state.settings.font_family_draft = s;
+            Task::none()
+        }
+        SettingsMsg::SetThemeMode(m) => {
+            state.settings.draft.appearance.theme_mode = m;
             Task::none()
         }
         SettingsMsg::Save => {

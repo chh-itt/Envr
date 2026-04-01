@@ -528,7 +528,7 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；Win11 默认字体为 YaHei UI 路径存在时可直接显示中文；选择 custom 后重启仍生效。
 
 ### T034.2 设置：主题模式（跟随系统/浅色/深色）
-- [ ] **T034.2：设置页加入主题模式（跟随/浅色/深色）并即时生效** #gui #settings #theme
+- [x] **T034.2：设置页加入主题模式（跟随/浅色/深色）并即时生效** #gui #settings #theme
   - **描述**：实现主题模式枚举与持久化；“跟随系统”需监听系统深浅偏好或至少在启动时读取；切换时 UI 立即刷新（不闪烁/不重建整页）。
   - **依赖**：T034,T031
   - **输入文档**：旧项目主题/外观设置实现；`refactor docs/03-gui-设计.md`
@@ -537,12 +537,12 @@
     - `crates/envr-ui/src/theme/*`（scheme/token 切换）
     - `crates/envr-gui/src/view/settings/*`
   - **验收**：主题切换即时生效；FollowSystem 在系统切换后可自动更新（或提供“刷新跟随”机制），且不破坏性能指标。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`envr-config` 增加 `ThemeMode::{follow_system,light,dark}` 并持久化到 `appearance.theme_mode`；`envr-ui::theme` 增加 `UiScheme` 与 `tokens_for_scheme()`，为三种 `UiFlavor` 补齐 dark 预设；GUI 设置页加入主题模式切换，并在 `AppState.tokens()` 中按当前设置实时计算 scheme（即时生效）。FollowSystem 使用跨平台命令探测（Windows `reg query` / macOS `defaults` / Linux `gsettings`），并做 900ms 缓存，避免频繁调用。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：FollowSystem 的系统探测使用外部命令实现（零额外依赖），并用 `OnceLock<Mutex<Cache>>` 做短 TTL 缓存，减少 UI 重绘成本。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；设置页切换 Follow/Light/Dark 立即改变全局配色。
 
 ### T034.3 设置：语言（简体中文/English）
 - [ ] **T034.3：设置页加入语言切换（zh-CN / en-US）并全局生效** #gui #settings #i18n

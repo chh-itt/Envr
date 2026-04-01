@@ -2,6 +2,7 @@
 
 use super::color::Srgb;
 use super::flavor::UiFlavor;
+use super::scheme::UiScheme;
 use super::tokens::{MotionTokens, SemanticColors, ShadowTokens, ThemeTokens};
 
 fn fluent_colors() -> SemanticColors {
@@ -43,10 +44,49 @@ fn material_colors() -> SemanticColors {
     }
 }
 
-/// Resolved tokens for a flavor (light appearance).
-pub fn tokens_for(flavor: UiFlavor) -> ThemeTokens {
-    match flavor {
-        UiFlavor::Fluent => ThemeTokens {
+fn fluent_colors_dark() -> SemanticColors {
+    SemanticColors {
+        background: Srgb::new(0.07, 0.08, 0.09),
+        surface: Srgb::new(0.10, 0.11, 0.12),
+        surface_panel: Srgb::new(0.12, 0.13, 0.14),
+        text: Srgb::new(0.92, 0.93, 0.94),
+        text_muted: Srgb::new(0.66, 0.68, 0.70),
+        primary: Srgb::new(0.35, 0.72, 1.0),
+        success: Srgb::new(0.33, 0.82, 0.52),
+        danger: Srgb::new(1.0, 0.45, 0.42),
+    }
+}
+
+fn liquid_colors_dark() -> SemanticColors {
+    SemanticColors {
+        background: Srgb::new(0.06, 0.07, 0.09),
+        surface: Srgb::new(0.09, 0.10, 0.12),
+        surface_panel: Srgb::new(0.11, 0.12, 0.15),
+        text: Srgb::new(0.92, 0.93, 0.95),
+        text_muted: Srgb::new(0.66, 0.68, 0.72),
+        primary: Srgb::new(0.40, 0.76, 1.0),
+        success: Srgb::new(0.34, 0.84, 0.55),
+        danger: Srgb::new(1.0, 0.48, 0.45),
+    }
+}
+
+fn material_colors_dark() -> SemanticColors {
+    SemanticColors {
+        background: Srgb::new(0.06, 0.06, 0.08),
+        surface: Srgb::new(0.10, 0.10, 0.12),
+        surface_panel: Srgb::new(0.12, 0.11, 0.14),
+        text: Srgb::new(0.92, 0.92, 0.95),
+        text_muted: Srgb::new(0.66, 0.66, 0.71),
+        primary: Srgb::new(0.78, 0.70, 0.95),
+        success: Srgb::new(0.40, 0.80, 0.62),
+        danger: Srgb::new(1.0, 0.46, 0.43),
+    }
+}
+
+/// Resolved tokens for a flavor + scheme.
+pub fn tokens_for_scheme(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
+    match (flavor, scheme) {
+        (UiFlavor::Fluent, UiScheme::Light) => ThemeTokens {
             flavor,
             colors: fluent_colors(),
             radius_sm: 3.0,
@@ -63,7 +103,24 @@ pub fn tokens_for(flavor: UiFlavor) -> ThemeTokens {
             },
             backdrop_blur_hint: 0.35,
         },
-        UiFlavor::LiquidGlass => ThemeTokens {
+        (UiFlavor::Fluent, UiScheme::Dark) => ThemeTokens {
+            flavor,
+            colors: fluent_colors_dark(),
+            radius_sm: 3.0,
+            radius_md: 6.0,
+            radius_lg: 10.0,
+            shadow: ShadowTokens {
+                blur_radius: 14.0,
+                offset_y: 2.0,
+                color_alpha: 0.30,
+            },
+            motion: MotionTokens {
+                standard_ms: 120,
+                emphasized_ms: 220,
+            },
+            backdrop_blur_hint: 0.35,
+        },
+        (UiFlavor::LiquidGlass, UiScheme::Light) => ThemeTokens {
             flavor,
             colors: liquid_colors(),
             radius_sm: 6.0,
@@ -80,7 +137,24 @@ pub fn tokens_for(flavor: UiFlavor) -> ThemeTokens {
             },
             backdrop_blur_hint: 0.55,
         },
-        UiFlavor::Material3 => ThemeTokens {
+        (UiFlavor::LiquidGlass, UiScheme::Dark) => ThemeTokens {
+            flavor,
+            colors: liquid_colors_dark(),
+            radius_sm: 6.0,
+            radius_md: 12.0,
+            radius_lg: 18.0,
+            shadow: ShadowTokens {
+                blur_radius: 22.0,
+                offset_y: 5.0,
+                color_alpha: 0.26,
+            },
+            motion: MotionTokens {
+                standard_ms: 180,
+                emphasized_ms: 320,
+            },
+            backdrop_blur_hint: 0.55,
+        },
+        (UiFlavor::Material3, UiScheme::Light) => ThemeTokens {
             flavor,
             colors: material_colors(),
             radius_sm: 8.0,
@@ -90,6 +164,23 @@ pub fn tokens_for(flavor: UiFlavor) -> ThemeTokens {
                 blur_radius: 12.0,
                 offset_y: 3.0,
                 color_alpha: 0.18,
+            },
+            motion: MotionTokens {
+                standard_ms: 140,
+                emphasized_ms: 280,
+            },
+            backdrop_blur_hint: 0.15,
+        },
+        (UiFlavor::Material3, UiScheme::Dark) => ThemeTokens {
+            flavor,
+            colors: material_colors_dark(),
+            radius_sm: 8.0,
+            radius_md: 14.0,
+            radius_lg: 22.0,
+            shadow: ShadowTokens {
+                blur_radius: 16.0,
+                offset_y: 3.0,
+                color_alpha: 0.32,
             },
             motion: MotionTokens {
                 standard_ms: 140,

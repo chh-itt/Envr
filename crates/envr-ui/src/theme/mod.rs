@@ -6,23 +6,25 @@ mod color;
 mod detect;
 mod flavor;
 mod presets;
+mod scheme;
 mod tokens;
 
 pub use color::Srgb;
 pub use detect::default_flavor_for_target;
 pub use flavor::UiFlavor;
-pub use presets::tokens_for;
+pub use presets::tokens_for_scheme;
+pub use scheme::{UiScheme, scheme_for_mode, system_prefers_dark_cached};
 pub use tokens::{MotionTokens, SemanticColors, ShadowTokens, ThemeTokens};
 
 #[cfg(test)]
 mod tests {
-    use super::{UiFlavor, default_flavor_for_target, tokens_for};
+    use super::{UiFlavor, UiScheme, default_flavor_for_target, tokens_for_scheme};
 
     #[test]
     fn preset_geometry_differs_across_flavors() {
-        let f = tokens_for(UiFlavor::Fluent);
-        let l = tokens_for(UiFlavor::LiquidGlass);
-        let m = tokens_for(UiFlavor::Material3);
+        let f = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
+        let l = tokens_for_scheme(UiFlavor::LiquidGlass, UiScheme::Light);
+        let m = tokens_for_scheme(UiFlavor::Material3, UiScheme::Light);
         assert!(f.radius_md < l.radius_md && l.radius_md < m.radius_md);
         assert!(f.shadow.blur_radius < m.shadow.blur_radius);
     }
