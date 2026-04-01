@@ -16,6 +16,7 @@ use crate::view::downloads::{
     DownloadJob, DownloadMsg, DownloadPanelState, JobState, download_dock,
 };
 use crate::view::env_center::{EnvCenterMsg, EnvCenterState, env_center_view};
+use crate::view::settings::{SettingsMsg, SettingsViewState, settings_view};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -51,6 +52,7 @@ pub struct AppState {
     flavor: UiFlavor,
     pub env_center: EnvCenterState,
     pub downloads: DownloadPanelState,
+    pub settings: SettingsViewState,
 }
 
 impl Default for AppState {
@@ -61,6 +63,7 @@ impl Default for AppState {
             flavor: default_flavor_for_target(),
             env_center: EnvCenterState::default(),
             downloads: DownloadPanelState::default(),
+            settings: SettingsViewState::new(),
         }
     }
 }
@@ -79,6 +82,7 @@ pub enum Message {
     SetFlavor(UiFlavor),
     EnvCenter(EnvCenterMsg),
     Download(DownloadMsg),
+    Settings(SettingsMsg),
 }
 
 pub fn run() -> iced::Result {
@@ -101,6 +105,9 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Runtime {
                 return gui_ops::refresh_runtimes(state.env_center.kind);
             }
+            if route == Route::Settings && let Err(e) = state.settings.reload_from_disk() {
+                state.error = Some(format!("设置加载失败: {e}"));
+            }
             Task::none()
         }
         Message::DismissError => {
@@ -118,6 +125,56 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
         Message::EnvCenter(msg) => handle_env_center(state, msg),
         Message::Download(msg) => handle_download(state, msg),
+        Message::Settings(msg) => handle_settings(state, msg),
+    }
+}
+
+fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
+    match msg {
+        SettingsMsg::RuntimeRootEdit(s) => {
+            state.settings.runtime_root_draft = s;
+            Task::none()
+        }
+        SettingsMsg::ManualIdEdit(s) => {
+            state.settings.manual_id_draft = s;
+            Task::none()
+        }
+        SettingsMsg::MaxConcEdit(s) => {
+            state.settings.max_conc_text = s;
+            Task::none()
+        }
+        SettingsMsg::RetryEdit(s) => {
+            state.settings.retry_text = s;
+            Task::none()
+        }
+        SettingsMsg::SetMirrorMode(m) => {
+            state.settings.draft.mirror.mode = m;
+            Task::none()
+        }
+        SettingsMsg::SetCleanup(v) => {
+            state
+                .settings
+                .draft
+                .behavior
+                .cleanup_downloads_after_install = v;
+            Task::none()
+        }
+        SettingsMsg::Save => {
+            state.settings.last_message = None;
+            match state.settings.save() {
+                Ok(()) => state.settings.last_message = Some("已保存到 settings.toml。".into()),
+                Err(e) => state.settings.last_message = Some(format!("保存失败: {e}")),
+            }
+            Task::none()
+        }
+        SettingsMsg::ReloadDisk => {
+            state.settings.last_message = None;
+            match state.settings.reload_from_disk() {
+                Ok(()) => state.settings.last_message = Some("已从磁盘重新加载。".into()),
+                Err(e) => state.settings.last_message = Some(format!("重新加载失败: {e}")),
+            }
+            Task::none()
+        }
     }
 }
 
@@ -358,30 +415,27 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         Route::Runtime => {
             col = col.push(env_center_view(&state.env_center, tokens));
         }
-        _ => {
-            let blurb: &'static str = match state.route {
-                Route::Dashboard => "总览与快捷入口（占位）。",
-                Route::Settings => "镜像、路径、行为与外观（占位）。",
-                Route::About => "关于本应用。",
-                Route::Runtime => unreachable!(),
-            };
-            col = col.push(text(blurb).size(15));
+        Route::Settings => {
+            col = col.push(settings_view(&state.settings, tokens));
+            col = col.push(text("外观").size(17));
+            col = col.push(flavor_picker_row(state.flavor));
+            col = col.push(
+                text(format!(
+                    "当前：{} · 圆角 md {:.1} · 阴影 blur {:.0} · 动效 {} ms",
+                    state.flavor.label_zh(),
+                    tokens.radius_md,
+                    tokens.shadow.blur_radius,
+                    tokens.motion.standard_ms
+                ))
+                .size(13),
+            );
         }
-    }
-
-    if state.route == Route::Settings {
-        col = col.push(text("视觉风格").size(17));
-        col = col.push(flavor_picker_row(state.flavor));
-        col = col.push(
-            text(format!(
-                "当前：{} · 圆角 md {:.1} · 阴影 blur {:.0} · 动效 {} ms",
-                state.flavor.label_zh(),
-                tokens.radius_md,
-                tokens.shadow.blur_radius,
-                tokens.motion.standard_ms
-            ))
-            .size(13),
-        );
+        Route::Dashboard => {
+            col = col.push(text("总览与快捷入口（占位）。").size(15));
+        }
+        Route::About => {
+            col = col.push(text("关于本应用。").size(15));
+        }
     }
 
     if state.route == Route::About {

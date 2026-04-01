@@ -9,10 +9,5 @@ pub fn open_runtime_service() -> EnvrResult<RuntimeService> {
 }
 
 fn runtime_root() -> EnvrResult<PathBuf> {
-    if let Ok(p) = std::env::var("ENVR_RUNTIME_ROOT")
-        && !p.is_empty()
-    {
-        return Ok(PathBuf::from(p));
-    }
-    Ok(envr_platform::paths::current_platform_paths()?.runtime_root)
+    envr_config::settings::resolve_runtime_root()
 }

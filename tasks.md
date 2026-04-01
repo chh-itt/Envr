@@ -494,18 +494,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T034 设置页（镜像、路径、行为）
-- [ ] **T034：实现设置页与配置持久化** #gui #config
+- [x] **T034：实现设置页与配置持久化** #gui #config
   - **描述**：可配置 runtime root、镜像模式、安装后清理等。
   - **依赖**：T033,T008,T013
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/settings/*`
   - **验收**：设置修改后 CLI/GUI 同步生效。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-config::settings` 增加 `PathSettings`、`BehaviorSettings` 与 `resolve_runtime_root()`（`ENVR_RUNTIME_ROOT` → `paths.runtime_root` → 平台默认）；`SettingsCache::reload` 供 GUI 强刷；CLI `effective_runtime_root` 与 GUI `service::open_runtime_service` 均走 `resolve_runtime_root`。设置页 `view/settings` 编辑镜像模式/manual_id、运行时根、下载并发与重试、`cleanup_downloads_after_install`，保存/从磁盘重载；进入「设置」路由时自动 `reload_from_disk`。外观风味保留在同页下半部。
+    - 相关提交/PR：feat(gui): T034 settings page, paths/behavior in settings.toml
+    - 遇到的问题/决策：`MirrorMode` 增加 `Copy` 以便镜像按钮闭包；状态文案用克隆 `String` 满足 `Element<'static>`；`cleanup_downloads_after_install` 仅持久化，运行时安装路径尚未消费该标志。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ## Phase 8：高级命令与扩展语言
 

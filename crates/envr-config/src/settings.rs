@@ -7,7 +7,7 @@ use std::{
     time::SystemTime,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MirrorMode {
     Official,
@@ -52,8 +52,29 @@ impl Default for MirrorSettings {
     }
 }
 
+/// Persistent overrides for install layout (GUI + CLI read the same file).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct PathSettings {
+    /// If set (non-empty after trim), used as runtime root unless `ENVR_RUNTIME_ROOT` is set.
+    #[serde(default)]
+    pub runtime_root: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct BehaviorSettings {
+    /// Remove staging/temp artifacts after a successful install (providers may adopt later).
+    #[serde(default)]
+    pub cleanup_downloads_after_install: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(default)]
+    pub paths: PathSettings,
+
+    #[serde(default)]
+    pub behavior: BehaviorSettings,
+
     #[serde(default)]
     pub download: DownloadSettings,
 
@@ -63,6 +84,14 @@ pub struct Settings {
 
 impl Settings {
     pub fn validate(&self) -> EnvrResult<()> {
+        if let Some(ref root) = self.paths.runtime_root
+            && root.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "paths.runtime_root must not be whitespace-only".to_string(),
+            ));
+        }
+
         if self.download.max_concurrent_downloads == 0 {
             return Err(EnvrError::Validation(
                 "download.max_concurrent_downloads must be >= 1".to_string(),
@@ -155,6 +184,13 @@ impl SettingsCache {
         Ok(&self.cached)
     }
 
+    /// Reread `settings.toml` from disk even when mtime is unchanged (e.g. after external CLI edit in same second).
+    pub fn reload(&mut self) -> EnvrResult<&Settings> {
+        self.cached = Settings::load_or_default_from(&self.path)?;
+        self.last_modified = file_mtime(&self.path).ok();
+        Ok(&self.cached)
+    }
+
     pub fn set_and_persist(&mut self, settings: Settings) -> EnvrResult<()> {
         settings.save_to(&self.path)?;
         self.cached = settings;
@@ -165,6 +201,29 @@ impl SettingsCache {
 
 pub fn settings_path_from_platform(paths: &EnvrPaths) -> PathBuf {
     paths.settings_file.clone()
+}
+
+/// Effective runtime data root: `ENVR_RUNTIME_ROOT` wins, then `settings.toml` `paths.runtime_root`,
+/// then the platform default (`EnvrPaths::runtime_root`).
+pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
+    if let Ok(p) = std::env::var("ENVR_RUNTIME_ROOT") {
+        let t = p.trim();
+        if !t.is_empty() {
+            return Ok(PathBuf::from(t));
+        }
+    }
+
+    let platform = envr_platform::paths::current_platform_paths()?;
+    let settings_path = settings_path_from_platform(&platform);
+    let settings = Settings::load_or_default_from(&settings_path)?;
+    if let Some(ref r) = settings.paths.runtime_root {
+        let t = r.trim();
+        if !t.is_empty() {
+            return Ok(PathBuf::from(t));
+        }
+    }
+
+    Ok(platform.runtime_root.clone())
 }
 
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
@@ -231,6 +290,12 @@ mod tests {
         let path = tmp.path().join("settings.toml");
 
         let settings = Settings {
+            paths: PathSettings {
+                runtime_root: Some("/tmp/envr-rt".to_string()),
+            },
+            behavior: BehaviorSettings {
+                cleanup_downloads_after_install: true,
+            },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,
                 retry_max: 5,
