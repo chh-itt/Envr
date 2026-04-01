@@ -30,6 +30,11 @@ impl RuntimeService {
             Box::new(envr_runtime_node::NodeRuntimeProvider::new()),
             Box::new(envr_runtime_python::PythonRuntimeProvider::new()),
             Box::new(envr_runtime_java::JavaRuntimeProvider::new()),
+            Box::new(envr_runtime_go::GoRuntimeProvider::new()),
+            Box::new(envr_runtime_rust::RustRuntimeProvider::new()),
+            Box::new(envr_runtime_php::PhpRuntimeProvider::new()),
+            Box::new(envr_runtime_deno::DenoRuntimeProvider::new()),
+            Box::new(envr_runtime_bun::BunRuntimeProvider::new()),
         ])
     }
 
@@ -40,7 +45,12 @@ impl RuntimeService {
             Box::new(
                 envr_runtime_python::PythonRuntimeProvider::new().with_runtime_root(root.clone()),
             ),
-            Box::new(envr_runtime_java::JavaRuntimeProvider::new().with_runtime_root(root)),
+            Box::new(envr_runtime_java::JavaRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_go::GoRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_rust::RustRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_php::PhpRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_deno::DenoRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_bun::BunRuntimeProvider::new().with_runtime_root(root)),
         ])
     }
 

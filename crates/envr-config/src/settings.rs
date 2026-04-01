@@ -131,6 +131,19 @@ pub struct AppearanceSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct RuntimeSettings {
+    #[serde(default)]
+    pub go: GoRuntimeSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GoRuntimeSettings {
+    /// Optional `GOPROXY` value to inject into `envr env`/`run`/`exec` when Go is in scope.
+    #[serde(default)]
+    pub goproxy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub paths: PathSettings,
@@ -149,6 +162,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub i18n: I18nSettings,
+
+    #[serde(default)]
+    pub runtime: RuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -199,6 +215,14 @@ impl Settings {
                         .to_string(),
                 ));
             }
+        }
+
+        if let Some(ref gp) = self.runtime.go.goproxy
+            && gp.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.go.goproxy must not be whitespace-only".to_string(),
+            ));
         }
 
         Ok(())
@@ -415,6 +439,11 @@ mod tests {
             },
             i18n: I18nSettings {
                 locale: LocaleMode::EnUs,
+            },
+            runtime: RuntimeSettings {
+                go: GoRuntimeSettings {
+                    goproxy: Some("https://proxy.golang.org,direct".to_string()),
+                },
             },
         };
 

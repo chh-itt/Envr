@@ -5,7 +5,14 @@ use crate::output;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, parse_runtime_kind};
 
-const ALL_KINDS: [RuntimeKind; 3] = [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java];
+// Keep defaults limited to runtimes that support remote listing across platforms.
+const ALL_KINDS: [RuntimeKind; 5] = [
+    RuntimeKind::Node,
+    RuntimeKind::Python,
+    RuntimeKind::Java,
+    RuntimeKind::Go,
+    RuntimeKind::Bun,
+];
 
 pub fn run(
     g: &GlobalArgs,

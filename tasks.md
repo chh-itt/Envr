@@ -601,108 +601,109 @@
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-runtime-*`
   - **验收**：每种语言至少完成 install/list/current/use/uninstall。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：T037.1~T037.7 均已完成：Go（索引+安装链路+GOPROXY）、Rust（rustup 工具链集成）、PHP（Windows 版本/变体）、Deno（索引+安装）、Bun（多版本+core shims + 全局可执行扫描/缓存清理/镜像策略）。
     - 相关提交/PR：
     - 遇到的问题/决策：
     - 验收结果：
 
 #### T037.1 Go 运行时实现
-- [ ] **T037.1：Go 远程索引与版本解析** #runtime #go
+- [x] **T037.1：Go 远程索引与版本解析** #runtime #go
   - **描述**：实现 Go 官方/镜像索引抓取、版本过滤与 LTS/推荐版本标记。
   - **依赖**：T015,T013
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-runtime-go/src/index.rs`
   - **验收**：`envr remote go` 输出与实际可安装版本一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `envr-runtime-go`：`index.rs` 对接 `https://go.dev/dl/?mode=json&include=all`，实现抓取/解析、`remote` 前缀过滤、`resolve`（`latest`/`stable`/前缀与精确版本）；`manager.rs` 增加本地 versions/current 读写与卸载；`RuntimeKind` 与 core/CLI/GUI 枚举链路接入 Go，`envr remote go` 与 `envr current/list go` 可用。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
-- [ ] **T037.2：Go 安装/卸载/切换与 GOPROXY 设置** #runtime #go
+- [x] **T037.2：Go 安装/卸载/切换与 GOPROXY 设置** #runtime #go
   - **描述**：打通 Go 下载、解压、current 链接、GOPROXY 配置与卸载流程。
   - **依赖**：T037.1,T012,T009
   - **输入文档**：旧项目 Go 支持、`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-runtime-go/src/manager.rs`
   - **验收**：`go version` 输出正确，GOPROXY 配置可切换并生效。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：已补齐 Go 安装主链路（按平台选择 `go.dev/dl` archive、下载到 cache、sha256 校验、解压、`current` 切换）；并在 `settings.toml` 增加 `runtime.go.goproxy`，`envr env/run/exec` 在 Go 进入 PATH 时自动注入 `GOPROXY`（便于团队统一代理配置）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
     - 相关提交/PR：
     - 遇到的问题/决策：
     - 验收结果：
 
 #### T037.3 Rust 运行时实现
-- [ ] **T037.3：Rust 工具链集成（基于 rustup）** #runtime #rust
+- [x] **T037.3：Rust 工具链集成（基于 rustup）** #runtime #rust
   - **描述**：借助 rustup 管理 Rust 版本/目标/组件，保持“旧项目”成熟路径，优先稳定与兼容。
   - **依赖**：T015
   - **输入文档**：`refactor docs/01-总体架构设计.md`
   - **输出文件**：`crates/envr-runtime-rust/src/manager.rs`
   - **验收**：可通过 envr 调用 rustup 安装/切换/卸载工具链，状态同步正确；不额外引入高风险自研安装链路。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `envr-runtime-rust`，通过调用 `rustup` 实现 toolchain 的 `install/list/current/use/uninstall`；默认使用 `runtime_root/runtimes/rust/{rustup,cargo}` 作为 `RUSTUP_HOME/CARGO_HOME` 以便隔离；`RuntimeKind::Rust` 接入 core/CLI/GUI；`envr env/run/exec` 在 Rust 在 PATH 作用域时注入 `cargo/bin` 与 active toolchain 的 `bin`。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 #### T037.4 PHP 运行时实现
-- [ ] **T037.4：PHP 版本与变体管理（NTS/TS）** #runtime #php
+- [x] **T037.4：PHP 版本与变体管理（NTS/TS）** #runtime #php
   - **描述**：实现 PHP 版本/线程模型解析、下载与安装路径结构。
   - **依赖**：T015,T013,T012
   - **输入文档**：旧项目 PHP 支持
   - **输出文件**：`crates/envr-runtime-php/src/{index,manager}.rs`
   - **验收**：可为 PHP 不同变体安装/切换版本，命令行调用正常。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `RuntimeKind::Php` 并接入 core/CLI/GUI；实现 `envr-runtime-php`（Windows 使用 `downloads.php.net/~windows/releases/releases.json`）的版本解析、remote/list/resolve、zip 下载校验与安装、`current` 切换与卸载；CLI `exec/run/env` 支持 PHP 进入 PATH（基于 pin/current 解析）。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 #### T037.5 Deno 运行时实现
-- [ ] **T037.5：Deno 索引与安装实现** #runtime #deno
+- [x] **T037.5：Deno 索引与安装实现** #runtime #deno
   - **描述**：实现基于 GitHub/镜像源的 Deno 版本列表与安装路径结构。
   - **依赖**：T015,T013,T012
   - **输入文档**：旧项目 Deno 支持
   - **输出文件**：`crates/envr-runtime-deno/src/{index,manager}.rs`
   - **验收**：`deno --version` 版本与 envr 状态一致，可切换/卸载。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `RuntimeKind::Deno` 并接入 core/CLI/GUI；实现 `envr-runtime-deno` 的版本解析（GitHub tags API）与安装（从 `dl.deno.land/release` 下载对应平台 zip、解压、`current` 切换、卸载）；CLI `exec/run/env` 支持 Deno 进入 PATH（基于 pin/current 解析）。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 #### T037.6 Bun 运行时实现
-- [ ] **T037.6：Bun 多版本体系（对齐 Node 能力）** #runtime #bun #shim
+- [x] **T037.6：Bun 多版本体系（对齐 Node 能力）** #runtime #bun #shim
   - **描述**：按 Node 思路实现 Bun 多版本安装/切换/卸载、current 管理、shim 转发与全局可执行支持，形成产品优势能力。
   - **依赖**：T015,T013,T012
   - **输入文档**：旧项目 Bun 支持
-  - **输出文件**：`crates/envr-runtime-bun/src/{index,manager,shim}.rs`
+  - **输出文件**：`crates/envr-runtime-bun/src/{index,manager,lib}.rs`，`crates/envr-shim-core/src/resolve.rs`，`crates/envr-core/src/shim_service.rs`
   - **验收**：支持 Bun 多版本并行安装、切换 current、shim 路由正确；`bun/bunx` 与全局可执行行为与 Node 体验一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `RuntimeKind::Bun` 并接入 core/CLI/GUI；实现 `envr-runtime-bun`（GitHub tags API + release `SHASUMS256.txt`）的 `remote/list/resolve/install/uninstall/current/use`；`envr env/run/exec` 支持 Bun 进入 PATH（基于 pin/current 解析）；`envr-shim-core`/`envr-core::shim_service` 增加 `bun/bunx` core shims 解析与路由。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
-- [ ] **T037.7：Bun 生态能力补齐（全局包/缓存/镜像策略）** #runtime #bun #advanced
+- [x] **T037.7：Bun 生态能力补齐（全局包/缓存/镜像策略）** #runtime #bun #advanced
   - **描述**：补齐 Bun 全局包扫描、shim 刷新、缓存清理和镜像/下载源策略，避免仅“能装能切”。
   - **依赖**：T037.6,T024
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-runtime-bun/src/{packages,cache,mirror}.rs`
   - **验收**：Bun 全局包新增后可直接调用；缓存与镜像设置在 CLI/GUI 均可管理。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：在 `envr-core::ShimService` 增加 Bun 全局可执行扫描（`bun pm bin -g`）并与 Node 扫描合并，避免互相清理；新增 `envr shim sync --globals` 刷新 core shims + 同步 npm/bun 全局 forwards；新增 `envr cache clean [KIND]` 清理 `{runtime_root}/cache`；Bun 网络请求接入 settings 的镜像策略（offline 拒绝、非官方镜像按 `base_url + host/path?query` 规则重写 URL）。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T046 单页架构与主布局
 - [ ] **T046：落地单页（SPA）主框架与左导航** #gui #ux

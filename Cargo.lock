@@ -838,9 +838,14 @@ dependencies = [
  "envr-config",
  "envr-domain",
  "envr-error",
+ "envr-runtime-bun",
+ "envr-runtime-deno",
+ "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-node",
+ "envr-runtime-php",
  "envr-runtime-python",
+ "envr-runtime-rust",
  "envr-shim-core",
  "tempfile",
  "tracing",
@@ -922,14 +927,46 @@ dependencies = [
 [[package]]
 name = "envr-runtime-bun"
 version = "0.1.0"
+dependencies = [
+ "envr-config",
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-mirror",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "envr-runtime-deno"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "envr-runtime-go"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "envr-runtime-java"
@@ -962,6 +999,16 @@ dependencies = [
 [[package]]
 name = "envr-runtime-php"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "envr-runtime-python"
@@ -981,6 +1028,11 @@ dependencies = [
 [[package]]
 name = "envr-runtime-rust"
 version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-error",
+ "envr-platform",
+]
 
 [[package]]
 name = "envr-shim"

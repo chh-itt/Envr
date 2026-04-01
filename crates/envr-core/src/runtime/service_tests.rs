@@ -5,7 +5,16 @@ use envr_domain::runtime::RuntimeKind;
 fn defaults_providers_registered() {
     let svc = RuntimeService::with_defaults().expect("defaults");
     // Smoke: default stack registers Node/Python/Java. Avoid remote indexes in CI (covered in runtime crates).
-    for kind in [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java] {
+    for kind in [
+        RuntimeKind::Node,
+        RuntimeKind::Python,
+        RuntimeKind::Java,
+        RuntimeKind::Go,
+        RuntimeKind::Rust,
+        RuntimeKind::Php,
+        RuntimeKind::Deno,
+        RuntimeKind::Bun,
+    ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }
 }
@@ -14,7 +23,16 @@ fn defaults_providers_registered() {
 fn with_runtime_root_registers_providers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let svc = RuntimeService::with_runtime_root(dir.path().to_path_buf()).expect("svc");
-    for kind in [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java] {
+    for kind in [
+        RuntimeKind::Node,
+        RuntimeKind::Python,
+        RuntimeKind::Java,
+        RuntimeKind::Go,
+        RuntimeKind::Rust,
+        RuntimeKind::Php,
+        RuntimeKind::Deno,
+        RuntimeKind::Bun,
+    ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }
 }

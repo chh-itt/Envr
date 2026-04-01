@@ -206,6 +206,35 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Manage shims under `{runtime_root}/shims`
+    #[command(subcommand)]
+    Shim(ShimCmd),
+    /// Manage envr download caches under `{runtime_root}/cache`
+    #[command(subcommand)]
+    Cache(CacheCmd),
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ShimCmd {
+    /// Refresh core shims (and optionally global package forwards)
+    Sync {
+        /// Also sync global package executables (npm global bin, bun global bin)
+        #[arg(long)]
+        globals: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCmd {
+    /// Remove download/extract caches
+    Clean {
+        /// Limit to one cache kind (e.g. `bun`, `node`). Default: remove all cache.
+        #[arg(value_name = "KIND")]
+        kind: Option<String>,
+        /// Alias for removing all cache (same as no KIND).
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

@@ -1,6 +1,7 @@
 //! CLI command handlers wired to `envr_core::runtime::RuntimeService`.
 
 mod alias_cmd;
+mod cache_cmd;
 mod check;
 mod child_env;
 mod common;
@@ -18,6 +19,7 @@ mod prune;
 mod remote;
 mod resolve_cmd;
 mod run_cmd;
+mod shim_cmd;
 mod uninstall;
 mod update;
 mod use_cmd;
@@ -67,6 +69,12 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
         crate::cli::Command::Config(sub) => config_cmd::run(&cli.global, sub),
         crate::cli::Command::Alias(sub) => alias_cmd::run(&cli.global, sub),
         crate::cli::Command::Update { check } => update::run(&cli.global, check),
+        crate::cli::Command::Shim(sub) => match sub {
+            crate::cli::ShimCmd::Sync { globals } => shim_cmd::sync(&cli.global, globals),
+        },
+        crate::cli::Command::Cache(sub) => match sub {
+            crate::cli::CacheCmd::Clean { kind, all } => cache_cmd::clean(&cli.global, kind, all),
+        },
         crate::cli::Command::Prune { lang, execute } => {
             let service = match common::runtime_service() {
                 Ok(s) => s,
@@ -111,6 +119,8 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
                 | crate::cli::Command::Config { .. }
                 | crate::cli::Command::Alias { .. }
                 | crate::cli::Command::Update { .. }
+                | crate::cli::Command::Shim { .. }
+                | crate::cli::Command::Cache { .. }
                 | crate::cli::Command::Prune { .. } => unreachable!("handled above"),
             }
         }

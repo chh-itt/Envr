@@ -5,6 +5,11 @@ pub enum RuntimeKind {
     Node,
     Python,
     Java,
+    Go,
+    Rust,
+    Php,
+    Deno,
+    Bun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +52,11 @@ pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {
         "node" => Ok(RuntimeKind::Node),
         "python" => Ok(RuntimeKind::Python),
         "java" => Ok(RuntimeKind::Java),
+        "go" => Ok(RuntimeKind::Go),
+        "rust" => Ok(RuntimeKind::Rust),
+        "php" => Ok(RuntimeKind::Php),
+        "deno" => Ok(RuntimeKind::Deno),
+        "bun" => Ok(RuntimeKind::Bun),
         _ => Err(EnvrError::Validation(format!("unknown runtime kind: {s}"))),
     }
 }

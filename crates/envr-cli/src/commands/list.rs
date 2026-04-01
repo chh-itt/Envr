@@ -5,7 +5,16 @@ use crate::output;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 
-const ALL_KINDS: [RuntimeKind; 3] = [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java];
+const ALL_KINDS: [RuntimeKind; 8] = [
+    RuntimeKind::Node,
+    RuntimeKind::Python,
+    RuntimeKind::Java,
+    RuntimeKind::Go,
+    RuntimeKind::Rust,
+    RuntimeKind::Php,
+    RuntimeKind::Deno,
+    RuntimeKind::Bun,
+];
 
 pub fn run(g: &GlobalArgs, service: &RuntimeService, lang: Option<String>) -> i32 {
     let kinds: Vec<RuntimeKind> = match lang {

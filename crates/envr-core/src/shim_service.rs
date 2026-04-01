@@ -1,6 +1,6 @@
 //! Writes launcher stubs under `{runtime_root}/shims` for `PATH`, and syncs Node global-bin forwards.
 //!
-//! Core tools use [`envr_shim_core::CoreCommand`] dispatch names (`envr-shim node`, …). Global npm
+//! Core tools use [`envr_shim_core::CoreCommand`] dispatch names (`envr-shim node`, ??. Global npm
 //! packages get small stubs that `call` / symlink the real file under `npm bin -g`.
 
 use envr_domain::runtime::RuntimeKind;
@@ -25,12 +25,26 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Pip, "pip3"),
         ],
         RuntimeKind::Java => &[(CoreCommand::Java, "java"), (CoreCommand::Javac, "javac")],
+        RuntimeKind::Go => &[],
+        RuntimeKind::Rust => &[],
+        RuntimeKind::Php => &[],
+        RuntimeKind::Deno => &[],
+        RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
     }
 }
 
 fn core_stems_set() -> HashSet<String> {
     let mut s = HashSet::new();
-    for k in [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java] {
+    for k in [
+        RuntimeKind::Node,
+        RuntimeKind::Python,
+        RuntimeKind::Java,
+        RuntimeKind::Go,
+        RuntimeKind::Rust,
+        RuntimeKind::Php,
+        RuntimeKind::Deno,
+        RuntimeKind::Bun,
+    ] {
         for (_, d) in core_shim_entries(k) {
             s.insert((*d).to_ascii_lowercase());
         }
@@ -76,51 +90,43 @@ impl ShimService {
         Ok(())
     }
 
-    /// Refreshes stubs for executables in `npm bin -g` (excluding core tools). Removes stale forwards.
+    /// Refreshes stubs for global package executables (excluding core tools).
+    ///
+    /// - For Node: scans `npm bin -g`
+    /// - For Bun: scans `bun pm bin -g`
+    ///
+    /// Removes stale forwards across all supported global-bin sources to avoid deleting
+    /// another runtime's global shims.
     pub fn sync_global_package_shims(
         &self,
         kind: RuntimeKind,
         _version_label: &str,
     ) -> EnvrResult<()> {
-        if kind != RuntimeKind::Node {
-            return Ok(());
+        match kind {
+            RuntimeKind::Node | RuntimeKind::Bun => self.sync_all_global_package_shims(),
+            _ => Ok(()),
         }
-        let Some(node_home) = self.try_current_node_home() else {
-            return Ok(());
-        };
-        let npm = match core_tool_executable(&node_home, CoreCommand::Npm) {
-            Ok(p) => p,
-            Err(_) => return Ok(()),
-        };
-        let global_bin = match self.npm_global_bin_dir(&npm, &node_home) {
-            Ok(p) => p,
-            Err(_) => return Ok(()),
-        };
-        if !global_bin.is_dir() {
-            return Ok(());
-        }
+    }
 
-        fs::create_dir_all(self.shim_dir())?;
+    /// Sync global executable forwards for Node + Bun, then drop stale non-core stubs.
+    pub fn sync_all_global_package_shims(&self) -> EnvrResult<()> {
         let mut seen = HashSet::<String>::new();
-        for e in fs::read_dir(&global_bin).map_err(EnvrError::from)? {
-            let e = e.map_err(EnvrError::from)?;
-            let path = e.path();
-            if !path.is_file() {
-                continue;
-            }
-            let stem = normalized_stem(&path);
-            if is_global_skip_stem(&stem) {
-                continue;
-            }
-            seen.insert(stem.clone());
-            self.write_global_forward(&path, &stem)?;
-        }
+        seen.extend(self.scan_node_global_bins()?);
+        seen.extend(self.scan_bun_global_bins()?);
         self.remove_stale_non_core_shims(&seen)?;
         Ok(())
     }
 
     fn try_current_node_home(&self) -> Option<PathBuf> {
         let link = self.runtime_root.join("runtimes/node/current");
+        if !link.exists() {
+            return None;
+        }
+        fs::canonicalize(&link).ok()
+    }
+
+    fn try_current_bun_home(&self) -> Option<PathBuf> {
+        let link = self.runtime_root.join("runtimes/bun/current");
         if !link.exists() {
             return None;
         }
@@ -145,6 +151,78 @@ impl ShimService {
             ));
         }
         Ok(PathBuf::from(s))
+    }
+
+    fn bun_global_bin_dir(&self, bun: &Path, bun_home: &Path) -> EnvrResult<PathBuf> {
+        let mut cmd = Command::new(bun);
+        cmd.args(["pm", "bin", "-g"]);
+        cmd.env("PATH", bun_path_env(bun_home)?);
+        let out = cmd.output().map_err(EnvrError::from)?;
+        if !out.status.success() {
+            return Err(EnvrError::Runtime(format!(
+                "bun pm bin -g failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )));
+        }
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if s.is_empty() {
+            return Err(EnvrError::Runtime(
+                "bun pm bin -g returned empty output".into(),
+            ));
+        }
+        Ok(PathBuf::from(s))
+    }
+
+    fn scan_bin_dir(&self, global_bin: &Path) -> EnvrResult<HashSet<String>> {
+        if !global_bin.is_dir() {
+            return Ok(HashSet::new());
+        }
+        fs::create_dir_all(self.shim_dir())?;
+        let mut seen = HashSet::<String>::new();
+        for e in fs::read_dir(global_bin).map_err(EnvrError::from)? {
+            let e = e.map_err(EnvrError::from)?;
+            let path = e.path();
+            if !path.is_file() {
+                continue;
+            }
+            let stem = normalized_stem(&path);
+            if is_global_skip_stem(&stem) {
+                continue;
+            }
+            seen.insert(stem.clone());
+            self.write_global_forward(&path, &stem)?;
+        }
+        Ok(seen)
+    }
+
+    fn scan_node_global_bins(&self) -> EnvrResult<HashSet<String>> {
+        let Some(node_home) = self.try_current_node_home() else {
+            return Ok(HashSet::new());
+        };
+        let npm = match core_tool_executable(&node_home, CoreCommand::Npm) {
+            Ok(p) => p,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        let global_bin = match self.npm_global_bin_dir(&npm, &node_home) {
+            Ok(p) => p,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        self.scan_bin_dir(&global_bin)
+    }
+
+    fn scan_bun_global_bins(&self) -> EnvrResult<HashSet<String>> {
+        let Some(bun_home) = self.try_current_bun_home() else {
+            return Ok(HashSet::new());
+        };
+        let bun = match core_tool_executable(&bun_home, CoreCommand::Bun) {
+            Ok(p) => p,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        let global_bin = match self.bun_global_bin_dir(&bun, &bun_home) {
+            Ok(p) => p,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        self.scan_bin_dir(&global_bin)
     }
 
     fn write_core_shim(&self, dispatch_name: &str) -> EnvrResult<()> {
@@ -253,6 +331,8 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "pip3"
             | "java"
             | "javac"
+            | "bun"
+            | "bunx"
     )
 }
 
@@ -274,6 +354,29 @@ fn npm_path_env(node_home: &Path) -> EnvrResult<String> {
             "{}:{}:{}",
             node_bin.display(),
             node_home.display(),
+            rest
+        ))
+    }
+}
+
+fn bun_path_env(bun_home: &Path) -> EnvrResult<String> {
+    let bun_bin = bun_home.join("bin");
+    let rest = std::env::var("PATH").unwrap_or_default();
+    #[cfg(windows)]
+    {
+        Ok(format!(
+            "{};{};{}",
+            bun_home.display(),
+            bun_bin.display(),
+            rest
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(format!(
+            "{}:{}:{}",
+            bun_bin.display(),
+            bun_home.display(),
             rest
         ))
     }

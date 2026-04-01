@@ -10,6 +10,11 @@ pub fn kind_label(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Node => "node",
         RuntimeKind::Python => "python",
         RuntimeKind::Java => "java",
+        RuntimeKind::Go => "go",
+        RuntimeKind::Rust => "rust",
+        RuntimeKind::Php => "php",
+        RuntimeKind::Deno => "deno",
+        RuntimeKind::Bun => "bun",
     }
 }
 

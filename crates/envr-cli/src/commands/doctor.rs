@@ -6,7 +6,16 @@ use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::RuntimeKind;
 use std::path::Path;
 
-const ALL_KINDS: [RuntimeKind; 3] = [RuntimeKind::Node, RuntimeKind::Python, RuntimeKind::Java];
+const ALL_KINDS: [RuntimeKind; 8] = [
+    RuntimeKind::Node,
+    RuntimeKind::Python,
+    RuntimeKind::Java,
+    RuntimeKind::Go,
+    RuntimeKind::Rust,
+    RuntimeKind::Php,
+    RuntimeKind::Deno,
+    RuntimeKind::Bun,
+];
 
 pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
     let root = match common::effective_runtime_root() {

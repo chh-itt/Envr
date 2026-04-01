@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+envr-domain = { path = "../envr-domain" }
+envr-error = { path = "../envr-error" }
+envr-platform = { path = "../envr-platform" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+envr-download = { path = "../envr-download" }
+tempfile = { workspace = true }

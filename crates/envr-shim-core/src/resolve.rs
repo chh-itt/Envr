@@ -47,6 +47,8 @@ pub enum CoreCommand {
     Pip,
     Java,
     Javac,
+    Bun,
+    Bunx,
 }
 
 impl CoreCommand {
@@ -55,6 +57,7 @@ impl CoreCommand {
             CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => "node",
             CoreCommand::Python | CoreCommand::Pip => "python",
             CoreCommand::Java | CoreCommand::Javac => "java",
+            CoreCommand::Bun | CoreCommand::Bunx => "bun",
         }
     }
 }
@@ -83,6 +86,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "pip" | "pip3" => Some(CoreCommand::Pip),
         "java" => Some(CoreCommand::Java),
         "javac" => Some(CoreCommand::Javac),
+        "bun" => Some(CoreCommand::Bun),
+        "bunx" => Some(CoreCommand::Bunx),
         _ => None,
     }
 }
@@ -326,12 +331,23 @@ fn java_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn bun_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Bun => Ok(first_existing(&[home.join("bun.exe"), home.join("bun")])
+            .ok_or_else(|| EnvrError::Runtime(format!("bun missing under {}", home.display())))?),
+        CoreCommand::Bunx => Ok(first_existing(&[home.join("bunx.exe"), home.join("bunx")])
+            .ok_or_else(|| EnvrError::Runtime(format!("bunx missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a bun tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(home, cmd),
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
+        CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
     }
 }
 
@@ -375,6 +391,7 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
             extra_env.push(("JAVA_HOME".into(), home.display().to_string()));
             java_tool_path(&home, cmd)?
         }
+        CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {

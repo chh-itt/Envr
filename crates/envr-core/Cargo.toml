@@ -10,6 +10,11 @@ envr-domain = { path = "../envr-domain" }
 envr-runtime-node = { path = "../envr-runtime-node" }
 envr-runtime-python = { path = "../envr-runtime-python" }
 envr-runtime-java = { path = "../envr-runtime-java" }
+envr-runtime-go = { path = "../envr-runtime-go" }
+envr-runtime-rust = { path = "../envr-runtime-rust" }
+envr-runtime-php = { path = "../envr-runtime-php" }
+envr-runtime-deno = { path = "../envr-runtime-deno" }
+envr-runtime-bun = { path = "../envr-runtime-bun" }
 envr-shim-core = { path = "../envr-shim-core" }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
@@ -17,3 +22,4 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+

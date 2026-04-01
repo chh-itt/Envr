@@ -15,7 +15,7 @@ pub fn run(g: &GlobalArgs, name: Option<String>) -> i32 {
     let base = normalize_invoked_basename(name.trim());
     let Some(cmd) = parse_core_command(&base) else {
         let err = EnvrError::Validation(format!(
-            "unknown tool {name:?} (try node, npm, npx, python, pip, java, javac)"
+            "unknown tool {name:?} (try node, npm, npx, python, pip, java, javac, bun, bunx)"
         ));
         return common::print_envr_error(g, err);
     };
