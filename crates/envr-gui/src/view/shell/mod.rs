@@ -6,13 +6,13 @@ use envr_ui::theme::ThemeTokens;
 use crate::app::{AppState, Message, Route};
 use crate::theme as gui_theme;
 use crate::view::dashboard::dashboard_view;
-use crate::view::downloads::download_dock;
+use crate::view::downloads::floating_download_panel;
 use crate::view::env_center::env_center_view;
 use crate::view::runtime_nav::runtime_nav_bar;
 use crate::view::runtime_settings::runtime_settings_view;
 use crate::view::settings::settings_view;
 
-use iced::widget::{button, column, horizontal_space, row};
+use iced::widget::{button, column, horizontal_space, row, stack, vertical_space};
 
 pub fn app_view(state: &AppState) -> Element<'_, Message> {
     let t = state.tokens();
@@ -28,11 +28,7 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
     .spacing(t.content_spacing().round() as u16)
     .height(Length::Fill);
 
-    let dock = container(download_dock(&state.downloads, t))
-        .padding(Padding::from(t.content_spacing()))
-        .width(Length::Fill);
-
-    let body = column![main_row, dock].spacing(8).height(Length::Fill);
+    let body = column![main_row].spacing(8).height(Length::Fill);
 
     let chrome = if let Some(err) = state.error_message() {
         column![error_banner(t, err), body].spacing(8)
@@ -40,7 +36,20 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
         column![body]
     };
 
-    container(chrome)
+    let x = state.downloads.x.max(0) as f32;
+    let y = state.downloads.y.max(0) as f32;
+    let floating = container(column![
+        vertical_space().height(Length::Fill),
+        row![
+            container(horizontal_space().width(Length::Fixed(x))).width(Length::Fixed(x)),
+            floating_download_panel(&state.downloads, t),
+        ],
+        container(vertical_space().height(Length::Fixed(y))).height(Length::Fixed(y)),
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    container(stack![chrome, floating])
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(Padding::from(t.content_spacing()))

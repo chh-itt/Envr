@@ -130,6 +130,40 @@ pub struct AppearanceSettings {
     pub theme_mode: ThemeMode,
 }
 
+/// GUI-only state persisted in `settings.toml` so window layout/UX preferences survive restarts.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GuiSettings {
+    #[serde(default)]
+    pub downloads_panel: DownloadsPanelSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DownloadsPanelSettings {
+    /// Whether the floating downloads panel is visible.
+    #[serde(default = "defaults::downloads_panel_visible")]
+    pub visible: bool,
+    /// Whether the panel is expanded (shows job list).
+    #[serde(default = "defaults::downloads_panel_expanded")]
+    pub expanded: bool,
+    /// Left offset in pixels from the window's left edge.
+    #[serde(default = "defaults::downloads_panel_x")]
+    pub x: i32,
+    /// Bottom offset in pixels from the window's bottom edge.
+    #[serde(default = "defaults::downloads_panel_y")]
+    pub y: i32,
+}
+
+impl Default for DownloadsPanelSettings {
+    fn default() -> Self {
+        Self {
+            visible: defaults::downloads_panel_visible(),
+            expanded: defaults::downloads_panel_expanded(),
+            x: defaults::downloads_panel_x(),
+            y: defaults::downloads_panel_y(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RuntimeSettings {
     #[serde(default)]
@@ -164,6 +198,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub appearance: AppearanceSettings,
+
+    #[serde(default)]
+    pub gui: GuiSettings,
 
     #[serde(default)]
     pub download: DownloadSettings,
@@ -241,6 +278,12 @@ impl Settings {
         {
             return Err(EnvrError::Validation(
                 "runtime.bun.global_bin_dir must not be whitespace-only".to_string(),
+            ));
+        }
+
+        if self.gui.downloads_panel.x < 0 || self.gui.downloads_panel.y < 0 {
+            return Err(EnvrError::Validation(
+                "gui.downloads_panel x/y must be >= 0".to_string(),
             ));
         }
 
@@ -421,6 +464,22 @@ mod defaults {
     pub fn locale_mode() -> LocaleMode {
         LocaleMode::FollowSystem
     }
+
+    pub fn downloads_panel_visible() -> bool {
+        true
+    }
+
+    pub fn downloads_panel_expanded() -> bool {
+        true
+    }
+
+    pub fn downloads_panel_x() -> i32 {
+        12
+    }
+
+    pub fn downloads_panel_y() -> i32 {
+        12
+    }
 }
 
 #[cfg(test)]
@@ -447,6 +506,14 @@ mod tests {
                     family: Some("Microsoft YaHei UI".to_string()),
                 },
                 theme_mode: ThemeMode::Dark,
+            },
+            gui: GuiSettings {
+                downloads_panel: DownloadsPanelSettings {
+                    visible: true,
+                    expanded: false,
+                    x: 24,
+                    y: 18,
+                },
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,

@@ -11,7 +11,7 @@ use envr_ui::theme::{
     ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, tokens_for_scheme,
 };
 use iced::font::Family;
-use iced::{Element, Task, application};
+use iced::{Element, Subscription, Task, application};
 
 use crate::download_runner;
 use crate::gui_ops;
@@ -72,17 +72,35 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        let gui_defaults = load_gui_downloads_panel_settings();
         Self {
             route: Route::default(),
             error: None,
             flavor: default_flavor_for_target(),
             env_center: EnvCenterState::default(),
-            downloads: DownloadPanelState::default(),
+            downloads: DownloadPanelState {
+                visible: gui_defaults.0,
+                expanded: gui_defaults.1,
+                x: gui_defaults.2,
+                y: gui_defaults.3,
+                ..DownloadPanelState::default()
+            },
             settings: SettingsViewState::new(),
             dashboard: DashboardState::default(),
             runtime_settings: RuntimeSettingsState::default(),
         }
     }
+}
+
+fn load_gui_downloads_panel_settings() -> (bool, bool, i32, i32) {
+    let paths = match envr_platform::paths::current_platform_paths() {
+        Ok(v) => v,
+        Err(_) => return (true, true, 12, 12),
+    };
+    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+    let p = st.gui.downloads_panel;
+    (p.visible, p.expanded, p.x.max(0), p.y.max(0))
 }
 
 impl AppState {
@@ -123,8 +141,11 @@ pub fn run() -> iced::Result {
         .default_font(configured_default_font())
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|_state| {
-            iced::time::every(Duration::from_millis(400))
-                .map(|_| Message::Download(DownloadMsg::Tick))
+            Subscription::batch([
+                iced::time::every(Duration::from_millis(400))
+                    .map(|_| Message::Download(DownloadMsg::Tick)),
+                iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))),
+            ])
         })
         .centered()
         .window_size((960.0, 640.0))
@@ -375,9 +396,58 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
             state.downloads.on_tick();
             Task::none()
         }
+        DownloadMsg::ToggleVisible => {
+            state.downloads.visible = !state.downloads.visible;
+            let _ = persist_download_panel_settings(&state.downloads);
+            Task::none()
+        }
         DownloadMsg::ToggleExpand => {
             state.downloads.expanded = !state.downloads.expanded;
+            let _ = persist_download_panel_settings(&state.downloads);
             Task::none()
+        }
+        DownloadMsg::StartDrag => {
+            state.downloads.dragging = true;
+            state.downloads.drag_from_cursor = None;
+            state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
+            Task::none()
+        }
+        DownloadMsg::Event(e) => {
+            use iced::Event;
+            use iced::mouse;
+            match e {
+                Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    if !state.downloads.dragging {
+                        return Task::none();
+                    }
+                    let (cx, cy) = (position.x, position.y);
+                    if state.downloads.drag_from_cursor.is_none() {
+                        state.downloads.drag_from_cursor = Some((cx, cy));
+                        return Task::none();
+                    }
+                    let (sx, sy) = state.downloads.drag_from_cursor.unwrap();
+                    let (px, py) = state
+                        .downloads
+                        .drag_from_pos
+                        .unwrap_or((state.downloads.x, state.downloads.y));
+                    // Interpret y as bottom offset; moving cursor down decreases bottom offset.
+                    let dx = cx - sx;
+                    let dy = cy - sy;
+                    state.downloads.x = (px + dx.round() as i32).max(0);
+                    state.downloads.y = (py - dy.round() as i32).max(0);
+                    Task::none()
+                }
+                Event::Mouse(mouse::Event::ButtonReleased(_btn)) => {
+                    if state.downloads.dragging {
+                        state.downloads.dragging = false;
+                        state.downloads.drag_from_cursor = None;
+                        state.downloads.drag_from_pos = None;
+                        let _ = persist_download_panel_settings(&state.downloads);
+                    }
+                    Task::none()
+                }
+                _ => Task::none(),
+            }
         }
         DownloadMsg::EnqueueDemo => enqueue_demo_download(state),
         DownloadMsg::Finished { id, result } => {
@@ -417,6 +487,20 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
             retry_download(state, &url_str, &format!("{label} (重试)"))
         }
     }
+}
+
+fn persist_download_panel_settings(
+    panel: &DownloadPanelState,
+) -> Result<(), envr_error::EnvrError> {
+    let paths = envr_platform::paths::current_platform_paths()?;
+    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+    let mut st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+    st.gui.downloads_panel.visible = panel.visible;
+    st.gui.downloads_panel.expanded = panel.expanded;
+    st.gui.downloads_panel.x = panel.x.max(0);
+    st.gui.downloads_panel.y = panel.y.max(0);
+    st.save_to(&settings_path)?;
+    Ok(())
 }
 
 fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {

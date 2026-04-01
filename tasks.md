@@ -776,18 +776,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T051 悬浮下载面板（可拖拽/可隐藏/可展开）
-- [ ] **T051：实现左下角悬浮下载面板并支持拖拽停靠** #gui #download #ux
+ - [x] **T051：实现左下角悬浮下载面板并支持拖拽停靠** #gui #download #ux
   - **描述**：下载面板默认左下角，支持拖拽、折叠、隐藏，记忆面板状态。
   - **依赖**：T033,T046
   - **输入文档**：`refactor docs/03-gui-设计.md`,`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-gui/src/view/downloads/floating_panel.rs`
   - **验收**：下载面板出现/隐藏不会挤压主内容布局。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：使用 `stack` 将下载面板作为浮层叠加在主内容之上，默认左下角；支持展开/隐藏；通过全局鼠标事件订阅实现拖拽移动（记录 `x/y` 偏移）；面板状态持久化到 `settings.toml` 的 `gui.downloads_panel`（visible/expanded/x/y），重启后保持。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T052 防闪烁与防弹跳专项优化
 - [ ] **T052：实现 UI 稳定性优化（减少冗余刷新/闪烁/弹跳）** #gui #perf #ux

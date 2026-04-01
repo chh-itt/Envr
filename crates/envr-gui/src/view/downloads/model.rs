@@ -58,6 +58,14 @@ pub struct DownloadPanelState {
     pub jobs: Vec<DownloadJob>,
     pub next_id: u64,
     pub expanded: bool,
+    pub visible: bool,
+    /// Left offset (px) from window left edge.
+    pub x: i32,
+    /// Bottom offset (px) from window bottom edge.
+    pub y: i32,
+    pub dragging: bool,
+    pub drag_from_cursor: Option<(f32, f32)>,
+    pub drag_from_pos: Option<(i32, i32)>,
 }
 
 impl Default for DownloadPanelState {
@@ -66,6 +74,12 @@ impl Default for DownloadPanelState {
             jobs: Vec::new(),
             next_id: 1,
             expanded: true,
+            visible: true,
+            x: 12,
+            y: 12,
+            dragging: false,
+            drag_from_cursor: None,
+            drag_from_pos: None,
         }
     }
 }
