@@ -366,18 +366,18 @@
 ## Phase 6：CLI 完整可用
 
 ### T025 CLI 命令骨架与全局参数
-- [ ] **T025：实现 `envr-cli` 命令树与全局参数（format/quiet/no-color）** #cli
+- [x] **T025：实现 `envr-cli` 命令树与全局参数（format/quiet/no-color）** #cli
   - **描述**：建立命令入口和统一输出选择器。
   - **依赖**：T015
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/cli.rs`
   - **验收**：`envr --help` 完整可读。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `cli.rs`（`clap` 根命令 `envr`、flatten 全局参数 `--format`、`--quiet`、`--no-color`、`--runtime-root`；L1 子命令 `install`/`use`/`list`/`current`/`uninstall`/`which`/`remote`/`doctor` 占位解析；`apply_global` 写入 `NO_COLOR`/`ENVR_RUNTIME_ROOT`/`ENVR_OUTPUT_FORMAT`/`RUST_LOG`（unsafe 块符合 Rust 2024 环境变量约定）；`main` 先解析再 `apply_global` 后初始化日志；二进制名 `envr`（`autobins = false` + `[[bin]]`）；集成测试校验 `--help` 含 L1 与全局项。工作区 `clap` 在 `default-features = false` 下需显式启用 `help`（及 `usage`）否则无 `--help`。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：子命令位置参数字段名不可用 `version`（与 `--version` 冲突），改为 `runtime_version`；`ValueEnum` 的 `default_value_t` 与 `global` 组合未作为根因，根因是缺少 `help` feature。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T026 基础命令实现（install/use/list/current）
 - [ ] **T026：实现核心高频命令链路** #cli
