@@ -4,6 +4,10 @@ use futures::StreamExt;
 use reqwest::{Client, StatusCode, Url, header};
 use std::{
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 use tokio::{
@@ -50,12 +54,17 @@ impl DownloadEngine {
             .map_err(|e| EnvrError::Download(format!("reqwest client build failed: {e}")))
     }
 
+    /// Optional `progress_downloaded` / `progress_total` are updated for GUI observability.
+    /// `progress_downloaded` starts at the resume offset (if any) and increases with each written chunk.
+    /// `progress_total` is set from `Content-Length` when present (full file size ≈ resume + remainder).
     pub async fn download_to_file(
         &self,
         url: Url,
         dest_path: impl AsRef<Path>,
         cancel: &CancelToken,
         options: &DownloadOptions,
+        progress_downloaded: Option<Arc<AtomicU64>>,
+        progress_total: Option<Arc<AtomicU64>>,
     ) -> EnvrResult<DownloadOutcome> {
         let dest_path = dest_path.as_ref().to_path_buf();
         if let Some(parent) = dest_path.parent() {
@@ -84,6 +93,19 @@ impl DownloadEngine {
             }
         };
 
+        if let (Some(total_atomic), Some(remainder)) =
+            (progress_total.as_ref(), response.content_length())
+        {
+            total_atomic.store(
+                effective_resumed_from.saturating_add(remainder),
+                Ordering::Relaxed,
+            );
+        }
+
+        if let Some(dl) = progress_downloaded.as_ref() {
+            dl.store(effective_resumed_from, Ordering::Relaxed);
+        }
+
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -108,6 +130,9 @@ impl DownloadEngine {
 
             file.write_all(&chunk).await.map_err(EnvrError::from)?;
             bytes_written = bytes_written.saturating_add(chunk.len() as u64);
+            if let Some(dl) = progress_downloaded.as_ref() {
+                dl.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+            }
         }
         file.flush().await.map_err(EnvrError::from)?;
 

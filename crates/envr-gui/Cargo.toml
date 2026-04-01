@@ -6,9 +6,11 @@ edition = "2024"
 [dependencies]
 envr-core = { path = "../envr-core" }
 envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-ui = { path = "../envr-ui" }
-iced = { version = "0.13", default-features = false, features = ["wgpu", "tiny-skia"] }
+reqwest = { workspace = true }
+iced = { version = "0.13", default-features = false, features = ["wgpu", "tiny-skia", "tokio"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }

@@ -1,4 +1,5 @@
 mod app;
+mod download_runner;
 mod gui_ops;
 mod runtime_exec;
 mod service;

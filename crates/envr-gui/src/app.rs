@@ -1,11 +1,20 @@
 //! Main-window shell: left navigation, routed content, global error banner.
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::time::Duration;
+
+use envr_download::task::CancelToken;
 use envr_ui::theme::{ThemeTokens, UiFlavor, default_flavor_for_target, tokens_for};
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Alignment, Element, Length, Padding, Task, Theme, application};
 
+use crate::download_runner;
 use crate::gui_ops;
 use crate::theme as gui_theme;
+use crate::view::downloads::{
+    DownloadJob, DownloadMsg, DownloadPanelState, JobState, download_dock,
+};
 use crate::view::env_center::{EnvCenterMsg, EnvCenterState, env_center_view};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -35,13 +44,13 @@ impl Route {
     }
 }
 
-#[derive(Debug)]
 pub struct AppState {
     route: Route,
     error: Option<String>,
     /// Active skin; user can override the OS default on the Settings page.
     flavor: UiFlavor,
     pub env_center: EnvCenterState,
+    pub downloads: DownloadPanelState,
 }
 
 impl Default for AppState {
@@ -51,6 +60,7 @@ impl Default for AppState {
             error: None,
             flavor: default_flavor_for_target(),
             env_center: EnvCenterState::default(),
+            downloads: DownloadPanelState::default(),
         }
     }
 }
@@ -68,11 +78,16 @@ pub enum Message {
     ReportError(String),
     SetFlavor(UiFlavor),
     EnvCenter(EnvCenterMsg),
+    Download(DownloadMsg),
 }
 
 pub fn run() -> iced::Result {
     application("Envr", update, view)
         .theme(|state| gui_theme::iced_theme(state.tokens()))
+        .subscription(|_state| {
+            iced::time::every(Duration::from_millis(400))
+                .map(|_| Message::Download(DownloadMsg::Tick))
+        })
         .centered()
         .window_size((960.0, 640.0))
         .run()
@@ -102,7 +117,96 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::EnvCenter(msg) => handle_env_center(state, msg),
+        Message::Download(msg) => handle_download(state, msg),
     }
+}
+
+fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
+    match msg {
+        DownloadMsg::Tick => {
+            state.downloads.on_tick();
+            Task::none()
+        }
+        DownloadMsg::ToggleExpand => {
+            state.downloads.expanded = !state.downloads.expanded;
+            Task::none()
+        }
+        DownloadMsg::EnqueueDemo => enqueue_demo_download(state),
+        DownloadMsg::Finished { id, result } => {
+            if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
+                match &result {
+                    Ok(_) => j.state = JobState::Done,
+                    Err(e) => {
+                        if e.contains("cancelled") {
+                            j.state = JobState::Cancelled;
+                        } else {
+                            j.state = JobState::Failed;
+                            j.last_error = Some(e.clone());
+                        }
+                    }
+                }
+            }
+            Task::none()
+        }
+        DownloadMsg::Cancel(id) => {
+            if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
+                j.cancel.cancel();
+            }
+            Task::none()
+        }
+        DownloadMsg::Retry(id) => {
+            let Some(failed) = state
+                .downloads
+                .jobs
+                .iter()
+                .find(|j| j.id == id && j.state == JobState::Failed)
+                .map(|j| (j.url.clone(), j.label.clone()))
+            else {
+                return Task::none();
+            };
+            let (url_str, label) = failed;
+            state.downloads.jobs.retain(|j| j.id != id);
+            retry_download(state, &url_str, &format!("{label} (重试)"))
+        }
+    }
+}
+
+fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {
+    retry_download(
+        state,
+        download_runner::DEMO_URL,
+        &format!("演示 #{}", state.downloads.next_id),
+    )
+}
+
+fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Message> {
+    let url = match reqwest::Url::parse(url_str) {
+        Ok(u) => u,
+        Err(e) => {
+            state.error = Some(format!("URL 解析失败: {e}"));
+            return Task::none();
+        }
+    };
+    let id = state.downloads.next_id;
+    state.downloads.next_id += 1;
+    let dest = std::env::temp_dir().join(format!("envr-gui-dl-{id}.tmp"));
+    let downloaded = Arc::new(AtomicU64::new(0));
+    let total = Arc::new(AtomicU64::new(0));
+    let cancel = CancelToken::new();
+    state.downloads.jobs.push(DownloadJob {
+        id,
+        label: label.to_string(),
+        url: url_str.to_string(),
+        state: JobState::Running,
+        downloaded: downloaded.clone(),
+        total: total.clone(),
+        cancel: cancel.clone(),
+        last_error: None,
+        tick_prev_bytes: 0,
+        tick_prev_at: None,
+        speed_bps: 0.0,
+    });
+    download_runner::start_http_job(id, url, dest, cancel, downloaded, total)
 }
 
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
@@ -179,7 +283,7 @@ fn view(state: &AppState) -> Element<'_, Message> {
     let t = state.tokens();
     let bg = gui_theme::to_color(t.colors.background);
 
-    let body = row![
+    let main_row = row![
         sidebar(state.route, t),
         container(page_body(state, t))
             .width(Length::Fill)
@@ -188,6 +292,12 @@ fn view(state: &AppState) -> Element<'_, Message> {
     ]
     .spacing(t.content_spacing().round() as u16)
     .height(Length::Fill);
+
+    let dock = container(download_dock(&state.downloads, t))
+        .padding(Padding::from(t.content_spacing()))
+        .width(Length::Fill);
+
+    let body = column![main_row, dock].spacing(8).height(Length::Fill);
 
     let chrome = if let Some(err) = state.error.as_deref() {
         column![error_banner(t, err), body].spacing(8)

@@ -885,10 +885,12 @@ version = "0.1.0"
 dependencies = [
  "envr-core",
  "envr-domain",
+ "envr-download",
  "envr-error",
  "envr-platform",
  "envr-ui",
  "iced",
+ "reqwest",
  "tokio",
  "tracing",
 ]
@@ -1601,6 +1603,7 @@ dependencies = [
  "iced_core",
  "log",
  "rustc-hash 2.1.2",
+ "tokio",
  "wasm-bindgen-futures",
  "wasm-timer",
 ]

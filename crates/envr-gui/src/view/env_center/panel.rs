@@ -111,7 +111,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             let uninstall_msg = if active || busy {
                 None
             } else {
-                Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(ver.0.clone())))
+                Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+                    ver.0.clone(),
+                )))
             };
 
             let row = row![

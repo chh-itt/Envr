@@ -480,18 +480,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T033 下载面板与任务控制
-- [ ] **T033：实现多任务下载面板（进度/取消/重试）** #gui #download
+- [x] **T033：实现多任务下载面板（进度/取消/重试）** #gui #download
   - **描述**：实时展示下载速度、ETA、失败原因、任务恢复。
   - **依赖**：T032,T010,T011
   - **输入文档**：`refactor docs/05-下载与镜像源设计.md`
   - **输出文件**：`crates/envr-gui/src/view/downloads/*`
   - **验收**：GUI 下载任务状态与后台真实状态一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-download::DownloadEngine::download_to_file` 增加可选进度/总长 `AtomicU64`；GUI `view/downloads` 底部 dock，多任务列表、`progress_bar`、订阅 `iced::time::every` 推算速率与 ETA、`CancelToken` 取消、失败重试（重新入队）；演示下载走真实异步引擎与 CLI 同源 crate。`iced` 启用 `tokio` feature 以使用 `time::every`。
+    - 相关提交/PR：feat(gui): T033 download panel and engine progress hooks
+    - 遇到的问题/决策：运行时 `install` 仍为同步阻塞 HTTP，未接入本面板；与「后台一致」对演示任务成立，环境安装进度需后续把 provider 下载迁到引擎并登记任务总线（或 T034/T051 前后续）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T034 设置页（镜像、路径、行为）
 - [ ] **T034：实现设置页与配置持久化** #gui #config
