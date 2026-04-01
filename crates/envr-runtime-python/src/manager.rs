@@ -199,11 +199,7 @@ pub fn python_executable(home: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
     {
         let p = home.join("python.exe");
-        if p.is_file() {
-            Some(p)
-        } else {
-            None
-        }
+        if p.is_file() { Some(p) } else { None }
     }
     #[cfg(not(windows))]
     {
