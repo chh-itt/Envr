@@ -4,6 +4,7 @@ use envr_domain::runtime::{
 };
 use envr_error::{EnvrError, EnvrResult};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub struct RuntimeService {
     providers: HashMap<RuntimeKind, Box<dyn RuntimeProvider>>,
@@ -29,6 +30,17 @@ impl RuntimeService {
             Box::new(envr_runtime_node::NodeRuntimeProvider::new()),
             Box::new(envr_runtime_python::PythonRuntimeProvider::new()),
             Box::new(envr_runtime_java::JavaRuntimeProvider::new()),
+        ])
+    }
+
+    /// Same as [`Self::with_defaults`], but all providers use this runtime root (e.g. from `ENVR_RUNTIME_ROOT`).
+    pub fn with_runtime_root(root: PathBuf) -> EnvrResult<Self> {
+        Self::new(vec![
+            Box::new(envr_runtime_node::NodeRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(
+                envr_runtime_python::PythonRuntimeProvider::new().with_runtime_root(root.clone()),
+            ),
+            Box::new(envr_runtime_java::JavaRuntimeProvider::new().with_runtime_root(root)),
         ])
     }
 

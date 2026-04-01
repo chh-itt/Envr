@@ -380,18 +380,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T026 基础命令实现（install/use/list/current）
-- [ ] **T026：实现核心高频命令链路** #cli
+- [x] **T026：实现核心高频命令链路** #cli
   - **描述**：打通核心四命令到 `envr-core`。
   - **依赖**：T025,T017,T019,T021,T024
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/commands/*`
   - **验收**：Node/Python/Java 三语言均可完成常规生命周期操作。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-core::RuntimeService::with_runtime_root` 统一为 Node/Python/Java provider 注入数据根；CLI `commands/{common,install,use_cmd,list,current}.rs` 解析 `node|python|java`、调用 `install`/`resolve+set_current`/`list_installed`/`current`；`ENVR_RUNTIME_ROOT`（及 `apply_global` 的 `--runtime-root`）优先于平台默认路径；`--format json` 输出简易 JSON；集成测试在隔离目录下验证 `list`/`current` 与参数校验。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：未在 T026 挂钩 T024 `ShimService`（仍留待安装链路集成）；`install`/`use` 需两个位置参数 `LANG` `VERSION`。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T027 扩展命令实现（uninstall/which/remote/doctor）
 - [ ] **T027：实现可运维命令集** #cli #doctor

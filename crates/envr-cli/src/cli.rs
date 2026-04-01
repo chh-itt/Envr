@@ -122,35 +122,5 @@ pub fn apply_global(args: &GlobalArgs) {
 }
 
 pub fn run(cli: Cli) -> i32 {
-    let label = command_label(&cli.command);
-    stub_not_implemented(&cli.global, label);
-    1
-}
-
-fn command_label(cmd: &Command) -> &'static str {
-    match cmd {
-        Command::Install { .. } => "install",
-        Command::Use { .. } => "use",
-        Command::List { .. } => "list",
-        Command::Current { .. } => "current",
-        Command::Uninstall { .. } => "uninstall",
-        Command::Which { .. } => "which",
-        Command::Remote { .. } => "remote",
-        Command::Doctor => "doctor",
-    }
-}
-
-fn stub_not_implemented(g: &GlobalArgs, cmd: &str) {
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            println!(
-                r#"{{"success":false,"code":"NOT_IMPLEMENTED","message":"command `{cmd}` is not yet implemented","data":null,"diagnostics":[]}}"#
-            );
-        }
-        OutputFormat::Text => {
-            if !g.quiet {
-                eprintln!("envr: `{cmd}` is not yet implemented (see T026+)");
-            }
-        }
-    }
+    crate::commands::dispatch(cli)
 }

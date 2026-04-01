@@ -289,6 +289,11 @@ dependencies = [
  "assert_cmd",
  "clap",
  "envr-core",
+ "envr-domain",
+ "envr-error",
+ "envr-platform",
+ "serde_json",
+ "tempfile",
  "tracing",
 ]
 

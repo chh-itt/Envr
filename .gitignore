@@ -2,6 +2,6 @@
 未完成的重构项目/
 
 /target/
-/.envr/
+.envr/
 **/*.rs.bk
 **/proptest-regressions/
