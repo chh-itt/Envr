@@ -706,18 +706,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T046 单页架构与主布局
-- [ ] **T046：落地单页（SPA）主框架与左导航** #gui #ux
+- [x] **T046：落地单页（SPA）主框架与左导航** #gui #ux
   - **描述**：实现固定左侧导航（仪表盘/运行时/设置/关于）与右侧内容区切换。
   - **依赖**：T030,T031
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/{shell,sidebar}/*`
   - **验收**：单窗口下四个导航页面均可无闪烁切换。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `view/shell`（主窗口容器与路由内容）与 `view/sidebar`（左导航），`AppState` 持有各页面 state（运行时/设置/下载面板等）以保证切换时状态保留；路由切换仅更新 `route`，不会重建全局状态，避免闪烁。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T047 仪表盘页面（Dashboard）完整实现
 - [ ] **T047：实现仪表盘总览与快捷操作** #gui
