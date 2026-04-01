@@ -8,11 +8,16 @@ fn parse_json_line(stdout: &[u8]) -> Value {
         if line.is_empty() {
             continue;
         }
-        if line.first() == Some(&b'{') && let Ok(v) = serde_json::from_slice::<Value>(line) {
+        if line.first() == Some(&b'{')
+            && let Ok(v) = serde_json::from_slice::<Value>(line)
+        {
             return v;
         }
     }
-    panic!("no json object in stdout: {}", String::from_utf8_lossy(stdout));
+    panic!(
+        "no json object in stdout: {}",
+        String::from_utf8_lossy(stdout)
+    );
 }
 
 fn json_stdout(args: &[&str], root: &std::path::Path) -> Value {
@@ -41,10 +46,7 @@ fn assert_envelope_shape(v: &Value) {
 #[test]
 fn list_json_contract() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let v = json_stdout(
-        &["--format", "json", "list"],
-        tmp.path(),
-    );
+    let v = json_stdout(&["--format", "json", "list"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());
@@ -55,10 +57,7 @@ fn list_json_contract() {
 #[test]
 fn current_json_contract() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let v = json_stdout(
-        &["--format", "json", "current"],
-        tmp.path(),
-    );
+    let v = json_stdout(&["--format", "json", "current"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());
@@ -69,10 +68,7 @@ fn current_json_contract() {
 #[test]
 fn doctor_json_contract() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let v = json_stdout(
-        &["--format", "json", "doctor"],
-        tmp.path(),
-    );
+    let v = json_stdout(&["--format", "json", "doctor"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());

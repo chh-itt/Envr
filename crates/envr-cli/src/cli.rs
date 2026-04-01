@@ -1,6 +1,7 @@
 //! Command-line interface for `envr` (clap tree and global flags).
 
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum OutputFormat {
@@ -93,6 +94,33 @@ pub enum Command {
     },
     /// Run diagnostics and environment checks
     Doctor,
+    /// Create a starter `.envr.toml` in the given directory
+    Init {
+        /// Directory that will contain `.envr.toml`
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        /// Overwrite an existing `.envr.toml`
+        #[arg(long)]
+        force: bool,
+    },
+    /// Verify `.envr.toml` / pins resolve to installed runtimes (same rules as shims)
+    Check {
+        /// Directory or file to start config search from
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
+    /// Print the runtime home directory shims would use (project pin, or global current)
+    Resolve {
+        /// Language key: `node`, `python`, or `java`
+        #[arg(value_name = "LANG")]
+        lang: String,
+        /// Version spec override (ignores project pin for this invocation)
+        #[arg(long, value_name = "SPEC")]
+        spec: Option<String>,
+        /// Working directory for upward `.envr.toml` search
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 /// Apply global flags to the process environment before logging and core calls.

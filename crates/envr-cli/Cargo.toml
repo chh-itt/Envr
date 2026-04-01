@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
+envr-config = { path = "../envr-config" }
 envr-core = { path = "../envr-core" }
 envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }

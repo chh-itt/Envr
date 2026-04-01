@@ -422,18 +422,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T029 项目级命令（init/check/resolve）
-- [ ] **T029：实现项目配置相关命令** #cli #config
+- [x] **T029：实现项目配置相关命令** #cli #config
   - **描述**：`init` 生成 `.envr.toml`，`check` 校验，`resolve` 解析版本规格。
   - **依赖**：T007,T028
   - **输入文档**：`refactor docs/04-shim-设计.md`
-  - **输出文件**：`crates/envr-cli/src/commands/{init,check,resolve}.rs`
+  - **输出文件**：`crates/envr-cli/src/commands/{init,check,resolve_cmd}.rs`
   - **验收**：项目目录内版本解析与 shim 实际行为一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-shim-core` 增加 `resolve_runtime_home_for_lang`，`runtime_home_for_key` 支持 optional spec 覆盖（CLI `--spec` 优先于项目 pin，再全局 `current`）。CLI `init`（`--path` 默认 `.`，`--force` 覆盖）、`check`（向上加载配置并对已声明 pin 调用 `pick_version_home` 与 shim 一致）、`resolve`（输出 `home` / `version_dir` / `resolution_source`: `cli_override`|`project`|`global_current`）；`check` 失败 JSON `code`=`project_check_failed`。依赖 `envr-config`；`dispatch` 对项目命令不构造 `RuntimeService`。集成测试 `project_cmds.rs`。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：`resolve` 模块命名 `resolve_cmd.rs` 避免与标准库混淆。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ## Phase 7：GUI（高质量体验，不简化）
 

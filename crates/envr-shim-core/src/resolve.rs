@@ -208,25 +208,41 @@ fn runtime_home_for_key(
     ctx: &ShimContext,
     key: &str,
     config: Option<&ProjectConfig>,
+    spec_override: Option<&str>,
 ) -> EnvrResult<PathBuf> {
     let versions_dir = ctx.runtime_root.join("runtimes").join(key).join("versions");
     let current_link = ctx.runtime_root.join("runtimes").join(key).join("current");
 
-    let pinned = config
-        .and_then(|c| c.runtimes.get(key))
-        .and_then(|r| r.version.as_deref());
+    let pinned = spec_override
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            config
+                .and_then(|c| c.runtimes.get(key))
+                .and_then(|r| r.version.as_deref())
+        });
 
     if let Some(spec) = pinned {
         pick_version_home(&versions_dir, spec)
+    } else if !current_link.exists() {
+        Err(EnvrError::Runtime(format!(
+            "no global current for {key} at {}; install and select a version",
+            current_link.display()
+        )))
     } else {
-        if !current_link.exists() {
-            return Err(EnvrError::Runtime(format!(
-                "no global current for {key} at {}; install and select a version",
-                current_link.display()
-            )));
-        }
         std::fs::canonicalize(&current_link).map_err(EnvrError::from)
     }
+}
+
+/// Runtime installation directory for `lang_key` (`node` / `python` / `java`), matching shim routing:
+/// `spec_override` wins, else `[runtimes.lang_key]` in `.envr.toml`, else global `current` symlink.
+pub fn resolve_runtime_home_for_lang(
+    ctx: &ShimContext,
+    lang_key: &str,
+    spec_override: Option<&str>,
+) -> EnvrResult<PathBuf> {
+    let cfg = load_project_config(&ctx.working_dir)?.map(|(c, _)| c);
+    runtime_home_for_key(ctx, lang_key, cfg.as_ref(), spec_override)
 }
 
 fn node_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
@@ -338,7 +354,7 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     let cfg = load_project_config(&ctx.working_dir)?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
-    let home = runtime_home_for_key(ctx, key, cfg.as_ref())?;
+    let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None)?;
     let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
 
     let mut extra_env = Vec::new();
