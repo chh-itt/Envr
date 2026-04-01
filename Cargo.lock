@@ -884,6 +884,7 @@ name = "envr-gui"
 version = "0.1.0"
 dependencies = [
  "envr-core",
+ "envr-ui",
  "iced",
  "tracing",
 ]

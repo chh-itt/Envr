@@ -1,4 +1,5 @@
 mod app;
+mod theme;
 
 fn main() {
     let _logging_guard = match envr_core::logging::init_logging("envr-gui") {

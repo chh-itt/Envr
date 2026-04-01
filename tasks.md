@@ -452,18 +452,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；本地运行 `envr-gui` 可切换页面并展示/关闭示例错误。
 
 ### T031 平台视觉主题系统（Fluent/Liquid Glass/M3）
-- [ ] **T031：实现跨平台主题与组件皮肤系统** #gui #ux
+- [x] **T031：实现跨平台主题与组件皮肤系统** #gui #ux
   - **描述**：按 OS 切换主题 token、阴影、圆角、材质与动效参数。
   - **依赖**：T030
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-ui/src/theme/*`
   - **验收**：三平台风格切换可见且一致。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`envr-ui::theme` 提供 `UiFlavor`、语义色、`ThemeTokens`（圆角、阴影、动效、dock 宽、`backdrop_blur_hint`）、`tokens_for` 三预设与 `default_flavor_for_target`；`envr-gui` 映射为 `iced::Theme::custom` 与侧栏/错误条容器样式；**设置**页可切换三种风味并展示 token 摘要以便肉眼验收。
+    - 相关提交/PR：feat(gui): T031 platform theme tokens and iced mapping
+    - 遇到的问题/决策：`iced` 皮肤与 token 解耦——token 留在 `envr-ui`，`iced` 调色与 `container` 样式在 `envr-gui/src/theme.rs`；真·亚克力/模糊受渲染能力限制，以 hint + 面板色阶区分风格。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；运行 GUI 在「设置」切换三种风格可见色与圆角/阴影差异。
 
 ### T032 环境中心页面（Node/Python/Java）
 - [ ] **T032：实现环境中心全流程交互（安装/切换/卸载）** #gui

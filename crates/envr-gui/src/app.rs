@@ -1,7 +1,10 @@
 //! Main-window shell: left navigation, routed content, global error banner.
 
+use envr_ui::theme::{ThemeTokens, UiFlavor, default_flavor_for_target, tokens_for};
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
-use iced::{Alignment, Element, Length, Theme, application};
+use iced::{Alignment, Element, Length, Padding, Theme, application};
+
+use crate::theme as gui_theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -30,10 +33,28 @@ impl Route {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AppState {
     route: Route,
     error: Option<String>,
+    /// Active skin; user can override the OS default on the Settings page.
+    flavor: UiFlavor,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            route: Route::default(),
+            error: None,
+            flavor: default_flavor_for_target(),
+        }
+    }
+}
+
+impl AppState {
+    fn tokens(&self) -> ThemeTokens {
+        tokens_for(self.flavor)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,11 +62,12 @@ pub enum Message {
     Navigate(Route),
     DismissError,
     ReportError(String),
+    SetFlavor(UiFlavor),
 }
 
 pub fn run() -> iced::Result {
     application("Envr", update, view)
-        .theme(|_| Theme::default())
+        .theme(|state| gui_theme::iced_theme(state.tokens()))
         .centered()
         .window_size((960.0, 640.0))
         .run()
@@ -59,22 +81,29 @@ fn update(state: &mut AppState, message: Message) {
         }
         Message::DismissError => state.error = None,
         Message::ReportError(msg) => state.error = Some(msg),
+        Message::SetFlavor(flavor) => {
+            tracing::debug!(%flavor, "set flavor");
+            state.flavor = flavor;
+        }
     }
 }
 
 fn view(state: &AppState) -> Element<'_, Message> {
+    let t = state.tokens();
+    let bg = gui_theme::to_color(t.colors.background);
+
     let body = row![
-        sidebar(state.route),
-        container(page_body(state))
+        sidebar(state.route, t),
+        container(page_body(state, t))
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding(16),
+            .padding(Padding::from(t.content_spacing())),
     ]
-    .spacing(12)
+    .spacing(t.content_spacing().round() as u16)
     .height(Length::Fill);
 
     let chrome = if let Some(err) = state.error.as_deref() {
-        column![error_banner(err), body].spacing(8)
+        column![error_banner(t, err), body].spacing(8)
     } else {
         column![body]
     };
@@ -82,11 +111,13 @@ fn view(state: &AppState) -> Element<'_, Message> {
     container(chrome)
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(12)
+        .padding(Padding::from(t.content_spacing()))
+        .style(move |_theme: &Theme| container::Style::default().background(bg))
         .into()
 }
 
-fn error_banner(message: &str) -> Element<'_, Message> {
+fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
+    let style = gui_theme::error_banner_style(tokens);
     container(
         row![
             text(message).size(14),
@@ -97,13 +128,12 @@ fn error_banner(message: &str) -> Element<'_, Message> {
         .align_y(Alignment::Center),
     )
     .padding(12)
-    .style(|_theme: &Theme| {
-        container::Style::default().background(iced::Color::from_rgb8(255, 228, 225))
-    })
+    .style(move |_theme: &Theme| style)
     .into()
 }
 
-fn sidebar(current: Route) -> Element<'static, Message> {
+fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message> {
+    let panel = gui_theme::panel_container_style(tokens);
     let mut col = column![].spacing(8);
     for route in Route::ALL {
         let b = button(text(route.label()))
@@ -116,22 +146,37 @@ fn sidebar(current: Route) -> Element<'static, Message> {
         };
         col = col.push(b);
     }
-    container(col.width(Length::Fixed(188.0)))
+    container(col.width(Length::Fixed(tokens.sidebar_width())))
         .padding(10)
-        .style(container::rounded_box)
+        .style(move |theme: &Theme| panel(theme))
         .into()
 }
 
-fn page_body(state: &AppState) -> Element<'static, Message> {
+fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'static, Message> {
     let title = text(state.route.label()).size(22);
     let blurb: &'static str = match state.route {
         Route::Dashboard => "总览与快捷入口（占位）。",
         Route::Runtime => "运行时与版本列表（占位）。",
-        Route::Settings => "镜像、路径与行为（占位）。",
+        Route::Settings => "镜像、路径、行为与外观（占位）。",
         Route::About => "关于本应用。",
     };
 
     let mut col = column![title, text(blurb).size(15),].spacing(14);
+
+    if state.route == Route::Settings {
+        col = col.push(text("视觉风格").size(17));
+        col = col.push(flavor_picker_row(state.flavor));
+        col = col.push(
+            text(format!(
+                "当前：{} · 圆角 md {:.1} · 阴影 blur {:.0} · 动效 {} ms",
+                state.flavor.label_zh(),
+                tokens.radius_md,
+                tokens.shadow.blur_radius,
+                tokens.motion.standard_ms
+            ))
+            .size(13),
+        );
+    }
 
     if state.route == Route::About {
         col = col.push(
@@ -145,4 +190,20 @@ fn page_body(state: &AppState) -> Element<'static, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+fn flavor_picker_row(active: UiFlavor) -> Element<'static, Message> {
+    let mut r = row![].spacing(8);
+    for flavor in UiFlavor::ALL {
+        let b = button(text(flavor.label_zh()))
+            .on_press(Message::SetFlavor(flavor))
+            .padding([8, 10]);
+        let b = if flavor == active {
+            b.style(button::primary)
+        } else {
+            b.style(button::secondary)
+        };
+        r = r.push(b);
+    }
+    r.into()
 }
