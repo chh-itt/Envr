@@ -292,18 +292,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；完整端到端安装未放入默认单测（耗时长且依赖网络/编译环境）。
 
 ### T020 Java 发行版模型与索引
-- [ ] **T020：实现 Java vendor 抽象与版本索引** #runtime #java
+- [x] **T020：实现 Java vendor 抽象与版本索引** #runtime #java
   - **描述**：支持 Temurin/OpenJDK 等 vendor 选择与版本解析。
   - **依赖**：T015
   - **输入文档**：二版 Java vendor 设计
   - **输出文件**：`crates/envr-runtime-java/src/vendor.rs`,`index.rs`
   - **验收**：可按 vendor 返回可安装版本。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`vendor.rs` 定义 `JavaVendor`（Temurin/OpenJDK 等别名 → Adoptium `vendor=eclipse`）；`index.rs` 用 blocking `reqwest` 拉取 `v3/info/available_releases`（LTS 主版本集合）与 `v3/info/release_versions`（`os`/`architecture` 映射 Windows/Linux/macOS + x64/aarch64/x86），`list_remote_versions`（降序 + `RemoteFilter.prefix`）、`resolve_java_version`（`latest`/`current`/`stable`、`lts`、精确 `openjdk_version`/`semver`、`major` / `major.minor` / `major.minor.security` 行内最新）；`JavaRuntimeProvider` 支持 `with_api_base` / `with_vendor`，`list_remote`/`resolve`/`install`（install 暂同 resolve，落盘见 T021）。`envr-core` 默认单测仅 `list_installed`，避免 CI 访问 Adoptium。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：Adoptium 查询需同时带 `heap_size`/`image_type`/`jvm_impl`/`os`/`architecture`/`vendor`，否则易 404；`lts` 解析结合 API 的 `available_lts_releases` 与条目的 `optional: LTS`。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T021 Java 安装/卸载/切换 + JAVA_HOME
 - [ ] **T021：实现 Java 生命周期管理与环境变量更新** #runtime #java
