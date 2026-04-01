@@ -4,8 +4,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
+use envr_config::settings::{FontMode, Settings};
 use envr_download::task::CancelToken;
+use envr_ui::font;
 use envr_ui::theme::{ThemeTokens, UiFlavor, default_flavor_for_target, tokens_for};
+use iced::font::Family;
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
 use iced::{Alignment, Element, Length, Padding, Task, Theme, application};
 
@@ -87,6 +90,7 @@ pub enum Message {
 
 pub fn run() -> iced::Result {
     application("Envr", update, view)
+        .default_font(configured_default_font())
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|_state| {
             iced::time::every(Duration::from_millis(400))
@@ -97,6 +101,34 @@ pub fn run() -> iced::Result {
         .run()
 }
 
+fn configured_default_font() -> iced::Font {
+    let paths = match envr_platform::paths::current_platform_paths() {
+        Ok(v) => v,
+        Err(_) => {
+            return iced::Font::with_name(font::preferred_system_sans_family());
+        }
+    };
+
+    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+
+    match st.appearance.font.mode {
+        FontMode::Auto => iced::Font::with_name(font::preferred_system_sans_family()),
+        FontMode::Custom => {
+            let fam = st
+                .appearance
+                .font
+                .family
+                .unwrap_or_else(|| font::preferred_system_sans_family().to_string());
+            let leaked: &'static str = Box::leak(fam.into_boxed_str());
+            iced::Font {
+                family: Family::Name(leaked),
+                ..iced::Font::default()
+            }
+        }
+    }
+}
+
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
     match message {
         Message::Navigate(route) => {
@@ -105,7 +137,9 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Runtime {
                 return gui_ops::refresh_runtimes(state.env_center.kind);
             }
-            if route == Route::Settings && let Err(e) = state.settings.reload_from_disk() {
+            if route == Route::Settings
+                && let Err(e) = state.settings.reload_from_disk()
+            {
                 state.error = Some(format!("设置加载失败: {e}"));
             }
             Task::none()
@@ -157,6 +191,18 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                 .draft
                 .behavior
                 .cleanup_downloads_after_install = v;
+            Task::none()
+        }
+        SettingsMsg::SetFontMode(m) => {
+            state.settings.draft.appearance.font.mode = m;
+            Task::none()
+        }
+        SettingsMsg::FontFamilyEdit(s) => {
+            state.settings.font_family_draft = s;
+            Task::none()
+        }
+        SettingsMsg::PickFontFamily(s) => {
+            state.settings.font_family_draft = s;
             Task::none()
         }
         SettingsMsg::Save => {

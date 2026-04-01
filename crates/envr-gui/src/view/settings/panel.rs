@@ -1,6 +1,7 @@
-use envr_config::settings::MirrorMode;
+use envr_config::settings::{FontMode, MirrorMode};
+use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
-use iced::widget::{button, column, row, text, text_input, toggler};
+use iced::widget::{button, column, pick_list, row, text, text_input, toggler};
 use iced::{Element, Length};
 
 use crate::app::Message;
@@ -14,6 +15,9 @@ pub enum SettingsMsg {
     RetryEdit(String),
     SetMirrorMode(MirrorMode),
     SetCleanup(bool),
+    SetFontMode(FontMode),
+    FontFamilyEdit(String),
+    PickFontFamily(String),
     Save,
     ReloadDisk,
 }
@@ -69,6 +73,55 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .label("安装成功后清理下载缓存（供后续运行时实现）")
         .on_toggle(|v| Message::Settings(SettingsMsg::SetCleanup(v)));
 
+    let mut font_mode_row = row![text("字体").size(15)].spacing(8);
+    for (mode, label) in [
+        (FontMode::Auto, "自动（系统字体）"),
+        (FontMode::Custom, "自定义"),
+    ] {
+        let b = button(text(label))
+            .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
+            .padding([6, 8]);
+        let b = if mode == state.draft.appearance.font.mode {
+            b.style(button::primary)
+        } else {
+            b.style(button::secondary)
+        };
+        font_mode_row = font_mode_row.push(b);
+    }
+
+    let picked = font::font_candidates()
+        .iter()
+        .copied()
+        .find(|n| n.eq_ignore_ascii_case(state.font_family_draft.trim()));
+
+    let font_custom = if state.draft.appearance.font.mode == FontMode::Custom {
+        column![
+            text("提示：字体将作为 iced 的 default_font 注入，保存后需重启 GUI 才能全局生效。")
+                .size(12),
+            row![
+                pick_list(font::font_candidates(), picked, |v| {
+                    Message::Settings(SettingsMsg::PickFontFamily(v.to_string()))
+                })
+                .placeholder("从候选字体中选择"),
+                text_input("字体族名（Font family）", &state.font_family_draft)
+                    .on_input(|s| Message::Settings(SettingsMsg::FontFamilyEdit(s)))
+                    .padding(8)
+                    .width(Length::Fill),
+            ]
+            .spacing(10),
+        ]
+        .spacing(6)
+    } else {
+        column![
+            text(format!(
+                "当前自动字体：{}（用于保证中文可显示）",
+                font::preferred_system_sans_family()
+            ))
+            .size(12),
+        ]
+        .spacing(6)
+    };
+
     let dl_row = row![
         column![
             text("最大并发下载").size(13),
@@ -109,6 +162,8 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         mirror_row,
         manual,
         cleanup,
+        font_mode_row,
+        font_custom,
         text("下载").size(16),
         dl_row,
         actions,

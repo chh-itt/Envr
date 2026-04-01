@@ -1,4 +1,4 @@
-use envr_config::settings::{MirrorMode, Settings, SettingsCache};
+use envr_config::settings::{FontMode, MirrorMode, Settings, SettingsCache};
 use envr_error::EnvrResult;
 
 /// In-memory editor bound to `settings.toml` via [`SettingsCache`].
@@ -9,6 +9,7 @@ pub struct SettingsViewState {
     pub manual_id_draft: String,
     pub max_conc_text: String,
     pub retry_text: String,
+    pub font_family_draft: String,
     pub last_message: Option<String>,
 }
 
@@ -25,6 +26,7 @@ impl SettingsViewState {
             manual_id_draft: String::new(),
             max_conc_text: String::new(),
             retry_text: String::new(),
+            font_family_draft: String::new(),
             last_message: None,
         };
         s.sync_from_cache().expect("initial settings sync");
@@ -38,6 +40,7 @@ impl SettingsViewState {
         self.manual_id_draft = st.mirror.manual_id.clone().unwrap_or_default();
         self.max_conc_text = st.download.max_concurrent_downloads.to_string();
         self.retry_text = st.download.retry_max.to_string();
+        self.font_family_draft = st.appearance.font.family.clone().unwrap_or_default();
         Ok(())
     }
 
@@ -68,6 +71,17 @@ impl SettingsViewState {
         s.download.retry_max = self.retry_text.trim().parse().map_err(|_| {
             envr_error::EnvrError::Validation("download.retry_max 必须是整数".to_string())
         })?;
+
+        if s.appearance.font.mode == FontMode::Custom {
+            let fam = self.font_family_draft.trim();
+            s.appearance.font.family = if fam.is_empty() {
+                None
+            } else {
+                Some(fam.to_string())
+            };
+        } else {
+            s.appearance.font.family = None;
+        }
         s.validate()?;
         Ok(s)
     }

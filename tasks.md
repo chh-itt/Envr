@@ -507,6 +507,63 @@
     - 遇到的问题/决策：`MirrorMode` 增加 `Copy` 以便镜像按钮闭包；状态文案用克隆 `String` 满足 `Element<'static>`；`cleanup_downloads_after_install` 仅持久化，运行时安装路径尚未消费该标志。
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
+### T034.1 设置：字体（自动系统字体 + 可选字体）
+- [x] **T034.1：设置页加入字体系统（自动使用系统本地字体，支持中文）** #gui #settings #font #i18n
+  - **描述**：实现系统字体发现（Windows/macOS/Linux），默认选择覆盖中文的系统字体；支持用户在设置中选择字体并持久化；启动时注入 `default_font`，避免 iced 缺字导致中文不可见。
+  - **依赖**：T034,T031
+  - **输入文档**：旧项目 `src/font.rs` + 设置页字体选择逻辑（FontCatalog）；`refactor docs/03-gui-设计.md`
+  - **输出文件**：
+    - `crates/envr-ui/src/font/*`（FontCatalog/发现与排序）
+    - `crates/envr-config/src/settings.rs`（FontSettings）
+    - `crates/envr-gui/src/view/settings/*`（字体选择器 UI）
+  - **验收**：
+    - Win11 默认可显示完整中文（无需用户手动配置）
+    - 用户选择字体后重启仍生效
+    - 字体发现耗时受控，不显著影响冷启动（必要时做缓存/延迟发现）
+  - **进度**：done
+  - **实现记录**：
+    - 实现要点：`envr-config` 增加 `appearance.font`（`FontMode::{auto,custom}` + `family`）并校验 custom 时必填；`envr-ui::font` 提供跨平台候选字体与 `preferred_system_sans_family()`（Win11 优先 YaHei UI）；GUI 设置页新增字体模式与选择器（候选 picklist + 手动输入）；启动时 `envr-gui` 从 `settings.toml` 读取并调用 `application(...).default_font(...)` 注入默认字体，避免 iced 中文缺字。
+    - 相关提交/PR：
+    - 遇到的问题/决策：iced `Font` 的 `Family::Name` 需要 `'static`，custom 字体族名在启动时通过 `Box::leak` 变为静态字符串（一次性泄漏，换取全局 default_font 支持）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；Win11 默认字体为 YaHei UI 路径存在时可直接显示中文；选择 custom 后重启仍生效。
+
+### T034.2 设置：主题模式（跟随系统/浅色/深色）
+- [ ] **T034.2：设置页加入主题模式（跟随/浅色/深色）并即时生效** #gui #settings #theme
+  - **描述**：实现主题模式枚举与持久化；“跟随系统”需监听系统深浅偏好或至少在启动时读取；切换时 UI 立即刷新（不闪烁/不重建整页）。
+  - **依赖**：T034,T031
+  - **输入文档**：旧项目主题/外观设置实现；`refactor docs/03-gui-设计.md`
+  - **输出文件**：
+    - `crates/envr-config/src/settings.rs`（AppearanceSettings：FollowSystem/Light/Dark）
+    - `crates/envr-ui/src/theme/*`（scheme/token 切换）
+    - `crates/envr-gui/src/view/settings/*`
+  - **验收**：主题切换即时生效；FollowSystem 在系统切换后可自动更新（或提供“刷新跟随”机制），且不破坏性能指标。
+  - **进度**：todo
+  - **实现记录**：
+    - 实现要点：
+    - 相关提交/PR：
+    - 遇到的问题/决策：
+    - 验收结果：
+
+### T034.3 设置：语言（简体中文/English）
+- [ ] **T034.3：设置页加入语言切换（zh-CN / en-US）并全局生效** #gui #settings #i18n
+  - **描述**：在设置中提供语言选择并持久化；切换后 GUI 立即刷新文本；CLI 与 GUI 共用同一 locale 解析与加载入口（避免两套语言状态）。
+  - **依赖**：T034,T910
+  - **输入文档**：旧项目 i18n 方案；`refactor docs/03-gui-设计.md`
+  - **输出文件**：
+    - `crates/envr-config/src/settings.rs`（I18nSettings：locale）
+    - `crates/envr-core/src/i18n/*`（初始化/切换/当前 locale）
+    - `crates/envr-gui/src/view/settings/*`
+  - **验收**：
+    - GUI 可在 zh-CN/en-US 间切换并立即生效
+    - 未配置时默认跟随系统语言（可回退到英文）
+    - 切换语言不引入明显闪烁与布局跳动
+  - **进度**：todo
+  - **实现记录**：
+    - 实现要点：
+    - 相关提交/PR：
+    - 遇到的问题/决策：
+    - 验收结果：
+
 ## Phase 8：高级命令与扩展语言
 
 ### T035 高级命令第一组（config/alias/prune/update）

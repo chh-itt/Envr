@@ -67,6 +67,38 @@ pub struct BehaviorSettings {
     pub cleanup_downloads_after_install: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FontMode {
+    Auto,
+    Custom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontSettings {
+    #[serde(default = "defaults::font_mode")]
+    pub mode: FontMode,
+
+    /// Used only when `mode = "custom"`.
+    #[serde(default)]
+    pub family: Option<String>,
+}
+
+impl Default for FontSettings {
+    fn default() -> Self {
+        Self {
+            mode: defaults::font_mode(),
+            family: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct AppearanceSettings {
+    #[serde(default)]
+    pub font: FontSettings,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
@@ -74,6 +106,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub behavior: BehaviorSettings,
+
+    #[serde(default)]
+    pub appearance: AppearanceSettings,
 
     #[serde(default)]
     pub download: DownloadSettings,
@@ -107,6 +142,21 @@ impl Settings {
             if !id_ok {
                 return Err(EnvrError::Validation(
                     "mirror.manual_id is required when mirror.mode = manual".to_string(),
+                ));
+            }
+        }
+
+        if self.appearance.font.mode == FontMode::Custom {
+            let ok = self
+                .appearance
+                .font
+                .family
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty());
+            if !ok {
+                return Err(EnvrError::Validation(
+                    "appearance.font.family is required when appearance.font.mode = custom"
+                        .to_string(),
                 ));
             }
         }
@@ -263,7 +313,7 @@ fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
 }
 
 mod defaults {
-    use super::MirrorMode;
+    use super::{FontMode, MirrorMode};
 
     pub fn max_concurrent_downloads() -> u32 {
         4
@@ -275,6 +325,10 @@ mod defaults {
 
     pub fn mirror_mode() -> MirrorMode {
         MirrorMode::Auto
+    }
+
+    pub fn font_mode() -> FontMode {
+        FontMode::Auto
     }
 }
 
@@ -295,6 +349,12 @@ mod tests {
             },
             behavior: BehaviorSettings {
                 cleanup_downloads_after_install: true,
+            },
+            appearance: AppearanceSettings {
+                font: FontSettings {
+                    mode: FontMode::Custom,
+                    family: Some("Microsoft YaHei UI".to_string()),
+                },
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,
