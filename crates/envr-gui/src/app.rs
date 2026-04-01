@@ -463,6 +463,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.kind = k;
             gui_ops::refresh_runtimes(k)
         }
+        EnvCenterMsg::SetMode(m) => {
+            state.env_center.mode = m;
+            // Keep input; mode affects button availability only.
+            Task::none()
+        }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input = s;
             Task::none()
@@ -488,6 +493,16 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.busy = true;
             state.error = None;
             gui_ops::install_version(state.env_center.kind, spec)
+        }
+        EnvCenterMsg::SubmitInstallAndUse => {
+            let spec = state.env_center.install_input.trim().to_string();
+            if spec.is_empty() {
+                state.error = Some("请输入版本 spec".into());
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::install_then_use(state.env_center.kind, spec)
         }
         EnvCenterMsg::InstallFinished(res) => {
             state.env_center.busy = false;

@@ -7,13 +7,22 @@ use iced::{Element, Length};
 
 use crate::app::Message;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VersionMode {
+    #[default]
+    Smart,
+    Exact,
+}
+
 #[derive(Debug, Clone)]
 pub enum EnvCenterMsg {
     PickKind(RuntimeKind),
+    SetMode(VersionMode),
     InstallInput(String),
     Refresh,
     DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>), String>),
     SubmitInstall,
+    SubmitInstallAndUse,
     InstallFinished(Result<RuntimeVersion, String>),
     SubmitUse(String),
     UseFinished(Result<(), String>),
@@ -24,6 +33,7 @@ pub enum EnvCenterMsg {
 #[derive(Debug)]
 pub struct EnvCenterState {
     pub kind: RuntimeKind,
+    pub mode: VersionMode,
     pub install_input: String,
     pub installed: Vec<RuntimeVersion>,
     pub current: Option<RuntimeVersion>,
@@ -34,6 +44,7 @@ impl Default for EnvCenterState {
     fn default() -> Self {
         Self {
             kind: RuntimeKind::Node,
+            mode: VersionMode::default(),
             install_input: String::new(),
             installed: Vec::new(),
             current: None,
@@ -63,11 +74,31 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         None => envr_core::i18n::tr("????: (???)", "Current: (not set)").to_string(),
     };
 
+    let mut mode_row = row![text(envr_core::i18n::tr("??", "Mode")).size(14)].spacing(8);
+    for (m, zh, en) in [
+        (VersionMode::Smart, "???Smart?", "Smart"),
+        (VersionMode::Exact, "???Exact?", "Exact"),
+    ] {
+        let b = button(text(envr_core::i18n::tr(zh, en)))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
+            .padding([6, 10]);
+        let b = if m == state.mode {
+            b.style(button::primary)
+        } else {
+            b.style(button::secondary)
+        };
+        mode_row = mode_row.push(b);
+    }
+
+    let input = state.install_input.trim();
+    let installed_match = state.installed.iter().any(|v| v.0 == input);
+    let current_match = state.current.as_ref().is_some_and(|c| c.0 == input);
+
     let install_row = row![
         text_input(
             envr_core::i18n::tr(
-                "?? spec?? CLI install ???? 20 / lts?",
-                "Version spec (same as CLI install, e.g. 20 / lts)",
+                "?? spec?Smart???????Exact?",
+                "Version spec (Smart) or exact version (Exact)",
             ),
             &state.install_input
         )
@@ -76,8 +107,26 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .padding(8),
         button(text(envr_core::i18n::tr("??", "Install")))
             .on_press_maybe(
-                (!busy && !state.install_input.trim().is_empty())
+                (!busy
+                    && !input.is_empty()
+                    && (state.mode == VersionMode::Smart || !installed_match))
                     .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
+            )
+            .padding([8, 14]),
+        button(text(envr_core::i18n::tr("?????", "Install & Use")))
+            .on_press_maybe(
+                (state.mode == VersionMode::Smart
+                    && !busy
+                    && !input.is_empty()
+                    && !installed_match)
+                    .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
+            )
+            .padding([8, 14]),
+        button(text(envr_core::i18n::tr("??", "Use")))
+            .on_press_maybe(
+                (!busy && !input.is_empty() && installed_match && !current_match).then_some(
+                    Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string()))
+                ),
             )
             .padding([8, 14]),
     ]
@@ -138,6 +187,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             kind_label(state.kind)
         ))
         .size(16),
+        mode_row,
         text(cur_line).size(14),
         text(envr_core::i18n::tr("???", "Install")).size(16),
         install_row,

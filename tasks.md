@@ -762,18 +762,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T050 智能/精确模式与版本操作矩阵
-- [ ] **T050：实现 Smart/Exact 模式与按钮状态规则** #gui #runtime
+ - [x] **T050：实现 Smart/Exact 模式与按钮状态规则** #gui #runtime
   - **描述**：智能与精确模式完整可切换；未安装/已安装/已使用状态按钮行为严格一致。
   - **依赖**：T048,T049,T032
   - **输入文档**：`refactor docs/03-gui-设计.md`
-  - **输出文件**：`crates/envr-gui/src/view/runtime/version_list/*`
+  - **输出文件**：`crates/envr-gui/src/view/env_center/*`，`crates/envr-gui/src/gui_ops.rs`
   - **验收**：规则符合：未安装仅安装，已安装用/卸载，已使用禁用该行关键按钮。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：在 EnvCenter 增加 `VersionMode::{Smart,Exact}` 切换；Smart 支持 “Install & Use” 组合操作（后台执行 install + resolve + set_current），Exact 模式下输入精确版本时若已安装则启用 Use、若未安装则仅允许 Install；已是 current 的版本行禁用 Use/Uninstall，busy 时全局禁用关键按钮，形成一致矩阵。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T051 悬浮下载面板（可拖拽/可隐藏/可展开）
 - [ ] **T051：实现左下角悬浮下载面板并支持拖拽停靠** #gui #download #ux
