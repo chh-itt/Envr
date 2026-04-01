@@ -5,6 +5,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 use tar::Archive as TarArchive;
+use xz2::read::XzDecoder;
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,6 +13,7 @@ pub enum ArchiveKind {
     Zip,
     Tar,
     TarGz,
+    TarXz,
 }
 
 pub fn detect_archive_kind(path: impl AsRef<Path>) -> EnvrResult<ArchiveKind> {
@@ -25,6 +27,8 @@ pub fn detect_archive_kind(path: impl AsRef<Path>) -> EnvrResult<ArchiveKind> {
         Ok(ArchiveKind::Zip)
     } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
         Ok(ArchiveKind::TarGz)
+    } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
+        Ok(ArchiveKind::TarXz)
     } else if name.ends_with(".tar") {
         Ok(ArchiveKind::Tar)
     } else {
@@ -46,6 +50,7 @@ pub fn extract_archive(
         ArchiveKind::Zip => extract_zip(archive_path, dest_dir),
         ArchiveKind::Tar => extract_tar(archive_path, dest_dir),
         ArchiveKind::TarGz => extract_tar_gz(archive_path, dest_dir),
+        ArchiveKind::TarXz => extract_tar_xz(archive_path, dest_dir),
     }
 }
 
@@ -114,6 +119,13 @@ fn extract_tar_gz(path: &Path, dest: &Path) -> EnvrResult<()> {
     let f = fs::File::open(path).map_err(EnvrError::from)?;
     let gz = GzDecoder::new(f);
     let mut ar = TarArchive::new(gz);
+    unpack_tar(&mut ar, dest)
+}
+
+fn extract_tar_xz(path: &Path, dest: &Path) -> EnvrResult<()> {
+    let f = fs::File::open(path).map_err(EnvrError::from)?;
+    let xz = XzDecoder::new(f);
+    let mut ar = TarArchive::new(xz);
     unpack_tar(&mut ar, dest)
 }
 

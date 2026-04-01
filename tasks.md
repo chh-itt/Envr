@@ -250,18 +250,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T017 Node 安装/卸载/切换
-- [ ] **T017：实现 Node 版本安装、卸载、current 切换流程** #runtime #node
+- [x] **T017：实现 Node 版本安装、卸载、current 切换流程** #runtime #node
   - **描述**：打通下载、解压、目录落盘、current 更新。
   - **依赖**：T016,T012
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-runtime-node/src/manager.rs`
   - **验收**：安装后可直接执行 `node -v`。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `manager`：`NodePaths`（`runtimes/node/versions/<ver>`、`current` 符号链接、`cache/node` 下载缓存）、`dist_root_from_index_json_url`、`parse_shasums256` / `pick_node_dist_artifact`（按平台优先 `.tar.xz`→`.tar.gz` 或 `win-*.zip` 等）、blocking 下载 + `checksum::verify_sha256_hex`、`extract::extract_archive` + `promote_single_root_dir` 扁平化官方单根目录；`NodeRuntimeProvider` 接入 `list_installed` / `current` / `set_current` / `install` / `uninstall`，支持 `with_runtime_root` 便于测试。`envr-download` 增加 `.tar.xz`/`.txz` 解压（`xz2`）。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：Windows 官方 zip 的 `node.exe` 常在根目录而非 `bin/`，`node_installation_valid` 同时识别两种布局；Linux 需 xz 解压链路故引入 `xz2`（工作区 `Cargo.toml` 声明版本）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；安装后可将 `{runtime_root}/runtimes/node/current` 下的 `node` / `node.exe` 加入 PATH 后执行 `node -v`（端到端下载未放入默认单测以免 CI 依赖外网）。
 
 ### T018 Python 远程索引与版本解析
 - [ ] **T018：实现 Python 版本发现、版本规范化与选择器** #runtime #python

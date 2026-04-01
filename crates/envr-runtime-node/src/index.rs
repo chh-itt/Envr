@@ -132,6 +132,16 @@ pub fn normalize_node_version(version: &str) -> String {
     version.strip_prefix('v').unwrap_or(version).to_string()
 }
 
+/// `22.11.0` or `v22.11.0` → `v22.11.0` for Node `dist/` URL segments.
+pub fn node_version_v_prefix(version: &str) -> String {
+    let t = version.trim();
+    let rest = t
+        .strip_prefix('v')
+        .or_else(|| t.strip_prefix('V'))
+        .unwrap_or(t);
+    format!("v{rest}")
+}
+
 fn normalize_prefix(prefix: &str) -> String {
     prefix
         .trim()
