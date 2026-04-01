@@ -24,6 +24,20 @@ pub struct ProjectConfig {
 
     #[serde(default)]
     pub runtimes: HashMap<String, RuntimeConfig>,
+
+    /// Named overlays (e.g. CI vs local). Activated via `ENVR_PROFILE` or `envr exec --profile`.
+    #[serde(default)]
+    pub profiles: HashMap<String, ProjectProfile>,
+}
+
+/// Pins + env for a single named profile (`[profiles.name]` in TOML).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectProfile {
+    #[serde(default)]
+    pub runtimes: HashMap<String, RuntimeConfig>,
+
+    #[serde(default)]
+    pub env: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +51,7 @@ impl ProjectConfig {
         let mut merged = base;
         merged.env.extend(self.env.drain());
         merged.runtimes.extend(self.runtimes.drain());
+        merged.profiles.extend(self.profiles.drain());
         merged
     }
 
@@ -57,6 +72,38 @@ impl ProjectConfig {
 
 pub fn load_project_config(
     start_dir: impl AsRef<Path>,
+) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
+    load_project_config_profile(start_dir, None)
+}
+
+/// Merge `.envr.toml` + `.envr.local.toml` only (no `ENVR_PROFILE` / `[profiles]` activation).
+pub fn load_project_config_disk_only(
+    start_dir: impl AsRef<Path>,
+) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
+    load_project_config_inner(start_dir, None)
+}
+
+/// Load project config; `profile` overrides [`ENVR_PROFILE`] when set.
+pub fn load_project_config_profile(
+    start_dir: impl AsRef<Path>,
+    profile: Option<&str>,
+) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
+    let effective_profile = profile
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            env::var("ENVR_PROFILE")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        });
+    load_project_config_inner(start_dir, effective_profile)
+}
+
+fn load_project_config_inner(
+    start_dir: impl AsRef<Path>,
+    effective_profile: Option<String>,
 ) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
     let start_dir = start_dir.as_ref();
     let mut current = if start_dir.is_dir() {
@@ -87,13 +134,25 @@ pub fn load_project_config(
                 None
             };
 
-            let merged = match (base_cfg, local_cfg) {
+            let mut merged = match (base_cfg, local_cfg) {
                 (Some(base), Some(local)) => local.merge_over(base),
                 (Some(base), None) => base,
                 (None, Some(local)) => local,
                 (None, None) => ProjectConfig::default(),
+            };
+
+            if let Some(ref pname) = effective_profile
+                && let Some(p) = merged.profiles.get(pname)
+            {
+                for (k, v) in &p.runtimes {
+                    merged.runtimes.insert(k.clone(), v.clone());
+                }
+                for (k, v) in &p.env {
+                    merged.env.insert(k.clone(), v.clone());
+                }
             }
-            .expand_vars()?;
+
+            let merged = merged.expand_vars()?;
 
             let loc = ProjectConfigLocation {
                 dir: current.clone(),
@@ -121,6 +180,17 @@ pub fn parse_project_config(path: impl AsRef<Path>) -> EnvrResult<ProjectConfig>
     let content = fs::read_to_string(path).map_err(EnvrError::from)?;
     toml::from_str(&content)
         .map_err(|err| EnvrError::Config(format!("failed to parse {}: {err}", path.display())))
+}
+
+pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
+    }
+    let content =
+        toml::to_string_pretty(cfg).map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+    fs::write(path, content).map_err(EnvrError::from)?;
+    Ok(())
 }
 
 fn expand_env_map(

@@ -581,18 +581,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T036 高级命令第二组（exec/run/env/import/export/profile）
-- [ ] **T036：实现脚本与环境协作能力命令集** #cli #advanced
+- [x] **T036：实现脚本与环境协作能力命令集** #cli #advanced
   - **描述**：覆盖自动化与团队协作使用场景。
   - **依赖**：T035
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/commands/*`
   - **验收**：项目导入导出与 profile 操作可用。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`envr-config` 增加 `load_project_config_disk_only`（仅合并 `.envr.toml` + `.envr.local.toml`，不应用 `ENVR_PROFILE` / `[profiles]`）；`envr exec --lang` / `envr run` 在子进程中合并项目 `env`、前置 PATH（单语言或 node+python+java）、Java 设置 `JAVA_HOME`；`envr env` 按 `--shell` 输出 `export`/`set`/`$env:`；`import`/`export` 读写合并后的 TOML；`profile list|show` 查看 `[profiles.*]`；`resolve` 增加 `--profile`。JSON 模式沿用标准信封；子进程非零退出码返回 `child_exit` 信封。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T037 扩展语言实现（Go/Rust/PHP/Deno/Bun）
 - [ ] **T037：逐步实现剩余语言 RuntimeProvider** #runtime

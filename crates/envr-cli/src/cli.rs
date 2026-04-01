@@ -120,7 +120,71 @@ pub enum Command {
         /// Working directory for upward `.envr.toml` search
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
+        /// Profile overlay (`[profiles.<name>]`), overrides `ENVR_PROFILE` for this invocation
+        #[arg(long, value_name = "NAME")]
+        profile: Option<String>,
     },
+    /// Run a subprocess with PATH and env for one language (project pins + `ENVR_PROFILE` / `--profile`)
+    Exec {
+        /// Language key: `node`, `python`, or `java`
+        #[arg(long, value_name = "LANG")]
+        lang: String,
+        #[arg(long, value_name = "SPEC")]
+        spec: Option<String>,
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_name = "NAME")]
+        profile: Option<String>,
+        #[arg(value_name = "COMMAND", required = true)]
+        command: String,
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+    },
+    /// Run a subprocess with merged PATH for node, python, and java (plus project `env`)
+    Run {
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_name = "NAME")]
+        profile: Option<String>,
+        #[arg(value_name = "COMMAND", required = true)]
+        command: String,
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+    },
+    /// Print shell snippets setting PATH / JAVA_HOME / project env (merged runtimes)
+    Env {
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_name = "NAME")]
+        profile: Option<String>,
+        #[arg(long, value_enum, default_value_t = EnvShellKind::Posix)]
+        shell: EnvShellKind,
+    },
+    /// Merge a TOML file into the project `.envr.toml` (imported keys win on conflict)
+    Import {
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
+    /// Print merged on-disk project config (base + local, no profile overlay) as TOML
+    Export {
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_name = "FILE")]
+        output: Option<PathBuf>,
+    },
+    /// Inspect `[profiles.*]` blocks (use `ENVR_PROFILE` or `exec`/`run` `--profile` to activate)
+    #[command(subcommand)]
+    Profile(ProfileCmd),
     /// Inspect user settings (`settings.toml`)
     #[command(subcommand)]
     Config(ConfigCmd),
@@ -150,6 +214,30 @@ pub enum ConfigCmd {
     Path,
     /// Print merged settings (defaults + file)
     Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ProfileCmd {
+    /// List profile names defined in merged project config
+    List {
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
+    /// Show runtimes and env for a named profile
+    Show {
+        #[arg(value_name = "NAME")]
+        name: String,
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum EnvShellKind {
+    #[default]
+    Posix,
+    Cmd,
+    Powershell,
 }
 
 #[derive(Subcommand, Debug)]

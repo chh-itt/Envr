@@ -21,6 +21,12 @@ fn help_is_readable_and_lists_l1_commands() {
         "alias",
         "prune",
         "update",
+        "exec",
+        "run",
+        "env",
+        "import",
+        "export",
+        "profile",
     ] {
         assert!(
             out.contains(sub),

@@ -1,4 +1,4 @@
-use envr_config::project_config::{ProjectConfig, load_project_config};
+use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::{EnvSnapshot, current_platform_paths};
 use std::ffi::OsString;
@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 pub struct ShimContext {
     pub runtime_root: PathBuf,
     pub working_dir: PathBuf,
+    /// When set, selects `[profiles.<name>]` overlay from `.envr.toml` (overrides `ENVR_PROFILE`).
+    pub profile: Option<String>,
 }
 
 impl ShimContext {
@@ -23,9 +25,14 @@ impl ShimContext {
             current_platform_paths()?.runtime_root
         };
         let working_dir = std::env::current_dir().map_err(EnvrError::from)?;
+        let profile = envs
+            .get("ENVR_PROFILE")
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         Ok(Self {
             runtime_root,
             working_dir,
+            profile,
         })
     }
 }
@@ -241,7 +248,8 @@ pub fn resolve_runtime_home_for_lang(
     lang_key: &str,
     spec_override: Option<&str>,
 ) -> EnvrResult<PathBuf> {
-    let cfg = load_project_config(&ctx.working_dir)?.map(|(c, _)| c);
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
     runtime_home_for_key(ctx, lang_key, cfg.as_ref(), spec_override)
 }
 
@@ -351,7 +359,8 @@ pub fn parse_shim_invocation(args: &[OsString]) -> EnvrResult<(CoreCommand, Vec<
 
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
-    let cfg = load_project_config(&ctx.working_dir)?.map(|(c, _)| c);
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None)?;
@@ -463,6 +472,7 @@ version = "20"
         let ctx = ShimContext {
             runtime_root: root.to_path_buf(),
             working_dir: root.join("prj"),
+            profile: None,
         };
 
         let shim = resolve_core_shim("node", &ctx).expect("resolve");
@@ -492,6 +502,7 @@ version = "20"
         let ctx = ShimContext {
             runtime_root: root.to_path_buf(),
             working_dir: root.join("prj"),
+            profile: None,
         };
 
         let shim = resolve_core_shim("python3", &ctx).expect("resolve");
@@ -516,6 +527,7 @@ version = "20"
         let ctx = ShimContext {
             runtime_root: root.to_path_buf(),
             working_dir: root.join("prj"),
+            profile: None,
         };
 
         let shim = resolve_core_shim("java", &ctx).expect("resolve");

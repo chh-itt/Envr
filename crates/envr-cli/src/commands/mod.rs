@@ -2,16 +2,22 @@
 
 mod alias_cmd;
 mod check;
+mod child_env;
 mod common;
 mod config_cmd;
 mod current;
 mod doctor;
+mod env_cmd;
+mod exec;
+mod import_export;
 mod init;
 mod install;
 mod list;
+mod profile_cmd;
 mod prune;
 mod remote;
 mod resolve_cmd;
+mod run_cmd;
 mod uninstall;
 mod update;
 mod use_cmd;
@@ -21,9 +27,43 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
     match cli.command {
         crate::cli::Command::Init { path, force } => init::run(&cli.global, path, force),
         crate::cli::Command::Check { path } => check::run(&cli.global, path),
-        crate::cli::Command::Resolve { lang, spec, path } => {
-            resolve_cmd::run(&cli.global, lang, spec, path)
+        crate::cli::Command::Resolve {
+            lang,
+            spec,
+            path,
+            profile,
+        } => resolve_cmd::run(&cli.global, lang, spec, path, profile),
+        crate::cli::Command::Exec {
+            lang,
+            spec,
+            path,
+            profile,
+            command,
+            args,
+        } => exec::run(&cli.global, lang, spec, path, profile, command, args),
+        crate::cli::Command::Run {
+            path,
+            profile,
+            command,
+            args,
+        } => run_cmd::run(&cli.global, path, profile, command, args),
+        crate::cli::Command::Env {
+            path,
+            profile,
+            shell,
+        } => env_cmd::run(&cli.global, path, profile, shell),
+        crate::cli::Command::Import { file, path } => {
+            import_export::import_run(&cli.global, file, path)
         }
+        crate::cli::Command::Export { path, output } => {
+            import_export::export_run(&cli.global, path, output)
+        }
+        crate::cli::Command::Profile(sub) => match sub {
+            crate::cli::ProfileCmd::List { path } => profile_cmd::list(&cli.global, path),
+            crate::cli::ProfileCmd::Show { name, path } => {
+                profile_cmd::show(&cli.global, path, name)
+            }
+        },
         crate::cli::Command::Config(sub) => config_cmd::run(&cli.global, sub),
         crate::cli::Command::Alias(sub) => alias_cmd::run(&cli.global, sub),
         crate::cli::Command::Update { check } => update::run(&cli.global, check),
@@ -62,6 +102,12 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
                 crate::cli::Command::Init { .. }
                 | crate::cli::Command::Check { .. }
                 | crate::cli::Command::Resolve { .. }
+                | crate::cli::Command::Exec { .. }
+                | crate::cli::Command::Run { .. }
+                | crate::cli::Command::Env { .. }
+                | crate::cli::Command::Import { .. }
+                | crate::cli::Command::Export { .. }
+                | crate::cli::Command::Profile { .. }
                 | crate::cli::Command::Config { .. }
                 | crate::cli::Command::Alias { .. }
                 | crate::cli::Command::Update { .. }
