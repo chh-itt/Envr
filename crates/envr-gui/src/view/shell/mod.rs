@@ -5,6 +5,7 @@ use envr_ui::theme::ThemeTokens;
 
 use crate::app::{AppState, Message, Route};
 use crate::theme as gui_theme;
+use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::download_dock;
 use crate::view::env_center::env_center_view;
 use crate::view::settings::settings_view;
@@ -62,8 +63,11 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
 }
 
 fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
-    let title = text(state.route().label()).size(22);
+    if state.route() == Route::Dashboard {
+        return dashboard_view(&state.dashboard, &state.downloads, tokens);
+    }
 
+    let title = text(state.route().label()).size(22);
     let mut col = column![title].spacing(14);
 
     match state.route() {
@@ -89,15 +93,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 .size(13),
             );
         }
-        Route::Dashboard => {
-            col = col.push(
-                text(envr_core::i18n::tr(
-                    "总览与快捷入口（占位）。",
-                    "Overview & shortcuts (placeholder).",
-                ))
-                .size(15),
-            );
-        }
+        Route::Dashboard => unreachable!("handled by early return"),
         Route::About => {
             col = col.push(text(envr_core::i18n::tr("关于本应用。", "About this app.")).size(15));
         }

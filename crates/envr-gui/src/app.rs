@@ -16,6 +16,7 @@ use iced::{Element, Task, application};
 use crate::download_runner;
 use crate::gui_ops;
 use crate::theme as gui_theme;
+use crate::view::dashboard::{DashboardMsg, DashboardState};
 use crate::view::downloads::{DownloadJob, DownloadMsg, DownloadPanelState, JobState};
 use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
@@ -64,6 +65,7 @@ pub struct AppState {
     pub env_center: EnvCenterState,
     pub downloads: DownloadPanelState,
     pub settings: SettingsViewState,
+    pub dashboard: DashboardState,
 }
 
 impl Default for AppState {
@@ -75,6 +77,7 @@ impl Default for AppState {
             env_center: EnvCenterState::default(),
             downloads: DownloadPanelState::default(),
             settings: SettingsViewState::new(),
+            dashboard: DashboardState::default(),
         }
     }
 }
@@ -105,6 +108,7 @@ pub enum Message {
     ReportError(String),
     SetFlavor(UiFlavor),
     EnvCenter(EnvCenterMsg),
+    Dashboard(DashboardMsg),
     Download(DownloadMsg),
     Settings(SettingsMsg),
 }
@@ -169,6 +173,9 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Runtime {
                 return gui_ops::refresh_runtimes(state.env_center.kind);
             }
+            if route == Route::Dashboard {
+                return gui_ops::refresh_dashboard();
+            }
             if route == Route::Settings
                 && let Err(e) = state.settings.reload_from_disk()
             {
@@ -193,8 +200,31 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::EnvCenter(msg) => handle_env_center(state, msg),
+        Message::Dashboard(msg) => handle_dashboard(state, msg),
         Message::Download(msg) => handle_download(state, msg),
         Message::Settings(msg) => handle_settings(state, msg),
+    }
+}
+
+fn handle_dashboard(state: &mut AppState, msg: DashboardMsg) -> Task<Message> {
+    match msg {
+        DashboardMsg::Refresh => {
+            state.dashboard.busy = true;
+            state.dashboard.last_error = None;
+            gui_ops::refresh_dashboard()
+        }
+        DashboardMsg::DataLoaded(res) => {
+            state.dashboard.busy = false;
+            match res {
+                Ok(d) => {
+                    state.dashboard.data = Some(d);
+                }
+                Err(e) => {
+                    state.dashboard.last_error = Some(e);
+                }
+            }
+            Task::none()
+        }
     }
 }
 

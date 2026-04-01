@@ -720,18 +720,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T047 仪表盘页面（Dashboard）完整实现
-- [ ] **T047：实现仪表盘总览与快捷操作** #gui
+- [x] **T047：实现仪表盘总览与快捷操作** #gui
   - **描述**：实现运行时概览、健康检查、最近任务和推荐操作卡片。
   - **依赖**：T046,T027,T033
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/dashboard/*`
   - **验收**：仪表盘数据与实际状态一致，支持跳转到对应页面。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `view/dashboard`（概览/健康检查/最近任务/推荐操作卡片）；新增 `gui_ops::refresh_dashboard` 在后台线程汇总 `RuntimeService` 的 installed/current 统计并做轻量 doctor 检查（runtime_root 可写、shims 是否为空等）；Dashboard 支持一键刷新与跳转到运行时/设置。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T048 运行时页顶部横向运行时导航
 - [ ] **T048：实现全运行时横向切换条（Node/Python/Go/Java/Rust/PHP/Deno/Bun）** #gui #runtime
