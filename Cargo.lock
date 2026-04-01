@@ -273,6 +273,8 @@ dependencies = [
  "envr-runtime-java",
  "envr-runtime-node",
  "envr-runtime-python",
+ "envr-shim-core",
+ "tempfile",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

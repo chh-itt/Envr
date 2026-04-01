@@ -302,6 +302,15 @@ fn java_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+/// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
+pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(home, cmd),
+        CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
+        CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
+    }
+}
+
 /// Interprets OS arguments: either `node ...` when argv0 is `node(.exe)`, or `envr-shim node ...`
 /// when argv0 is the shim binary name.
 pub fn parse_shim_invocation(args: &[OsString]) -> EnvrResult<(CoreCommand, Vec<OsString>)> {

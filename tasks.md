@@ -350,18 +350,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T024 shim 文件生成与刷新
-- [ ] **T024：实现 shims 生成、删除、全局包自动刷新** #shim #node
+- [x] **T024：实现 shims 生成、删除、全局包自动刷新** #shim #node
   - **描述**：安装/卸载/全局包变化后自动更新 shim 文件。
   - **依赖**：T023,T009
   - **输入文档**：旧项目与二版 shim 行为
   - **输出文件**：`crates/envr-core/src/shim_service.rs`
   - **验收**：新增全局包后可直接执行；删除后 shim 清理正确。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `ShimService`（`runtime_root` + `shim_exe` 绝对路径），`shim_dir`=`{runtime_root}/shims`。`ensure_shims(kind)` 写入核心启动器（Windows `*.cmd`：`envr-shim.exe <dispatch> %*`；Unix `#!/bin/sh` + `exec` + `chmod 755`）。`remove_shims(kind)` 删除对应语言的 core 文件。`sync_global_package_shims(Node, _)`：在存在 `runtimes/node/current` 时用 `core_tool_executable` 找 `npm` 并执行 `npm bin -g`（PATH 前置 node home），为非核心条目在 `shims` 下生成转发（Windows `call "全局路径"`；Unix symlink）；`remove_stale_non_core_shims` 删除既非 core、又不在当前全局 bin 列表中的 shim。`envr-shim-core` 增加 `core_tool_executable` 供 npm 定位。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：与 CLI 安装流程解耦，由调用方在适当时机传入 `shim_exe` 并调用 `ensure`/`sync`；未在 crate 内自动挂钩 Node 安装（留待 T026+）。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ## Phase 6：CLI 完整可用
 

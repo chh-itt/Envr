@@ -1,5 +1,8 @@
 pub mod logging;
 pub mod runtime;
+pub mod shim_service;
+
+pub use shim_service::ShimService;
 
 use envr_error::{EnvrError, EnvrResult};
 use std::path::Path;
