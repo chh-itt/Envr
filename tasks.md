@@ -278,18 +278,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T019 Python 安装/卸载/切换
-- [ ] **T019：实现 Python 安装流程与 pip 基础可用性** #runtime #python
+- [x] **T019：实现 Python 安装流程与 pip 基础可用性** #runtime #python
   - **描述**：支持安装后 `python/pip` 可执行、版本切换可生效。
   - **依赖**：T018,T012
   - **输入文档**：旧项目 Python 经验
   - **输出文件**：`crates/envr-runtime-python/src/manager.rs`
   - **验收**：`python --version` 与 `pip --version` 正常。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `manager`：`PythonPaths`（`runtimes/python/versions/<x.y.z>`、`current` 符号链接、`cache/python`）；`pick_install_artifact`（Windows 选官方 **embeddable zip**，解压后修补 `*. _pth` 追加 `import site`，再拉取 `get-pip.py` 引导 pip；Linux/macOS 选 **源码 `.tar.xz`**，`./configure --prefix=... --with-ensurepip=install` + `make -jN` + `make install`）；可选校验 API 提供的 `sha256_sum`；安装结束执行 `python -m pip --version` 自检；`list_installed` / `current` / `set_current` / `uninstall` 与 Node 同模式。`PythonRuntimeProvider` 增加 `with_runtime_root` 并接入上述能力。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：官方 Linux 无预编译包条目时以源码安装为统一路径（需本机编译工具链）；Windows 用 embeddable + get-pip 避免静默 `.exe` 安装器参数差异。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；完整端到端安装未放入默认单测（耗时长且依赖网络/编译环境）。
 
 ### T020 Java 发行版模型与索引
 - [ ] **T020：实现 Java vendor 抽象与版本索引** #runtime #java

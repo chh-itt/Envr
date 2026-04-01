@@ -46,6 +46,8 @@ pub struct PyReleaseFile {
     pub release: String,
     pub is_source: bool,
     pub url: String,
+    #[serde(default)]
+    pub sha256_sum: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -315,6 +317,72 @@ fn parse_partial_spec(s: &str) -> EnvrResult<SpecMatch> {
     }
 }
 
+/// API release id for a resolved version label (`3.12.1`) on this host.
+pub fn release_id_for_version_label(
+    index: &PythonIndex,
+    version_label: &str,
+    os: &str,
+    arch: &str,
+) -> EnvrResult<u32> {
+    let rows = candidate_releases(index, os, arch);
+    rows.iter()
+        .find(|(_, v, _)| v == version_label)
+        .map(|(_, _, id)| *id)
+        .ok_or_else(|| {
+            EnvrError::Validation(format!(
+                "python {version_label} is not available for this platform"
+            ))
+        })
+}
+
+/// Artifact used for `envr` installs: Windows embeddable `.zip` (+ bootstrap pip); Unix source `.tar.xz` (+ `make install` + ensurepip).
+pub fn pick_install_artifact(
+    files: &[PyReleaseFile],
+    os: &str,
+    arch: &str,
+) -> EnvrResult<PyReleaseFile> {
+    match os {
+        "windows" => pick_windows_embed_zip(files, arch),
+        "linux" | "macos" => pick_source_xz_tarball(files),
+        _ => Err(EnvrError::Platform(format!(
+            "unsupported OS for python install: {os}"
+        ))),
+    }
+}
+
+fn pick_windows_embed_zip(files: &[PyReleaseFile], arch: &str) -> EnvrResult<PyReleaseFile> {
+    let mut candidates: Vec<PyReleaseFile> = files
+        .iter()
+        .filter(|f| {
+            !f.is_source
+                && os_is_windows(&f.os)
+                && windows_file_matches_arch(f, arch)
+                && f.url.to_ascii_lowercase().ends_with(".zip")
+                && f.url.to_ascii_lowercase().contains("embed")
+                && !f.name.to_ascii_lowercase().contains("debug")
+        })
+        .cloned()
+        .collect();
+    candidates.sort_by(|a, b| b.url.len().cmp(&a.url.len()));
+    candidates.into_iter().next().ok_or_else(|| {
+        EnvrError::Validation("no Windows embeddable zip for this CPU architecture".into())
+    })
+}
+
+fn pick_source_xz_tarball(files: &[PyReleaseFile]) -> EnvrResult<PyReleaseFile> {
+    files
+        .iter()
+        .find(|f| {
+            f.is_source && os_is_source(&f.os) && f.url.to_ascii_lowercase().ends_with(".tar.xz")
+        })
+        .cloned()
+        .ok_or_else(|| {
+            EnvrError::Validation(
+                "no XZ source tarball in release (required for Linux/macOS install)".into(),
+            )
+        })
+}
+
 fn pick_partial(rows: &[(SemKey, String, u32)], spec: SpecMatch) -> EnvrResult<String> {
     let best = match spec {
         SpecMatch::Exact(ma, mi, p) => {
@@ -362,6 +430,7 @@ mod tests {
             release: "x".into(),
             is_source: false,
             url: "https://x/python-3.12.1-amd64.exe".into(),
+            sha256_sum: None,
         };
         assert!(windows_file_matches_arch(&f, "x86_64"));
         assert!(!windows_file_matches_arch(&f, "x86"));
@@ -396,6 +465,7 @@ mod tests {
                     release: "https://www.python.org/api/v2/downloads/release/2/".into(),
                     is_source: true,
                     url: "https://www.python.org/ftp/python/3.12.1/Python-3.12.1.tar.xz".into(),
+                    sha256_sum: None,
                 }],
             )]),
         };
@@ -405,5 +475,43 @@ mod tests {
         assert_eq!(list[0].0, "3.12.1");
         let r = resolve_python_version(&index, "linux", "x86_64", "3.12").expect("r");
         assert_eq!(r, "3.12.1");
+    }
+
+    #[test]
+    fn pick_install_embed_windows() {
+        let files = vec![
+            PyReleaseFile {
+                name: "embed".into(),
+                os: "https://www.python.org/api/v2/downloads/os/1/".into(),
+                release: "r".into(),
+                is_source: false,
+                url: "https://x/python-3.12.1-embed-amd64.zip".into(),
+                sha256_sum: None,
+            },
+            PyReleaseFile {
+                name: "exe".into(),
+                os: "https://www.python.org/api/v2/downloads/os/1/".into(),
+                release: "r".into(),
+                is_source: false,
+                url: "https://x/python-3.12.1-amd64.exe".into(),
+                sha256_sum: None,
+            },
+        ];
+        let p = pick_install_artifact(&files, "windows", "x86_64").expect("pick");
+        assert!(p.url.contains("embed"));
+    }
+
+    #[test]
+    fn pick_install_source_unix() {
+        let files = vec![PyReleaseFile {
+            name: "src".into(),
+            os: "https://www.python.org/api/v2/downloads/os/3/".into(),
+            release: "r".into(),
+            is_source: true,
+            url: "https://x/Python-3.12.1.tar.xz".into(),
+            sha256_sum: None,
+        }];
+        let p = pick_install_artifact(&files, "linux", "x86_64").expect("pick");
+        assert!(p.url.ends_with(".tar.xz"));
     }
 }

@@ -5,8 +5,11 @@ edition = "2024"
 
 [dependencies]
 envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }
+envr-platform = { path = "../envr-platform" }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }

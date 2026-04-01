@@ -1,21 +1,29 @@
 mod index;
+mod manager;
 
 pub use index::{
     DEFAULT_PYTHON_RELEASE_FILES_URL, DEFAULT_PYTHON_RELEASES_URL, PyRelease, PyReleaseFile,
     PythonIndex, blocking_http_client, fetch_json, list_remote_versions, load_python_index,
     normalize_python_version_label, parse_release_file_list, parse_release_list,
-    release_has_platform_assets, resolve_python_version,
+    pick_install_artifact, release_has_platform_assets, release_id_for_version_label,
+    resolve_python_version,
+};
+pub use manager::{
+    PythonManager, PythonPaths, list_installed_versions, python_executable,
+    python_installation_valid, read_current,
 };
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::EnvrResult;
+use envr_platform::paths::current_platform_paths;
 
 pub struct PythonRuntimeProvider {
     releases_url: String,
     files_url: String,
+    runtime_root_override: Option<std::path::PathBuf>,
 }
 
 impl PythonRuntimeProvider {
@@ -23,6 +31,7 @@ impl PythonRuntimeProvider {
         Self {
             releases_url: DEFAULT_PYTHON_RELEASES_URL.to_string(),
             files_url: DEFAULT_PYTHON_RELEASE_FILES_URL.to_string(),
+            runtime_root_override: None,
         }
     }
 
@@ -30,7 +39,28 @@ impl PythonRuntimeProvider {
         Self {
             releases_url: releases_url.into(),
             files_url: files_url.into(),
+            runtime_root_override: None,
         }
+    }
+
+    pub fn with_runtime_root(mut self, root: std::path::PathBuf) -> Self {
+        self.runtime_root_override = Some(root);
+        self
+    }
+
+    fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
+        Ok(match &self.runtime_root_override {
+            Some(p) => p.clone(),
+            None => current_platform_paths()?.runtime_root,
+        })
+    }
+
+    fn manager(&self) -> EnvrResult<PythonManager> {
+        PythonManager::try_new(
+            self.runtime_root()?,
+            self.releases_url.clone(),
+            self.files_url.clone(),
+        )
     }
 
     fn load_index(&self) -> EnvrResult<PythonIndex> {
@@ -51,15 +81,17 @@ impl RuntimeProvider for PythonRuntimeProvider {
     }
 
     fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(vec![])
+        let paths = PythonPaths::new(self.runtime_root()?);
+        list_installed_versions(&paths)
     }
 
     fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
-        Ok(None)
+        let paths = PythonPaths::new(self.runtime_root()?);
+        read_current(&paths)
     }
 
-    fn set_current(&self, _version: &RuntimeVersion) -> EnvrResult<()> {
-        Err(EnvrError::Runtime("not implemented".to_string()))
+    fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.manager()?.set_current(version)
     }
 
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -77,10 +109,10 @@ impl RuntimeProvider for PythonRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        Ok(self.resolve(&request.spec)?.version)
+        self.manager()?.install_from_spec(&request.spec)
     }
 
-    fn uninstall(&self, _version: &RuntimeVersion) -> EnvrResult<()> {
-        Err(EnvrError::Runtime("not implemented".to_string()))
+    fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.manager()?.uninstall(version)
     }
 }
