@@ -466,18 +466,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；运行 GUI 在「设置」切换三种风格可见色与圆角/阴影差异。
 
 ### T032 环境中心页面（Node/Python/Java）
-- [ ] **T032：实现环境中心全流程交互（安装/切换/卸载）** #gui
+- [x] **T032：实现环境中心全流程交互（安装/切换/卸载）** #gui
   - **描述**：GUI 完整调用 core 服务，不复制业务逻辑。
   - **依赖**：T031,T026,T027
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/env_center/*`
   - **验收**：GUI 能完成与 CLI 等效的核心操作。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`view/env_center/panel.rs` 展示 Node/Python/Java 切换、已安装列表、当前版本、`install`/`resolve`+`set_current`（等同 CLI `use`）/`uninstall`；`service.rs` 与 CLI 一致解析 `ENVR_RUNTIME_ROOT`；`gui_ops.rs` + `runtime_exec.rs` 用 Tokio `spawn_blocking` 调用 `RuntimeService`，避免阻塞 UI；进入「运行时」自动刷新列表。
+    - 相关提交/PR：feat(gui): T032 env center via RuntimeService
+    - 遇到的问题/决策：`iced` `update` 返回 `Task<Message>`；侧栏仍为四路由，环境中心落在「运行时」页；当前行禁用使用/卸载与 CLI 规则一致。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T033 下载面板与任务控制
 - [ ] **T033：实现多任务下载面板（进度/取消/重试）** #gui #download

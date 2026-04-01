@@ -884,8 +884,12 @@ name = "envr-gui"
 version = "0.1.0"
 dependencies = [
  "envr-core",
+ "envr-domain",
+ "envr-error",
+ "envr-platform",
  "envr-ui",
  "iced",
+ "tokio",
  "tracing",
 ]
 

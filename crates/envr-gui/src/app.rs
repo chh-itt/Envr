@@ -2,9 +2,11 @@
 
 use envr_ui::theme::{ThemeTokens, UiFlavor, default_flavor_for_target, tokens_for};
 use iced::widget::{button, column, container, horizontal_space, row, scrollable, text};
-use iced::{Alignment, Element, Length, Padding, Theme, application};
+use iced::{Alignment, Element, Length, Padding, Task, Theme, application};
 
+use crate::gui_ops;
 use crate::theme as gui_theme;
+use crate::view::env_center::{EnvCenterMsg, EnvCenterState, env_center_view};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -39,6 +41,7 @@ pub struct AppState {
     error: Option<String>,
     /// Active skin; user can override the OS default on the Settings page.
     flavor: UiFlavor,
+    pub env_center: EnvCenterState,
 }
 
 impl Default for AppState {
@@ -47,6 +50,7 @@ impl Default for AppState {
             route: Route::default(),
             error: None,
             flavor: default_flavor_for_target(),
+            env_center: EnvCenterState::default(),
         }
     }
 }
@@ -63,6 +67,7 @@ pub enum Message {
     DismissError,
     ReportError(String),
     SetFlavor(UiFlavor),
+    EnvCenter(EnvCenterMsg),
 }
 
 pub fn run() -> iced::Result {
@@ -73,17 +78,99 @@ pub fn run() -> iced::Result {
         .run()
 }
 
-fn update(state: &mut AppState, message: Message) {
+fn update(state: &mut AppState, message: Message) -> Task<Message> {
     match message {
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
             state.route = route;
+            if route == Route::Runtime {
+                return gui_ops::refresh_runtimes(state.env_center.kind);
+            }
+            Task::none()
         }
-        Message::DismissError => state.error = None,
-        Message::ReportError(msg) => state.error = Some(msg),
+        Message::DismissError => {
+            state.error = None;
+            Task::none()
+        }
+        Message::ReportError(msg) => {
+            state.error = Some(msg);
+            Task::none()
+        }
         Message::SetFlavor(flavor) => {
             tracing::debug!(%flavor, "set flavor");
             state.flavor = flavor;
+            Task::none()
+        }
+        Message::EnvCenter(msg) => handle_env_center(state, msg),
+    }
+}
+
+fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
+    match msg {
+        EnvCenterMsg::PickKind(k) => {
+            state.env_center.kind = k;
+            gui_ops::refresh_runtimes(k)
+        }
+        EnvCenterMsg::InstallInput(s) => {
+            state.env_center.install_input = s;
+            Task::none()
+        }
+        EnvCenterMsg::Refresh => gui_ops::refresh_runtimes(state.env_center.kind),
+        EnvCenterMsg::DataLoaded(res) => {
+            state.env_center.busy = false;
+            match res {
+                Ok((list, cur)) => {
+                    state.env_center.installed = list;
+                    state.env_center.current = cur;
+                }
+                Err(e) => state.error = Some(e),
+            }
+            Task::none()
+        }
+        EnvCenterMsg::SubmitInstall => {
+            let spec = state.env_center.install_input.trim().to_string();
+            if spec.is_empty() {
+                state.error = Some("请输入版本 spec".into());
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::install_version(state.env_center.kind, spec)
+        }
+        EnvCenterMsg::InstallFinished(res) => {
+            state.env_center.busy = false;
+            match &res {
+                Ok(v) => {
+                    tracing::info!(version = %v.0, "gui install ok");
+                    state.env_center.install_input.clear();
+                }
+                Err(e) => state.error = Some(e.clone()),
+            }
+            gui_ops::refresh_runtimes(state.env_center.kind)
+        }
+        EnvCenterMsg::SubmitUse(v) => {
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::use_version(state.env_center.kind, v)
+        }
+        EnvCenterMsg::UseFinished(res) => {
+            state.env_center.busy = false;
+            if let Err(e) = res {
+                state.error = Some(e);
+            }
+            gui_ops::refresh_runtimes(state.env_center.kind)
+        }
+        EnvCenterMsg::SubmitUninstall(v) => {
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::uninstall_version(state.env_center.kind, v)
+        }
+        EnvCenterMsg::UninstallFinished(res) => {
+            state.env_center.busy = false;
+            if let Err(e) = res {
+                state.error = Some(e);
+            }
+            gui_ops::refresh_runtimes(state.env_center.kind)
         }
     }
 }
@@ -152,16 +239,25 @@ fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message> {
         .into()
 }
 
-fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'static, Message> {
+fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
     let title = text(state.route.label()).size(22);
-    let blurb: &'static str = match state.route {
-        Route::Dashboard => "总览与快捷入口（占位）。",
-        Route::Runtime => "运行时与版本列表（占位）。",
-        Route::Settings => "镜像、路径、行为与外观（占位）。",
-        Route::About => "关于本应用。",
-    };
 
-    let mut col = column![title, text(blurb).size(15),].spacing(14);
+    let mut col = column![title].spacing(14);
+
+    match state.route {
+        Route::Runtime => {
+            col = col.push(env_center_view(&state.env_center, tokens));
+        }
+        _ => {
+            let blurb: &'static str = match state.route {
+                Route::Dashboard => "总览与快捷入口（占位）。",
+                Route::Settings => "镜像、路径、行为与外观（占位）。",
+                Route::About => "关于本应用。",
+                Route::Runtime => unreachable!(),
+            };
+            col = col.push(text(blurb).size(15));
+        }
+    }
 
     if state.route == Route::Settings {
         col = col.push(text("视觉风格").size(17));

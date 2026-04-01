@@ -1,5 +1,9 @@
 mod app;
+mod gui_ops;
+mod runtime_exec;
+mod service;
 mod theme;
+mod view;
 
 fn main() {
     let _logging_guard = match envr_core::logging::init_logging("envr-gui") {
