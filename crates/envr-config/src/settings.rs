@@ -373,6 +373,16 @@ impl SettingsCache {
         self.last_modified = file_mtime(&self.path).ok();
         Ok(())
     }
+
+    /// Replace cached settings without any disk I/O.
+    ///
+    /// Useful for GUI async flows where the settings were already loaded/saved
+    /// off the UI thread.
+    pub fn set_cached(&mut self, settings: Settings) {
+        self.cached = settings;
+        // Force the next `get()` to re-check disk mtime.
+        self.last_modified = None;
+    }
 }
 
 pub fn settings_path_from_platform(paths: &EnvrPaths) -> PathBuf {

@@ -36,11 +36,6 @@ impl RuntimeSettingsState {
         Ok(())
     }
 
-    pub fn reload_from_disk(&mut self) -> EnvrResult<()> {
-        self.cache.reload()?;
-        self.sync_from_cache()
-    }
-
     pub fn build_settings(&self) -> EnvrResult<Settings> {
         let mut s = self.draft.clone();
         let gp = self.go_goproxy_draft.trim();
@@ -61,12 +56,7 @@ impl RuntimeSettingsState {
         Ok(s)
     }
 
-    pub fn save(&mut self) -> EnvrResult<()> {
-        let next = self.build_settings()?;
-        self.cache.set_and_persist(next)?;
-        self.sync_from_cache()?;
-        Ok(())
-    }
+    // Persist is performed off the UI thread in `app.rs`.
 }
 
 impl Default for RuntimeSettingsState {

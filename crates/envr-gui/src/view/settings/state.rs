@@ -47,11 +47,6 @@ impl SettingsViewState {
         Ok(())
     }
 
-    pub fn reload_from_disk(&mut self) -> EnvrResult<()> {
-        self.cache.reload()?;
-        self.sync_from_cache()
-    }
-
     pub fn build_settings(&self) -> EnvrResult<Settings> {
         let mut s = self.draft.clone();
         let rr = self.runtime_root_draft.trim();
@@ -89,13 +84,6 @@ impl SettingsViewState {
         s.i18n.locale = self.locale_mode_draft;
         s.validate()?;
         Ok(s)
-    }
-
-    pub fn save(&mut self) -> EnvrResult<()> {
-        let next = self.build_settings()?;
-        self.cache.set_and_persist(next)?;
-        self.sync_from_cache()?;
-        Ok(())
     }
 
     pub fn env_overrides_runtime_root() -> bool {

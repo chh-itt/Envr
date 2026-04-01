@@ -22,6 +22,8 @@ pub enum SettingsMsg {
     SetLocaleMode(LocaleMode),
     Save,
     ReloadDisk,
+    DiskLoaded(Result<envr_config::settings::Settings, String>),
+    DiskSaved(Result<envr_config::settings::Settings, String>),
 }
 
 pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<'static, Message> {

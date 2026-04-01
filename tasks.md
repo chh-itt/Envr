@@ -834,18 +834,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T040 页面加载与操作响应优化
-- [ ] **T040：优化页面加载与操作响应延迟** #perf #ux
+- [x] **T040：优化页面加载与操作响应延迟** #perf #ux
   - **描述**：异步化耗时任务，UI 反馈即时化（占位/骨架/进度）。
   - **依赖**：T039
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：主要页面逻辑
   - **验收**：页面加载 <=150ms、操作反馈 <=50ms。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：将设置页与运行时设置的读写 `settings.toml` 从同步 I/O 改为异步任务（进入设置页自动后台加载；保存/从磁盘重载均先即时展示 Loading/Saving 状态，再在完成后回填并提示结果），避免页面切换和点击动作阻塞渲染线程。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ## Phase 10：测试完整性与发布准备
 

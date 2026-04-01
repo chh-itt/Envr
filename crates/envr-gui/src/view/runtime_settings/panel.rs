@@ -14,6 +14,8 @@ pub enum RuntimeSettingsMsg {
     GoGoproxyEdit(String),
     BunGlobalBinDirEdit(String),
     Save,
+    DiskLoaded(Result<envr_config::settings::Settings, String>),
+    DiskSaved(Result<envr_config::settings::Settings, String>),
 }
 
 pub fn runtime_settings_view(

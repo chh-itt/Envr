@@ -12,6 +12,7 @@ use envr_ui::theme::{
 };
 use iced::font::Family;
 use iced::{Element, Subscription, Task, application};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use crate::download_runner;
@@ -205,13 +206,17 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Dashboard {
                 return gui_ops::refresh_dashboard();
             }
-            if route == Route::Settings
-                && let Err(e) = state.settings.reload_from_disk()
-            {
-                state.error = Some(format!(
-                    "{}: {e}",
-                    envr_core::i18n::tr("设置加载失败", "Failed to load settings")
-                ));
+            if route == Route::Settings {
+                state.settings.last_message =
+                    Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+                let path = settings_path();
+                return Task::perform(
+                    async move {
+                        envr_config::settings::Settings::load_or_default_from(&path)
+                            .map_err(|e| e.to_string())
+                    },
+                    |res| Message::Settings(SettingsMsg::DiskLoaded(res)),
+                );
             }
             Task::none()
         }
@@ -243,17 +248,16 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::ReloadDisk => {
-            state.runtime_settings.last_message = None;
-            match state.runtime_settings.reload_from_disk() {
-                Ok(()) => {}
-                Err(e) => {
-                    state.runtime_settings.last_message = Some(format!(
-                        "{}: {e}",
-                        envr_core::i18n::tr("重新加载失败", "Reload failed")
-                    ));
-                }
-            }
-            Task::none()
+            state.runtime_settings.last_message =
+                Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+            let path = settings_path();
+            Task::perform(
+                async move {
+                    envr_config::settings::Settings::load_or_default_from(&path)
+                        .map_err(|e| e.to_string())
+                },
+                |res| Message::RuntimeSettings(RuntimeSettingsMsg::DiskLoaded(res)),
+            )
         }
         RuntimeSettingsMsg::GoGoproxyEdit(s) => {
             state.runtime_settings.go_goproxy_draft = s;
@@ -264,11 +268,57 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::Save => {
-            state.runtime_settings.last_message = None;
-            match state.runtime_settings.save() {
-                Ok(()) => {
-                    state.runtime_settings.last_message =
-                        Some(envr_core::i18n::tr("已保存。", "Saved.").into());
+            state.runtime_settings.last_message =
+                Some(envr_core::i18n::tr("正在保存…", "Saving…").into());
+            let path = settings_path();
+            let next = state
+                .runtime_settings
+                .build_settings()
+                .map_err(|e| e.to_string());
+            Task::perform(
+                async move {
+                    let next = next?;
+                    next.save_to(&path).map_err(|e| e.to_string())?;
+                    Ok(next)
+                },
+                |res| Message::RuntimeSettings(RuntimeSettingsMsg::DiskSaved(res)),
+            )
+        }
+        RuntimeSettingsMsg::DiskLoaded(res) => {
+            match res {
+                Ok(st) => {
+                    state.runtime_settings.cache.set_cached(st);
+                    if let Err(e) = state.runtime_settings.sync_from_cache() {
+                        state.runtime_settings.last_message = Some(format!(
+                            "{}: {e}",
+                            envr_core::i18n::tr("同步失败", "Sync failed")
+                        ));
+                    } else {
+                        state.runtime_settings.last_message = None;
+                    }
+                }
+                Err(e) => {
+                    state.runtime_settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("重新加载失败", "Reload failed")
+                    ));
+                }
+            }
+            Task::none()
+        }
+        RuntimeSettingsMsg::DiskSaved(res) => {
+            match res {
+                Ok(st) => {
+                    state.runtime_settings.cache.set_cached(st);
+                    if let Err(e) = state.runtime_settings.sync_from_cache() {
+                        state.runtime_settings.last_message = Some(format!(
+                            "{}: {e}",
+                            envr_core::i18n::tr("同步失败", "Sync failed")
+                        ));
+                    } else {
+                        state.runtime_settings.last_message =
+                            Some(envr_core::i18n::tr("已保存。", "Saved.").into());
+                    }
                 }
                 Err(e) => {
                     state.runtime_settings.last_message = Some(format!(
@@ -359,28 +409,43 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             Task::none()
         }
         SettingsMsg::Save => {
-            state.settings.last_message = None;
-            match state.settings.save() {
-                Ok(()) => {
-                    state.settings.last_message =
-                        Some(envr_core::i18n::tr("已保存到 settings.toml。", "Saved.").into());
-                }
-                Err(e) => {
-                    state.settings.last_message = Some(format!(
-                        "{}: {e}",
-                        envr_core::i18n::tr("保存失败", "Save failed")
-                    ));
-                }
-            }
-            Task::none()
+            state.settings.last_message = Some(envr_core::i18n::tr("正在保存…", "Saving…").into());
+            let path = settings_path();
+            let next = state.settings.build_settings().map_err(|e| e.to_string());
+            Task::perform(
+                async move {
+                    let next = next?;
+                    next.save_to(&path).map_err(|e| e.to_string())?;
+                    Ok(next)
+                },
+                |res| Message::Settings(SettingsMsg::DiskSaved(res)),
+            )
         }
         SettingsMsg::ReloadDisk => {
-            state.settings.last_message = None;
-            match state.settings.reload_from_disk() {
-                Ok(()) => {
-                    state.settings.last_message = Some(
-                        envr_core::i18n::tr("已从磁盘重新加载。", "Reloaded from disk.").into(),
-                    );
+            state.settings.last_message = Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+            let path = settings_path();
+            Task::perform(
+                async move {
+                    envr_config::settings::Settings::load_or_default_from(&path)
+                        .map_err(|e| e.to_string())
+                },
+                |res| Message::Settings(SettingsMsg::DiskLoaded(res)),
+            )
+        }
+        SettingsMsg::DiskLoaded(res) => {
+            match res {
+                Ok(st) => {
+                    state.settings.cache.set_cached(st);
+                    if let Err(e) = state.settings.sync_from_cache() {
+                        state.settings.last_message = Some(format!(
+                            "{}: {e}",
+                            envr_core::i18n::tr("同步失败", "Sync failed")
+                        ));
+                    } else {
+                        state.settings.last_message = Some(
+                            envr_core::i18n::tr("已从磁盘重新加载。", "Reloaded from disk.").into(),
+                        );
+                    }
                 }
                 Err(e) => {
                     state.settings.last_message = Some(format!(
@@ -391,7 +456,36 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             }
             Task::none()
         }
+        SettingsMsg::DiskSaved(res) => {
+            match res {
+                Ok(st) => {
+                    state.settings.cache.set_cached(st);
+                    if let Err(e) = state.settings.sync_from_cache() {
+                        state.settings.last_message = Some(format!(
+                            "{}: {e}",
+                            envr_core::i18n::tr("同步失败", "Sync failed")
+                        ));
+                    } else {
+                        state.settings.last_message =
+                            Some(envr_core::i18n::tr("已保存到 settings.toml。", "Saved.").into());
+                    }
+                }
+                Err(e) => {
+                    state.settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("保存失败", "Save failed")
+                    ));
+                }
+            }
+            Task::none()
+        }
     }
+}
+
+fn settings_path() -> PathBuf {
+    let paths =
+        envr_platform::paths::current_platform_paths().expect("platform paths for settings");
+    envr_config::settings::settings_path_from_platform(&paths)
 }
 
 fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
