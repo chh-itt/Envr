@@ -264,18 +264,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；安装后可将 `{runtime_root}/runtimes/node/current` 下的 `node` / `node.exe` 加入 PATH 后执行 `node -v`（端到端下载未放入默认单测以免 CI 依赖外网）。
 
 ### T018 Python 远程索引与版本解析
-- [ ] **T018：实现 Python 版本发现、版本规范化与选择器** #runtime #python
+- [x] **T018：实现 Python 版本发现、版本规范化与选择器** #runtime #python
   - **描述**：支持主/次/补丁版本选择与平台包筛选。
   - **依赖**：T015
   - **输入文档**：二版 Python 检测逻辑
   - **输出文件**：`crates/envr-runtime-python/src/index.rs`
   - **验收**：可稳定获取并解析可安装版本。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：基于 `python.org` OData API：拉取 `/api/v2/downloads/release/` 与 `/api/v2/downloads/release_file/`，按 `release` id 关联；从 `name`（如 `Python 3.12.1`）解析 semver；平台规则——Windows 非源码且按 URL/名称匹配 `amd64`/`arm64`/`win32`；macOS 非源码安装包；Linux 以官方源码 `.tar.xz`（`is_source`）作为可安装基线；排除 `pre_release`。`list_remote_versions` 按版本降序并支持 `RemoteFilter.prefix`；`resolve_python_version` 支持 `latest`/`stable`/`current`、`3`、`3.12`、`3.12.1` 与精确标签。`PythonRuntimeProvider` 接入 `list_remote`/`resolve`/`install`（install 返回解析结果）。`envr-core` 单测改为用 Java 做路由桩，避免默认 CI 拉取官方索引。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：python.org 无独立 “Linux” OS 条目，Linux 以源码 XZ 作为与官方下载页一致的通用工件；全量 `release_file` 一次拉取（体量可接受）以在内存中完成平台筛选。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T019 Python 安装/卸载/切换
 - [ ] **T019：实现 Python 安装流程与 pip 基础可用性** #runtime #python

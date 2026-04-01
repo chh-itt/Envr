@@ -6,10 +6,7 @@ fn defaults_include_node_python_java() {
     let svc = RuntimeService::with_defaults().expect("defaults");
     let filter = RemoteFilter { prefix: None };
 
-    // Node `list_remote` hits `https://nodejs.org/dist/index.json`; covered in envr-runtime-node tests.
-    let _ = svc
-        .list_remote(RuntimeKind::Python, &filter)
-        .expect("python");
+    // Node/Python `list_remote` hit official indexes; covered in envr-runtime-* crate tests.
     let _ = svc.list_remote(RuntimeKind::Java, &filter).expect("java");
 }
 
@@ -18,11 +15,11 @@ fn install_and_resolve_are_routed() {
     let svc = RuntimeService::with_defaults().expect("defaults");
     let spec = VersionSpec("1.2.3".to_string());
 
-    let resolved = svc.resolve(RuntimeKind::Python, &spec).expect("resolve");
+    let resolved = svc.resolve(RuntimeKind::Java, &spec).expect("resolve");
     assert_eq!(resolved.version.0, "1.2.3");
 
     let installed = svc
-        .install(RuntimeKind::Python, &InstallRequest { spec })
+        .install(RuntimeKind::Java, &InstallRequest { spec })
         .expect("install");
     assert_eq!(installed.0, "1.2.3");
 }
