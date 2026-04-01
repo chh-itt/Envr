@@ -306,18 +306,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T021 Java 安装/卸载/切换 + JAVA_HOME
-- [ ] **T021：实现 Java 生命周期管理与环境变量更新** #runtime #java
+- [x] **T021：实现 Java 生命周期管理与环境变量更新** #runtime #java
   - **描述**：安装/切换后 `java`、`javac`、`JAVA_HOME` 一致。
   - **依赖**：T020,T009,T012
   - **输入文档**：旧项目 Java 完整实现
   - **输出文件**：`crates/envr-runtime-java/src/manager.rs`
   - **验收**：切换后 `java -version` 与 `JAVA_HOME` 对应正确。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：新增 `manager`：`JavaPaths`（`runtimes/java/versions/<openjdk_version>`、`current` 符号链接、`cache/java`）；用 Adoptium `v3/assets/version/{Maven范围}` 拉取与解析版本一致的 GA JDK 包（`package.link` + SHA256）；blocking 下载 + `checksum::verify_sha256_hex`、`extract::extract_archive` + `promote_single_root_dir` 扁平化单根 `jdk-*` 目录；`java_installation_valid`（`bin/java` / `bin/java.exe`）；`list_installed` / `read_current` / `set_current` / `uninstall`；安装或切换后 `sync_java_home_export` 写入 `runtimes/java/JAVA_HOME`（单行绝对路径，供 `export JAVA_HOME=$(<...>)` 与 `PATH` 追加 `$JAVA_HOME/bin`）。`index` 补充 `normalize_openjdk_version_label`、`adoptium_assets_version_range_segment`、`find_version_entry`。`JavaRuntimeProvider` 增加 `with_runtime_root` 并接入上述能力。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：Windows 无管理员/开发者模式时创建目录 symlink 会失败，故 `current`+`JAVA_HOME` 文件的集成单测放在 `cfg(unix)`，Windows 仅测目录布局与 `list_installed`。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；端到端下载未放入默认单测（依赖网络）。
 
 ## Phase 5：Shim 与命令代理
 

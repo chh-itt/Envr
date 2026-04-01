@@ -134,6 +134,100 @@ pub fn load_java_index(
     })
 }
 
+/// Normalizes an Adoptium `openjdk_version` string for equality checks (trim, strip `-LTS`, lowercase).
+pub fn normalize_openjdk_version_label(s: &str) -> String {
+    let trimmed = s.trim();
+    let no_lts = trimmed
+        .strip_suffix("-LTS")
+        .or_else(|| trimmed.strip_suffix("-lts"))
+        .unwrap_or(trimmed)
+        .trim();
+    no_lts.to_ascii_lowercase()
+}
+
+/// Path segment for `GET /v3/assets/version/{segment}` (percent-encoded Maven range `[lo,hi)`).
+pub fn adoptium_assets_version_range_segment(openjdk_version_label: &str) -> EnvrResult<String> {
+    let trimmed = openjdk_version_label.trim();
+    let no_lts = trimmed
+        .strip_suffix("-LTS")
+        .or_else(|| trimmed.strip_suffix("-lts"))
+        .unwrap_or(trimmed)
+        .trim();
+    let (triplet, _) = no_lts.split_once('+').unwrap_or((no_lts, ""));
+    let parts: Vec<&str> = triplet.split('.').collect();
+    let (maj, min, sec) = match parts.as_slice() {
+        [a] => (
+            a.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+            0u32,
+            0u32,
+        ),
+        [a, b] => (
+            a.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+            b.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+            0u32,
+        ),
+        [a, b, c] => (
+            a.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+            b.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+            c.parse::<u32>().map_err(|_| {
+                EnvrError::Validation(format!("bad java version: {openjdk_version_label}"))
+            })?,
+        ),
+        _ => {
+            return Err(EnvrError::Validation(format!(
+                "bad java version: {openjdk_version_label}"
+            )));
+        }
+    };
+    let lo = format!("{maj}.{min}.{sec}");
+    let hi_sec = sec.checked_add(1).ok_or_else(|| {
+        EnvrError::Validation(format!(
+            "java version patch overflow: {openjdk_version_label}"
+        ))
+    })?;
+    let hi = format!("{maj}.{min}.{hi_sec}");
+    let raw = format!("[{lo},{hi})");
+    Ok(percent_encode_adoptium_range(&raw))
+}
+
+fn percent_encode_adoptium_range(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '[' => out.push_str("%5B"),
+            ']' => out.push_str("%5D"),
+            '(' => out.push_str("%28"),
+            ')' => out.push_str("%29"),
+            ',' => out.push_str("%2C"),
+            '+' => out.push_str("%2B"),
+            ' ' => out.push_str("%20"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+pub fn find_version_entry<'a>(
+    index: &'a JavaIndex,
+    openjdk_version_label: &str,
+) -> Option<&'a JavaVersionEntry> {
+    let want = normalize_openjdk_version_label(openjdk_version_label);
+    index.versions.iter().find(|e| {
+        normalize_openjdk_version_label(&e.openjdk_version) == want
+            || e.openjdk_version == openjdk_version_label
+    })
+}
+
 pub fn list_remote_versions(
     index: &JavaIndex,
     filter: &RemoteFilter,
@@ -349,5 +443,17 @@ mod tests {
         .expect("list");
         assert_eq!(list.len(), 1);
         assert!(list[0].0.starts_with("21"));
+    }
+
+    #[test]
+    fn assets_range_segment() {
+        assert_eq!(
+            adoptium_assets_version_range_segment("24.0.2+12").expect("seg"),
+            "%5B24.0.2%2C24.0.3%29"
+        );
+        assert_eq!(
+            adoptium_assets_version_range_segment("25+36-LTS").expect("seg"),
+            "%5B25.0.0%2C25.0.1%29"
+        );
     }
 }
