@@ -358,6 +358,7 @@ fn pick_highest_minor_line(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     const FIXTURE: &str = r#"[
         {"version":"v30.0.0","date":"2026-01-01","files":["linux-x64","osx-x64-tar","win-x64-zip"],"lts":false},
@@ -455,5 +456,15 @@ mod tests {
             resolve_node_version(&rel, "linux", "x86_64", "v22.9.0").expect("r"),
             "22.9.0"
         );
+    }
+
+    proptest! {
+        #[test]
+        fn normalize_and_v_prefix_roundtrip(raw in "[vV]?[0-9]{1,2}(\\.[0-9]{1,2}){0,2}") {
+            let n = normalize_node_version(&raw.to_ascii_lowercase());
+            let v = node_version_v_prefix(&raw);
+            prop_assert!(v.starts_with('v'));
+            prop_assert_eq!(normalize_node_version(&v), n);
+        }
     }
 }

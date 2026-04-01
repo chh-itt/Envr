@@ -92,4 +92,63 @@ mod tests {
         let err: EnvrError = io_error.into();
         assert_eq!(err.code(), ErrorCode::Io);
     }
+
+    #[test]
+    fn all_error_codes_map_and_serialize() {
+        let cases = [
+            (
+                EnvrError::Config("c".into()),
+                ErrorCode::Config,
+                "\"config\"",
+            ),
+            (
+                EnvrError::Validation("v".into()),
+                ErrorCode::Validation,
+                "\"validation\"",
+            ),
+            (
+                EnvrError::Runtime("r".into()),
+                ErrorCode::Runtime,
+                "\"runtime\"",
+            ),
+            (
+                EnvrError::Platform("p".into()),
+                ErrorCode::Platform,
+                "\"platform\"",
+            ),
+            (
+                EnvrError::Download("d".into()),
+                ErrorCode::Download,
+                "\"download\"",
+            ),
+            (
+                EnvrError::Mirror("m".into()),
+                ErrorCode::Mirror,
+                "\"mirror\"",
+            ),
+            (
+                EnvrError::Unknown("u".into()),
+                ErrorCode::Unknown,
+                "\"unknown\"",
+            ),
+        ];
+        for (err, code, json) in cases {
+            assert_eq!(err.code(), code);
+            assert_eq!(serde_json::to_string(&code).expect("ser"), json);
+            let payload = err.to_payload();
+            assert_eq!(payload.code, code);
+            let needle = match &err {
+                EnvrError::Config(_) => "config error",
+                EnvrError::Validation(_) => "validation error",
+                EnvrError::Runtime(_) => "runtime error",
+                EnvrError::Platform(_) => "platform error",
+                EnvrError::Download(_) => "download error",
+                EnvrError::Mirror(_) => "mirror error",
+                EnvrError::Unknown(_) => "unknown error",
+                EnvrError::Io(_) => "i/o error",
+            };
+            assert!(payload.message.contains(needle));
+            assert!(payload.chain.is_empty());
+        }
+    }
 }

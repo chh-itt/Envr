@@ -422,6 +422,23 @@ mod tests {
     }
 
     #[test]
+    fn remove_shims_deletes_existing_core_launchers_only() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path().to_path_buf();
+        let shim = root.join("envr-shim.exe");
+        fs::write(&shim, []).expect("touch");
+        let svc = ShimService::new(root.clone(), shim);
+        svc.ensure_shims(RuntimeKind::Node).expect("ensure");
+        let keep = svc.shim_dir().join(shim_filename("custom-tool"));
+        fs::write(&keep, b"x").expect("write keep");
+
+        svc.remove_shims(RuntimeKind::Node).expect("remove");
+        assert!(!svc.shim_dir().join(shim_filename("node")).exists());
+        assert!(!svc.shim_dir().join(shim_filename("npm")).exists());
+        assert!(keep.exists());
+    }
+
+    #[test]
     fn remove_stale_drops_orphan_global_stub() {
         let tmp = tempfile::TempDir::new().expect("tmp");
         let root = tmp.path().to_path_buf();
@@ -437,5 +454,64 @@ mod tests {
         svc.remove_stale_non_core_shims(&set).expect("clean");
         assert!(!orphan.exists());
         assert!(svc.shim_dir().join(shim_filename("keep")).exists());
+    }
+
+    #[test]
+    fn global_skip_stem_includes_bun_and_excludes_user_bins() {
+        assert!(is_global_skip_stem("bun"));
+        assert!(is_global_skip_stem("bunx"));
+        assert!(!is_global_skip_stem("tsx"));
+        assert!(!is_global_skip_stem("mytool"));
+    }
+
+    #[test]
+    fn core_stems_set_contains_expected_core_commands() {
+        let s = core_stems_set();
+        for k in [
+            "node", "npm", "npx", "python", "pip", "java", "javac", "bun", "bunx",
+        ] {
+            assert!(s.contains(k), "missing {k}");
+        }
+        assert!(!s.contains("tsx"));
+    }
+
+    #[test]
+    fn scan_bin_dir_skips_core_stems_and_keeps_user_bins() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path().to_path_buf();
+        let shim = root.join("envr-shim.exe");
+        fs::write(&shim, []).expect("touch");
+        let svc = ShimService::new(root.clone(), shim);
+
+        let global_bin = root.join("global-bin");
+        fs::create_dir_all(&global_bin).expect("mkdir");
+        #[cfg(windows)]
+        {
+            fs::write(global_bin.join("node.cmd"), b"x").expect("node");
+            fs::write(global_bin.join("mytool.cmd"), b"x").expect("mytool");
+        }
+        #[cfg(not(windows))]
+        {
+            fs::write(global_bin.join("node"), b"x").expect("node");
+            fs::write(global_bin.join("mytool"), b"x").expect("mytool");
+        }
+
+        let seen = svc.scan_bin_dir(&global_bin).expect("scan");
+        assert!(seen.contains("mytool"));
+        assert!(!seen.contains("node"));
+        assert!(svc.shim_dir().join(shim_filename("mytool")).exists());
+        assert!(!svc.shim_dir().join(shim_filename("node")).exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn shim_filename_is_cmd_on_windows() {
+        assert_eq!(shim_filename("node"), "node.cmd");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn shim_filename_has_no_suffix_on_unix() {
+        assert_eq!(shim_filename("node"), "node");
     }
 }

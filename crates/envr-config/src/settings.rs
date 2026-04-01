@@ -380,8 +380,8 @@ impl SettingsCache {
     /// off the UI thread.
     pub fn set_cached(&mut self, settings: Settings) {
         self.cached = settings;
-        // Force the next `get()` to re-check disk mtime.
-        self.last_modified = None;
+        // Keep mtime tracking consistent so `get()` can stay in-memory unless disk changed.
+        self.last_modified = file_mtime(&self.path).ok();
     }
 }
 
@@ -577,5 +577,43 @@ mode = "manual"
 
         let loaded = Settings::load_or_default_from(&path).expect("load_or_default");
         assert_eq!(loaded, Settings::default());
+    }
+
+    #[test]
+    fn invalid_download_limits_recover_defaults() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("settings.toml");
+
+        fs::write(
+            &path,
+            r#"
+[download]
+max_concurrent_downloads = 0
+retry_max = -1
+"#,
+        )
+        .expect("write");
+
+        let loaded = Settings::load_or_default_from(&path).expect("load_or_default");
+        assert_eq!(loaded, Settings::default());
+    }
+
+    #[test]
+    fn cache_set_cached_updates_in_memory_without_disk_write() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("settings.toml");
+        Settings::default().save_to(&path).expect("save default");
+
+        let mut cache = SettingsCache::new(&path).expect("cache");
+        let mut in_mem = Settings::default();
+        in_mem.mirror.mode = MirrorMode::Offline;
+        cache.set_cached(in_mem.clone());
+
+        let got = cache.get().expect("get").clone();
+        assert_eq!(got.mirror.mode, MirrorMode::Offline);
+
+        // Disk content remains unchanged until explicitly persisted.
+        let from_disk = Settings::load_from(&path).expect("load disk");
+        assert_eq!(from_disk.mirror.mode, Settings::default().mirror.mode);
     }
 }

@@ -149,6 +149,7 @@ pub fn tr(zh_cn: &'static str, en_us: &'static str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use envr_config::settings::{I18nSettings, Settings};
 
     #[test]
     fn parses_locale_name_from_reg_output() {
@@ -158,5 +159,41 @@ HKEY_CURRENT_USER\Control Panel\International
 
 "#;
         assert_eq!(parse_reg_sz_locale_name(sample).as_deref(), Some("zh-CN"));
+    }
+
+    #[test]
+    fn set_and_tr_follow_current_locale() {
+        set(Locale::ZhCn);
+        assert_eq!(tr("中文", "English"), "中文");
+        set(Locale::EnUs);
+        assert_eq!(tr("中文", "English"), "English");
+    }
+
+    #[test]
+    fn init_from_settings_uses_explicit_locale() {
+        let mut s = Settings {
+            i18n: I18nSettings {
+                locale: LocaleMode::ZhCn,
+            },
+            ..Default::default()
+        };
+        init_from_settings(&s);
+        assert_eq!(current(), Locale::ZhCn);
+
+        s.i18n.locale = LocaleMode::EnUs;
+        init_from_settings(&s);
+        assert_eq!(current(), Locale::EnUs);
+    }
+
+    #[test]
+    fn locale_label_is_stable() {
+        assert_eq!(Locale::ZhCn.label(), "简体中文");
+        assert_eq!(Locale::EnUs.label(), "English");
+    }
+
+    #[test]
+    fn bcp47_name_mapping_handles_zh_and_non_zh() {
+        assert_eq!(locale_from_bcp47_name("zh-Hans-CN"), Locale::ZhCn);
+        assert_eq!(locale_from_bcp47_name("en-US"), Locale::EnUs);
     }
 }

@@ -58,8 +58,9 @@ pub fn format_error_chain(err: &(dyn Error + 'static)) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::format_error_chain;
+    use super::{format_error_chain, init_logging};
     use std::{error::Error, fmt};
+    use tempfile::TempDir;
 
     #[derive(Debug)]
     struct LeafError;
@@ -95,5 +96,27 @@ mod tests {
         let chain = format_error_chain(&err);
         assert!(chain.contains("parent"));
         assert!(chain.contains("leaf"));
+    }
+
+    #[test]
+    fn format_error_chain_single_level() {
+        let err = LeafError;
+        let chain = format_error_chain(&err);
+        assert_eq!(chain, "leaf");
+    }
+
+    #[test]
+    fn init_logging_second_init_returns_error() {
+        let tmp = TempDir::new().expect("tmp");
+        let old = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(tmp.path()).expect("chdir");
+
+        let _guard = init_logging("envr-core-test").expect("first init");
+        let err = match init_logging("envr-core-test") {
+            Ok(_) => panic!("second init should fail"),
+            Err(e) => e,
+        };
+        assert!(err.to_string().contains("failed to initialize logging"));
+        std::env::set_current_dir(old).expect("restore cwd");
     }
 }

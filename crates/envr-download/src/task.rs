@@ -234,6 +234,26 @@ mod tests {
         assert_eq!(t.state, TaskState::Cancelled);
         assert!(t.cancel.is_cancelled());
     }
+
+    #[test]
+    fn invalid_state_transitions_return_validation_error() {
+        let mut t = DownloadTask::new("t1");
+        let e1 = t.mark_done().expect_err("queued cannot complete");
+        assert!(e1.to_string().contains("cannot complete task"));
+
+        t.start().expect("start");
+        let e2 = t.start().expect_err("running cannot start");
+        assert!(e2.to_string().contains("cannot start task"));
+    }
+
+    #[test]
+    fn cancelled_task_cannot_be_started_again() {
+        let mut t = DownloadTask::new("t1");
+        t.cancel().expect("cancel");
+        let err = t.start().expect_err("cancelled task should not start");
+        assert!(err.to_string().contains("cannot start task"));
+        assert_eq!(t.state, TaskState::Cancelled);
+    }
 }
 
 #[cfg(test)]

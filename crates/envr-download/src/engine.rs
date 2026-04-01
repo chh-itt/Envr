@@ -200,6 +200,11 @@ impl RateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::task::CancelToken;
+    use std::sync::atomic::AtomicU64;
+    use tempfile::TempDir;
+    use wiremock::matchers::{header, method, path as path_matcher};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn range_header_is_built_correctly() {
@@ -213,5 +218,187 @@ mod tests {
         let mut lim = RateLimiter::new(Some(0));
         let err = lim.throttle(1).await.expect_err("should error");
         assert!(matches!(err, EnvrError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn existing_file_len_handles_present_and_missing() {
+        let tmp = TempDir::new().expect("tmp");
+        let missing = tmp.path().join("missing.bin");
+        let n0 = existing_file_len(&missing).await.expect("len");
+        assert_eq!(n0, 0);
+
+        let present = tmp.path().join("present.bin");
+        tokio::fs::write(&present, b"abcd").await.expect("write");
+        let n1 = existing_file_len(&present).await.expect("len");
+        assert_eq!(n1, 4);
+    }
+
+    #[test]
+    fn default_client_can_be_built() {
+        let _ = DownloadEngine::default_client().expect("client");
+    }
+
+    #[test]
+    fn default_download_options_are_sane() {
+        let d = DownloadOptions::default();
+        assert_eq!(d.timeout, Duration::from_secs(60));
+        assert_eq!(d.max_bytes_per_sec, None);
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_no_limit_is_noop() {
+        let mut lim = RateLimiter::new(None);
+        lim.throttle(10_000).await.expect("noop");
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_under_limit_does_not_error() {
+        let mut lim = RateLimiter::new(Some(1024));
+        lim.throttle(128).await.expect("ok");
+    }
+
+    #[tokio::test]
+    async fn download_to_file_writes_full_body_on_200() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_matcher("/file"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-length", "5")
+                    .set_body_bytes(b"hello"),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("out.bin");
+        let url = Url::parse(&format!("{}/file", server.uri())).expect("url");
+        let cancel = CancelToken::new();
+        let opts = DownloadOptions {
+            timeout: Duration::from_secs(10),
+            max_bytes_per_sec: None,
+        };
+        let out = DownloadEngine::new(Client::new())
+            .download_to_file(url, &dest, &cancel, &opts, None, None)
+            .await
+            .expect("dl");
+        assert_eq!(out.bytes_written, 5);
+        assert_eq!(out.resumed_from, 0);
+        let bytes = tokio::fs::read(&dest).await.expect("read");
+        assert_eq!(bytes, b"hello");
+    }
+
+    #[tokio::test]
+    async fn download_to_file_appends_on_206() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_matcher("/resume"))
+            .and(header("range", "bytes=2-"))
+            .respond_with(
+                ResponseTemplate::new(206)
+                    .insert_header("content-length", "3")
+                    .insert_header("content-range", "bytes 2-4/5")
+                    .set_body_bytes(b"cde"),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("out.bin");
+        tokio::fs::write(&dest, b"ab").await.expect("seed");
+        let url = Url::parse(&format!("{}/resume", server.uri())).expect("url");
+        let cancel = CancelToken::new();
+        let opts = DownloadOptions {
+            timeout: Duration::from_secs(10),
+            max_bytes_per_sec: None,
+        };
+        let out = DownloadEngine::new(Client::new())
+            .download_to_file(url, &dest, &cancel, &opts, None, None)
+            .await
+            .expect("dl");
+        assert_eq!(out.bytes_written, 3);
+        assert_eq!(out.resumed_from, 2);
+        let bytes = tokio::fs::read(&dest).await.expect("read");
+        assert_eq!(bytes, b"abcde");
+    }
+
+    #[tokio::test]
+    async fn download_to_file_unexpected_status_errors() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("missing.bin");
+        let url = Url::parse(&format!("{}/nope", server.uri())).expect("url");
+        let err = DownloadEngine::new(Client::new())
+            .download_to_file(
+                url,
+                &dest,
+                &CancelToken::new(),
+                &DownloadOptions::default(),
+                None,
+                None,
+            )
+            .await
+            .expect_err("404");
+        assert!(matches!(err, EnvrError::Download(_)));
+    }
+
+    #[tokio::test]
+    async fn download_to_file_sets_progress_atomics() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-length", "4")
+                    .set_body_bytes(b"abcd"),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("p.bin");
+        let total = Arc::new(AtomicU64::new(0));
+        let dl = Arc::new(AtomicU64::new(999));
+        let url = Url::parse(&format!("{}/f", server.uri())).expect("url");
+        DownloadEngine::new(Client::new())
+            .download_to_file(
+                url,
+                &dest,
+                &CancelToken::new(),
+                &DownloadOptions::default(),
+                Some(dl.clone()),
+                Some(total.clone()),
+            )
+            .await
+            .expect("dl");
+        assert_eq!(total.load(Ordering::Relaxed), 4);
+        assert_eq!(dl.load(Ordering::Relaxed), 4);
+    }
+
+    #[tokio::test]
+    async fn download_to_file_precancel_errors_before_write() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(b"x"))
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("out.bin");
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let url = Url::parse(&format!("{}/x", server.uri())).expect("url");
+        let err = DownloadEngine::new(Client::new())
+            .download_to_file(url, &dest, &cancel, &DownloadOptions::default(), None, None)
+            .await
+            .expect_err("cancelled");
+        let EnvrError::Download(msg) = err else {
+            panic!("expected Download error");
+        };
+        assert!(msg.contains("cancelled"));
     }
 }

@@ -38,6 +38,7 @@ sha2 = { version = "0.10", default-features = false, features = ["std"] }
 tempfile = { version = "3", default-features = false }
 assert_cmd = { version = "2", default-features = false }
 proptest = { version = "1", default-features = false, features = ["std"] }
+wiremock = "0.6"
 
 [workspace.metadata.envr.dependency_policy]
 source_doc = "refactor docs/07-依赖选择与原则.md"

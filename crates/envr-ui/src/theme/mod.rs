@@ -18,7 +18,74 @@ pub use tokens::{MotionTokens, SemanticColors, ShadowTokens, ThemeTokens};
 
 #[cfg(test)]
 mod tests {
-    use super::{UiFlavor, UiScheme, default_flavor_for_target, tokens_for_scheme};
+    use super::{
+        MotionTokens, SemanticColors, ShadowTokens, ThemeTokens, UiFlavor, UiScheme,
+        default_flavor_for_target, scheme_for_mode, tokens_for_scheme,
+    };
+    use envr_config::settings::ThemeMode;
+
+    #[test]
+    fn ui_flavor_keys_and_labels_cover_all_variants() {
+        assert_eq!(UiFlavor::ALL.len(), 3);
+        for f in UiFlavor::ALL {
+            assert!(!f.as_str().is_empty());
+            assert!(!f.label_en().is_empty());
+            assert!(!f.label_zh().is_empty());
+            assert_eq!(format!("{f}"), f.as_str());
+        }
+    }
+
+    #[test]
+    fn scheme_for_mode_light_and_dark_are_deterministic() {
+        assert_eq!(scheme_for_mode(ThemeMode::Light), UiScheme::Light);
+        assert_eq!(scheme_for_mode(ThemeMode::Dark), UiScheme::Dark);
+    }
+
+    #[test]
+    fn scheme_for_mode_follow_system_returns_a_scheme() {
+        let s = scheme_for_mode(ThemeMode::FollowSystem);
+        assert!(matches!(s, UiScheme::Light | UiScheme::Dark));
+    }
+
+    #[test]
+    fn theme_tokens_spacing_matches_flavor() {
+        let c = SemanticColors {
+            background: super::Srgb::new(0.0, 0.0, 0.0),
+            surface: super::Srgb::new(0.1, 0.1, 0.1),
+            surface_panel: super::Srgb::new(0.12, 0.12, 0.12),
+            text: super::Srgb::new(1.0, 1.0, 1.0),
+            text_muted: super::Srgb::new(0.7, 0.7, 0.7),
+            primary: super::Srgb::new(0.2, 0.5, 1.0),
+            success: super::Srgb::new(0.2, 0.8, 0.3),
+            danger: super::Srgb::new(0.9, 0.2, 0.2),
+        };
+        let shadow = ShadowTokens {
+            blur_radius: 1.0,
+            offset_y: 1.0,
+            color_alpha: 0.5,
+        };
+        let motion = MotionTokens {
+            standard_ms: 200,
+            emphasized_ms: 300,
+        };
+        let t = ThemeTokens {
+            flavor: UiFlavor::Fluent,
+            colors: c,
+            radius_sm: 4.0,
+            radius_md: 8.0,
+            radius_lg: 12.0,
+            shadow,
+            motion,
+            backdrop_blur_hint: 0.0,
+        };
+        assert_eq!(t.content_spacing(), 10.0);
+        assert_eq!(t.sidebar_width(), 188.0);
+        let t2 = ThemeTokens {
+            flavor: UiFlavor::Material3,
+            ..t
+        };
+        assert_eq!(t2.content_spacing(), 14.0);
+    }
 
     #[test]
     fn preset_geometry_differs_across_flavors() {

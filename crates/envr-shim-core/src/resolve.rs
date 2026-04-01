@@ -430,6 +430,13 @@ mod tests {
     }
 
     #[test]
+    fn parse_invocation_rejects_empty_argv() {
+        let args: Vec<OsString> = vec![];
+        let err = parse_shim_invocation(&args).expect_err("must fail");
+        assert!(err.to_string().contains("missing program name"));
+    }
+
+    #[test]
     fn parse_invocation_dispatch_subcommand() {
         let args = vec![
             OsString::from("envr-shim"),
@@ -440,6 +447,42 @@ mod tests {
         let (cmd, rest) = parse_shim_invocation(&args).expect("parse");
         assert_eq!(cmd, CoreCommand::Python);
         assert_eq!(rest, vec![OsString::from("-c"), OsString::from("pass")]);
+    }
+
+    #[test]
+    fn normalize_and_parse_core_command_cover_aliases() {
+        assert_eq!(normalize_invoked_basename(r"C:\bin\PYTHON3.EXE"), "python3");
+        assert_eq!(parse_core_command("python3"), Some(CoreCommand::Python));
+        assert_eq!(parse_core_command("pip3"), Some(CoreCommand::Pip));
+        assert_eq!(parse_core_command("bunx"), Some(CoreCommand::Bunx));
+        assert_eq!(parse_core_command("unknown"), None);
+    }
+
+    #[test]
+    fn parse_invocation_rejects_unknown_dispatch() {
+        let args = vec![
+            OsString::from("envr-shim"),
+            OsString::from("not-a-core-tool"),
+        ];
+        let err = parse_shim_invocation(&args).expect_err("must fail");
+        assert!(err.to_string().contains("could not determine core tool"));
+    }
+
+    #[test]
+    fn pick_version_home_rejects_empty_spec() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let versions = tmp.path().join("versions");
+        fs::create_dir_all(&versions).expect("d");
+        let err = pick_version_home(&versions, "  ").expect_err("must fail");
+        assert!(err.to_string().contains("empty runtime version spec"));
+    }
+
+    #[test]
+    fn pick_version_home_rejects_missing_versions_dir() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let versions = tmp.path().join("missing");
+        let err = pick_version_home(&versions, "20").expect_err("must fail");
+        assert!(err.to_string().contains("no versions directory"));
     }
 
     #[test]
@@ -460,6 +503,71 @@ mod tests {
         fs::create_dir_all(v.join("21.0.6+9-LTS")).expect("d");
         let p = pick_version_home(&v, "21.0.6+9-LTS").expect("pick");
         assert!(p.ends_with("21.0.6+9-LTS"));
+    }
+
+    #[test]
+    fn resolve_runtime_home_for_lang_uses_spec_override() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let versions = root.join("runtimes/node/versions");
+        fs::create_dir_all(versions.join("18.0.0")).expect("d");
+        fs::create_dir_all(versions.join("20.1.0")).expect("d");
+        let prj = root.join("prj");
+        fs::create_dir_all(&prj).expect("d");
+
+        let ctx = ShimContext {
+            runtime_root: root.to_path_buf(),
+            working_dir: prj,
+            profile: None,
+        };
+        let p = resolve_runtime_home_for_lang(&ctx, "node", Some("20")).expect("resolve");
+        assert!(p.ends_with("20.1.0"));
+    }
+
+    #[test]
+    fn resolve_runtime_home_for_lang_errors_when_no_current_and_no_pin() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        fs::create_dir_all(root.join("prj")).expect("d");
+        let ctx = ShimContext {
+            runtime_root: root.to_path_buf(),
+            working_dir: root.join("prj"),
+            profile: None,
+        };
+        let err = resolve_runtime_home_for_lang(&ctx, "node", None).expect_err("must fail");
+        assert!(err.to_string().contains("no global current for node"));
+    }
+
+    #[test]
+    fn core_tool_executable_node_and_pip_pick_expected_files() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let home = tmp.path();
+        fs::create_dir_all(home.join("bin")).expect("bin");
+        fs::create_dir_all(home.join("Scripts")).expect("scripts");
+
+        #[cfg(windows)]
+        {
+            fs::write(home.join("bin/node.exe"), []).expect("node");
+            fs::write(home.join("Scripts/pip.exe"), []).expect("pip");
+        }
+        #[cfg(not(windows))]
+        {
+            fs::write(home.join("bin/node"), []).expect("node");
+            fs::write(home.join("bin/pip"), []).expect("pip");
+        }
+
+        let node = core_tool_executable(home, CoreCommand::Node).expect("node");
+        let pip = core_tool_executable(home, CoreCommand::Pip).expect("pip");
+        assert!(node.exists());
+        assert!(pip.exists());
+    }
+
+    #[test]
+    fn core_tool_executable_reports_missing_binary() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let home = tmp.path();
+        let err = core_tool_executable(home, CoreCommand::Bun).expect_err("missing bun");
+        assert!(err.to_string().contains("bun missing under"));
     }
 
     #[cfg(unix)]

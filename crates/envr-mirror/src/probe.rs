@@ -181,6 +181,58 @@ fn save_cache(path: &PathBuf, cache: &ProbeCache) -> EnvrResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::registry::{Mirror, MirrorId, MirrorRegistry};
+    use crate::strategy::ResolvedMirror;
+    use envr_config::settings::{MirrorMode, MirrorSettings, Settings};
+    use reqwest::Client;
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    static ENVR_ROOT_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    struct EnvRestore {
+        key: &'static str,
+        had_value: bool,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl EnvRestore {
+        fn set(key: &'static str, value: &std::path::Path) -> Self {
+            let old = std::env::var_os(key);
+            let had_value = old.is_some();
+            // SAFETY: `ENVR_ROOT_TEST_LOCK` serializes tests that touch this env var.
+            unsafe {
+                std::env::set_var(key, value.as_os_str());
+            }
+            Self {
+                key,
+                had_value,
+                old,
+            }
+        }
+    }
+
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            // SAFETY: same as `EnvRestore::set`.
+            unsafe {
+                if self.had_value {
+                    if let Some(v) = &self.old {
+                        std::env::set_var(self.key, v);
+                    }
+                } else {
+                    std::env::remove_var(self.key);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn probe_config_default_values() {
+        let c = ProbeConfig::default();
+        assert_eq!(c.timeout_ms, 1500);
+        assert_eq!(c.cache_ttl_ms, 5 * 60 * 1000);
+    }
 
     #[test]
     fn cmp_prefers_lower_latency() {
@@ -199,5 +251,158 @@ mod tests {
             checked_at_epoch_ms: 1,
         };
         assert_eq!(cmp_result(&a, &b), std::cmp::Ordering::Less);
+        assert_eq!(cmp_result(&b, &a), std::cmp::Ordering::Greater);
+        assert_eq!(cmp_result(&a, &a), std::cmp::Ordering::Equal);
+    }
+
+    #[test]
+    fn cmp_treats_missing_latency_as_worst() {
+        let slow = MirrorProbeResult {
+            mirror_id: "x".to_string(),
+            ok: true,
+            status: Some(200),
+            latency_ms: None,
+            checked_at_epoch_ms: 1,
+        };
+        let fast = MirrorProbeResult {
+            mirror_id: "y".to_string(),
+            ok: true,
+            status: Some(200),
+            latency_ms: Some(5),
+            checked_at_epoch_ms: 1,
+        };
+        assert_eq!(cmp_result(&slow, &fast), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn save_and_load_probe_cache_roundtrip() {
+        let dir = tempfile::tempdir().expect("tmp");
+        let path = dir.path().join("mirror-probe-cache.json");
+        let mut cache = ProbeCache::default();
+        cache.results.insert(
+            "m1".to_string(),
+            MirrorProbeResult {
+                mirror_id: "m1".to_string(),
+                ok: true,
+                status: Some(200),
+                latency_ms: Some(1),
+                checked_at_epoch_ms: 42,
+            },
+        );
+        save_cache(&path, &cache).expect("save");
+        let loaded = load_cache_if_fresh(&path, u64::MAX).expect("load");
+        assert_eq!(loaded.results.len(), 1);
+        assert_eq!(loaded.results.get("m1").unwrap().checked_at_epoch_ms, 42);
+    }
+
+    #[test]
+    fn load_probe_cache_rejects_invalid_json() {
+        let dir = tempfile::tempdir().expect("tmp");
+        let path = dir.path().join("bad.json");
+        std::fs::write(&path, b"{ not json").expect("write");
+        let err = load_cache_if_fresh(&path, u64::MAX).expect_err("bad json");
+        assert!(matches!(err, EnvrError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn probe_mirror_head_success_and_404_count_as_ok() {
+        let server = MockServer::start().await;
+        Mock::given(method("HEAD"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        let mirror = Mirror {
+            id: MirrorId("t".into()),
+            name: "t".into(),
+            base_url: format!("{}/", server.uri()),
+            is_official: false,
+        };
+        let r = probe_mirror(&Client::new(), &mirror, 3000)
+            .await
+            .expect("probe");
+        assert!(r.ok);
+        assert_eq!(r.status, Some(200));
+
+        let server404 = MockServer::start().await;
+        Mock::given(method("HEAD"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server404)
+            .await;
+        let m404 = Mirror {
+            id: MirrorId("n".into()),
+            name: "n".into(),
+            base_url: format!("{}/", server404.uri()),
+            is_official: false,
+        };
+        let r404 = probe_mirror(&Client::new(), &m404, 3000)
+            .await
+            .expect("probe");
+        assert!(r404.ok);
+        assert_eq!(r404.status, Some(404));
+    }
+
+    #[tokio::test]
+    async fn resolve_mirror_auto_requires_auto_mode() {
+        let reg = MirrorRegistry::with_presets().expect("reg");
+        let settings = Settings {
+            mirror: MirrorSettings {
+                mode: MirrorMode::Official,
+                manual_id: None,
+            },
+            ..Default::default()
+        };
+        let err = resolve_mirror_auto(&settings, &reg, &Client::new(), &ProbeConfig::default())
+            .await
+            .expect_err("not auto");
+        assert!(matches!(err, EnvrError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn resolve_mirror_auto_picks_fastest_reachable_mirror() {
+        let _lock = ENVR_ROOT_TEST_LOCK.lock().await;
+        let tmp = tempfile::tempdir().expect("tmp");
+        let _env = EnvRestore::set("ENVR_ROOT", tmp.path());
+
+        let server = MockServer::start().await;
+        Mock::given(method("HEAD"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let mut reg = MirrorRegistry::default();
+        reg.register(Mirror {
+            id: MirrorId("official".into()),
+            name: "Official".into(),
+            base_url: "https://example.invalid/envr/".into(),
+            is_official: true,
+        })
+        .expect("official");
+        reg.register(Mirror {
+            id: MirrorId("local".into()),
+            name: "Local".into(),
+            base_url: format!("{}/", server.uri()),
+            is_official: false,
+        })
+        .expect("local");
+
+        let settings = Settings {
+            mirror: MirrorSettings {
+                mode: MirrorMode::Auto,
+                manual_id: None,
+            },
+            ..Default::default()
+        };
+
+        let resolved =
+            resolve_mirror_auto(&settings, &reg, &Client::new(), &ProbeConfig::default())
+                .await
+                .expect("resolve");
+
+        match resolved {
+            ResolvedMirror::Mirror(m) => {
+                assert_eq!(m.id.0, "local");
+            }
+            ResolvedMirror::Offline => panic!("expected mirror"),
+        }
     }
 }

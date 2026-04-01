@@ -43,3 +43,39 @@ impl AliasesFile {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn load_missing_file_returns_default() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("aliases.toml");
+        let loaded = AliasesFile::load_or_default(&path).expect("load");
+        assert!(loaded.aliases.is_empty());
+    }
+
+    #[test]
+    fn save_and_load_roundtrip() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("nested/aliases.toml");
+        let mut f = AliasesFile::default();
+        f.aliases.insert("ll".into(), "list --format json".into());
+        f.aliases.insert("cu".into(), "current".into());
+
+        f.save_to(&path).expect("save");
+        let loaded = AliasesFile::load_or_default(&path).expect("load");
+        assert_eq!(loaded, f);
+    }
+
+    #[test]
+    fn malformed_aliases_file_is_error() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("aliases.toml");
+        fs::write(&path, "aliases = [").expect("write");
+        let err = AliasesFile::load_or_default(&path).expect_err("must fail");
+        assert!(err.to_string().contains("failed to parse"));
+    }
+}

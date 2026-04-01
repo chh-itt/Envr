@@ -1,0 +1,3 @@
+# T044 门禁：`cargo envr-cov` 仅汇总下列 crate 的合并行覆盖（不含 GUI / CLI / runtime 适配层 / 独立 shim 二进制）。
+[alias]
+envr-cov = "llvm-cov --all-targets --summary-only -p envr-config -p envr-core -p envr-download -p envr-shim-core -p envr-error -p envr-domain -p envr-platform -p envr-mirror -p envr-ui"

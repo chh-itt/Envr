@@ -60,3 +60,23 @@ pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {
         _ => Err(EnvrError::Validation(format!("unknown runtime kind: {s}"))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_runtime_kind_accepts_ascii_case() {
+        assert_eq!(parse_runtime_kind("NODE").expect("node"), RuntimeKind::Node);
+        assert_eq!(
+            parse_runtime_kind("Python").expect("py"),
+            RuntimeKind::Python
+        );
+    }
+
+    #[test]
+    fn parse_runtime_kind_rejects_unknown() {
+        let err = parse_runtime_kind("ruby").expect_err("unknown");
+        assert!(matches!(err, EnvrError::Validation(_)));
+    }
+}

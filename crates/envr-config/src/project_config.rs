@@ -291,6 +291,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use std::fs;
     use tempfile::TempDir;
 
@@ -377,5 +378,55 @@ B = "${A}"
         );
         let err = load_project_config(dir).expect_err("cycle should error");
         assert!(matches!(err, EnvrError::Validation(_)));
+    }
+
+    proptest! {
+        #[test]
+        fn merge_over_prefers_local_values(
+            base_env in proptest::collection::hash_map("[A-Z_]{1,8}", ".*", 0..8),
+            base_rt in proptest::collection::hash_map("[a-z]{2,8}", "([0-9]{1,2}(\\.[0-9]{1,2}){0,2})?", 0..8),
+            local_env in proptest::collection::hash_map("[A-Z_]{1,8}", ".*", 0..8),
+            local_rt in proptest::collection::hash_map("[a-z]{2,8}", "([0-9]{1,2}(\\.[0-9]{1,2}){0,2})?", 0..8),
+        ) {
+            let base = ProjectConfig {
+                env: base_env.clone(),
+                runtimes: base_rt
+                    .iter()
+                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()) }))
+                    .collect(),
+                ..Default::default()
+            };
+
+            let local = ProjectConfig {
+                env: local_env.clone(),
+                runtimes: local_rt
+                    .iter()
+                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()) }))
+                    .collect(),
+                ..Default::default()
+            };
+
+            let merged = local.merge_over(base);
+
+            for (k, v) in &local_env {
+                prop_assert_eq!(merged.env.get(k), Some(v));
+            }
+            for (k, v) in &base_env {
+                if !local_env.contains_key(k) {
+                    prop_assert_eq!(merged.env.get(k), Some(v));
+                }
+            }
+
+            for (k, v) in &local_rt {
+                let got = merged.runtimes.get(k).and_then(|r| r.version.as_ref());
+                prop_assert_eq!(got, Some(v));
+            }
+            for (k, v) in &base_rt {
+                if !local_rt.contains_key(k) {
+                    let got = merged.runtimes.get(k).and_then(|r| r.version.as_ref());
+                    prop_assert_eq!(got, Some(v));
+                }
+            }
+        }
     }
 }

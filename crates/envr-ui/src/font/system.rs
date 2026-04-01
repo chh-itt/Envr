@@ -71,3 +71,20 @@ fn windows_font_exists(file_name: &str) -> bool {
     let p = PathBuf::from(windir).join("Fonts").join(file_name);
     Path::new(&p).exists()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preferred_sans_is_non_empty() {
+        assert!(!preferred_system_sans_family().is_empty());
+    }
+
+    #[test]
+    fn font_candidates_lists_platform_stack() {
+        let c = font_candidates();
+        assert!(!c.is_empty());
+        assert!(c.iter().all(|s| !s.is_empty()));
+    }
+}

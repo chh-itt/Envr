@@ -52,4 +52,26 @@ mod tests {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
+
+    #[test]
+    fn verify_sha256_accepts_uppercase_hex() {
+        let tmp = TempDir::new().expect("tmp");
+        let p = tmp.path().join("x.bin");
+        fs::write(&p, b"abc").expect("write");
+
+        verify_sha256_hex(
+            &p,
+            "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+        )
+        .expect("verify");
+    }
+
+    #[test]
+    fn verify_sha256_rejects_mismatch() {
+        let tmp = TempDir::new().expect("tmp");
+        let p = tmp.path().join("x.bin");
+        fs::write(&p, b"abc").expect("write");
+        let err = verify_sha256_hex(&p, "00").expect_err("must mismatch");
+        assert!(err.to_string().contains("sha256 mismatch"));
+    }
 }
