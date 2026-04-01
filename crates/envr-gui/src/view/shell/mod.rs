@@ -113,7 +113,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 text(format!(
                     "{} {} · {} md {:.1} · {} blur {:.0} · {} {} ms",
                     envr_core::i18n::tr("当前：", "Current:"),
-                    state.flavor().label_zh(),
+                    envr_core::i18n::tr(state.flavor().label_zh(), state.flavor().label_en()),
                     envr_core::i18n::tr("圆角", "Radius"),
                     tokens.radius_md,
                     envr_core::i18n::tr("阴影", "Shadow"),

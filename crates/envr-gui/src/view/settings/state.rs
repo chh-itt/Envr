@@ -63,11 +63,21 @@ impl SettingsViewState {
         };
         s.download.max_concurrent_downloads = self.max_conc_text.trim().parse().map_err(|_| {
             envr_error::EnvrError::Validation(
-                "download.max_concurrent_downloads 必须是正整数".to_string(),
+                envr_core::i18n::tr(
+                    "download.max_concurrent_downloads 必须是正整数",
+                    "download.max_concurrent_downloads must be a positive integer",
+                )
+                .to_string(),
             )
         })?;
         s.download.retry_max = self.retry_text.trim().parse().map_err(|_| {
-            envr_error::EnvrError::Validation("download.retry_max 必须是整数".to_string())
+            envr_error::EnvrError::Validation(
+                envr_core::i18n::tr(
+                    "download.retry_max 必须是整数",
+                    "download.retry_max must be an integer",
+                )
+                .to_string(),
+            )
         })?;
 
         if s.appearance.font.mode == FontMode::Custom {
@@ -94,9 +104,9 @@ impl SettingsViewState {
 
     pub fn mirror_mode_label(m: MirrorMode) -> &'static str {
         match m {
-            MirrorMode::Official => "official（仅官方）",
-            MirrorMode::Auto => "auto（自动测速）",
-            MirrorMode::Manual => "manual（指定镜像 ID）",
+            MirrorMode::Official => envr_core::i18n::tr("official（仅官方）", "official (upstream only)"),
+            MirrorMode::Auto => envr_core::i18n::tr("auto（自动测速）", "auto (probe fastest mirror)"),
+            MirrorMode::Manual => envr_core::i18n::tr("manual（指定镜像 ID）", "manual (specific mirror ID)"),
             MirrorMode::Offline => "offline",
         }
     }

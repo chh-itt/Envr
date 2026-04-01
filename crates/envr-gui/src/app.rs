@@ -582,7 +582,14 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
             };
             let (url_str, label) = failed;
             state.downloads.jobs.retain(|j| j.id != id);
-            retry_download(state, &url_str, &format!("{label} (重试)"))
+            retry_download(
+                state,
+                &url_str,
+                &format!(
+                    "{label} {}",
+                    envr_core::i18n::tr("(重试)", "(retry)")
+                ),
+            )
         }
     }
 }
@@ -605,7 +612,11 @@ fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {
     retry_download(
         state,
         download_runner::DEMO_URL,
-        &format!("演示 #{}", state.downloads.next_id),
+        &format!(
+            "{} #{}",
+            envr_core::i18n::tr("演示", "Demo"),
+            state.downloads.next_id
+        ),
     )
 }
 
@@ -613,7 +624,10 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
     let url = match reqwest::Url::parse(url_str) {
         Ok(u) => u,
         Err(e) => {
-            state.error = Some(format!("URL 解析失败: {e}"));
+            state.error = Some(format!(
+                "{}: {e}",
+                envr_core::i18n::tr("URL 解析失败", "URL parse failed")
+            ));
             return Task::none();
         }
     };
@@ -672,7 +686,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         EnvCenterMsg::SubmitInstall => {
             let spec = state.env_center.install_input.trim().to_string();
             if spec.is_empty() {
-                state.error = Some("请输入版本 spec".into());
+                state.error = Some(
+                    envr_core::i18n::tr("请输入版本 spec", "Please enter a version spec").into(),
+                );
                 return Task::none();
             }
             state.env_center.busy = true;
@@ -682,7 +698,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         EnvCenterMsg::SubmitInstallAndUse => {
             let spec = state.env_center.install_input.trim().to_string();
             if spec.is_empty() {
-                state.error = Some("请输入版本 spec".into());
+                state.error = Some(
+                    envr_core::i18n::tr("请输入版本 spec", "Please enter a version spec").into(),
+                );
                 return Task::none();
             }
             state.env_center.busy = true;

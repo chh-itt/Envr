@@ -70,14 +70,14 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     let busy = state.busy;
 
     let cur_line = match &state.current {
-        Some(v) => format!("{} {}", envr_core::i18n::tr("????:", "Current:"), v.0),
-        None => envr_core::i18n::tr("????: (???)", "Current: (not set)").to_string(),
+        Some(v) => format!("{} {}", envr_core::i18n::tr("当前：", "Current:"), v.0),
+        None => envr_core::i18n::tr("当前：(未设置)", "Current: (not set)").to_string(),
     };
 
-    let mut mode_row = row![text(envr_core::i18n::tr("??", "Mode")).size(14)].spacing(8);
+    let mut mode_row = row![text(envr_core::i18n::tr("模式", "Mode")).size(14)].spacing(8);
     for (m, zh, en) in [
-        (VersionMode::Smart, "???Smart?", "Smart"),
-        (VersionMode::Exact, "???Exact?", "Exact"),
+        (VersionMode::Smart, "智能（Smart）", "Smart"),
+        (VersionMode::Exact, "精确（Exact）", "Exact"),
     ] {
         let b = button(text(envr_core::i18n::tr(zh, en)))
             .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
@@ -97,7 +97,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     let install_row = row![
         text_input(
             envr_core::i18n::tr(
-                "?? spec?Smart???????Exact?",
+                "版本 spec（Smart）或精确版本（Exact）",
                 "Version spec (Smart) or exact version (Exact)",
             ),
             &state.install_input
@@ -105,7 +105,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .on_input(|s| Message::EnvCenter(EnvCenterMsg::InstallInput(s)))
         .width(Length::Fill)
         .padding(8),
-        button(text(envr_core::i18n::tr("??", "Install")))
+        button(text(envr_core::i18n::tr("安装", "Install")))
             .on_press_maybe(
                 (!busy
                     && !input.is_empty()
@@ -113,7 +113,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                     .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
             )
             .padding([8, 14]),
-        button(text(envr_core::i18n::tr("?????", "Install & Use")))
+        button(text(envr_core::i18n::tr("安装并切换", "Install & Use")))
             .on_press_maybe(
                 (state.mode == VersionMode::Smart
                     && !busy
@@ -122,7 +122,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                     .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
             )
             .padding([8, 14]),
-        button(text(envr_core::i18n::tr("??", "Use")))
+        button(text(envr_core::i18n::tr("切换", "Use")))
             .on_press_maybe(
                 (!busy && !input.is_empty() && installed_match && !current_match).then_some(
                     Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string()))
@@ -137,7 +137,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     if state.installed.is_empty() {
         list_col = list_col.push(
             text(envr_core::i18n::tr(
-                "???????????????",
+                "暂无已安装版本（点击刷新）。",
                 "(No installed versions. Click Refresh.)",
             ))
             .size(14),
@@ -160,14 +160,14 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
 
             let row = row![
                 text(format!("{} {}", kind_label(state.kind), ver.0)).width(Length::Fill),
-                button(text(envr_core::i18n::tr("??", "Use"))).on_press_maybe(use_msg),
-                button(text(envr_core::i18n::tr("??", "Uninstall"))).on_press_maybe(uninstall_msg),
+                button(text(envr_core::i18n::tr("切换", "Use"))).on_press_maybe(use_msg),
+                button(text(envr_core::i18n::tr("卸载", "Uninstall"))).on_press_maybe(uninstall_msg),
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center);
 
             let note = if active {
-                Some(text(envr_core::i18n::tr("????", "(current)")).size(13))
+                Some(text(envr_core::i18n::tr("(当前)", "(current)")).size(13))
             } else {
                 None
             };
@@ -183,15 +183,15 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     let body = column![
         text(format!(
             "{}: {}",
-            envr_core::i18n::tr("?????", "Runtime"),
+            envr_core::i18n::tr("运行时", "Runtime"),
             kind_label(state.kind)
         ))
         .size(16),
         mode_row,
         text(cur_line).size(14),
-        text(envr_core::i18n::tr("???", "Install")).size(16),
+        text(envr_core::i18n::tr("安装", "Install")).size(16),
         install_row,
-        text(envr_core::i18n::tr("?????", "Installed")).size(16),
+        text(envr_core::i18n::tr("已安装", "Installed")).size(16),
         scrollable(list_col).height(Length::Fixed(260.0)),
     ]
     .spacing(tokens.content_spacing().round().max(8.0) as u16);
