@@ -8,6 +8,7 @@ use crate::theme as gui_theme;
 use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::download_dock;
 use crate::view::env_center::env_center_view;
+use crate::view::runtime_nav::runtime_nav_bar;
 use crate::view::settings::settings_view;
 
 use iced::widget::{button, column, horizontal_space, row};
@@ -72,6 +73,21 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
 
     match state.route() {
         Route::Runtime => {
+            col = col.push(runtime_nav_bar(
+                state.env_center.kind,
+                state.env_center.busy,
+                tokens,
+            ));
+            col = col.push(
+                button(text(envr_core::i18n::tr(
+                    "刷新当前运行时",
+                    "Refresh current runtime",
+                )))
+                .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
+                    crate::view::env_center::EnvCenterMsg::Refresh,
+                )))
+                .padding([6, 12]),
+            );
             col = col.push(env_center_view(&state.env_center, tokens));
         }
         Route::Settings => {

@@ -734,18 +734,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T048 运行时页顶部横向运行时导航
-- [ ] **T048：实现全运行时横向切换条（Node/Python/Go/Java/Rust/PHP/Deno/Bun）** #gui #runtime
+- [x] **T048：实现全运行时横向切换条（Node/Python/Go/Java/Rust/PHP/Deno/Bun）** #gui #runtime
   - **描述**：实现右侧“运行时”页面顶部平铺导航，支持热切换与状态保留。
   - **依赖**：T046,T037
   - **输入文档**：`refactor docs/03-gui-设计.md`
-  - **输出文件**：`crates/envr-gui/src/view/runtime/tabs.rs`
+  - **输出文件**：`crates/envr-gui/src/view/runtime_nav/*`，`crates/envr-gui/src/view/env_center/*`，`crates/envr-gui/src/view/shell/*`
   - **验收**：八个运行时标签可切换且不触发整页重建闪烁。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `view/runtime_nav` 顶部横向切换条；将语言切换按钮从 `env_center_view` 内部移至 Runtime 路由顶部，避免重复控件；`EnvCenterState` 继续持有当前 kind + installed/current 等状态，切换仅更新 kind 并触发刷新，切换不丢状态。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T049 运行时设置区（默认折叠）
 - [ ] **T049：实现每运行时独立设置区（默认折叠，按语言定制）** #gui #config

@@ -42,7 +42,7 @@ impl Default for EnvCenterState {
     }
 }
 
-fn kind_label(kind: RuntimeKind) -> &'static str {
+pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
     match kind {
         RuntimeKind::Node => "Node",
         RuntimeKind::Python => "Python",
@@ -57,44 +57,6 @@ fn kind_label(kind: RuntimeKind) -> &'static str {
 
 pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
     let busy = state.busy;
-    let header = text(envr_core::i18n::tr(
-        "?????Node / Python / Java / Go / Rust / PHP / Deno / Bun?",
-        "Environment Center (Node / Python / Java / Go / Rust / PHP / Deno / Bun)",
-    ))
-    .size(20);
-    let intro = text(envr_core::i18n::tr(
-        "????????? CLI ?? envr-core?????????",
-        "Install/switch/uninstall share envr-core with CLI; no duplicated business logic.",
-    ))
-    .size(14);
-
-    let mut kind_row = row![].spacing(8);
-    for kind in [
-        RuntimeKind::Node,
-        RuntimeKind::Python,
-        RuntimeKind::Java,
-        RuntimeKind::Go,
-        RuntimeKind::Rust,
-        RuntimeKind::Php,
-        RuntimeKind::Deno,
-        RuntimeKind::Bun,
-    ] {
-        let label = text(kind_label(kind));
-        let b = button(label)
-            .on_press(Message::EnvCenter(EnvCenterMsg::PickKind(kind)))
-            .padding([6, 10]);
-        let b = if kind == state.kind {
-            b.style(button::primary)
-        } else {
-            b.style(button::secondary)
-        };
-        let b = if busy { b.on_press_maybe(None) } else { b };
-        kind_row = kind_row.push(b);
-    }
-
-    let refresh = button(text(envr_core::i18n::tr("????", "Refresh")))
-        .on_press_maybe((!busy).then_some(Message::EnvCenter(EnvCenterMsg::Refresh)))
-        .padding([6, 12]);
 
     let cur_line = match &state.current {
         Some(v) => format!("{} {}", envr_core::i18n::tr("????:", "Current:"), v.0),
@@ -170,17 +132,13 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     }
 
     let body = column![
-        header,
-        intro,
-        text(envr_core::i18n::tr(
-            "??????????????? ENVR_RUNTIME_ROOT?? CLI ???",
-            "You can set ENVR_RUNTIME_ROOT before startup; same as CLI.",
+        text(format!(
+            "{}: {}",
+            envr_core::i18n::tr("?????", "Runtime"),
+            kind_label(state.kind)
         ))
-        .size(12),
-        kind_row,
-        row![text(cur_line).size(15), refresh,]
-            .spacing(14)
-            .align_y(iced::Alignment::Center),
+        .size(16),
+        text(cur_line).size(14),
         text(envr_core::i18n::tr("???", "Install")).size(16),
         install_row,
         text(envr_core::i18n::tr("?????", "Installed")).size(16),
