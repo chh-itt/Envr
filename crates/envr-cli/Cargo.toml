@@ -17,6 +17,7 @@ envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-shim-core = { path = "../envr-shim-core" }
 serde_json = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

@@ -815,6 +815,7 @@ dependencies = [
  "envr-shim-core",
  "serde_json",
  "tempfile",
+ "toml",
  "tracing",
 ]
 

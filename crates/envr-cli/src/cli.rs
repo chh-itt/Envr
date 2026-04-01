@@ -121,6 +121,53 @@ pub enum Command {
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
     },
+    /// Inspect user settings (`settings.toml`)
+    #[command(subcommand)]
+    Config(ConfigCmd),
+    /// Manage CLI aliases (`config/aliases.toml`)
+    #[command(subcommand)]
+    Alias(AliasCmd),
+    /// Remove installed versions except the active `current` selection
+    Prune {
+        /// Limit to one language (`node`, `python`, `java`); default: all
+        #[arg(value_name = "LANG")]
+        lang: Option<String>,
+        /// Actually uninstall (default is a dry-run plan only)
+        #[arg(long)]
+        execute: bool,
+    },
+    /// Show CLI version and update notes
+    Update {
+        /// Reserved for a future release check
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCmd {
+    /// Print absolute path to `settings.toml`
+    Path,
+    /// Print merged settings (defaults + file)
+    Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AliasCmd {
+    /// List aliases
+    List,
+    /// Add or replace an alias (`name` expands to `target`, e.g. `n` → `node`)
+    Add {
+        #[arg(value_name = "NAME")]
+        name: String,
+        #[arg(value_name = "TARGET")]
+        target: String,
+    },
+    /// Remove an alias
+    Remove {
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
 }
 
 /// Apply global flags to the process environment before logging and core calls.

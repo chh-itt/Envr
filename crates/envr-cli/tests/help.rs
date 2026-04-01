@@ -17,6 +17,10 @@ fn help_is_readable_and_lists_l1_commands() {
         "init",
         "check",
         "resolve",
+        "config",
+        "alias",
+        "prune",
+        "update",
     ] {
         assert!(
             out.contains(sub),

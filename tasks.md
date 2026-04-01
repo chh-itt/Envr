@@ -567,18 +567,18 @@
 ## Phase 8：高级命令与扩展语言
 
 ### T035 高级命令第一组（config/alias/prune/update）
-- [ ] **T035：实现常用高级命令集** #cli #advanced
+- [x] **T035：实现常用高级命令集** #cli #advanced
   - **描述**：提升日常运维能力，覆盖旧项目常用命令。
   - **依赖**：T028,T029
   - **输入文档**：`refactor docs/02-cli-设计.md`
   - **输出文件**：`crates/envr-cli/src/commands/*`
   - **验收**：命令可用且具备稳定错误处理。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`envr config path|show`（`settings.toml` 路径与合并后内容，JSON 含结构化 `settings`）；`envr alias list|add|remove` 持久化到 `config/aliases.toml`（`envr-config::aliases`）；`envr prune [lang] [--execute]` 默认 dry-run，执行时卸载除 `current` 外的已安装版本；`envr update [--check]` 打印 CLI 版本并标明自更新尚未实现。输出遵循现有 `--format json` 信封。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：`prune` 在对应语言无 `current` 时不卸载任何版本，避免误删；`update` 仅占位，避免虚假网络请求。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T036 高级命令第二组（exec/run/env/import/export/profile）
 - [ ] **T036：实现脚本与环境协作能力命令集** #cli #advanced

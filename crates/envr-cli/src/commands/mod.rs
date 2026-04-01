@@ -1,15 +1,19 @@
 //! CLI command handlers wired to `envr_core::runtime::RuntimeService`.
 
+mod alias_cmd;
 mod check;
 mod common;
+mod config_cmd;
 mod current;
 mod doctor;
 mod init;
 mod install;
 mod list;
+mod prune;
 mod remote;
 mod resolve_cmd;
 mod uninstall;
+mod update;
 mod use_cmd;
 mod which;
 
@@ -19,6 +23,16 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
         crate::cli::Command::Check { path } => check::run(&cli.global, path),
         crate::cli::Command::Resolve { lang, spec, path } => {
             resolve_cmd::run(&cli.global, lang, spec, path)
+        }
+        crate::cli::Command::Config(sub) => config_cmd::run(&cli.global, sub),
+        crate::cli::Command::Alias(sub) => alias_cmd::run(&cli.global, sub),
+        crate::cli::Command::Update { check } => update::run(&cli.global, check),
+        crate::cli::Command::Prune { lang, execute } => {
+            let service = match common::runtime_service() {
+                Ok(s) => s,
+                Err(e) => return common::print_envr_error(&cli.global, e),
+            };
+            prune::run(&cli.global, &service, lang, execute)
         }
         other => {
             let service = match common::runtime_service() {
@@ -47,7 +61,11 @@ pub fn dispatch(cli: crate::cli::Cli) -> i32 {
                 crate::cli::Command::Doctor => doctor::run(&cli.global, &service),
                 crate::cli::Command::Init { .. }
                 | crate::cli::Command::Check { .. }
-                | crate::cli::Command::Resolve { .. } => unreachable!("handled above"),
+                | crate::cli::Command::Resolve { .. }
+                | crate::cli::Command::Config { .. }
+                | crate::cli::Command::Alias { .. }
+                | crate::cli::Command::Update { .. }
+                | crate::cli::Command::Prune { .. } => unreachable!("handled above"),
             }
         }
     }
