@@ -748,18 +748,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T049 运行时设置区（默认折叠）
-- [ ] **T049：实现每运行时独立设置区（默认折叠，按语言定制）** #gui #config
+ - [x] **T049：实现每运行时独立设置区（默认折叠，按语言定制）** #gui #config
   - **描述**：沿用“未完成的重构项目”精练设置思路，为每个运行时配置独立设置块。
   - **依赖**：T048,T034
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/view/runtime/settings/*`
   - **验收**：每语言设置项可独立保存并即时生效。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：Runtime 页新增“运行时设置（默认折叠）”面板（`view/runtime_settings`），按当前 kind 显示对应设置并保存到 `settings.toml`；当前已定制 Go（`runtime.go.goproxy`）与 Bun（`runtime.bun.global_bin_dir`，用于 shim 同步全局可执行的目录覆盖），其他语言先显示占位“暂无专属设置项”。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T050 智能/精确模式与版本操作矩阵
 - [ ] **T050：实现 Smart/Exact 模式与按钮状态规则** #gui #runtime

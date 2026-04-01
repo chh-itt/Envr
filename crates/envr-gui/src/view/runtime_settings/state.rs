@@ -1,0 +1,76 @@
+use envr_config::settings::{Settings, SettingsCache, settings_path_from_platform};
+use envr_error::EnvrResult;
+
+pub struct RuntimeSettingsState {
+    pub expanded: bool,
+    pub cache: SettingsCache,
+    pub draft: Settings,
+    pub go_goproxy_draft: String,
+    pub bun_global_bin_dir_draft: String,
+    pub last_message: Option<String>,
+}
+
+impl RuntimeSettingsState {
+    pub fn new() -> Self {
+        let paths =
+            envr_platform::paths::current_platform_paths().expect("platform paths for settings");
+        let path = settings_path_from_platform(&paths);
+        let cache = SettingsCache::new(path).expect("settings cache");
+        let mut s = Self {
+            expanded: false,
+            cache,
+            draft: Settings::default(),
+            go_goproxy_draft: String::new(),
+            bun_global_bin_dir_draft: String::new(),
+            last_message: None,
+        };
+        s.sync_from_cache().expect("initial sync");
+        s
+    }
+
+    pub fn sync_from_cache(&mut self) -> EnvrResult<()> {
+        let st = self.cache.get()?.clone();
+        self.draft = st.clone();
+        self.go_goproxy_draft = st.runtime.go.goproxy.clone().unwrap_or_default();
+        self.bun_global_bin_dir_draft = st.runtime.bun.global_bin_dir.clone().unwrap_or_default();
+        Ok(())
+    }
+
+    pub fn reload_from_disk(&mut self) -> EnvrResult<()> {
+        self.cache.reload()?;
+        self.sync_from_cache()
+    }
+
+    pub fn build_settings(&self) -> EnvrResult<Settings> {
+        let mut s = self.draft.clone();
+        let gp = self.go_goproxy_draft.trim();
+        s.runtime.go.goproxy = if gp.is_empty() {
+            None
+        } else {
+            Some(gp.to_string())
+        };
+
+        let bb = self.bun_global_bin_dir_draft.trim();
+        s.runtime.bun.global_bin_dir = if bb.is_empty() {
+            None
+        } else {
+            Some(bb.to_string())
+        };
+
+        s.validate()?;
+        Ok(s)
+    }
+
+    pub fn save(&mut self) -> EnvrResult<()> {
+        let next = self.build_settings()?;
+        self.cache.set_and_persist(next)?;
+        self.sync_from_cache()?;
+        Ok(())
+    }
+}
+
+impl Default for RuntimeSettingsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}

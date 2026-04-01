@@ -19,6 +19,7 @@ use crate::theme as gui_theme;
 use crate::view::dashboard::{DashboardMsg, DashboardState};
 use crate::view::downloads::{DownloadJob, DownloadMsg, DownloadPanelState, JobState};
 use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
+use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
 
@@ -66,6 +67,7 @@ pub struct AppState {
     pub downloads: DownloadPanelState,
     pub settings: SettingsViewState,
     pub dashboard: DashboardState,
+    pub runtime_settings: RuntimeSettingsState,
 }
 
 impl Default for AppState {
@@ -78,6 +80,7 @@ impl Default for AppState {
             downloads: DownloadPanelState::default(),
             settings: SettingsViewState::new(),
             dashboard: DashboardState::default(),
+            runtime_settings: RuntimeSettingsState::default(),
         }
     }
 }
@@ -111,6 +114,7 @@ pub enum Message {
     Dashboard(DashboardMsg),
     Download(DownloadMsg),
     Settings(SettingsMsg),
+    RuntimeSettings(RuntimeSettingsMsg),
 }
 
 pub fn run() -> iced::Result {
@@ -203,6 +207,53 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::Dashboard(msg) => handle_dashboard(state, msg),
         Message::Download(msg) => handle_download(state, msg),
         Message::Settings(msg) => handle_settings(state, msg),
+        Message::RuntimeSettings(msg) => handle_runtime_settings(state, msg),
+    }
+}
+
+fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Task<Message> {
+    match msg {
+        RuntimeSettingsMsg::ToggleExpand => {
+            state.runtime_settings.expanded = !state.runtime_settings.expanded;
+            Task::none()
+        }
+        RuntimeSettingsMsg::ReloadDisk => {
+            state.runtime_settings.last_message = None;
+            match state.runtime_settings.reload_from_disk() {
+                Ok(()) => {}
+                Err(e) => {
+                    state.runtime_settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("重新加载失败", "Reload failed")
+                    ));
+                }
+            }
+            Task::none()
+        }
+        RuntimeSettingsMsg::GoGoproxyEdit(s) => {
+            state.runtime_settings.go_goproxy_draft = s;
+            Task::none()
+        }
+        RuntimeSettingsMsg::BunGlobalBinDirEdit(s) => {
+            state.runtime_settings.bun_global_bin_dir_draft = s;
+            Task::none()
+        }
+        RuntimeSettingsMsg::Save => {
+            state.runtime_settings.last_message = None;
+            match state.runtime_settings.save() {
+                Ok(()) => {
+                    state.runtime_settings.last_message =
+                        Some(envr_core::i18n::tr("已保存。", "Saved.").into());
+                }
+                Err(e) => {
+                    state.runtime_settings.last_message = Some(format!(
+                        "{}: {e}",
+                        envr_core::i18n::tr("保存失败", "Save failed")
+                    ));
+                }
+            }
+            Task::none()
+        }
     }
 }
 

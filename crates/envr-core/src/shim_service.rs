@@ -3,6 +3,7 @@
 //! Core tools use [`envr_shim_core::CoreCommand`] dispatch names (`envr-shim node`, ??. Global npm
 //! packages get small stubs that `call` / symlink the real file under `npm bin -g`.
 
+use envr_config::settings::{Settings, settings_path_from_platform};
 use envr_domain::runtime::RuntimeKind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{CoreCommand, core_tool_executable};
@@ -218,11 +219,27 @@ impl ShimService {
             Ok(p) => p,
             Err(_) => return Ok(HashSet::new()),
         };
-        let global_bin = match self.bun_global_bin_dir(&bun, &bun_home) {
-            Ok(p) => p,
-            Err(_) => return Ok(HashSet::new()),
+        let global_bin = match self
+            .bun_global_bin_dir_from_settings()
+            .or_else(|| self.bun_global_bin_dir(&bun, &bun_home).ok())
+        {
+            Some(p) => p,
+            None => return Ok(HashSet::new()),
         };
         self.scan_bin_dir(&global_bin)
+    }
+
+    fn bun_global_bin_dir_from_settings(&self) -> Option<PathBuf> {
+        let paths = envr_platform::paths::current_platform_paths().ok()?;
+        let settings_path = settings_path_from_platform(&paths);
+        let st = Settings::load_or_default_from(&settings_path).ok()?;
+        st.runtime
+            .bun
+            .global_bin_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
     }
 
     fn write_core_shim(&self, dispatch_name: &str) -> EnvrResult<()> {

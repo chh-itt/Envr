@@ -838,6 +838,7 @@ dependencies = [
  "envr-config",
  "envr-domain",
  "envr-error",
+ "envr-platform",
  "envr-runtime-bun",
  "envr-runtime-deno",
  "envr-runtime-go",

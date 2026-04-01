@@ -2,6 +2,7 @@ pub mod dashboard;
 pub mod downloads;
 pub mod env_center;
 pub mod runtime_nav;
+pub mod runtime_settings;
 pub mod settings;
 pub mod shell;
 pub mod sidebar;

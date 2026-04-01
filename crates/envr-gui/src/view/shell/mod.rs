@@ -9,6 +9,7 @@ use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::download_dock;
 use crate::view::env_center::env_center_view;
 use crate::view::runtime_nav::runtime_nav_bar;
+use crate::view::runtime_settings::runtime_settings_view;
 use crate::view::settings::settings_view;
 
 use iced::widget::{button, column, horizontal_space, row};
@@ -88,6 +89,11 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 )))
                 .padding([6, 12]),
             );
+            col = col.push(runtime_settings_view(
+                &state.runtime_settings,
+                state.env_center.kind,
+                tokens,
+            ));
             col = col.push(env_center_view(&state.env_center, tokens));
         }
         Route::Settings => {

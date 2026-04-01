@@ -134,6 +134,8 @@ pub struct AppearanceSettings {
 pub struct RuntimeSettings {
     #[serde(default)]
     pub go: GoRuntimeSettings,
+    #[serde(default)]
+    pub bun: BunRuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -141,6 +143,15 @@ pub struct GoRuntimeSettings {
     /// Optional `GOPROXY` value to inject into `envr env`/`run`/`exec` when Go is in scope.
     #[serde(default)]
     pub goproxy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct BunRuntimeSettings {
+    /// Optional override for Bun global bin directory (defaults to `bun pm bin -g`).
+    ///
+    /// This affects shim sync for global Bun executables.
+    #[serde(default)]
+    pub global_bin_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -222,6 +233,14 @@ impl Settings {
         {
             return Err(EnvrError::Validation(
                 "runtime.go.goproxy must not be whitespace-only".to_string(),
+            ));
+        }
+
+        if let Some(ref dir) = self.runtime.bun.global_bin_dir
+            && dir.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.bun.global_bin_dir must not be whitespace-only".to_string(),
             ));
         }
 
@@ -443,6 +462,9 @@ mod tests {
             runtime: RuntimeSettings {
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
+                },
+                bun: BunRuntimeSettings {
+                    global_bin_dir: Some("/tmp/.bun/bin".to_string()),
                 },
             },
         };
