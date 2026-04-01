@@ -85,6 +85,17 @@ impl Default for DownloadPanelState {
 }
 
 impl DownloadPanelState {
+    pub fn has_running_jobs(&self) -> bool {
+        self.jobs.iter().any(|j| j.state == JobState::Running)
+    }
+
+    pub fn needs_tick(&self) -> bool {
+        // Tick exists to refresh progress/speed UI. When panel is hidden, we can
+        // stop re-rendering to reduce CPU usage; the final Finished event will
+        // still update job state.
+        self.visible && self.has_running_jobs()
+    }
+
     pub fn on_tick(&mut self) {
         let now = Instant::now();
         for j in &mut self.jobs {

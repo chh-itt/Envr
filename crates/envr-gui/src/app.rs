@@ -138,15 +138,22 @@ pub fn run() -> iced::Result {
         .default_font(configured_default_font(&startup))
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
-            let tick = iced::time::every(Duration::from_millis(400))
-                .map(|_| Message::Download(DownloadMsg::Tick));
-            if state.downloads.dragging {
-                Subscription::batch([
-                    tick,
-                    iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))),
-                ])
-            } else {
-                tick
+            let maybe_tick = state
+                .downloads
+                .needs_tick()
+                .then(|| iced::time::every(Duration::from_millis(400)))
+                .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
+
+            let maybe_events = state
+                .downloads
+                .dragging
+                .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
+
+            match (maybe_tick, maybe_events) {
+                (Some(tick), Some(events)) => Subscription::batch([tick, events]),
+                (Some(tick), None) => tick,
+                (None, Some(events)) => events,
+                (None, None) => Subscription::none(),
             }
         })
         .centered()

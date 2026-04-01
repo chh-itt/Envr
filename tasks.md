@@ -820,18 +820,18 @@
     - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T039 运行性能优化（FPS/内存/CPU）
-- [ ] **T039：优化渲染与状态更新频率，控制资源占用** #perf #gui
+- [x] **T039：优化渲染与状态更新频率，控制资源占用** #perf #gui
   - **描述**：避免高频重绘与大对象复制，控制内存峰值 <40MB。
   - **依赖**：T038
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`envr-gui`/`envr-ui` 渲染与状态代码
   - **验收**：FPS/内存/CPU 达标，关键页面不卡顿。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：将下载面板的定时 `Tick` 订阅改为“仅在面板可见且存在 Running job 时启用”，空闲或面板隐藏时停止定时重绘；拖拽鼠标事件订阅仍保持仅拖拽时启用，进一步降低空闲 CPU 与无效刷新。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T040 页面加载与操作响应优化
 - [ ] **T040：优化页面加载与操作响应延迟** #perf #ux
