@@ -1,14 +1,8 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Shim routing: map `node` / `python` / `java` / … to a concrete executable using project config, then global `current`.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod resolve;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use resolve::{
+    CoreCommand, ResolvedShim, ShimContext, normalize_invoked_basename, pick_version_home,
+    resolve_core_shim,
+};

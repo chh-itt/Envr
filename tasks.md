@@ -322,18 +322,18 @@
 ## Phase 5：Shim 与命令代理
 
 ### T022 `envr-shim-core` 解析与路由
-- [ ] **T022：实现 shim 路由核心（命令识别、版本解析、回退策略）** #shim
+- [x] **T022：实现 shim 路由核心（命令识别、版本解析、回退策略）** #shim
   - **描述**：统一处理 core executable 与全局包命令转发。
   - **依赖**：T007,T015,T017,T019,T021
   - **输入文档**：`refactor docs/04-shim-设计.md`
   - **输出文件**：`crates/envr-shim-core/src/*`
   - **验收**：项目级与全局级版本解析结果正确。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`ShimContext`（`ENVR_RUNTIME_ROOT` 或 `current_platform_paths().runtime_root` + `working_dir`）、`load_project_config(cwd)` 后按 `[runtimes.node|python|java].version` 选 `versions/<dir>`（`pick_version_home`：精确目录名或 `major` / `major.minor` / `major.minor.patch` 在已安装目录中选最新），无 pin 则 `runtimes/<lang>/current` 规范路径；`CoreCommand` 映射 `node/npm/npx`、`python/pip`、`java/javac` 到真实可执行路径（对齐 Node/Python/Java 安装布局）；`java`/`javac` 附加 `JAVA_HOME`。未知命令返回明确错误（全局 npm bin 留给后续）。单测覆盖版本选择与 Unix 下项目 pin 优先于 global current；Windows 跑目录选择单测。
+    - 相关提交/PR：（本次提交）
+    - 遇到的问题/决策：Rust 2024 中 `Option<(u32,u32,u32)>` 返回类型需拆 `type VersionTriple` 避免 `>>` 解析问题；依赖 `symlink` 的集成单测仅 `cfg(unix)`。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T023 `envr-shim` 二进制入口
 - [ ] **T023：实现 shim 二进制入口与跨平台进程替换执行** #shim

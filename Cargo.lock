@@ -372,6 +372,12 @@ version = "0.1.0"
 [[package]]
 name = "envr-shim-core"
 version = "0.1.0"
+dependencies = [
+ "envr-config",
+ "envr-error",
+ "envr-platform",
+ "tempfile",
+]
 
 [[package]]
 name = "envr-test-utils"
