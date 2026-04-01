@@ -806,18 +806,18 @@
 ## Phase 9：性能优化与体验打磨
 
 ### T038 启动性能优化
-- [ ] **T038：优化冷启动/热启动路径（懒加载与缓存）** #perf #gui
+- [x] **T038：优化冷启动/热启动路径（懒加载与缓存）** #perf #gui
   - **描述**：减少启动时 I/O 与不必要初始化，达到目标启动时延。
   - **依赖**：T034
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`envr-gui` 初始化链路相关代码
   - **验收**：达到文档定义的冷/热启动指标。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：启动时只读取一次 `settings.toml` 并缓存（`OnceLock<Settings>`），复用到 i18n 初始化、默认字体选择、下载面板初始状态，减少冷启动 I/O 与重复解析。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过。
 
 ### T039 运行性能优化（FPS/内存/CPU）
 - [ ] **T039：优化渲染与状态更新频率，控制资源占用** #perf #gui

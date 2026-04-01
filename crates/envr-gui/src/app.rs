@@ -12,6 +12,7 @@ use envr_ui::theme::{
 };
 use iced::font::Family;
 use iced::{Element, Subscription, Task, application};
+use std::sync::OnceLock;
 
 use crate::download_runner;
 use crate::gui_ops;
@@ -72,7 +73,7 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        let gui_defaults = load_gui_downloads_panel_settings();
+        let gui_defaults = load_gui_downloads_panel_settings_cached();
         Self {
             route: Route::default(),
             error: None,
@@ -92,13 +93,8 @@ impl Default for AppState {
     }
 }
 
-fn load_gui_downloads_panel_settings() -> (bool, bool, i32, i32) {
-    let paths = match envr_platform::paths::current_platform_paths() {
-        Ok(v) => v,
-        Err(_) => return (true, true, 12, 12),
-    };
-    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+fn load_gui_downloads_panel_settings_cached() -> (bool, bool, i32, i32) {
+    let st = STARTUP_SETTINGS.get().cloned().unwrap_or_default();
     let p = st.gui.downloads_panel;
     (p.visible, p.expanded, p.x.max(0), p.y.max(0))
 }
@@ -136,9 +132,10 @@ pub enum Message {
 }
 
 pub fn run() -> iced::Result {
-    init_i18n();
+    let startup = load_startup_settings();
+    envr_core::i18n::init_from_settings(&startup);
     application("Envr", update, view)
-        .default_font(configured_default_font())
+        .default_font(configured_default_font(&startup))
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
             let tick = iced::time::every(Duration::from_millis(400))
@@ -157,27 +154,20 @@ pub fn run() -> iced::Result {
         .run()
 }
 
-fn init_i18n() {
+static STARTUP_SETTINGS: OnceLock<Settings> = OnceLock::new();
+
+fn load_startup_settings() -> Settings {
     let paths = match envr_platform::paths::current_platform_paths() {
         Ok(v) => v,
-        Err(_) => return,
+        Err(_) => return Settings::default(),
     };
     let settings_path = envr_config::settings::settings_path_from_platform(&paths);
     let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
-    envr_core::i18n::init_from_settings(&st);
+    let _ = STARTUP_SETTINGS.set(st.clone());
+    st
 }
 
-fn configured_default_font() -> iced::Font {
-    let paths = match envr_platform::paths::current_platform_paths() {
-        Ok(v) => v,
-        Err(_) => {
-            return iced::Font::with_name(font::preferred_system_sans_family());
-        }
-    };
-
-    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
-
+fn configured_default_font(st: &Settings) -> iced::Font {
     match st.appearance.font.mode {
         FontMode::Auto => iced::Font::with_name(font::preferred_system_sans_family()),
         FontMode::Custom => {
@@ -185,7 +175,9 @@ fn configured_default_font() -> iced::Font {
                 .appearance
                 .font
                 .family
-                .unwrap_or_else(|| font::preferred_system_sans_family().to_string());
+                .as_deref()
+                .unwrap_or(font::preferred_system_sans_family())
+                .to_string();
             let leaked: &'static str = Box::leak(fam.into_boxed_str());
             iced::Font {
                 family: Family::Name(leaked),
