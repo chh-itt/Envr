@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 envr-core = { path = "../envr-core" }
+iced = { version = "0.13", default-features = false, features = ["wgpu", "tiny-skia"] }
 tracing = { workspace = true }

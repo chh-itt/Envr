@@ -438,18 +438,18 @@
 ## Phase 7：GUI（高质量体验，不简化）
 
 ### T030 GUI 应用骨架与消息循环
-- [ ] **T030：建立 `envr-gui` 入口与状态容器** #gui
+- [x] **T030：建立 `envr-gui` 入口与状态容器** #gui
   - **描述**：实现主窗口、路由、全局消息处理和错误提示通道。
   - **依赖**：T015,T005
   - **输入文档**：`refactor docs/03-gui-设计.md`
   - **输出文件**：`crates/envr-gui/src/*`
   - **验收**：GUI 可启动并完成基本页面切换。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
-    - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 实现要点：`iced` 0.13 `application` 主循环；`AppState`（`route` + `error`）；左侧四向导航（仪表盘 / 运行时 / 设置 / 关于），右侧占位内容；顶部全局错误横幅与 `DismissError`；`ReportError` 供后续后台失败回调；启动前仍调用 `envr_core::logging::init_logging`。
+    - 相关提交/PR：feat(gui): T030 iced shell with routes and error banner
+    - 遇到的问题/决策：侧栏/正文 helpers 返回 `Element<'static, …>` 以避免无输入借用时的 `'_` 推断错误；演示用错误入口仅在「关于」页。
+    - 验收结果：`cargo fmt --all`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --all-targets` 通过；本地运行 `envr-gui` 可切换页面并展示/关闭示例错误。
 
 ### T031 平台视觉主题系统（Fluent/Liquid Glass/M3）
 - [ ] **T031：实现跨平台主题与组件皮肤系统** #gui #ux

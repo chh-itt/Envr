@@ -1,3 +1,5 @@
+mod app;
+
 fn main() {
     let _logging_guard = match envr_core::logging::init_logging("envr-gui") {
         Ok(guard) => guard,
@@ -11,4 +13,8 @@ fn main() {
     };
 
     tracing::info!("envr-gui started");
+    if let Err(err) = app::run() {
+        eprintln!("envr-gui exited with error: {err}");
+        std::process::exit(1);
+    }
 }
