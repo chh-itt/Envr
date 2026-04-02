@@ -60,11 +60,24 @@ pub struct PathSettings {
     pub runtime_root: Option<String>,
 }
 
+/// How the GUI interprets the install text field on the Runtimes page (`Smart` vs `Exact`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeInstallMode {
+    #[default]
+    Smart,
+    Exact,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct BehaviorSettings {
     /// Remove staging/temp artifacts after a successful install (providers may adopt later).
     #[serde(default)]
     pub cleanup_downloads_after_install: bool,
+
+    /// Install field semantics on the Runtimes page (also persisted for CLI parity if adopted later).
+    #[serde(default)]
+    pub runtime_install_mode: RuntimeInstallMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -587,6 +600,7 @@ mod tests {
             },
             behavior: BehaviorSettings {
                 cleanup_downloads_after_install: true,
+                runtime_install_mode: RuntimeInstallMode::default(),
             },
             appearance: AppearanceSettings {
                 font: FontSettings {

@@ -1,4 +1,4 @@
-use envr_config::settings::{FontMode, LocaleMode, MirrorMode, ThemeMode};
+use envr_config::settings::{FontMode, LocaleMode, MirrorMode, RuntimeInstallMode, ThemeMode};
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Vertical;
@@ -16,7 +16,10 @@ use crate::widget_styles::{
 
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
-    RuntimeRootEdit(String),
+    BrowseRuntimeRoot,
+    RuntimeRootBrowseResult(Option<std::path::PathBuf>),
+    ClearRuntimeRoot,
+    SetRuntimeInstallMode(RuntimeInstallMode),
     ManualIdEdit(String),
     MaxConcEdit(String),
     RetryEdit(String),
@@ -54,23 +57,117 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .size(ty.micro)
     };
 
-    let rr = container(
-        text_input(
-            &envr_core::i18n::tr_key(
-                "gui.settings.runtime_root_placeholder",
-                "运行时根目录（可选）",
-                "Runtime root (optional)",
-            ),
-            &state.runtime_root_draft,
-        )
-        .on_input(|s| Message::Settings(SettingsMsg::RuntimeRootEdit(s)))
-        .padding(sp.sm)
+    let env_lock = SettingsViewState::env_overrides_runtime_root();
+    let rr_display: Element<'static, Message> = if state.runtime_root_draft.trim().is_empty() {
+        text(envr_core::i18n::tr_key(
+            "gui.settings.runtime_root_placeholder",
+            "运行时根目录（可选）",
+            "Runtime root (optional)",
+        ))
+        .size(ty.body_small)
+        .color(gui_theme::to_color(tokens.colors.text_muted))
+        .into()
+    } else {
+        text(state.runtime_root_draft.clone())
+            .size(ty.body_small)
+            .color(gui_theme::to_color(tokens.colors.text))
+            .into()
+    };
+    let path_area = container(rr_display)
         .width(Length::Fill)
-        .style(text_input_style(tokens)),
-    )
-    .width(Length::Fill)
-    .height(Length::Fixed(tokens.control_height_secondary))
-    .align_y(Vertical::Center);
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .align_y(Vertical::Center)
+        .padding([0.0, sp.sm as f32]);
+
+    let browse_h = tokens
+        .control_height_secondary
+        .max(tokens.min_click_target_px());
+    let pad_v = sp.sm as f32;
+    let rr_row = row![
+        path_area,
+        button(button_content_centered(
+            text(envr_core::i18n::tr_key(
+                "gui.settings.runtime_root_browse",
+                "浏览文件夹…",
+                "Choose folder…",
+            ))
+            .into(),
+        ))
+        .on_press_maybe(
+            (!env_lock).then_some(Message::Settings(SettingsMsg::BrowseRuntimeRoot)),
+        )
+        .height(Length::Fixed(browse_h))
+        .padding([pad_v, sp.md as f32])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+        button(button_content_centered(
+            text(envr_core::i18n::tr_key(
+                "gui.settings.runtime_root_clear",
+                "清除",
+                "Clear",
+            ))
+            .into(),
+        ))
+        .on_press_maybe(
+            (!env_lock && !state.runtime_root_draft.trim().is_empty())
+                .then_some(Message::Settings(SettingsMsg::ClearRuntimeRoot)),
+        )
+        .height(Length::Fixed(browse_h))
+        .padding([pad_v, sp.md as f32])
+        .style(button_style(tokens, ButtonVariant::Ghost)),
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
+    let install_mode_hint = text(envr_core::i18n::tr_key(
+        "gui.settings.runtime_install_mode_hint",
+        "影响「运行时」页安装框的解析方式；保存后写入 settings.toml。",
+        "Controls how the Runtimes install field is interpreted; saved to settings.toml.",
+    ))
+    .size(ty.micro);
+
+    let mut install_mode_row = row![
+        text(envr_core::i18n::tr_key(
+            "gui.settings.runtime_install_mode_label",
+            "版本安装模式",
+            "Version install mode",
+        ))
+        .size(ty.body),
+    ]
+    .spacing(sp.sm as f32);
+    for (m, key, zh, en) in [
+        (
+            RuntimeInstallMode::Smart,
+            "gui.runtime.mode.smart",
+            "智能（Smart）",
+            "Smart",
+        ),
+        (
+            RuntimeInstallMode::Exact,
+            "gui.runtime.mode.exact",
+            "精确（Exact）",
+            "Exact",
+        ),
+    ] {
+        let variant = if m == state.draft.behavior.runtime_install_mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if m == state.draft.behavior.runtime_install_mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
+        ))
+        .on_press(Message::Settings(SettingsMsg::SetRuntimeInstallMode(m)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(h))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, variant));
+        install_mode_row = install_mode_row.push(b);
+    }
 
     let mut mirror_row = row![
         text(envr_core::i18n::tr_key(
@@ -471,7 +568,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ),
         column![
             env_note,
-            rr,
+            rr_row,
+            install_mode_hint,
+            install_mode_row,
             mirror_row,
             manual,
             cleanup,

@@ -73,6 +73,10 @@ impl RuntimeService {
         self.provider(kind)?.list_remote(filter)
     }
 
+    pub fn list_remote_majors(&self, kind: RuntimeKind) -> EnvrResult<Vec<String>> {
+        self.provider(kind)?.list_remote_majors()
+    }
+
     pub fn resolve(&self, kind: RuntimeKind, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
         self.provider(kind)?.resolve(spec)
     }

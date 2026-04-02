@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
-use envr_config::settings::{FontMode, Settings, ThemeMode};
+use envr_config::settings::{FontMode, RuntimeInstallMode, Settings, ThemeMode};
 use envr_download::task::CancelToken;
 use envr_ui::font;
 use envr_ui::theme::Srgb;
@@ -13,7 +13,6 @@ use envr_ui::theme::{
     tokens_for_appearance,
 };
 use iced::font::Family;
-use iced::widget::{operation, Id};
 use iced::window;
 use iced::{Element, Size, Subscription, Task, application};
 use std::path::PathBuf;
@@ -26,20 +25,10 @@ use crate::view::dashboard::{DashboardMsg, DashboardState};
 use crate::view::downloads::{
     DOWNLOAD_PANEL_SHELL_W, DownloadJob, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
 };
-use crate::view::env_center::{ENV_INSTALLED_LIST_SCROLL_ID, EnvCenterMsg, EnvCenterState};
+use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
 use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
-
-fn scroll_env_installed_list(y: f32) -> Task<Message> {
-    operation::scroll_to(
-        Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
-        operation::AbsoluteOffset {
-            x: Some(0.0),
-            y: Some(y),
-        },
-    )
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -198,6 +187,16 @@ pub enum Message {
 }
 
 pub fn run() -> iced::Result {
+    // Ensure wgpu uses the GL backend when available.
+    // This helps keep the baseline memory stable on some systems.
+    #[cfg(target_os = "windows")]
+    {
+        if std::env::var_os("WGPU_BACKEND").is_none() {
+            // Safe to do early during startup, before wgpu/iced are initialized.
+            unsafe { std::env::set_var("WGPU_BACKEND", "gl") };
+        }
+    }
+
     let startup = load_startup_settings();
     envr_core::i18n::init_from_settings(&startup);
     application(
@@ -319,12 +318,22 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
             state.route = route;
-            state.env_center.list_scroll_y = 0.0;
             if route == Route::Runtime {
-                return Task::batch([
-                    gui_ops::refresh_runtimes(state.env_center.kind),
-                    scroll_env_installed_list(0.0),
-                ]);
+                // Avoid any expensive remote fetches until the user actually navigates
+                // to the Runtime page.
+                let mode = state.settings.draft.behavior.runtime_install_mode;
+                if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+                    && mode == RuntimeInstallMode::Exact
+                    && state.env_center.remote_major_keys.is_empty()
+                    && !state.env_center.remote_major_loading
+                {
+                    state.env_center.remote_major_loading = true;
+                    return Task::batch([
+                        gui_ops::fetch_remote_major_keys(envr_domain::runtime::RuntimeKind::Node),
+                        gui_ops::refresh_runtimes(state.env_center.kind),
+                    ]);
+                }
+                return gui_ops::refresh_runtimes(state.env_center.kind);
             }
             if route == Route::Dashboard {
                 state.dashboard.busy = true;
@@ -503,10 +512,52 @@ fn handle_dashboard(state: &mut AppState, msg: DashboardMsg) -> Task<Message> {
     }
 }
 
+async fn browse_runtime_root_folder(start: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    tokio::task::spawn_blocking(move || {
+        let mut dlg = rfd::FileDialog::new();
+        if let Some(p) = start {
+            if p.is_dir() {
+                dlg = dlg.set_directory(p);
+            }
+        }
+        dlg.pick_folder()
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
     match msg {
-        SettingsMsg::RuntimeRootEdit(s) => {
-            state.settings.runtime_root_draft = s;
+        SettingsMsg::BrowseRuntimeRoot => {
+            let start = {
+                let t = state.settings.runtime_root_draft.trim();
+                if t.is_empty() {
+                    None
+                } else {
+                    let p = std::path::PathBuf::from(t);
+                    p.is_dir().then_some(p)
+                }
+            };
+            Task::perform(
+                browse_runtime_root_folder(start),
+                |r| Message::Settings(SettingsMsg::RuntimeRootBrowseResult(r)),
+            )
+        }
+        SettingsMsg::RuntimeRootBrowseResult(pb) => {
+            if let Some(pb) = pb {
+                state.settings.runtime_root_draft = pb.to_string_lossy().to_string();
+            }
+            Task::none()
+        }
+        SettingsMsg::ClearRuntimeRoot => {
+            state.settings.runtime_root_draft.clear();
+            Task::none()
+        }
+        SettingsMsg::SetRuntimeInstallMode(m) => {
+            state.settings.draft.behavior.runtime_install_mode = m;
+            // Defer any expensive remote major-key fetching until navigation
+            // to the Runtime page (see Message::Navigate(Route::Runtime)).
             Task::none()
         }
         SettingsMsg::ManualIdEdit(s) => {
@@ -924,61 +975,92 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.env_center.kind = k;
-            state.env_center.list_scroll_y = 0.0;
-            Task::batch([
-                gui_ops::refresh_runtimes(k),
-                scroll_env_installed_list(0.0),
-            ])
-        }
-        EnvCenterMsg::ListScroll(y) => {
-            state.env_center.list_scroll_y = y;
-            Task::none()
-        }
-        EnvCenterMsg::SetMode(m) => {
-            state.env_center.mode = m;
-            // Keep input; mode affects button availability only.
-            Task::none()
+            // Reset remote caches / expansion state when switching runtime kind.
+            state.env_center.remote_cache.clear();
+            state.env_center.remote_major_keys.clear();
+            state.env_center.remote_major_loading = false;
+            state.env_center.expanded_exact_majors.clear();
+            state.env_center.remote_loading_majors.clear();
+            state.env_center.install_input.clear();
+            state.env_center.expanded = true;
+            state.env_center.busy = false;
+            Task::batch([gui_ops::refresh_runtimes(k)])
         }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input = s;
+            // In Exact mode, interpret query as a `major` prefix (e.g. "25") and lazy-fetch children.
+            let mode = state.settings.draft.behavior.runtime_install_mode;
+            if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node && mode == RuntimeInstallMode::Exact {
+                if let Some(major) = parse_major_only(&state.env_center.install_input) {
+                    state.env_center.expanded_exact_majors.insert(major.clone());
+                    if !state.env_center.remote_cache.contains_key(&major)
+                        && !state.env_center.remote_loading_majors.contains(&major)
+                    {
+                        state.env_center.remote_loading_majors.insert(major.clone());
+                        return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
+                    }
+                }
+            }
             Task::none()
         }
-        EnvCenterMsg::Refresh => gui_ops::refresh_runtimes(state.env_center.kind),
         EnvCenterMsg::DataLoaded(res) => {
             state.env_center.busy = false;
             match res {
                 Ok((list, cur)) => {
                     state.env_center.installed = list;
                     state.env_center.current = cur;
+
+                    // In Exact mode, auto-expand the current major and lazily fetch its remote children.
+                    if state.settings.draft.behavior.runtime_install_mode == RuntimeInstallMode::Exact
+                        && state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+                    {
+                        if let Some(cur_v) = state.env_center.current.as_ref() {
+                            if let Some(major) = parse_major_from_ver(&cur_v.0) {
+                                state.env_center
+                                    .expanded_exact_majors
+                                    .insert(major.clone());
+                                if !state.env_center.remote_cache.contains_key(&major)
+                                    && !state.env_center.remote_loading_majors.contains(&major)
+                                {
+                                    state.env_center.remote_loading_majors.insert(major.clone());
+                                    return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => state.error = Some(e),
             }
-            state.env_center.clamp_list_scroll(state.tokens());
-            let y = state.env_center.list_scroll_y;
-            scroll_env_installed_list(y)
+            Task::none()
         }
-        EnvCenterMsg::SubmitInstall => {
-            let spec = state.env_center.install_input.trim().to_string();
-            if spec.is_empty() {
-                state.error = Some(envr_core::i18n::tr_key(
-                    "gui.error.version_spec_required",
-                    "请输入版本 spec",
-                    "Please enter a version spec",
-                ));
+        EnvCenterMsg::RemoteFetchedPrefix(res) => {
+            match res {
+                Ok((prefix, list)) => {
+                    state.env_center.remote_cache.insert(prefix.clone(), list);
+                    state.env_center.remote_loading_majors.remove(&prefix);
+                }
+                Err(e) => state.error = Some(e),
+            }
+            Task::none()
+        }
+        EnvCenterMsg::RemoteFetchedMajorKeys(res) => {
+            state.env_center.remote_major_loading = false;
+            match res {
+                Ok(keys) => state.env_center.remote_major_keys = keys,
+                Err(e) => state.error = Some(e),
+            }
+            Task::none()
+        }
+        EnvCenterMsg::SubmitInstall(spec) => {
+            if spec.trim().is_empty() {
                 return Task::none();
             }
             state.env_center.busy = true;
             state.error = None;
             gui_ops::install_version(state.env_center.kind, spec)
         }
-        EnvCenterMsg::SubmitInstallAndUse => {
-            let spec = state.env_center.install_input.trim().to_string();
-            if spec.is_empty() {
-                state.error = Some(envr_core::i18n::tr_key(
-                    "gui.error.version_spec_required",
-                    "请输入版本 spec",
-                    "Please enter a version spec",
-                ));
+        EnvCenterMsg::SubmitInstallAndUse(spec) => {
+            if spec.trim().is_empty() {
                 return Task::none();
             }
             state.env_center.busy = true;
@@ -990,7 +1072,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             match &res {
                 Ok(v) => {
                     tracing::info!(version = %v.0, "gui install ok");
-                    state.env_center.install_input.clear();
+                    // `install_input` is now the search keyword; keep it for better feedback.
                 }
                 Err(e) => state.error = Some(e.clone()),
             }
@@ -1020,6 +1102,47 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
+        EnvCenterMsg::ToggleExpanded => {
+            state.env_center.expanded = !state.env_center.expanded;
+            Task::none()
+        }
+        EnvCenterMsg::ToggleExactMajor(major) => {
+            if state.env_center.expanded_exact_majors.contains(&major) {
+                state.env_center.expanded_exact_majors.remove(&major);
+                return Task::none();
+            }
+            state.env_center.expanded_exact_majors.insert(major.clone());
+            if !state.env_center.remote_cache.contains_key(&major)
+                && !state.env_center.remote_loading_majors.contains(&major)
+            {
+                state.env_center.remote_loading_majors.insert(major.clone());
+                return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
+            }
+            Task::none()
+        }
+    }
+}
+
+fn parse_major_only(s: &str) -> Option<String> {
+    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
+    if t.is_empty() {
+        return None;
+    }
+    if t.chars().all(|c| c.is_ascii_digit()) {
+        Some(t.to_string())
+    } else {
+        None
+    }
+}
+
+fn parse_major_from_ver(ver: &str) -> Option<String> {
+    let t = ver.trim().strip_prefix('v').unwrap_or(ver.trim());
+    let first = t.split('.').next()?;
+    // Node versions are normally `MAJOR.MINOR.PATCH` (e.g. `20.11.1`).
+    if first.chars().all(|c| c.is_ascii_digit()) {
+        Some(first.to_string())
+    } else {
+        None
     }
 }
 

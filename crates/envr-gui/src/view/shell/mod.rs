@@ -2,6 +2,7 @@ use iced::widget::{container, rule, scrollable, space, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use envr_ui::theme::{ThemeTokens, UiFlavor};
+use envr_domain::runtime::RuntimeKind;
 
 use crate::app::{AppState, Message, Route};
 use crate::icons::Lucide;
@@ -133,36 +134,20 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 state.env_center.busy,
                 tokens,
             ));
-            let txt = gui_theme::to_color(tokens.colors.text);
-            let refresh_rt = row![
-                Lucide::RefreshCw.view(16.0, txt),
-                text(envr_core::i18n::tr_key(
-                    "gui.action.refresh_current_runtime",
-                    "刷新当前运行时",
-                    "Refresh current runtime",
-                )),
-            ]
-            .spacing(sp.sm as f32)
-            .align_y(Alignment::Center);
-            col = col.push(
-                button(button_content_centered(refresh_rt.into()))
-                    .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
-                        crate::view::env_center::EnvCenterMsg::Refresh,
-                    )))
-                    .height(Length::Fixed(
-                        tokens
-                            .control_height_secondary
-                            .max(tokens.min_click_target_px()),
-                    ))
-                    .padding([sp.sm as f32, sp.md as f32])
-                    .style(button_style(tokens, ButtonVariant::Secondary)),
-            );
-            col = col.push(runtime_settings_view(
-                &state.runtime_settings,
-                state.env_center.kind,
+            // Only show the extra per-runtime settings panel when there are
+            // actually runtime-specific options to configure.
+            if matches!(state.env_center.kind, RuntimeKind::Go | RuntimeKind::Bun) {
+                col = col.push(runtime_settings_view(
+                    &state.runtime_settings,
+                    state.env_center.kind,
+                    tokens,
+                ));
+            }
+            col = col.push(env_center_view(
+                &state.env_center,
+                state.settings.draft.behavior.runtime_install_mode,
                 tokens,
             ));
-            col = col.push(env_center_view(&state.env_center, tokens));
         }
         Route::Settings => {
             col = col.push(settings_view(&state.settings, tokens));

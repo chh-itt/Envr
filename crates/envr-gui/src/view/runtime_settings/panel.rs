@@ -1,6 +1,6 @@
 use iced::alignment::Vertical;
-use iced::widget::{button, column, container, row, space, text, text_input};
-use iced::{Alignment, Element, Length};
+use iced::widget::{button, column, container, row, text, text_input};
+use iced::{Alignment, Element, Length, Padding, Theme};
 
 use envr_domain::runtime::RuntimeKind;
 use envr_ui::theme::ThemeTokens;
@@ -10,7 +10,7 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::runtime_settings::state::RuntimeSettingsState;
 use crate::widget_styles::{
-    ButtonVariant, button_content_centered, button_style, section_card, text_input_style,
+    card_container_style, ButtonVariant, button_content_centered, button_style, text_input_style,
 };
 
 #[derive(Debug, Clone)]
@@ -50,26 +50,32 @@ pub fn runtime_settings_view(
         .padding([sp.sm as f32, (sp.sm + 2) as f32])
         .style(button_style(tokens, ButtonVariant::Secondary));
 
-    let header_bar = row![
-        space::horizontal(),
-        expand_btn,
-    ]
-    .align_y(Alignment::Center)
-    .spacing(sp.sm as f32);
-
     let card_title = envr_core::i18n::tr_key(
         "gui.runtime_settings.card_title",
         "运行时设置",
         "Runtime settings",
     );
 
+    let header_row = row![text(card_title).size(ty.section), expand_btn]
+        .align_y(Alignment::Center)
+        .spacing(sp.sm as f32)
+        .width(Length::Fill);
+
+    let pad = tokens.card_padding_px();
+    let inset = Padding::from([pad + 4.0, pad + 4.0]);
+    let card_s = card_container_style(tokens, 1);
+
     if !state.expanded {
-        return section_card(tokens, card_title, header_bar.into());
+        return container(header_row)
+            .padding(inset)
+            .width(Length::Fill)
+            .style(move |theme: &Theme| card_s(theme))
+            .into();
     }
 
     let on_prim = gui_theme::contrast_on_primary(tokens);
     let pad_v = sp.sm as f32;
-    let mut body = column![header_bar].spacing(sp.md as f32);
+    let mut body = column![header_row].spacing(sp.md as f32);
     let note = text(envr_core::i18n::tr_key(
         "gui.runtime_settings.note",
         "这些设置写入 settings.toml，并会影响 CLI/GUI 的运行时行为（例如 shim 同步、环境注入等）。",
@@ -190,5 +196,9 @@ pub fn runtime_settings_view(
     .spacing((sp.sm + 2) as f32);
 
     body = body.push(actions).push(status);
-    section_card(tokens, card_title, body.into())
+    container(body)
+        .padding(inset)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| card_s(theme))
+        .into()
 }

@@ -24,6 +24,12 @@ struct NodeReleaseJson {
     lts: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize)]
+struct NodeReleaseMajorsJson {
+    version: String,
+    files: Vec<String>,
+}
+
 impl TryFrom<NodeReleaseJson> for NodeRelease {
     type Error = EnvrError;
 
@@ -48,6 +54,36 @@ pub fn parse_node_index(json: &str) -> EnvrResult<Vec<NodeRelease>> {
     raw.into_iter()
         .map(NodeRelease::try_from)
         .collect::<EnvrResult<Vec<_>>>()
+}
+
+/// Parse `index.json` and extract remote version `major` keys without materializing
+/// all releases into memory at once.
+///
+/// This is used by the GUI in Exact mode to render expandable `major` groups while
+/// keeping memory usage stable.
+pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec<String>> {
+    let mut majors: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let iter = serde_json::Deserializer::from_str(json).into_iter::<NodeReleaseMajorsJson>();
+    for item in iter {
+        let r = item.map_err(|e| EnvrError::Validation(e.to_string()))?;
+        if !release_has_platform(&r.files, os, arch) {
+            continue;
+        }
+        let t = r.version.trim_start_matches('v');
+        let major = t.split('.').next().unwrap_or("");
+        if !major.is_empty() && major.chars().all(|c| c.is_ascii_digit()) {
+            majors.insert(major.to_string());
+        }
+    }
+
+    let mut out: Vec<String> = majors.into_iter().collect();
+    out.sort_by(|a, b| {
+        let na = a.parse::<u64>().unwrap_or(0);
+        let nb = b.parse::<u64>().unwrap_or(0);
+        nb.cmp(&na)
+    });
+    Ok(out)
 }
 
 pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {

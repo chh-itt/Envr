@@ -1,6 +1,6 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
-use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrError;
 
 use crate::app::Message;
@@ -29,6 +29,57 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
             Ok(Ok(data)) => EnvCenterMsg::DataLoaded(Ok(data)),
             Ok(Err(e)) => EnvCenterMsg::DataLoaded(Err(e)),
             Err(e) => EnvCenterMsg::DataLoaded(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+pub fn fetch_remote_prefix(kind: RuntimeKind, prefix: String) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    let prefix_for_req = prefix.clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<RuntimeVersion>, String> {
+                if kind != RuntimeKind::Node {
+                    return Ok(Vec::new());
+                }
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                svc.list_remote(
+                    kind,
+                    &RemoteFilter {
+                        prefix: Some(prefix_for_req),
+                    },
+                )
+                .map_err(|e| e.to_string())
+            })
+            .await;
+
+        let msg = match res {
+            Ok(Ok(list)) => EnvCenterMsg::RemoteFetchedPrefix(Ok((prefix, list))),
+            Ok(Err(e)) => EnvCenterMsg::RemoteFetchedPrefix(Err(e)),
+            Err(e) => EnvCenterMsg::RemoteFetchedPrefix(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+pub fn fetch_remote_major_keys(kind: RuntimeKind) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<String>, String> {
+                if kind != RuntimeKind::Node {
+                    return Ok(Vec::new());
+                }
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                svc.list_remote_majors(kind).map_err(|e| e.to_string())
+            })
+            .await;
+
+        let msg = match res {
+            Ok(Ok(list)) => EnvCenterMsg::RemoteFetchedMajorKeys(Ok(list)),
+            Ok(Err(e)) => EnvCenterMsg::RemoteFetchedMajorKeys(Err(e)),
+            Err(e) => EnvCenterMsg::RemoteFetchedMajorKeys(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
     })

@@ -41,6 +41,13 @@ pub trait RuntimeProvider: Send + Sync {
     fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()>;
 
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>>;
+
+    /// Returns remote version `major` keys (e.g. `25` for `25.x.x`) without
+    /// materializing the full remote leaf version list.
+    /// Non-implemented providers may return an empty vec via the default impl.
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        Ok(Vec::new())
+    }
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion>;
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion>;

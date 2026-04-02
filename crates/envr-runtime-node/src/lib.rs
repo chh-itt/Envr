@@ -62,6 +62,11 @@ impl NodeRuntimeProvider {
         let body = index::fetch_node_index(&client, &self.index_json_url)?;
         index::parse_node_index(&body)
     }
+
+    fn fetch_index_body(&self) -> EnvrResult<String> {
+        let client = index::blocking_http_client()?;
+        index::fetch_node_index(&client, &self.index_json_url)
+    }
 }
 
 impl Default for NodeRuntimeProvider {
@@ -97,6 +102,47 @@ impl RuntimeProvider for NodeRuntimeProvider {
             std::env::consts::ARCH,
             filter,
         )
+    }
+
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+
+        // Disk cache: avoid repeatedly parsing full `index.json`.
+        // TTL is fixed to 24h for now (can be wired to settings later).
+        let ttl_secs = 24_u64 * 60_u64 * 60_u64;
+        let paths = NodePaths::new(self.runtime_root()?);
+        let cache_file = paths
+            .cache_dir()
+            .join(format!("remote_majors_{os}_{arch}.json"));
+
+        if let Ok(meta) = std::fs::metadata(&cache_file) {
+            if let Ok(mtime) = meta.modified() {
+                if let Ok(age) = std::time::SystemTime::now().duration_since(mtime) {
+                    if age.as_secs() <= ttl_secs {
+                        if let Ok(s) = std::fs::read_to_string(&cache_file) {
+                            if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
+                                return Ok(list);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let body = self.fetch_index_body()?;
+        let majors = index::parse_node_major_keys(&body, os, arch)?;
+
+        // Best-effort cache write (don't fail the whole operation if disk write fails).
+        let _ = (|| -> EnvrResult<()> {
+            std::fs::create_dir_all(paths.cache_dir())?;
+            let s = serde_json::to_string(&majors)
+                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            std::fs::write(&cache_file, s)?;
+            Ok(())
+        })();
+
+        Ok(majors)
     }
 
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
