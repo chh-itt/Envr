@@ -44,6 +44,7 @@ pub fn panel_container_style(tokens: ThemeTokens) -> impl Fn(&Theme) -> containe
         b: 0.0,
         a: shadow_alpha,
     };
+    let border_a = tokens.panel_border_alpha;
     move |_theme: &Theme| {
         container::Style::default()
             .background(panel)
@@ -51,7 +52,7 @@ pub fn panel_container_style(tokens: ThemeTokens) -> impl Fn(&Theme) -> containe
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
-                a: 0.06,
+                a: border_a,
             }))
             .shadow(iced::Shadow {
                 color: shadow_color,

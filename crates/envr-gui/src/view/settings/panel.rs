@@ -19,6 +19,7 @@ pub enum SettingsMsg {
     FontFamilyEdit(String),
     PickFontFamily(String),
     SetThemeMode(ThemeMode),
+    AccentColorEdit(String),
     SetLocaleMode(LocaleMode),
     Save,
     ReloadDisk,
@@ -230,6 +231,27 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         theme_mode_row = theme_mode_row.push(b);
     }
 
+    let accent_row = column![
+        text(envr_core::i18n::tr_key(
+            "gui.settings.accent_color",
+            "基准色（可选，#RGB / #RRGGBB）",
+            "Accent color (optional, #RGB / #RRGGBB)",
+        ))
+        .size(tokens.typography().subsection),
+        text_input(
+            &envr_core::i18n::tr_key(
+                "gui.settings.accent_placeholder",
+                "留空则使用平台默认主色",
+                "Leave empty for platform default primary",
+            ),
+            &state.accent_color_draft,
+        )
+        .on_input(|s| Message::Settings(SettingsMsg::AccentColorEdit(s)))
+        .padding(tokens.space().sm)
+        .width(Length::Fill),
+    ]
+    .spacing(tokens.space().xs);
+
     let dl_row = row![
         column![
             text(envr_core::i18n::tr_key(
@@ -342,6 +364,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         font_mode_row,
         font_custom,
         theme_mode_row,
+        accent_row,
         locale_row,
         text(envr_core::i18n::tr_key(
             "gui.settings.downloads_section",

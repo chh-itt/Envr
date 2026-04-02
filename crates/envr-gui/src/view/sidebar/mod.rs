@@ -8,7 +8,8 @@ use crate::theme as gui_theme;
 
 pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message> {
     let panel = gui_theme::panel_container_style(tokens);
-    let mut col = column![].spacing(8);
+    let sp = tokens.space();
+    let mut col = column![].spacing(sp.sm);
     for route in Route::ALL {
         let b = button(text(route.label()))
             .on_press(Message::Navigate(route))
@@ -21,7 +22,7 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
         col = col.push(b);
     }
     container(col.width(Length::Fixed(tokens.sidebar_width())))
-        .padding(10)
+        .padding(sp.sm + 2)
         .style(move |theme: &Theme| panel(theme))
         .into()
 }

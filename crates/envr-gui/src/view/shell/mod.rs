@@ -28,10 +28,11 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
     .spacing(t.content_spacing().round() as u16)
     .height(Length::Fill);
 
-    let body = column![main_row].spacing(8).height(Length::Fill);
+    let sp = t.space();
+    let body = column![main_row].spacing(sp.sm).height(Length::Fill);
 
     let chrome = if let Some(err) = state.error_message() {
-        column![error_banner(t, err), body].spacing(8)
+        column![error_banner(t, err), body].spacing(sp.sm)
     } else {
         column![body]
     };
@@ -59,9 +60,11 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
 
 fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
     let style = gui_theme::error_banner_style(tokens);
+    let ty = tokens.typography();
+    let sp = tokens.space();
     container(
         row![
-            text(message).size(14),
+            text(message).size(ty.body_small),
             horizontal_space(),
             button(text(envr_core::i18n::tr_key(
                 "gui.action.close",
@@ -70,10 +73,10 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
             )))
             .on_press(Message::DismissError),
         ]
-        .spacing(8)
+        .spacing(sp.sm)
         .align_y(Alignment::Center),
     )
-    .padding(12)
+    .padding(sp.md)
     .style(move |_theme: &Theme| style)
     .into()
 }
@@ -83,8 +86,10 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         return dashboard_view(&state.dashboard, &state.downloads, tokens);
     }
 
-    let title = text(state.route().label()).size(22);
-    let mut col = column![title].spacing(14);
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let title = text(state.route().label()).size(ty.page_title);
+    let mut col = column![title].spacing(sp.sm + sp.xs);
 
     match state.route() {
         Route::Runtime => {
@@ -102,7 +107,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
                     crate::view::env_center::EnvCenterMsg::Refresh,
                 )))
-                .padding([6, 12]),
+                .padding([sp.xs + 2, sp.md]),
             );
             col = col.push(runtime_settings_view(
                 &state.runtime_settings,
@@ -119,9 +124,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     "外观",
                     "Appearance",
                 ))
-                .size(17),
+                .size(ty.subsection),
             );
-            col = col.push(flavor_picker_row(state.flavor()));
+            col = col.push(flavor_picker_row(state.flavor(), tokens));
             col = col.push(
                 text(format!(
                     "{} {} · {} md {:.1} · {} blur {:.0} · {} {} ms",
@@ -134,7 +139,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     envr_core::i18n::tr_key("gui.label.motion", "动效", "Motion"),
                     tokens.motion.standard_ms
                 ))
-                .size(13),
+                .size(ty.caption),
             );
         }
         Route::Dashboard => unreachable!("handled by early return"),
@@ -145,7 +150,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     "关于本应用。",
                     "About this app.",
                 ))
-                .size(15),
+                .size(ty.body),
             );
         }
     }
@@ -187,12 +192,13 @@ fn flavor_label_i18n(flavor: UiFlavor) -> String {
     }
 }
 
-fn flavor_picker_row(active: UiFlavor) -> Element<'static, Message> {
-    let mut r = row![].spacing(8);
+fn flavor_picker_row(active: UiFlavor, tokens: ThemeTokens) -> Element<'static, Message> {
+    let sp = tokens.space();
+    let mut r = row![].spacing(sp.sm);
     for flavor in UiFlavor::ALL {
         let b = button(text(flavor_label_i18n(flavor)))
             .on_press(Message::SetFlavor(flavor))
-            .padding([8, 10]);
+            .padding([sp.sm, sp.sm + 2]);
         let b = if flavor == active {
             b.style(button::primary)
         } else {

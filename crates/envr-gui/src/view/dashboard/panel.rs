@@ -14,6 +14,8 @@ pub fn dashboard_view(
     downloads: &DownloadPanelState,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
     let mut col = column![
         row![
             text(envr_core::i18n::tr_key(
@@ -21,7 +23,7 @@ pub fn dashboard_view(
                 "仪表盘",
                 "Dashboard",
             ))
-            .size(22),
+            .size(ty.page_title),
             iced::widget::horizontal_space(),
             button(text(envr_core::i18n::tr_key(
                 "gui.dashboard.refresh",
@@ -31,11 +33,11 @@ pub fn dashboard_view(
             .on_press(Message::Dashboard(
                 crate::view::dashboard::state::DashboardMsg::Refresh
             ))
-            .padding([6, 12]),
+            .padding([sp.xs + 2, sp.md]),
         ]
         .align_y(Alignment::Center)
     ]
-    .spacing(12);
+    .spacing(sp.md);
 
     if let Some(err) = state.last_error.as_deref() {
         col = col.push(text(format!(
@@ -78,21 +80,25 @@ fn card(
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let panel = gui_theme::panel_container_style(tokens);
-    container(column![text(title).size(16), body].spacing(10))
-        .padding(12)
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    container(column![text(title).size(ty.section), body].spacing(sp.sm + 2))
+        .padding(sp.md)
         .width(Length::Fill)
         .style(move |theme: &Theme| panel(theme))
         .into()
 }
 
 fn runtime_overview_card(rows: &[RuntimeRow], tokens: ThemeTokens) -> Element<'static, Message> {
-    let mut list = column![].spacing(6);
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let mut list = column![].spacing(sp.xs + 2);
     for r in rows {
         let label = kind_label(r.kind);
         let cur = r.current.clone().unwrap_or_else(|| {
             envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
         });
-        list = list.push(text(format!("{label}: {} · {}", r.installed, cur)).size(13));
+        list = list.push(text(format!("{label}: {} · {}", r.installed, cur)).size(ty.caption));
     }
     card(
         envr_core::i18n::tr_key(
@@ -113,14 +119,16 @@ fn doctor_card(
     recs: &[String],
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
     let mut body = column![
         text(format!(
             "{}: {runtime_root}",
             envr_core::i18n::tr_key("gui.dashboard.runtime_root", "运行时根目录", "Runtime root",)
         ))
-        .size(13)
+        .size(ty.caption)
     ]
-    .spacing(6);
+    .spacing(sp.xs + 2);
     let shims_suffix = if shims_empty {
         envr_core::i18n::tr_key("gui.dashboard.shims_empty", "（空）", " (empty)")
     } else {
@@ -144,7 +152,7 @@ fn doctor_card(
             "Health check: issues found",
         )));
         for i in issues {
-            body = body.push(text(format!("- {i}")).size(12));
+            body = body.push(text(format!("- {i}")).size(ty.micro));
         }
     }
     if !recs.is_empty() {
@@ -154,10 +162,10 @@ fn doctor_card(
                 "建议：",
                 "Suggestions:",
             ))
-            .size(13),
+            .size(ty.caption),
         );
         for r in recs {
-            body = body.push(text(format!("- {r}")).size(12));
+            body = body.push(text(format!("- {r}")).size(ty.micro));
         }
     }
 
@@ -172,7 +180,9 @@ fn recent_jobs_card(
     downloads: &DownloadPanelState,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
-    let mut body = column![].spacing(6);
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let mut body = column![].spacing(sp.xs + 2);
     if downloads.jobs.is_empty() {
         body = body.push(text(envr_core::i18n::tr_key(
             "gui.dashboard.no_recent_jobs",
@@ -191,7 +201,7 @@ fn recent_jobs_card(
                     envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
                 }
             };
-            body = body.push(text(format!("{} · {} · {}", j.label, st, j.url)).size(12));
+            body = body.push(text(format!("{} · {} · {}", j.label, st, j.url)).size(ty.micro));
         }
     }
     card(
@@ -206,6 +216,7 @@ fn recent_jobs_card(
 }
 
 fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
+    let sp = tokens.space();
     let actions = row![
         button(text(envr_core::i18n::tr_key(
             "gui.dashboard.open_runtimes",
@@ -213,16 +224,16 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
             "Open runtimes",
         )))
         .on_press(Message::Navigate(Route::Runtime))
-        .padding([6, 12]),
+        .padding([sp.xs + 2, sp.md]),
         button(text(envr_core::i18n::tr_key(
             "gui.dashboard.open_settings",
             "打开设置",
             "Open settings",
         )))
         .on_press(Message::Navigate(Route::Settings))
-        .padding([6, 12]),
+        .padding([sp.xs + 2, sp.md]),
     ]
-    .spacing(10);
+    .spacing(sp.sm + 2);
     card(
         envr_core::i18n::tr_key(
             "gui.dashboard.recommended_actions",

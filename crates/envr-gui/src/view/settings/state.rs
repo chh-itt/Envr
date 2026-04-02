@@ -1,5 +1,6 @@
 use envr_config::settings::{FontMode, LocaleMode, MirrorMode, Settings, SettingsCache};
 use envr_error::EnvrResult;
+use envr_ui::theme::Srgb;
 
 /// In-memory editor bound to `settings.toml` via [`SettingsCache`].
 pub struct SettingsViewState {
@@ -10,6 +11,7 @@ pub struct SettingsViewState {
     pub max_conc_text: String,
     pub retry_text: String,
     pub font_family_draft: String,
+    pub accent_color_draft: String,
     pub locale_mode_draft: LocaleMode,
     pub last_message: Option<String>,
 }
@@ -28,6 +30,7 @@ impl SettingsViewState {
             max_conc_text: String::new(),
             retry_text: String::new(),
             font_family_draft: String::new(),
+            accent_color_draft: String::new(),
             locale_mode_draft: LocaleMode::FollowSystem,
             last_message: None,
         };
@@ -43,6 +46,7 @@ impl SettingsViewState {
         self.max_conc_text = st.download.max_concurrent_downloads.to_string();
         self.retry_text = st.download.retry_max.to_string();
         self.font_family_draft = st.appearance.font.family.clone().unwrap_or_default();
+        self.accent_color_draft = st.appearance.accent_color.clone().unwrap_or_default();
         self.locale_mode_draft = st.i18n.locale;
         Ok(())
     }
@@ -88,6 +92,21 @@ impl SettingsViewState {
         }
 
         s.i18n.locale = self.locale_mode_draft;
+
+        let ac = self.accent_color_draft.trim();
+        s.appearance.accent_color = if ac.is_empty() {
+            None
+        } else {
+            Srgb::from_hex(ac).map_err(|_| {
+                envr_error::EnvrError::Validation(envr_core::i18n::tr_key(
+                    "gui.settings.err.accent_hex",
+                    "appearance.accent_color 须为 #RGB 或 #RRGGBB",
+                    "appearance.accent_color must be #RGB or #RRGGBB",
+                ))
+            })?;
+            Some(ac.to_string())
+        };
+
         s.validate()?;
         Ok(s)
     }

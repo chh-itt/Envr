@@ -4,11 +4,12 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
-use envr_config::settings::{FontMode, Settings};
+use envr_config::settings::{FontMode, Settings, ThemeMode};
 use envr_download::task::CancelToken;
 use envr_ui::font;
+use envr_ui::theme::Srgb;
 use envr_ui::theme::{
-    ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, tokens_for_scheme,
+    ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, tokens_for_appearance,
 };
 use iced::font::Family;
 use iced::{Element, Subscription, Task, application};
@@ -94,10 +95,22 @@ fn load_gui_downloads_panel_settings_cached() -> (bool, bool, i32, i32) {
     (p.visible, p.expanded, p.x.max(0), p.y.max(0))
 }
 
+fn accent_from_settings(st: &Settings) -> Option<Srgb> {
+    st.appearance.accent_color.as_deref().and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Srgb::from_hex(t).ok()
+        }
+    })
+}
+
 impl AppState {
     pub(crate) fn tokens(&self) -> ThemeTokens {
         let scheme = scheme_for_mode(self.settings.draft.appearance.theme_mode);
-        tokens_for_scheme(self.flavor, scheme)
+        let accent = accent_from_settings(&self.settings.draft);
+        tokens_for_appearance(self.flavor, scheme, accent)
     }
 
     pub fn route(&self) -> Route {
@@ -115,6 +128,8 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// Re-resolve `FollowSystem` scheme when OS appearance changes (cheap tick).
+    ThemePollTick,
     Navigate(Route),
     DismissError,
     ReportError(String),
@@ -144,11 +159,25 @@ pub fn run() -> iced::Result {
                 .dragging
                 .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
 
-            match (maybe_tick, maybe_events) {
-                (Some(tick), Some(events)) => Subscription::batch([tick, events]),
-                (Some(tick), None) => tick,
-                (None, Some(events)) => events,
-                (None, None) => Subscription::none(),
+            let theme_poll = (state.settings.draft.appearance.theme_mode
+                == ThemeMode::FollowSystem)
+                .then(|| iced::time::every(Duration::from_secs(1)))
+                .map(|s| s.map(|_| Message::ThemePollTick));
+
+            let mut subs = Vec::new();
+            if let Some(t) = maybe_tick {
+                subs.push(t);
+            }
+            if let Some(e) = maybe_events {
+                subs.push(e);
+            }
+            if let Some(t) = theme_poll {
+                subs.push(t);
+            }
+            if subs.is_empty() {
+                Subscription::none()
+            } else {
+                Subscription::batch(subs)
             }
         })
         .centered()
@@ -191,6 +220,7 @@ fn configured_default_font(st: &Settings) -> iced::Font {
 
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
     match message {
+        Message::ThemePollTick => Task::none(),
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
             state.route = route;
@@ -201,9 +231,11 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 return gui_ops::refresh_dashboard();
             }
             if route == Route::Settings {
-                state.settings.last_message = Some(
-                    envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…"),
-                );
+                state.settings.last_message = Some(envr_core::i18n::tr_key(
+                    "gui.app.loading",
+                    "正在加载…",
+                    "Loading…",
+                ));
                 let path = settings_path();
                 return Task::perform(
                     async move {
@@ -243,8 +275,11 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::ReloadDisk => {
-            state.runtime_settings.last_message =
-                Some(envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…"));
+            state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.loading",
+                "正在加载…",
+                "Loading…",
+            ));
             let path = settings_path();
             Task::perform(
                 async move {
@@ -263,8 +298,11 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::Save => {
-            state.runtime_settings.last_message =
-                Some(envr_core::i18n::tr_key("gui.app.saving", "正在保存…", "Saving…"));
+            state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.saving",
+                "正在保存…",
+                "Saving…",
+            ));
             let path = settings_path();
             let next = state
                 .runtime_settings
@@ -323,9 +361,11 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
                             )
                         ));
                     } else {
-                        state.runtime_settings.last_message = Some(
-                            envr_core::i18n::tr_key("gui.app.saved_short", "已保存。", "Saved."),
-                        );
+                        state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
+                            "gui.app.saved_short",
+                            "已保存。",
+                            "Saved.",
+                        ));
                     }
                 }
                 Err(e) => {
@@ -408,6 +448,16 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.settings.draft.appearance.theme_mode = m;
             Task::none()
         }
+        SettingsMsg::AccentColorEdit(s) => {
+            state.settings.accent_color_draft = s;
+            let t = state.settings.accent_color_draft.trim();
+            state.settings.draft.appearance.accent_color = if t.is_empty() {
+                None
+            } else {
+                Srgb::from_hex(t).ok().map(|_| t.to_string())
+            };
+            Task::none()
+        }
         SettingsMsg::SetLocaleMode(m) => {
             state.settings.locale_mode_draft = m;
             // Apply immediately so all views re-render with new language.
@@ -417,8 +467,11 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             Task::none()
         }
         SettingsMsg::Save => {
-            state.settings.last_message =
-                Some(envr_core::i18n::tr_key("gui.app.saving", "正在保存…", "Saving…"));
+            state.settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.saving",
+                "正在保存…",
+                "Saving…",
+            ));
             let path = settings_path();
             let next = state.settings.build_settings().map_err(|e| e.to_string());
             Task::perform(
@@ -431,8 +484,11 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             )
         }
         SettingsMsg::ReloadDisk => {
-            state.settings.last_message =
-                Some(envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…"));
+            state.settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.loading",
+                "正在加载…",
+                "Loading…",
+            ));
             let path = settings_path();
             Task::perform(
                 async move {
@@ -456,13 +512,11 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             )
                         ));
                     } else {
-                        state.settings.last_message = Some(
-                            envr_core::i18n::tr_key(
-                                "gui.app.reloaded_from_disk",
-                                "已从磁盘重新加载。",
-                                "Reloaded from disk.",
-                            ),
-                        );
+                        state.settings.last_message = Some(envr_core::i18n::tr_key(
+                            "gui.app.reloaded_from_disk",
+                            "已从磁盘重新加载。",
+                            "Reloaded from disk.",
+                        ));
                     }
                 }
                 Err(e) => {
@@ -492,13 +546,11 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             )
                         ));
                     } else {
-                        state.settings.last_message = Some(
-                            envr_core::i18n::tr_key(
-                                "gui.app.saved_settings_toml",
-                                "已保存到 settings.toml。",
-                                "Saved.",
-                            ),
-                        );
+                        state.settings.last_message = Some(envr_core::i18n::tr_key(
+                            "gui.app.saved_settings_toml",
+                            "已保存到 settings.toml。",
+                            "Saved.",
+                        ));
                     }
                 }
                 Err(e) => {

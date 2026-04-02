@@ -5,6 +5,7 @@
 mod color;
 mod detect;
 mod flavor;
+mod material_seed;
 mod presets;
 mod scheme;
 mod tokens;
@@ -12,15 +13,17 @@ mod tokens;
 pub use color::Srgb;
 pub use detect::default_flavor_for_target;
 pub use flavor::UiFlavor;
-pub use presets::tokens_for_scheme;
+pub use presets::{tokens_for_appearance, tokens_for_scheme};
 pub use scheme::{UiScheme, scheme_for_mode, system_prefers_dark_cached};
-pub use tokens::{MotionTokens, SemanticColors, ShadowTokens, ThemeTokens};
+pub use tokens::{
+    MotionTokens, SemanticColors, ShadowTokens, SpacingScale, ThemeTokens, TypographyScale,
+};
 
 #[cfg(test)]
 mod tests {
     use super::{
         MotionTokens, SemanticColors, ShadowTokens, ThemeTokens, UiFlavor, UiScheme,
-        default_flavor_for_target, scheme_for_mode, tokens_for_scheme,
+        default_flavor_for_target, scheme_for_mode, tokens_for_appearance, tokens_for_scheme,
     };
     use envr_config::settings::ThemeMode;
 
@@ -48,7 +51,7 @@ mod tests {
     }
 
     #[test]
-    fn theme_tokens_spacing_matches_flavor() {
+    fn theme_tokens_spacing_and_sidebar_use_token_scale() {
         let c = SemanticColors {
             background: super::Srgb::new(0.0, 0.0, 0.0),
             surface: super::Srgb::new(0.1, 0.1, 0.1),
@@ -57,6 +60,7 @@ mod tests {
             text_muted: super::Srgb::new(0.7, 0.7, 0.7),
             primary: super::Srgb::new(0.2, 0.5, 1.0),
             success: super::Srgb::new(0.2, 0.8, 0.3),
+            warning: super::Srgb::new(0.9, 0.8, 0.2),
             danger: super::Srgb::new(0.9, 0.2, 0.2),
         };
         let shadow = ShadowTokens {
@@ -67,6 +71,7 @@ mod tests {
         let motion = MotionTokens {
             standard_ms: 200,
             emphasized_ms: 300,
+            easing_standard: [0.2, 0.0, 0.0, 1.0],
         };
         let t = ThemeTokens {
             flavor: UiFlavor::Fluent,
@@ -74,17 +79,29 @@ mod tests {
             radius_sm: 4.0,
             radius_md: 8.0,
             radius_lg: 12.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow,
             motion,
+            panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.0,
         };
-        assert_eq!(t.content_spacing(), 10.0);
-        assert_eq!(t.sidebar_width(), 188.0);
+        assert_eq!(t.content_spacing(), 12.0);
+        assert_eq!(t.sidebar_width(), 240.0);
         let t2 = ThemeTokens {
             flavor: UiFlavor::Material3,
             ..t
         };
-        assert_eq!(t2.content_spacing(), 14.0);
+        assert_eq!(t2.content_spacing(), t.content_spacing());
+    }
+
+    #[test]
+    fn tokens_for_appearance_accent_overrides_primary() {
+        let base = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
+        let accent = super::Srgb::from_hex("#FF5500").expect("hex");
+        let t = tokens_for_appearance(UiFlavor::Fluent, UiScheme::Light, Some(accent));
+        assert_eq!(t.colors.primary, accent);
+        assert_ne!(base.colors.primary, t.colors.primary);
     }
 
     #[test]

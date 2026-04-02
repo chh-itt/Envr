@@ -1,191 +1,203 @@
-//! Light-mode presets. Values are tuned to read distinctly in `iced` while staying on-brand per platform doc.
+//! Composes [`super::tokens::base`] into full [`ThemeTokens`] per flavor + scheme.
+//! User accent and Linux Material seed are applied in [`tokens_for_appearance`].
 
-use super::color::Srgb;
 use super::flavor::UiFlavor;
+use super::material_seed;
 use super::scheme::UiScheme;
+use super::tokens::base;
 use super::tokens::{MotionTokens, SemanticColors, ShadowTokens, ThemeTokens};
 
-fn fluent_colors() -> SemanticColors {
+const MOTION_STANDARD: MotionTokens = MotionTokens {
+    standard_ms: 200,
+    emphasized_ms: 300,
+    easing_standard: [0.2, 0.0, 0.0, 1.0],
+};
+
+fn semantic_fluent_light() -> SemanticColors {
     SemanticColors {
-        background: Srgb::new(0.96, 0.97, 0.98),
-        surface: Srgb::new(1.0, 1.0, 1.0),
-        surface_panel: Srgb::new(0.98, 0.99, 1.0),
-        text: Srgb::new(0.11, 0.13, 0.15),
-        text_muted: Srgb::new(0.35, 0.38, 0.42),
-        primary: Srgb::new(0.0, 0.47, 0.83),
-        success: Srgb::new(0.11, 0.62, 0.35),
-        danger: Srgb::new(0.77, 0.2, 0.18),
+        background: base::SURFACE_PAGE_LIGHT,
+        surface: base::SURFACE_CARD_LIGHT,
+        surface_panel: base::SURFACE_PANEL_LIGHT,
+        text: base::TEXT_PRIMARY_LIGHT,
+        text_muted: base::TEXT_MUTED_LIGHT,
+        primary: base::BRAND_PRIMARY_FLUENT,
+        success: base::SEMANTIC_SUCCESS,
+        warning: base::SEMANTIC_WARNING,
+        danger: base::SEMANTIC_ERROR,
     }
 }
 
-fn liquid_colors() -> SemanticColors {
+fn semantic_fluent_dark() -> SemanticColors {
     SemanticColors {
-        background: Srgb::new(0.93, 0.94, 0.96),
-        surface: Srgb::new(0.97, 0.97, 0.99),
-        surface_panel: Srgb::new(0.94, 0.95, 0.98),
-        text: Srgb::new(0.09, 0.10, 0.12),
-        text_muted: Srgb::new(0.36, 0.38, 0.44),
-        primary: Srgb::new(0.04, 0.52, 1.0),
-        success: Srgb::new(0.13, 0.65, 0.38),
-        danger: Srgb::new(0.75, 0.22, 0.19),
+        background: base::SURFACE_PAGE_DARK,
+        surface: base::SURFACE_CARD_DARK,
+        surface_panel: base::SURFACE_PANEL_DARK,
+        text: base::TEXT_PRIMARY_DARK,
+        text_muted: base::TEXT_MUTED_DARK,
+        primary: base::BRAND_PRIMARY_FLUENT_DARK,
+        success: base::SEMANTIC_SUCCESS,
+        warning: base::SEMANTIC_WARNING,
+        danger: base::SEMANTIC_ERROR,
     }
 }
 
-fn material_colors() -> SemanticColors {
-    SemanticColors {
-        background: Srgb::new(0.95, 0.94, 0.98),
-        surface: Srgb::new(0.99, 0.98, 1.0),
-        surface_panel: Srgb::new(0.96, 0.94, 0.99),
-        text: Srgb::new(0.11, 0.11, 0.13),
-        text_muted: Srgb::new(0.38, 0.37, 0.42),
-        primary: Srgb::new(0.40, 0.32, 0.64),
-        success: Srgb::new(0.11, 0.55, 0.41),
-        danger: Srgb::new(0.73, 0.18, 0.15),
-    }
+fn semantic_liquid_light() -> SemanticColors {
+    let mut c = semantic_fluent_light();
+    c.surface_panel = liquid_panel_light();
+    c.primary = base::BRAND_PRIMARY_LIQUID;
+    c
 }
 
-fn fluent_colors_dark() -> SemanticColors {
-    SemanticColors {
-        background: Srgb::new(0.07, 0.08, 0.09),
-        surface: Srgb::new(0.10, 0.11, 0.12),
-        surface_panel: Srgb::new(0.12, 0.13, 0.14),
-        text: Srgb::new(0.92, 0.93, 0.94),
-        text_muted: Srgb::new(0.66, 0.68, 0.70),
-        primary: Srgb::new(0.35, 0.72, 1.0),
-        success: Srgb::new(0.33, 0.82, 0.52),
-        danger: Srgb::new(1.0, 0.45, 0.42),
-    }
+fn semantic_liquid_dark() -> SemanticColors {
+    let mut c = semantic_fluent_dark();
+    c.primary = base::BRAND_PRIMARY_LIQUID_DARK;
+    c
 }
 
-fn liquid_colors_dark() -> SemanticColors {
-    SemanticColors {
-        background: Srgb::new(0.06, 0.07, 0.09),
-        surface: Srgb::new(0.09, 0.10, 0.12),
-        surface_panel: Srgb::new(0.11, 0.12, 0.15),
-        text: Srgb::new(0.92, 0.93, 0.95),
-        text_muted: Srgb::new(0.66, 0.68, 0.72),
-        primary: Srgb::new(0.40, 0.76, 1.0),
-        success: Srgb::new(0.34, 0.84, 0.55),
-        danger: Srgb::new(1.0, 0.48, 0.45),
-    }
+fn liquid_panel_light() -> super::color::Srgb {
+    // Slightly cooler panel than generic (Liquid Glass)
+    super::color::Srgb::new(0.94, 0.95, 0.98)
 }
 
-fn material_colors_dark() -> SemanticColors {
-    SemanticColors {
-        background: Srgb::new(0.06, 0.06, 0.08),
-        surface: Srgb::new(0.10, 0.10, 0.12),
-        surface_panel: Srgb::new(0.12, 0.11, 0.14),
-        text: Srgb::new(0.92, 0.92, 0.95),
-        text_muted: Srgb::new(0.66, 0.66, 0.71),
-        primary: Srgb::new(0.78, 0.70, 0.95),
-        success: Srgb::new(0.40, 0.80, 0.62),
-        danger: Srgb::new(1.0, 0.46, 0.43),
-    }
+fn semantic_material_light() -> SemanticColors {
+    let mut c = semantic_fluent_light();
+    c.surface = base::SURFACE_CARD_LIGHT;
+    c.surface_panel = super::color::Srgb::new(0.96, 0.94, 0.99);
+    c.primary = base::BRAND_PRIMARY_MATERIAL_FALLBACK;
+    c
 }
 
-/// Resolved tokens for a flavor + scheme.
+fn semantic_material_dark() -> SemanticColors {
+    let mut c = semantic_fluent_dark();
+    c.surface_panel = super::color::Srgb::new(0.12, 0.11, 0.14);
+    c.primary = base::BRAND_PRIMARY_MATERIAL_DARK;
+    c
+}
+
+/// Resolved tokens for a flavor + scheme, then optional accent / Linux seed.
+pub fn tokens_for_appearance(
+    flavor: UiFlavor,
+    scheme: UiScheme,
+    accent: Option<super::color::Srgb>,
+) -> ThemeTokens {
+    let mut t = raw_tokens(flavor, scheme);
+    if let Some(p) = accent {
+        t.colors.primary = p;
+    } else if flavor == UiFlavor::Material3 {
+        if let Some(p) = material_seed::linux_material_primary_seed() {
+            t.colors.primary = p;
+        }
+    }
+    t
+}
+
+/// Preset only (no accent / OS seed).
 pub fn tokens_for_scheme(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
+    tokens_for_appearance(flavor, scheme, None)
+}
+
+fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
     match (flavor, scheme) {
         (UiFlavor::Fluent, UiScheme::Light) => ThemeTokens {
             flavor,
-            colors: fluent_colors(),
-            radius_sm: 3.0,
-            radius_md: 6.0,
-            radius_lg: 10.0,
+            colors: semantic_fluent_light(),
+            radius_sm: 4.0,
+            radius_md: 8.0,
+            radius_lg: 12.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 10.0,
                 offset_y: 2.0,
                 color_alpha: 0.14,
             },
-            motion: MotionTokens {
-                standard_ms: 120,
-                emphasized_ms: 220,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.35,
         },
         (UiFlavor::Fluent, UiScheme::Dark) => ThemeTokens {
             flavor,
-            colors: fluent_colors_dark(),
-            radius_sm: 3.0,
-            radius_md: 6.0,
-            radius_lg: 10.0,
+            colors: semantic_fluent_dark(),
+            radius_sm: 4.0,
+            radius_md: 8.0,
+            radius_lg: 12.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 14.0,
                 offset_y: 2.0,
                 color_alpha: 0.30,
             },
-            motion: MotionTokens {
-                standard_ms: 120,
-                emphasized_ms: 220,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.35,
         },
         (UiFlavor::LiquidGlass, UiScheme::Light) => ThemeTokens {
             flavor,
-            colors: liquid_colors(),
-            radius_sm: 6.0,
-            radius_md: 12.0,
-            radius_lg: 18.0,
+            colors: semantic_liquid_light(),
+            radius_sm: 8.0,
+            radius_md: 14.0,
+            radius_lg: 20.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 18.0,
                 offset_y: 4.0,
                 color_alpha: 0.10,
             },
-            motion: MotionTokens {
-                standard_ms: 180,
-                emphasized_ms: 320,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.55,
         },
         (UiFlavor::LiquidGlass, UiScheme::Dark) => ThemeTokens {
             flavor,
-            colors: liquid_colors_dark(),
-            radius_sm: 6.0,
-            radius_md: 12.0,
-            radius_lg: 18.0,
+            colors: semantic_liquid_dark(),
+            radius_sm: 8.0,
+            radius_md: 14.0,
+            radius_lg: 20.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 22.0,
                 offset_y: 5.0,
                 color_alpha: 0.26,
             },
-            motion: MotionTokens {
-                standard_ms: 180,
-                emphasized_ms: 320,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.55,
         },
         (UiFlavor::Material3, UiScheme::Light) => ThemeTokens {
             flavor,
-            colors: material_colors(),
-            radius_sm: 8.0,
-            radius_md: 14.0,
-            radius_lg: 22.0,
+            colors: semantic_material_light(),
+            radius_sm: 10.0,
+            radius_md: 16.0,
+            radius_lg: 24.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 12.0,
                 offset_y: 3.0,
                 color_alpha: 0.18,
             },
-            motion: MotionTokens {
-                standard_ms: 140,
-                emphasized_ms: 280,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.15,
         },
         (UiFlavor::Material3, UiScheme::Dark) => ThemeTokens {
             flavor,
-            colors: material_colors_dark(),
-            radius_sm: 8.0,
-            radius_md: 14.0,
-            radius_lg: 22.0,
+            colors: semantic_material_dark(),
+            radius_sm: 10.0,
+            radius_md: 16.0,
+            radius_lg: 24.0,
+            control_height_primary: 36.0,
+            control_height_secondary: 32.0,
             shadow: ShadowTokens {
                 blur_radius: 16.0,
                 offset_y: 3.0,
                 color_alpha: 0.32,
             },
-            motion: MotionTokens {
-                standard_ms: 140,
-                emphasized_ms: 280,
-            },
+            motion: MOTION_STANDARD,
+            panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.15,
         },
     }

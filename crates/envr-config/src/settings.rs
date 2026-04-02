@@ -128,6 +128,10 @@ pub struct AppearanceSettings {
 
     #[serde(default = "defaults::theme_mode")]
     pub theme_mode: ThemeMode,
+
+    /// Optional brand accent `#RGB` / `#RRGGBB`; merged into theme primary when valid (GUI-003).
+    #[serde(default)]
+    pub accent_color: Option<String>,
 }
 
 /// GUI-only state persisted in `settings.toml` so window layout/UX preferences survive restarts.
@@ -516,6 +520,7 @@ mod tests {
                     family: Some("Microsoft YaHei UI".to_string()),
                 },
                 theme_mode: ThemeMode::Dark,
+                accent_color: None,
             },
             gui: GuiSettings {
                 downloads_panel: DownloadsPanelSettings {
