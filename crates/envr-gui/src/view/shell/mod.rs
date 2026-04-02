@@ -80,33 +80,42 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let danger = gui_theme::to_color(tokens.colors.danger);
-    let muted = gui_theme::to_color(tokens.colors.text);
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let hint = envr_core::i18n::tr_key(
+        "gui.empty.hint.global_error",
+        "若问题持续，请重试或导出日志以便反馈。",
+        "If this keeps happening, retry or export logs for support.",
+    );
     let close_lbl = row![
-        Lucide::X.view(14.0, muted),
+        Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.text)),
         text(envr_core::i18n::tr_key("gui.action.close", "关闭", "Close",)),
     ]
     .spacing(sp.xs)
     .align_y(Alignment::Center);
-    container(
-        row![
-            Lucide::CircleAlert.view(20.0, danger),
-            text(message).size(ty.body_small).width(Length::Fill),
-            button(close_lbl)
-                .on_press(Message::DismissError)
-                .height(Length::Fixed(
-                    tokens
-                        .control_height_secondary
-                        .max(tokens.min_click_target_px()),
-                ))
-                .padding([0, sp.sm])
-                .style(button_style(tokens, ButtonVariant::Ghost)),
+    let main_row = row![
+        Lucide::CircleAlert.view(20.0, danger),
+        column![
+            text(message).size(ty.body_small),
+            text(hint).size(ty.caption).color(muted),
         ]
-        .spacing(sp.sm)
-        .align_y(Alignment::Center),
-    )
-    .padding(sp.md)
-    .style(move |_theme: &Theme| style)
-    .into()
+        .spacing(sp.xs)
+        .width(Length::Fill),
+        button(close_lbl)
+            .on_press(Message::DismissError)
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, ButtonVariant::Ghost)),
+    ]
+    .spacing(sp.sm)
+    .align_y(Alignment::Center);
+    container(main_row)
+        .padding(sp.md)
+        .style(move |_theme: &Theme| style)
+        .into()
 }
 
 fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {

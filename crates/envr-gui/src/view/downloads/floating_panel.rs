@@ -11,6 +11,7 @@ use iced::{Alignment, Element, Length, Theme};
 use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
+use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
 use crate::widget_styles::{ButtonVariant, button_style};
 
 /// Card width matches layout geometry / persistence (`tasks_gui.md` GUI-061).
@@ -104,14 +105,30 @@ pub fn floating_download_panel(
 
     if state.expanded {
         if state.jobs.is_empty() {
-            body = body.push(
-                text(envr_core::i18n::tr_key(
-                    "gui.downloads.no_jobs",
-                    "暂无任务。",
-                    "No jobs.",
-                ))
-                .size(ty.micro),
+            let empty_title = envr_core::i18n::tr_key(
+                "gui.empty.title.no_download_jobs",
+                "暂无下载任务",
+                "No download jobs",
             );
+            let empty_body = envr_core::i18n::tr_key(
+                "gui.empty.body.no_download_jobs",
+                "从运行时页安装或使用演示下载时，进度会显示在面板中。",
+                "Install from the Runtimes page or start a demo download to see progress here.",
+            );
+            let empty_hint = Some(envr_core::i18n::tr_key(
+                "gui.empty.hint.no_download_jobs",
+                "可折叠面板节省空间；长按标题条可拖拽停靠位置。",
+                "Collapse the panel for more room; long-press the title bar to drag.",
+            ));
+            body = body.push(illustrative_block_compact(
+                tokens,
+                EmptyTone::Neutral,
+                Lucide::Download,
+                28.0,
+                empty_title,
+                empty_body,
+                empty_hint,
+            ));
         } else {
             let mut list = column![].spacing(sp.sm + 2);
             for j in state.jobs.iter().rev().take(6) {

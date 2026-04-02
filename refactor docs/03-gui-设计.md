@@ -84,3 +84,69 @@
 - 可继续使用 `iced`（已有积累），但减少自定义复杂组件数量。
 - 组件层 `envr-ui` 只放纯表现组件，不放业务逻辑。
 
+## 7. 设计 Token 落地（单一真相，`envr_ui::theme`）
+
+**代码位置**：`crates/envr-ui/src/theme/tokens.rs`（色板锚点、`ThemeTokens`）、`presets.rs`（三风味 × 明暗）、`shell` 子模块窗口常量。
+
+### 7.1 色板与语义（sRGB 锚点）
+
+| 角色 | 浅色示例 | 说明 |
+|------|----------|------|
+| 页面背景 | `#F9F9F9` | `SURFACE_PAGE_LIGHT` |
+| 卡片表面 | `#FFFFFF` | `SURFACE_CARD_LIGHT` |
+| 主文字 | `#1E1E1E` | `TEXT_PRIMARY_LIGHT` |
+| 次要文字 | `#595959`（相对卡片 ≥4.5:1） | `TEXT_MUTED_LIGHT` |
+| Fluent 品牌主色 | `#0078D4` | `BRAND_PRIMARY_FLUENT` |
+| Liquid 品牌主色 | `#0A84FF` | `BRAND_PRIMARY_LIQUID` |
+| 语义 成功 / 警告 / 危险 | `#2E7D32` / `#FBC02D` / `#D32F2F` | `SEMANTIC_*` |
+
+暗色方案见同模块 `*_DARK`、`BRAND_*_DARK`。用户自定义强调色通过设置合并进 `tokens_for_appearance(..., accent)`。
+
+### 7.2 间距（8pt 网格）
+
+静态表 `SPACING_8PT`：`xs=4, sm=8, md=12, lg=16, xl=24, xxl=32`（逻辑 px）。主内容区外边距基准为 **`ThemeTokens::content_spacing()`**（=`md`）。
+
+### 7.3 圆角与控件高度（按风味预设）
+
+`ThemeTokens` 内：`radius_sm/md/lg`、`control_height_primary`（约 36）、`control_height_secondary`（约 32）。卡片圆角 **`card_corner_radius()` = 12**；下载浮层与卡片一致 **`download_panel_corner_radius()`**。
+
+### 7.4 列表与虚拟化
+
+- 行高 **`list_row_height()` = 44**（与 `min_interactive_size` 默认一致，满足点击区域基线）。
+- 骨架行数 **`list_skeleton_rows()` = 5**。
+- 虚拟化阈值 **`list_virtualize_min_rows` = 28**（安装列表等）。
+
+### 7.5 动效（`MotionTokens`）
+
+默认 **`standard_ms = 200`**、**`emphasized_ms = 300`**，**easing** `cubic-bezier(0.2, 0, 0, 1)`（`easing_standard` 数组）。系统/环境「减少动效」时 GUI 可将时长置 0（见 `envr_platform::a11y`）。
+
+### 7.6 排版
+
+`typography()` 字号由基准 × **`content_text_scale`**（默认 1.0，GUI 可通过环境变量 **`ENVR_UI_SCALE`** 限制在约 0.85～1.35）得出 page_title / section / body 等 ramp。
+
+### 7.7 Shell 窗口（`shell` 模块）
+
+| 常量 | 值 |
+|------|-----|
+| `WINDOW_DEFAULT_W×H` | 1200 × 720 |
+| `WINDOW_MIN_W×H` | 960 × 600 |
+| `CONTENT_MAX_WIDTH` | 960 |
+| 侧栏宽度（方法） | `sidebar_width()` = **240** |
+
+### 7.8 下载浮层与持久化
+
+- 卡片右宽常量（与持久化公式一致）：**320px**（`envr-gui` `DOWNLOAD_PANEL_SHELL_W`）。
+- `settings.toml`：`gui.downloads_panel` 含 `visible` / `expanded` / `x` / `y` 及归一化 **`x_frac` / `y_frac`**（相对客户区减内边距与面板宽），便于 DPI 与窗口尺寸变化。
+
+### 7.9 无障碍相关环境变量
+
+| 变量 | 作用 |
+|------|------|
+| `ENVR_UI_SCALE` | 界面正文字号缩放 |
+| `ENVR_REDUCE_MOTION` / `ACCESSIBILITY_REDUCED_MOTION` | 强制减少动效 |
+| Windows | `SPI_GETUIEFFECTS` 关闭时视为减少动效（`envr_platform::a11y`） |
+
+### 7.10 空态 / 错误态呈现（GUI-070）
+
+- `envr-gui`：`view/empty_state.rs` 提供几何弱插图 + 图标 + 分级文案的 **`illustrative_block`** / **`illustrative_block_compact`**；仪表盘、运行时列表空、下载面板空态与全局错误条统一使用该模式，避免单行灰字。
+

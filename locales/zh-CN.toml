@@ -60,6 +60,30 @@ gui.settings.mirror.offline = "offline"
 gui.dashboard.refresh = "刷新"
 gui.dashboard.load_failed = "加载失败"
 gui.dashboard.no_data_yet = "尚无数据。点击「刷新」。"
+gui.empty.title.no_dashboard_data = "还没有仪表盘数据"
+gui.empty.body.no_dashboard_data = "连接本机上的 envr core 后，可在此查看运行时与健康摘要。"
+gui.empty.hint.no_dashboard_data = "请点击上方「刷新」。若首次使用，可先完成 CLI 初始化。"
+
+gui.empty.title.dashboard_error = "无法加载仪表盘"
+gui.empty.body.dashboard_error_prefix = "发生了错误："
+gui.empty.hint.dashboard_error = "请检查本机权限、网络与防病毒软件，然后重试刷新。"
+
+gui.empty.title.dashboard_refresh_failed = "刷新仪表盘失败"
+gui.empty.hint.dashboard_stale = "下方仍显示上次成功加载的数据。"
+
+gui.empty.title.no_installed_versions = "这里还没有已安装版本"
+gui.empty.body.no_installed_versions = "安装成功后，已安装列表会出现在此区域。"
+gui.empty.hint.no_installed_versions = "在上方输入版本 spec 并点击安装，或使用「刷新当前运行时」后再试。"
+
+gui.empty.title.no_download_jobs = "暂无下载任务"
+gui.empty.body.no_download_jobs = "从运行时页安装或使用演示下载时，进度会显示在面板中。"
+gui.empty.hint.no_download_jobs = "可折叠面板节省空间；长按标题条可拖拽停靠位置。"
+
+gui.empty.title.no_recent_activity = "暂无最近任务"
+gui.empty.body.no_recent_activity = "安装或下载完成后，这里会显示最近几条记录。"
+gui.empty.hint.no_recent_activity = "进行中的任务可在左下角「下载」面板查看。"
+
+gui.empty.hint.global_error = "若问题持续，请重试或导出日志以便反馈。"
 gui.dashboard.not_set = "(未设置)"
 gui.dashboard.runtimes_overview = "运行时概览"
 gui.dashboard.runtime_root = "运行时根目录"

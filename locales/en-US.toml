@@ -55,6 +55,30 @@ gui.settings.mirror.offline = "offline"
 gui.dashboard.refresh = "Refresh"
 gui.dashboard.load_failed = "Failed"
 gui.dashboard.no_data_yet = "No data yet. Click Refresh."
+gui.empty.title.no_dashboard_data = "No dashboard data yet"
+gui.empty.body.no_dashboard_data = "Once envr core responds on this machine, you'll see runtime and health summaries here."
+gui.empty.hint.no_dashboard_data = "Click Refresh above. On first use, finish CLI setup if needed."
+
+gui.empty.title.dashboard_error = "Couldn't load dashboard"
+gui.empty.body.dashboard_error_prefix = "Something went wrong:"
+gui.empty.hint.dashboard_error = "Check permissions, network, and security software, then try Refresh again."
+
+gui.empty.title.dashboard_refresh_failed = "Couldn't refresh the dashboard"
+gui.empty.hint.dashboard_stale = "Below is the last data that loaded successfully."
+
+gui.empty.title.no_installed_versions = "No installed versions here"
+gui.empty.body.no_installed_versions = "After you install a version, it will appear in this list."
+gui.empty.hint.no_installed_versions = "Enter a spec above and install, or Refresh the current runtime."
+
+gui.empty.title.no_download_jobs = "No download jobs"
+gui.empty.body.no_download_jobs = "Install from the Runtimes page or start a demo download to see progress here."
+gui.empty.hint.no_download_jobs = "Collapse the panel for more room; long-press the title bar to drag."
+
+gui.empty.title.no_recent_activity = "No recent activity"
+gui.empty.body.no_recent_activity = "After installs or downloads finish, recent entries show up here."
+gui.empty.hint.no_recent_activity = "In-progress work stays in the Downloads panel (bottom-left)."
+
+gui.empty.hint.global_error = "If this keeps happening, retry or export logs for support."
 gui.dashboard.not_set = "(none)"
 gui.dashboard.runtimes_overview = "Runtimes overview"
 gui.dashboard.runtime_root = "Runtime root"

@@ -12,6 +12,7 @@ use iced::{Alignment, Element, Length, Theme};
 use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
+use crate::view::empty_state::{EmptyTone, illustrative_block};
 use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
 
 /// Fixed list viewport height (`tasks_gui.md` GUI-021); keeps layout stable vs. skeleton rows.
@@ -343,15 +344,31 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
             .into()
     } else if state.installed.is_empty() {
+        let title = envr_core::i18n::tr_key(
+            "gui.empty.title.no_installed_versions",
+            "这里还没有已安装版本",
+            "No installed versions here",
+        );
+        let body = envr_core::i18n::tr_key(
+            "gui.empty.body.no_installed_versions",
+            "安装成功后，已安装列表会出现在此区域。",
+            "After you install a version, it will appear in this list.",
+        );
+        let hint = Some(envr_core::i18n::tr_key(
+            "gui.empty.hint.no_installed_versions",
+            "在上方输入版本 spec 并点击安装，或使用「刷新当前运行时」后再试。",
+            "Enter a spec above and install, or Refresh the current runtime.",
+        ));
         container(
-            container(
-                text(envr_core::i18n::tr_key(
-                    "gui.runtime.none_installed",
-                    "暂无已安装版本（点击刷新）。",
-                    "(No installed versions. Click Refresh.)",
-                ))
-                .size(ty.body_small),
-            )
+            container(illustrative_block(
+                tokens,
+                EmptyTone::Neutral,
+                Lucide::Package,
+                36.0,
+                title,
+                body,
+                hint,
+            ))
             .align_x(Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
             .width(Length::Fill)

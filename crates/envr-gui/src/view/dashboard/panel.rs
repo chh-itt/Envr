@@ -9,6 +9,7 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
 use crate::view::downloads::{DownloadPanelState, JobState};
+use crate::view::empty_state::{EmptyTone, illustrative_block, illustrative_block_compact};
 use crate::widget_styles::{ButtonVariant, button_style, card_container_style};
 
 pub fn dashboard_view(
@@ -54,39 +55,98 @@ pub fn dashboard_view(
     ]
     .spacing(tokens.page_title_gap());
 
-    if let Some(err) = state.last_error.as_deref() {
-        col = col.push(text(format!(
-            "{}: {err}",
-            envr_core::i18n::tr_key("gui.dashboard.load_failed", "加载失败", "Failed")
-        )));
+    if let Some(data) = state.data.as_ref() {
+        if let Some(err) = state.last_error.as_deref() {
+            let title = envr_core::i18n::tr_key(
+                "gui.empty.title.dashboard_refresh_failed",
+                "刷新仪表盘失败",
+                "Couldn't refresh the dashboard",
+            );
+            let body = format!("{err}");
+            let hint = Some(envr_core::i18n::tr_key(
+                "gui.empty.hint.dashboard_stale",
+                "下方仍显示上次成功加载的数据。",
+                "Below is the last data that loaded successfully.",
+            ));
+            col = col.push(illustrative_block(
+                tokens,
+                EmptyTone::Warning,
+                Lucide::CircleAlert,
+                36.0,
+                title,
+                body,
+                hint,
+            ));
+        }
+        col = col
+            .push(runtime_overview_card(&data.rows, tokens))
+            .push(doctor_card(
+                &data.runtime_root,
+                &data.shims_dir,
+                data.shims_empty,
+                &data.issues,
+                &data.recommendations,
+                tokens,
+            ))
+            .push(recent_jobs_card(downloads, tokens))
+            .push(recommended_actions_card(tokens));
+        return col.into();
     }
 
-    let data = match state.data.as_ref() {
-        Some(d) => d,
-        None => {
-            col = col.push(text(envr_core::i18n::tr_key(
-                "gui.dashboard.no_data_yet",
-                "尚无数据。点击「刷新」。",
-                "No data yet. Click Refresh.",
-            )));
-            return col.into();
-        }
-    };
-
-    col = col
-        .push(runtime_overview_card(&data.rows, tokens))
-        .push(doctor_card(
-            &data.runtime_root,
-            &data.shims_dir,
-            data.shims_empty,
-            &data.issues,
-            &data.recommendations,
+    if let Some(err) = state.last_error.as_deref() {
+        let title = envr_core::i18n::tr_key(
+            "gui.empty.title.dashboard_error",
+            "无法加载仪表盘",
+            "Couldn't load dashboard",
+        );
+        let prefix = envr_core::i18n::tr_key(
+            "gui.empty.body.dashboard_error_prefix",
+            "发生了错误：",
+            "Something went wrong:",
+        );
+        let body = format!("{prefix} {err}");
+        let hint = Some(envr_core::i18n::tr_key(
+            "gui.empty.hint.dashboard_error",
+            "请检查本机权限、网络与防病毒软件，然后重试刷新。",
+            "Check permissions, network, and security software, then try Refresh again.",
+        ));
+        col = col.push(illustrative_block(
             tokens,
-        ))
-        .push(recent_jobs_card(downloads, tokens))
-        .push(recommended_actions_card(tokens));
+            EmptyTone::Danger,
+            Lucide::CircleAlert,
+            40.0,
+            title,
+            body,
+            hint,
+        ));
+        return col.into();
+    }
 
-    col.into()
+    let title = envr_core::i18n::tr_key(
+        "gui.empty.title.no_dashboard_data",
+        "还没有仪表盘数据",
+        "No dashboard data yet",
+    );
+    let body = envr_core::i18n::tr_key(
+        "gui.empty.body.no_dashboard_data",
+        "连接本机上的 envr core 后，可在此查看运行时与健康摘要。",
+        "Once envr core responds on this machine, you'll see runtime and health summaries here.",
+    );
+    let hint = Some(envr_core::i18n::tr_key(
+        "gui.empty.hint.no_dashboard_data",
+        "请点击上方「刷新」。若首次使用，可先完成 CLI 初始化。",
+        "Click Refresh above. On first use, finish CLI setup if needed.",
+    ));
+    col = col.push(illustrative_block(
+        tokens,
+        EmptyTone::Neutral,
+        Lucide::LayoutDashboard,
+        40.0,
+        title,
+        body,
+        hint,
+    ));
+    return col.into();
 }
 
 fn card(
@@ -200,11 +260,30 @@ fn recent_jobs_card(
     let sp = tokens.space();
     let mut body = column![].spacing(sp.xs + 2);
     if downloads.jobs.is_empty() {
-        body = body.push(text(envr_core::i18n::tr_key(
-            "gui.dashboard.no_recent_jobs",
-            "暂无下载/安装任务。",
-            "No download/install jobs yet.",
-        )));
+        let title = envr_core::i18n::tr_key(
+            "gui.empty.title.no_recent_activity",
+            "暂无最近任务",
+            "No recent activity",
+        );
+        let sub = envr_core::i18n::tr_key(
+            "gui.empty.body.no_recent_activity",
+            "安装或下载完成后，这里会显示最近几条记录。",
+            "After installs or downloads finish, recent entries show up here.",
+        );
+        let hint = Some(envr_core::i18n::tr_key(
+            "gui.empty.hint.no_recent_activity",
+            "进行中的任务可在左下角「下载」面板查看。",
+            "In-progress work stays in the Downloads panel (bottom-left).",
+        ));
+        body = body.push(illustrative_block_compact(
+            tokens,
+            EmptyTone::Neutral,
+            Lucide::Download,
+            30.0,
+            title,
+            sub,
+            hint,
+        ));
     } else {
         for j in downloads.jobs.iter().rev().take(5) {
             let st = match j.state {

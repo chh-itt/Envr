@@ -1,5 +1,6 @@
 pub mod dashboard;
 pub mod downloads;
+pub mod empty_state;
 pub mod env_center;
 pub mod runtime_nav;
 pub mod runtime_settings;
