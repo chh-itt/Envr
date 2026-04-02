@@ -50,9 +50,13 @@ pub fn floating_download_panel(
         }))
         .on_press(Message::Download(DownloadMsg::ToggleExpand))
         .padding([4, 10]),
-        button(text(envr_core::i18n::tr_key("gui.action.hide", "隐藏", "Hide")))
-            .on_press(Message::Download(DownloadMsg::ToggleVisible))
-            .padding([4, 10]),
+        button(text(envr_core::i18n::tr_key(
+            "gui.action.hide",
+            "隐藏",
+            "Hide"
+        )))
+        .on_press(Message::Download(DownloadMsg::ToggleVisible))
+        .padding([4, 10]),
     ]
     .spacing(10)
     .align_y(Alignment::Center);

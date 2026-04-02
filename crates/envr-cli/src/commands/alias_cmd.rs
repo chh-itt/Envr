@@ -26,11 +26,7 @@ pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
                     if file.aliases.is_empty() {
                         println!(
                             "{}",
-                            envr_core::i18n::tr_key(
-                                "cli.alias.none",
-                                "（无别名）",
-                                "(no aliases)",
-                            )
+                            envr_core::i18n::tr_key("cli.alias.none", "（无别名）", "(no aliases)",)
                         );
                         return;
                     }

@@ -75,11 +75,9 @@ pub fn run(
                     "命令行覆盖",
                     "CLI override",
                 ),
-                "project" => envr_core::i18n::tr_key(
-                    "cli.resolve.source.project",
-                    "项目",
-                    "project",
-                ),
+                "project" => {
+                    envr_core::i18n::tr_key("cli.resolve.source.project", "项目", "project")
+                }
                 "global_current" => envr_core::i18n::tr_key(
                     "cli.resolve.source.global_current",
                     "全局 current",

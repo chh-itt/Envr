@@ -50,20 +50,14 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
         ),
         JobState::Failed => {
             let detail = job.last_error.clone().unwrap_or_else(|| {
-                envr_core::i18n::tr_key(
-                    "gui.downloads.unknown_error",
-                    "未知错误",
-                    "unknown error",
-                )
+                envr_core::i18n::tr_key("gui.downloads.unknown_error", "未知错误", "unknown error")
             });
             format!(
                 "{}: {detail}",
                 envr_core::i18n::tr_key("gui.job.failed", "失败", "Failed"),
             )
         }
-        JobState::Cancelled => {
-            envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
-        }
+        JobState::Cancelled => envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled"),
     }
 }
 

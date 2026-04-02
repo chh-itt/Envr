@@ -64,17 +64,13 @@ pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
 fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {
     use envr_error::EnvrError;
     let exe = std::env::current_exe().map_err(EnvrError::from)?;
-    let dir = exe
-        .parent()
-        .ok_or_else(|| {
-            EnvrError::Runtime(
-                envr_core::i18n::tr_key(
-                    "cli.err.shim_exe_no_parent",
-                    "current_exe 没有父目录",
-                    "current_exe has no parent directory",
-                ),
-            )
-        })?;
+    let dir = exe.parent().ok_or_else(|| {
+        EnvrError::Runtime(envr_core::i18n::tr_key(
+            "cli.err.shim_exe_no_parent",
+            "current_exe 没有父目录",
+            "current_exe has no parent directory",
+        ))
+    })?;
 
     #[cfg(windows)]
     let candidates = ["envr-shim.exe", "envr-shim"];

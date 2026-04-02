@@ -49,11 +49,7 @@ pub fn run(
     let data = serde_json::json!({ "runtimes": runtimes });
 
     output::emit_ok(g, "list_remote", data, || {
-        let none_line = envr_core::i18n::tr_key(
-            "cli.list.indent_none",
-            "  （无）",
-            "  (none)",
-        );
+        let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
         for (kind, versions) in rows {
             println!(
                 "{}",

@@ -83,7 +83,12 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     };
 
     let mut mode_row = row![
-        text(envr_core::i18n::tr_key("gui.runtime.mode", "模式", "Mode")).size(14)
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.mode_label",
+            "模式",
+            "Mode"
+        ))
+        .size(14)
     ]
     .spacing(8);
     for (m, key, zh, en) in [
@@ -133,9 +138,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             "Install",
         )))
         .on_press_maybe(
-            (!busy
-                && !input.is_empty()
-                && (state.mode == VersionMode::Smart || !installed_match))
+            (!busy && !input.is_empty() && (state.mode == VersionMode::Smart || !installed_match))
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
         )
         .padding([8, 14]),
@@ -149,10 +152,15 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
         )
         .padding([8, 14]),
-        button(text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")))
+        button(text(envr_core::i18n::tr_key(
+            "gui.action.use",
+            "切换",
+            "Use"
+        )))
         .on_press_maybe(
-            (!busy && !input.is_empty() && installed_match && !current_match)
-                .then_some(Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string()))),
+            (!busy && !input.is_empty() && installed_match && !current_match).then_some(
+                Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string()))
+            ),
         )
         .padding([8, 14]),
     ]
@@ -187,8 +195,12 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
 
             let row = row![
                 text(format!("{} {}", kind_label(state.kind), ver.0)).width(Length::Fill),
-                button(text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")))
-                    .on_press_maybe(use_msg),
+                button(text(envr_core::i18n::tr_key(
+                    "gui.action.use",
+                    "切换",
+                    "Use"
+                )))
+                .on_press_maybe(use_msg),
                 button(text(envr_core::i18n::tr_key(
                     "gui.action.uninstall",
                     "卸载",
@@ -229,7 +241,12 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .size(16),
         mode_row,
         text(cur_line).size(14),
-        text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")).size(16),
+        text(envr_core::i18n::tr_key(
+            "gui.action.install",
+            "安装",
+            "Install"
+        ))
+        .size(16),
         install_row,
         text(envr_core::i18n::tr_key(
             "gui.runtime.installed",
@@ -243,4 +260,3 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
 
     body.into()
 }
-

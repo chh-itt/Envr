@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[[test]]
+name = "i18n_gui_tr_key"
+path = "tests/i18n/gui_tr_key.rs"
+
 [dependencies]
 envr-config = { path = "../envr-config" }
 envr-error = { path = "../envr-error" }

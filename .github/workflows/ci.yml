@@ -67,6 +67,9 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: i18n lint (T914)
+        run: cargo run -p envr-i18n-lint --locked
+
       - name: cargo test
         run: cargo test --workspace --all-targets
 

@@ -61,11 +61,7 @@ pub fn run(g: &GlobalArgs, path: PathBuf, force: bool) -> i32 {
             println!(
                 "{}",
                 fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.init.wrote",
-                        "已写入 {path}",
-                        "wrote {path}",
-                    ),
+                    &envr_core::i18n::tr_key("cli.init.wrote", "已写入 {path}", "wrote {path}",),
                     &[("path", &target.display().to_string())],
                 )
             );

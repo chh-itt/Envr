@@ -157,13 +157,11 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 "触发全局错误示例",
                 "Trigger global error (demo)",
             )))
-            .on_press(Message::ReportError(
-                envr_core::i18n::tr_key(
-                    "gui.about.error_demo",
-                    "示例：后台任务失败时可经此通道提示用户。",
-                    "Demo: background task failures can be surfaced here.",
-                )
-            )),
+            .on_press(Message::ReportError(envr_core::i18n::tr_key(
+                "gui.about.error_demo",
+                "示例：后台任务失败时可经此通道提示用户。",
+                "Demo: background task failures can be surfaced here.",
+            ))),
         );
     }
 
@@ -175,21 +173,17 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
 
 fn flavor_label_i18n(flavor: UiFlavor) -> String {
     match flavor {
-        UiFlavor::Fluent => envr_core::i18n::tr_key(
-            "gui.flavor.fluent",
-            flavor.label_zh(),
-            flavor.label_en(),
-        ),
+        UiFlavor::Fluent => {
+            envr_core::i18n::tr_key("gui.flavor.fluent", flavor.label_zh(), flavor.label_en())
+        }
         UiFlavor::LiquidGlass => envr_core::i18n::tr_key(
             "gui.flavor.liquid_glass",
             flavor.label_zh(),
             flavor.label_en(),
         ),
-        UiFlavor::Material3 => envr_core::i18n::tr_key(
-            "gui.flavor.material3",
-            flavor.label_zh(),
-            flavor.label_en(),
-        ),
+        UiFlavor::Material3 => {
+            envr_core::i18n::tr_key("gui.flavor.material3", flavor.label_zh(), flavor.label_en())
+        }
     }
 }
 
@@ -197,8 +191,8 @@ fn flavor_picker_row(active: UiFlavor) -> Element<'static, Message> {
     let mut r = row![].spacing(8);
     for flavor in UiFlavor::ALL {
         let b = button(text(flavor_label_i18n(flavor)))
-        .on_press(Message::SetFlavor(flavor))
-        .padding([8, 10]);
+            .on_press(Message::SetFlavor(flavor))
+            .padding([8, 10]);
         let b = if flavor == active {
             b.style(button::primary)
         } else {

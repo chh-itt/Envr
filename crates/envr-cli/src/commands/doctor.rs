@@ -221,11 +221,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
                                 "{kind}：已安装 {count} 个版本，当前 = {current}",
                                 "{kind}: {count} installed, current = {current}",
                             ),
-                            &[
-                                ("kind", kind),
-                                ("count", &ic.to_string()),
-                                ("current", v),
-                            ],
+                            &[("kind", kind), ("count", &ic.to_string()), ("current", v),],
                         )
                     ),
                     None => println!(
@@ -248,11 +244,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
             if !report.issues.is_empty() {
                 println!(
                     "\n{}",
-                    envr_core::i18n::tr_key(
-                        "cli.doctor.issues_heading",
-                        "问题：",
-                        "Issues:",
-                    )
+                    envr_core::i18n::tr_key("cli.doctor.issues_heading", "问题：", "Issues:",)
                 );
                 for i in &report.issues {
                     println!("  - {i}");
@@ -309,11 +301,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
                                 "{kind}：已安装 {count} 个版本，当前 = {current}",
                                 "{kind}: {count} installed, current = {current}",
                             ),
-                            &[
-                                ("kind", kind),
-                                ("count", &ic.to_string()),
-                                ("current", v),
-                            ],
+                            &[("kind", kind), ("count", &ic.to_string()), ("current", v),],
                         )
                     ),
                     None => println!(
@@ -336,11 +324,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService) -> i32 {
             if !report.issues.is_empty() {
                 println!(
                     "\n{}",
-                    envr_core::i18n::tr_key(
-                        "cli.doctor.issues_heading",
-                        "问题：",
-                        "Issues:",
-                    )
+                    envr_core::i18n::tr_key("cli.doctor.issues_heading", "问题：", "Issues:",)
                 );
                 for i in &report.issues {
                     println!("  - {i}");

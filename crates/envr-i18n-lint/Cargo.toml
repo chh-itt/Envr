@@ -1,0 +1,15 @@
+[package]
+name = "envr-i18n-lint"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+publish = false
+description = "Workspace i18n checks: tr_key coverage, locale parity, no legacy tr() in GUI/CLI."
+
+[[bin]]
+name = "envr-i18n-lint"
+path = "src/main.rs"
+
+[dependencies]
+regex = { workspace = true }
+toml = { workspace = true }

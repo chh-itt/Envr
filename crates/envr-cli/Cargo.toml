@@ -9,6 +9,10 @@ autobins = false
 name = "envr"
 path = "src/main.rs"
 
+[[test]]
+name = "i18n_cli_help_locale"
+path = "tests/i18n/cli_help_locale.rs"
+
 [dependencies]
 clap = { workspace = true }
 envr-config = { path = "../envr-config" }

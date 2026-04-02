@@ -74,7 +74,9 @@ fn patch_subcommand(cmd: &mut Command) {
                     "安装运行时版本",
                     "Install a runtime version",
                 ))
-                .mut_arg("lang", |a| a.help(tr("cli.help.arg.lang", "语言", "Language")))
+                .mut_arg("lang", |a| {
+                    a.help(tr("cli.help.arg.lang", "语言", "Language"))
+                })
                 .mut_arg("runtime_version", |a| {
                     a.help(tr("cli.help.arg.version", "版本", "Version"))
                 });
@@ -87,36 +89,44 @@ fn patch_subcommand(cmd: &mut Command) {
                     "为当前 shell 选择运行时",
                     "Select a runtime for the current shell",
                 ))
-                .mut_arg("lang", |a| a.help(tr("cli.help.arg.lang", "语言", "Language")))
+                .mut_arg("lang", |a| {
+                    a.help(tr("cli.help.arg.lang", "语言", "Language"))
+                })
                 .mut_arg("runtime_version", |a| {
                     a.help(tr("cli.help.arg.version", "版本", "Version"))
                 });
         }
         "list" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.list",
-                "列出已安装的运行时",
-                "List installed runtimes",
-            )).mut_arg("lang", |a| {
-                a.help(tr(
-                    "cli.help.arg.lang_optional",
-                    "语言（可选）",
-                    "Language (optional)",
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.list",
+                    "列出已安装的运行时",
+                    "List installed runtimes",
                 ))
-            });
+                .mut_arg("lang", |a| {
+                    a.help(tr(
+                        "cli.help.arg.lang_optional",
+                        "语言（可选）",
+                        "Language (optional)",
+                    ))
+                });
         }
         "current" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.current",
-                "显示当前激活的运行时版本",
-                "Show the active runtime version",
-            )).mut_arg("lang", |a| {
-                a.help(tr(
-                    "cli.help.arg.lang_optional",
-                    "语言（可选）",
-                    "Language (optional)",
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.current",
+                    "显示当前激活的运行时版本",
+                    "Show the active runtime version",
                 ))
-            });
+                .mut_arg("lang", |a| {
+                    a.help(tr(
+                        "cli.help.arg.lang_optional",
+                        "语言（可选）",
+                        "Language (optional)",
+                    ))
+                });
         }
         "uninstall" => {
             *cmd = cmd
@@ -126,17 +136,22 @@ fn patch_subcommand(cmd: &mut Command) {
                     "卸载运行时版本",
                     "Uninstall a runtime version",
                 ))
-                .mut_arg("lang", |a| a.help(tr("cli.help.arg.lang", "语言", "Language")))
+                .mut_arg("lang", |a| {
+                    a.help(tr("cli.help.arg.lang", "语言", "Language"))
+                })
                 .mut_arg("runtime_version", |a| {
                     a.help(tr("cli.help.arg.version", "版本", "Version"))
                 });
         }
         "which" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.which",
-                "定位 shim 或可执行文件",
-                "Locate a shim or executable",
-            )).mut_arg("name", |a| a.help(tr("cli.help.arg.name", "名称", "Name")));
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.which",
+                    "定位 shim 或可执行文件",
+                    "Locate a shim or executable",
+                ))
+                .mut_arg("name", |a| a.help(tr("cli.help.arg.name", "名称", "Name")));
         }
         "remote" => {
             *cmd = cmd
@@ -170,7 +185,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "diagnostics" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.diagnostics",
+                "cli.help.cmd.diagnostics_topic",
                 "导出诊断 zip（doctor JSON、环境摘要、近期日志）",
                 "Export a diagnostics zip for bug reports (doctor JSON, env summary, recent logs)",
             ));
@@ -328,11 +343,7 @@ fn patch_subcommand(cmd: &mut Command) {
                     "Print shell snippets setting PATH / JAVA_HOME / project env (merged runtimes)",
                 ))
                 .mut_arg("path", |a| {
-                    a.help(tr(
-                        "cli.help.arg.workdir",
-                        "工作目录",
-                        "Working directory",
-                    ))
+                    a.help(tr("cli.help.arg.workdir", "工作目录", "Working directory"))
                 })
                 .mut_arg("profile", |a| {
                     a.help(tr(
@@ -394,7 +405,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "profile" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.profile",
+                "cli.help.cmd.profile_topic",
                 "查看 `[profiles.*]`（用 ENVR_PROFILE 或 exec/run 的 `--profile` 激活）",
                 "Inspect `[profiles.*]` blocks (use `ENVR_PROFILE` or `exec`/`run` `--profile` to activate)",
             ));
@@ -404,7 +415,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "config" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.config",
+                "cli.help.cmd.config_topic",
                 "查看用户设置（settings.toml）",
                 "Inspect user settings (`settings.toml`)",
             ));
@@ -414,7 +425,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "alias" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.alias",
+                "cli.help.cmd.alias_topic",
                 "管理 CLI 别名（config/aliases.toml）",
                 "Manage CLI aliases (`config/aliases.toml`)",
             ));
@@ -446,21 +457,24 @@ fn patch_subcommand(cmd: &mut Command) {
                 });
         }
         "update" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.update",
-                "显示 CLI 版本与更新说明",
-                "Show CLI version and update notes",
-            )).mut_arg("check", |a| {
-                a.help(tr(
-                    "cli.help.arg.check_update",
-                    "预留：检查新版本",
-                    "Reserved for a future release check",
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.update",
+                    "显示 CLI 版本与更新说明",
+                    "Show CLI version and update notes",
                 ))
-            });
+                .mut_arg("check", |a| {
+                    a.help(tr(
+                        "cli.help.arg.check_update",
+                        "预留：检查新版本",
+                        "Reserved for a future release check",
+                    ))
+                });
         }
         "shim" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.shim",
+                "cli.help.cmd.shim_topic",
                 "管理 `{runtime_root}/shims` 下的 shim",
                 "Manage shims under `{runtime_root}/shims`",
             ));
@@ -470,7 +484,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "cache" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.cache",
+                "cli.help.cmd.cache_topic",
                 "管理 `{runtime_root}/cache` 下的下载缓存",
                 "Manage envr download caches under `{runtime_root}/cache`",
             ));
@@ -504,17 +518,16 @@ fn patch_diagnostics_sub(cmd: &mut Command) {
 fn patch_profile_sub(cmd: &mut Command) {
     match cmd.get_name() {
         "list" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.profile.list",
-                "列出合并项目配置中的 profile 名",
-                "List profile names defined in merged project config",
-            )).mut_arg("path", |a| {
-                a.help(tr(
-                    "cli.help.arg.workdir",
-                    "工作目录",
-                    "Working directory",
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.profile.list",
+                    "列出合并项目配置中的 profile 名",
+                    "List profile names defined in merged project config",
                 ))
-            });
+                .mut_arg("path", |a| {
+                    a.help(tr("cli.help.arg.workdir", "工作目录", "Working directory"))
+                });
         }
         "show" => {
             *cmd = cmd
@@ -525,14 +538,14 @@ fn patch_profile_sub(cmd: &mut Command) {
                     "Show runtimes and env for a named profile",
                 ))
                 .mut_arg("name", |a| {
-                    a.help(tr("cli.help.arg.profile_name", "Profile 名", "Profile name"))
+                    a.help(tr(
+                        "cli.help.arg.profile_name",
+                        "Profile 名",
+                        "Profile name",
+                    ))
                 })
                 .mut_arg("path", |a| {
-                    a.help(tr(
-                        "cli.help.arg.workdir",
-                        "工作目录",
-                        "Working directory",
-                    ))
+                    a.help(tr("cli.help.arg.workdir", "工作目录", "Working directory"))
                 });
         }
         _ => {}
@@ -607,11 +620,9 @@ fn patch_cache_sub(cmd: &mut Command) {
 fn patch_alias_sub(cmd: &mut Command) {
     match cmd.get_name() {
         "list" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.alias.list",
-                "列出别名",
-                "List aliases",
-            ));
+            *cmd = cmd
+                .clone()
+                .about(tr("cli.help.cmd.alias.list", "列出别名", "List aliases"));
         }
         "add" => {
             *cmd = cmd
@@ -629,13 +640,16 @@ fn patch_alias_sub(cmd: &mut Command) {
                 });
         }
         "remove" => {
-            *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.alias.remove",
-                "删除别名",
-                "Remove an alias",
-            )).mut_arg("name", |a| {
-                a.help(tr("cli.help.arg.alias_name", "别名", "Alias name"))
-            });
+            *cmd = cmd
+                .clone()
+                .about(tr(
+                    "cli.help.cmd.alias.remove",
+                    "删除别名",
+                    "Remove an alias",
+                ))
+                .mut_arg("name", |a| {
+                    a.help(tr("cli.help.arg.alias_name", "别名", "Alias name"))
+                });
         }
         _ => {}
     }
@@ -650,8 +664,14 @@ mod tests {
     fn localized_command_matches_cli_structure() {
         let a = Cli::command();
         let b = localized_command();
-        let na: Vec<_> = a.get_subcommands().map(|c| c.get_name().to_string()).collect();
-        let nb: Vec<_> = b.get_subcommands().map(|c| c.get_name().to_string()).collect();
+        let na: Vec<_> = a
+            .get_subcommands()
+            .map(|c| c.get_name().to_string())
+            .collect();
+        let nb: Vec<_> = b
+            .get_subcommands()
+            .map(|c| c.get_name().to_string())
+            .collect();
         assert_eq!(na, nb);
     }
 }

@@ -1055,29 +1055,29 @@
     - 验收结果：两文档可独立评审；与 T910 规范 §2/§8 一致。
 
 ### T914 i18n 完整性自动检查
-- [ ] **T914：建立 i18n lint（缺失 key/未使用 key/硬编码文本）** #i18n #quality
+- [x] **T914：建立 i18n lint（缺失 key/未使用 key/硬编码文本）** #i18n #quality
   - **描述**：在 CI 中加入自动检查，阻止新增硬编码文案。
   - **依赖**：T911,T912,T003
   - **输入文档**：i18n 规范
   - **输出文件**：CI 检查脚本与规则
   - **验收**：CI 能自动拦截 i18n 违规提交。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 workspace crate `crates/envr-i18n-lint`（`cargo run -p envr-i18n-lint`）：解析 `locales/zh-CN.toml` 与 `en-US.toml` 的 `[messages]`（与 `envr-core` 相同的展平规则）、校验 zh/en key 集合一致；扫描 `envr-gui` / `envr-cli` / `envr-core` 源码中的 `tr_key("…"`、`cli_help.rs` 内 `tr("…"`，以及字面量 `cli.*`/`gui.*`（覆盖 `tr_key(key, …)` 元组）；代码引用 key 须在两侧 locale 均存在；`envr-gui`/`envr-cli` 禁止 `envr_core::i18n::tr(`；以 `__` 开头的 key 视为测试占位不报错；未引用 locale key 仅打印提示。CI `test` job 增加 `cargo run -p envr-i18n-lint --locked`。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：`locales/*` 中曾存在 TOML 点号键与嵌套冲突（如 `gui.runtime.mode` 与 `gui.runtime.mode.smart`），已改为 `mode_label` / `font_section` / `theme_section`；`cli.help.cmd.*` 与子命令 about 冲突处改为 `*_topic` key 并与 `cli_help.rs` 对齐；补全 `cli_help.rs` 全部 `tr` key 的中英词条。
+    - 验收结果：本地 `cargo run -p envr-i18n-lint --locked` 通过；与 CI 步骤一致。
 
 ### T915 多语言回归测试
-- [ ] **T915：增加中英文全链路回归测试（GUI + CLI）** #i18n #test
+- [x] **T915：增加中英文全链路回归测试（GUI + CLI）** #i18n #test
   - **描述**：验证不同语言下功能一致、文本完整、无截断和布局溢出。
   - **依赖**：T911,T912,T914
   - **输入文档**：回归矩阵
-  - **输出文件**：`tests/i18n/*`
+  - **输出文件**：`tests/i18n/*`（实现为 `crates/envr-cli/tests/i18n/` 与 `crates/envr-core/tests/i18n/`，workspace 无根包时由 crate 内 `[[test]]` 挂载）
   - **验收**：中英文模式下核心流程全部通过，UI 文案无明显显示缺陷。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：CLI — `envr-cli` 集成测试 `tests/i18n/cli_help_locale.rs`：`ENVR_ROOT` 指向临时目录，`config/settings.toml` 设 `zh_cn` / `en_us`，断言 `envr --help` 根 about 分别为 `locales` 中的中文/英文。GUI — `envr-core` 集成测试 `tests/i18n/gui_tr_key.rs`：在无 headless iced 的前提下对 `gui.route.*` 调用 `set` + `tr_key`，断言与嵌入的 `locales/*` 一致。全量布局/截断仍以人工/后续 E2E 为准。
     - 相关提交/PR：
     - 遇到的问题/决策：
-    - 验收结果：
+    - 验收结果：`cargo test -p envr-cli --test i18n_cli_help_locale`、`cargo test -p envr-core --test i18n_gui_tr_key` 通过。

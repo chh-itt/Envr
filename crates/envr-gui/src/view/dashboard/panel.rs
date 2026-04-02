@@ -89,13 +89,9 @@ fn runtime_overview_card(rows: &[RuntimeRow], tokens: ThemeTokens) -> Element<'s
     let mut list = column![].spacing(6);
     for r in rows {
         let label = kind_label(r.kind);
-        let cur = r
-            .current
-            .as_ref()
-            .map(|v| v.clone())
-            .unwrap_or_else(|| {
-                envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
-            });
+        let cur = r.current.clone().unwrap_or_else(|| {
+            envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
+        });
         list = list.push(text(format!("{label}: {} · {}", r.installed, cur)).size(13));
     }
     card(
@@ -120,11 +116,7 @@ fn doctor_card(
     let mut body = column![
         text(format!(
             "{}: {runtime_root}",
-            envr_core::i18n::tr_key(
-                "gui.dashboard.runtime_root",
-                "运行时根目录",
-                "Runtime root",
-            )
+            envr_core::i18n::tr_key("gui.dashboard.runtime_root", "运行时根目录", "Runtime root",)
         ))
         .size(13)
     ]
@@ -170,11 +162,7 @@ fn doctor_card(
     }
 
     card(
-        envr_core::i18n::tr_key(
-            "gui.dashboard.health_card_title",
-            "健康检查",
-            "Health",
-        ),
+        envr_core::i18n::tr_key("gui.dashboard.health_card_title", "健康检查", "Health"),
         body.into(),
         tokens,
     )
@@ -194,7 +182,9 @@ fn recent_jobs_card(
     } else {
         for j in downloads.jobs.iter().rev().take(5) {
             let st = match j.state {
-                JobState::Running => envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
+                JobState::Running => {
+                    envr_core::i18n::tr_key("gui.job.running", "进行中", "Running")
+                }
                 JobState::Done => envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
                 JobState::Failed => envr_core::i18n::tr_key("gui.job.failed", "失败", "Failed"),
                 JobState::Cancelled => {

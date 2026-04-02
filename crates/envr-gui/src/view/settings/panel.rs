@@ -109,7 +109,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .on_toggle(|v| Message::Settings(SettingsMsg::SetCleanup(v)));
 
     let mut font_mode_row = row![
-        text(envr_core::i18n::tr_key("gui.settings.font", "字体", "Font")).size(15)
+        text(envr_core::i18n::tr_key(
+            "gui.settings.font_section",
+            "字体",
+            "Font"
+        ))
+        .size(15)
     ]
     .spacing(8);
     for (mode, key, zh, en) in [
@@ -191,7 +196,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     };
 
     let mut theme_mode_row = row![
-        text(envr_core::i18n::tr_key("gui.settings.theme", "主题", "Theme")).size(15)
+        text(envr_core::i18n::tr_key(
+            "gui.settings.theme_section",
+            "主题",
+            "Theme"
+        ))
+        .size(15)
     ]
     .spacing(8);
     for (mode, key, zh, en) in [
@@ -201,7 +211,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "跟随系统",
             "Follow system",
         ),
-        (ThemeMode::Light, "gui.settings.theme.light", "浅色", "Light"),
+        (
+            ThemeMode::Light,
+            "gui.settings.theme.light",
+            "浅色",
+            "Light",
+        ),
         (ThemeMode::Dark, "gui.settings.theme.dark", "深色", "Dark"),
     ] {
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
@@ -273,7 +288,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     .spacing(10);
 
     let mut locale_row = row![
-        text(envr_core::i18n::tr_key("gui.settings.language", "语言", "Language")).size(15)
+        text(envr_core::i18n::tr_key(
+            "gui.settings.language",
+            "语言",
+            "Language"
+        ))
+        .size(15)
     ]
     .spacing(8);
     for (mode, key, zh, en) in [
@@ -308,7 +328,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     }
 
     column![
-        text(envr_core::i18n::tr_key("gui.settings.title", "设置", "Settings")).size(20),
+        text(envr_core::i18n::tr_key(
+            "gui.settings.title",
+            "设置",
+            "Settings"
+        ))
+        .size(20),
         env_note,
         rr,
         mirror_row,

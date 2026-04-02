@@ -59,9 +59,8 @@ pub fn runtime_settings_view(
 
     match active_kind {
         RuntimeKind::Go => {
-            body = body.push(
-                text(envr_core::i18n::tr_key("gui.runtime.lang.go", "Go", "Go")).size(16),
-            );
+            body = body
+                .push(text(envr_core::i18n::tr_key("gui.runtime.lang.go", "Go", "Go")).size(16));
             body = body.push(
                 text_input("runtime.go.goproxy", &state.go_goproxy_draft)
                     .on_input(|s| Message::RuntimeSettings(RuntimeSettingsMsg::GoGoproxyEdit(s)))
@@ -79,7 +78,12 @@ pub fn runtime_settings_view(
         }
         RuntimeKind::Bun => {
             body = body.push(
-                text(envr_core::i18n::tr_key("gui.runtime.lang.bun", "Bun", "Bun")).size(16),
+                text(envr_core::i18n::tr_key(
+                    "gui.runtime.lang.bun",
+                    "Bun",
+                    "Bun",
+                ))
+                .size(16),
             );
             body = body.push(
                 text_input(
@@ -114,9 +118,13 @@ pub fn runtime_settings_view(
     };
 
     let actions = row![
-        button(text(envr_core::i18n::tr_key("gui.action.save", "保存", "Save")))
-            .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::Save))
-            .padding([8, 12]),
+        button(text(envr_core::i18n::tr_key(
+            "gui.action.save",
+            "保存",
+            "Save"
+        )))
+        .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::Save))
+        .padding([8, 12]),
         button(text(envr_core::i18n::tr_key(
             "gui.settings.reload_disk",
             "从磁盘重新加载",

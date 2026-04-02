@@ -45,20 +45,12 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService, lang: Option<String>) -> i3
     let data = serde_json::json!({ "runtimes": runtimes });
 
     output::emit_ok(g, "list_installed", data, || {
-        let none_line = envr_core::i18n::tr_key(
-            "cli.list.indent_none",
-            "  （无）",
-            "  (none)",
-        );
+        let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
         for (kind, versions) in rows {
             println!(
                 "{}",
                 fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.list.header",
-                        "{kind}：",
-                        "{kind}:",
-                    ),
+                    &envr_core::i18n::tr_key("cli.list.header", "{kind}：", "{kind}:",),
                     &[("kind", kind_label(kind))],
                 )
             );

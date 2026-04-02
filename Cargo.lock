@@ -937,6 +937,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "envr-i18n-lint"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "toml",
+]
+
+[[package]]
 name = "envr-mirror"
 version = "0.1.0"
 dependencies = [

@@ -62,22 +62,18 @@ impl SettingsViewState {
             Some(mid.to_string())
         };
         s.download.max_concurrent_downloads = self.max_conc_text.trim().parse().map_err(|_| {
-            envr_error::EnvrError::Validation(
-                envr_core::i18n::tr_key(
-                    "gui.settings.err.max_conc",
-                    "download.max_concurrent_downloads 必须是正整数",
-                    "download.max_concurrent_downloads must be a positive integer",
-                ),
-            )
+            envr_error::EnvrError::Validation(envr_core::i18n::tr_key(
+                "gui.settings.err.max_conc",
+                "download.max_concurrent_downloads 必须是正整数",
+                "download.max_concurrent_downloads must be a positive integer",
+            ))
         })?;
         s.download.retry_max = self.retry_text.trim().parse().map_err(|_| {
-            envr_error::EnvrError::Validation(
-                envr_core::i18n::tr_key(
-                    "gui.settings.err.retry",
-                    "download.retry_max 必须是整数",
-                    "download.retry_max must be an integer",
-                ),
-            )
+            envr_error::EnvrError::Validation(envr_core::i18n::tr_key(
+                "gui.settings.err.retry",
+                "download.retry_max 必须是整数",
+                "download.retry_max must be an integer",
+            ))
         })?;
 
         if s.appearance.font.mode == FontMode::Custom {
@@ -119,11 +115,9 @@ impl SettingsViewState {
                 "manual（指定镜像 ID）",
                 "manual (specific mirror ID)",
             ),
-            MirrorMode::Offline => envr_core::i18n::tr_key(
-                "gui.settings.mirror.offline",
-                "offline",
-                "offline",
-            ),
+            MirrorMode::Offline => {
+                envr_core::i18n::tr_key("gui.settings.mirror.offline", "offline", "offline")
+            }
         }
     }
 }
