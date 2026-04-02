@@ -67,6 +67,8 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
 }
 
 pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
     let busy = state.busy;
 
     let cur_line = match &state.current {
@@ -88,9 +90,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             "模式",
             "Mode"
         ))
-        .size(14)
+        .size(ty.body_small)
     ]
-    .spacing(8);
+    .spacing(sp.sm);
     for (m, key, zh, en) in [
         (
             VersionMode::Smart,
@@ -107,7 +109,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     ] {
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
-            .padding([6, 10]);
+            .padding([sp.xs + 2, sp.sm + 2]);
         let b = if m == state.mode {
             b.style(button::primary)
         } else {
@@ -131,7 +133,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         )
         .on_input(|s| Message::EnvCenter(EnvCenterMsg::InstallInput(s)))
         .width(Length::Fill)
-        .padding(8),
+        .padding(sp.sm),
         button(text(envr_core::i18n::tr_key(
             "gui.action.install",
             "安装",
@@ -141,7 +143,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             (!busy && !input.is_empty() && (state.mode == VersionMode::Smart || !installed_match))
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
         )
-        .padding([8, 14]),
+        .padding([sp.sm, sp.md + 2]),
         button(text(envr_core::i18n::tr_key(
             "gui.action.install_use",
             "安装并切换",
@@ -151,7 +153,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             (state.mode == VersionMode::Smart && !busy && !input.is_empty() && !installed_match)
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
         )
-        .padding([8, 14]),
+        .padding([sp.sm, sp.md + 2]),
         button(text(envr_core::i18n::tr_key(
             "gui.action.use",
             "切换",
@@ -162,12 +164,12 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string()))
             ),
         )
-        .padding([8, 14]),
+        .padding([sp.sm, sp.md + 2]),
     ]
-    .spacing(10)
+    .spacing(sp.sm + 2)
     .align_y(iced::Alignment::Center);
 
-    let mut list_col = column![].spacing(6);
+    let mut list_col = column![].spacing(sp.xs + 2);
     if state.installed.is_empty() {
         list_col = list_col.push(
             text(envr_core::i18n::tr_key(
@@ -175,7 +177,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 "暂无已安装版本（点击刷新）。",
                 "(No installed versions. Click Refresh.)",
             ))
-            .size(14),
+            .size(ty.body_small),
         );
     } else {
         for ver in &state.installed {
@@ -208,7 +210,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 )))
                 .on_press_maybe(uninstall_msg),
             ]
-            .spacing(10)
+            .spacing(sp.sm + 2)
             .align_y(iced::Alignment::Center);
 
             let note = if active {
@@ -218,14 +220,14 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                         "(当前)",
                         "(current)",
                     ))
-                    .size(13),
+                    .size(ty.caption),
                 )
             } else {
                 None
             };
 
             if let Some(t) = note {
-                list_col = list_col.push(column![row, t].spacing(4));
+                list_col = list_col.push(column![row, t].spacing(sp.xs));
             } else {
                 list_col = list_col.push(row);
             }
@@ -238,25 +240,25 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             envr_core::i18n::tr_key("gui.runtime.title", "运行时", "Runtime"),
             kind_label(state.kind)
         ))
-        .size(16),
+        .size(ty.section),
         mode_row,
-        text(cur_line).size(14),
+        text(cur_line).size(ty.body_small),
         text(envr_core::i18n::tr_key(
             "gui.action.install",
             "安装",
             "Install"
         ))
-        .size(16),
+        .size(ty.section),
         install_row,
         text(envr_core::i18n::tr_key(
             "gui.runtime.installed",
             "已安装",
             "Installed",
         ))
-        .size(16),
+        .size(ty.section),
         scrollable(list_col).height(Length::Fixed(260.0)),
     ]
-    .spacing(tokens.content_spacing().round().max(8.0) as u16);
+    .spacing(tokens.content_spacing().round().max(sp.sm as f32) as u16);
 
     body.into()
 }

@@ -28,20 +28,23 @@ pub enum SettingsMsg {
 }
 
 pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+
     let env_note = if SettingsViewState::env_overrides_runtime_root() {
         text(envr_core::i18n::tr_key(
             "gui.settings.note.env_override",
             "提示：已设置环境变量 ENVR_RUNTIME_ROOT，将覆盖下方的运行时根与 settings.toml。",
             "Note: ENVR_RUNTIME_ROOT is set and overrides the runtime root below and settings.toml.",
         ))
-        .size(12)
+        .size(ty.micro)
     } else {
         text(envr_core::i18n::tr_key(
             "gui.settings.note.runtime_root",
             "运行时根：留空表示使用平台默认；与 CLI 共用 settings.toml。",
             "Runtime root: leave empty to use platform default; shared with CLI via settings.toml.",
         ))
-        .size(12)
+        .size(ty.micro)
     };
 
     let rr = text_input(
@@ -53,7 +56,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         &state.runtime_root_draft,
     )
     .on_input(|s| Message::Settings(SettingsMsg::RuntimeRootEdit(s)))
-    .padding(8)
+    .padding(sp.sm)
     .width(Length::Fill);
 
     let mut mirror_row = row![
@@ -62,9 +65,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "镜像策略",
             "Mirror strategy",
         ))
-        .size(15),
+        .size(ty.body),
     ]
-    .spacing(8);
+    .spacing(sp.sm);
     for mode in [
         MirrorMode::Official,
         MirrorMode::Auto,
@@ -74,7 +77,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         let lab = SettingsViewState::mirror_mode_label(mode);
         let b = button(text(lab))
             .on_press(Message::Settings(SettingsMsg::SetMirrorMode(mode)))
-            .padding([6, 8]);
+            .padding([sp.xs + 2, sp.sm]);
         let b = if mode == state.draft.mirror.mode {
             b.style(button::primary)
         } else {
@@ -90,13 +93,13 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 "manual 模式下请填写镜像 ID（与 envr-mirror 预设一致，如 official、cn-1、cn-2）。",
                 "In manual mode, enter a mirror ID (from envr-mirror presets, e.g. official, cn-1, cn-2).",
             ))
-            .size(12),
+            .size(ty.micro),
             text_input("mirror.manual_id", &state.manual_id_draft)
                 .on_input(|s| Message::Settings(SettingsMsg::ManualIdEdit(s)))
-                .padding(8)
+                .padding(sp.sm)
                 .width(Length::Fill),
         ]
-        .spacing(6)
+        .spacing(sp.xs + 2)
     } else {
         column![]
     };
@@ -115,9 +118,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "字体",
             "Font"
         ))
-        .size(15)
+        .size(ty.body)
     ]
-    .spacing(8);
+    .spacing(sp.sm);
     for (mode, key, zh, en) in [
         (
             FontMode::Auto,
@@ -134,7 +137,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     ] {
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
-            .padding([6, 8]);
+            .padding([sp.xs + 2, sp.sm]);
         let b = if mode == state.draft.appearance.font.mode {
             b.style(button::primary)
         } else {
@@ -155,7 +158,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 "提示：字体将作为 iced 的 default_font 注入，保存后需重启 GUI 才能全局生效。",
                 "Note: the font is injected as iced default_font; restart the GUI after saving to apply globally.",
             ))
-            .size(12),
+            .size(ty.micro),
             row![
                 pick_list(font::font_candidates(), picked, |v| {
                     Message::Settings(SettingsMsg::PickFontFamily(v.to_string()))
@@ -174,12 +177,12 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                     &state.font_family_draft
                 )
                 .on_input(|s| Message::Settings(SettingsMsg::FontFamilyEdit(s)))
-                .padding(8)
+                .padding(sp.sm)
                 .width(Length::Fill),
             ]
-            .spacing(10),
+            .spacing(sp.sm + 2),
         ]
-        .spacing(6)
+        .spacing(sp.xs + 2)
     } else {
         column![
             text(format!(
@@ -191,9 +194,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 ),
                 font::preferred_system_sans_family(),
             ))
-            .size(12),
+            .size(ty.micro),
         ]
-        .spacing(6)
+        .spacing(sp.xs + 2)
     };
 
     let mut theme_mode_row = row![
@@ -202,9 +205,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "主题",
             "Theme"
         ))
-        .size(15)
+        .size(ty.body)
     ]
-    .spacing(8);
+    .spacing(sp.sm);
     for (mode, key, zh, en) in [
         (
             ThemeMode::FollowSystem,
@@ -222,7 +225,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     ] {
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
-            .padding([6, 8]);
+            .padding([sp.xs + 2, sp.sm]);
         let b = if mode == state.draft.appearance.theme_mode {
             b.style(button::primary)
         } else {
@@ -237,7 +240,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "基准色（可选，#RGB / #RRGGBB）",
             "Accent color (optional, #RGB / #RRGGBB)",
         ))
-        .size(tokens.typography().subsection),
+        .size(ty.subsection),
         text_input(
             &envr_core::i18n::tr_key(
                 "gui.settings.accent_placeholder",
@@ -247,10 +250,10 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             &state.accent_color_draft,
         )
         .on_input(|s| Message::Settings(SettingsMsg::AccentColorEdit(s)))
-        .padding(tokens.space().sm)
+        .padding(sp.sm)
         .width(Length::Fill),
     ]
-    .spacing(tokens.space().xs);
+    .spacing(sp.xs);
 
     let dl_row = row![
         column![
@@ -259,35 +262,35 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 "最大并发下载",
                 "Max concurrent downloads",
             ))
-            .size(13),
+            .size(ty.caption),
             text_input(
                 &envr_core::i18n::tr_key("gui.settings.max_conc_example", "例如 4", "e.g. 4"),
                 &state.max_conc_text
             )
             .on_input(|s| Message::Settings(SettingsMsg::MaxConcEdit(s)))
-            .padding(6),
+            .padding(sp.xs + 2),
         ]
-        .spacing(4),
+        .spacing(sp.xs),
         column![
             text(envr_core::i18n::tr_key(
                 "gui.settings.retry_limit",
                 "重试次数上限",
                 "Retry limit",
             ))
-            .size(13),
+            .size(ty.caption),
             text_input(
                 &envr_core::i18n::tr_key("gui.settings.retry_example", "例如 3", "e.g. 3"),
                 &state.retry_text
             )
             .on_input(|s| Message::Settings(SettingsMsg::RetryEdit(s)))
-            .padding(6),
+            .padding(sp.xs + 2),
         ]
-        .spacing(4),
+        .spacing(sp.xs),
     ]
-    .spacing(16);
+    .spacing(sp.lg);
 
     let status = match state.last_message.as_ref() {
-        Some(m) => text(m.clone()).size(13),
+        Some(m) => text(m.clone()).size(ty.caption),
         None => text("").size(1),
     };
 
@@ -298,16 +301,16 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "Save to settings.toml",
         )))
         .on_press(Message::Settings(SettingsMsg::Save))
-        .padding([8, 12]),
+        .padding([sp.sm, sp.md]),
         button(text(envr_core::i18n::tr_key(
             "gui.settings.reload_disk",
             "从磁盘重新加载",
             "Reload from disk",
         )))
         .on_press(Message::Settings(SettingsMsg::ReloadDisk))
-        .padding([8, 12]),
+        .padding([sp.sm, sp.md]),
     ]
-    .spacing(10);
+    .spacing(sp.sm + 2);
 
     let mut locale_row = row![
         text(envr_core::i18n::tr_key(
@@ -315,9 +318,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "语言",
             "Language"
         ))
-        .size(15)
+        .size(ty.body)
     ]
-    .spacing(8);
+    .spacing(sp.sm);
     for (mode, key, zh, en) in [
         (
             LocaleMode::FollowSystem,
@@ -340,7 +343,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     ] {
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
-            .padding([6, 8]);
+            .padding([sp.xs + 2, sp.sm]);
         let b = if mode == state.locale_mode_draft {
             b.style(button::primary)
         } else {
@@ -355,7 +358,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "设置",
             "Settings"
         ))
-        .size(20),
+        .size(ty.section),
         env_note,
         rr,
         mirror_row,
@@ -371,11 +374,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "下载",
             "Downloads",
         ))
-        .size(16),
+        .size(ty.subsection),
         dl_row,
         actions,
         status,
     ]
-    .spacing(tokens.content_spacing().round() as u16)
+    .spacing(sp.md)
     .into()
 }

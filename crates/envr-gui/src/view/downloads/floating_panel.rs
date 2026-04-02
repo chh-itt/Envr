@@ -12,6 +12,9 @@ pub fn floating_download_panel(
     state: &DownloadPanelState,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+
     if !state.visible {
         return container(
             button(text(envr_core::i18n::tr_key(
@@ -20,7 +23,7 @@ pub fn floating_download_panel(
                 "Downloads",
             )))
             .on_press(Message::Download(DownloadMsg::ToggleVisible))
-            .padding([6, 10]),
+            .padding([sp.xs + 2, sp.sm + 2]),
         )
         .into();
     }
@@ -28,13 +31,13 @@ pub fn floating_download_panel(
     let header = row![
         button(text("≡"))
             .on_press(Message::Download(DownloadMsg::StartDrag))
-            .padding([4, 8]),
+            .padding([sp.xs, sp.sm]),
         text(envr_core::i18n::tr_key(
             "gui.downloads.panel_title",
             "下载任务",
             "Downloads",
         ))
-        .size(15),
+        .size(ty.body),
         iced::widget::horizontal_space(),
         button(text(envr_core::i18n::tr_key(
             "gui.downloads.add_demo",
@@ -42,26 +45,26 @@ pub fn floating_download_panel(
             "Add demo download",
         )))
         .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-        .padding([4, 10]),
+        .padding([sp.xs, sp.sm + 2]),
         button(text(if state.expanded {
             envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
         } else {
             envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
         }))
         .on_press(Message::Download(DownloadMsg::ToggleExpand))
-        .padding([4, 10]),
+        .padding([sp.xs, sp.sm + 2]),
         button(text(envr_core::i18n::tr_key(
             "gui.action.hide",
             "隐藏",
             "Hide"
         )))
         .on_press(Message::Download(DownloadMsg::ToggleVisible))
-        .padding([4, 10]),
+        .padding([sp.xs, sp.sm + 2]),
     ]
-    .spacing(10)
+    .spacing(sp.sm + 2)
     .align_y(Alignment::Center);
 
-    let mut body = column![header].spacing(10);
+    let mut body = column![header].spacing(sp.sm + 2);
 
     if state.expanded {
         if state.jobs.is_empty() {
@@ -71,14 +74,14 @@ pub fn floating_download_panel(
                     "暂无任务。",
                     "No jobs.",
                 ))
-                .size(12),
+                .size(ty.micro),
             );
         } else {
-            let mut list = column![].spacing(10);
+            let mut list = column![].spacing(sp.sm + 2);
             for j in state.jobs.iter().rev().take(6) {
                 let ratio = j.progress_ratio();
                 let line = format_job_state_line(j);
-                let mut actions = row![].spacing(8);
+                let mut actions = row![].spacing(sp.sm);
                 if j.state == JobState::Running {
                     actions = actions.push(
                         button(text(envr_core::i18n::tr_key(
@@ -101,12 +104,12 @@ pub fn floating_download_panel(
                 }
                 list = list.push(
                     column![
-                        text(format!("{} — {}", j.label, j.url)).size(12),
+                        text(format!("{} — {}", j.label, j.url)).size(ty.micro),
                         progress_bar(0.0..=100.0, ratio),
-                        text(line).size(11),
+                        text(line).size(ty.tiny),
                         actions,
                     ]
-                    .spacing(4),
+                    .spacing(sp.xs),
                 );
             }
             body = body.push(scrollable(list).height(Length::Fixed(220.0)));
@@ -115,7 +118,7 @@ pub fn floating_download_panel(
 
     let panel = gui_theme::panel_container_style(tokens);
     container(body)
-        .padding(10)
+        .padding(sp.sm + 2)
         .width(Length::Fixed(320.0))
         .style(move |theme: &Theme| panel(theme))
         .into()

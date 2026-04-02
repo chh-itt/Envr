@@ -23,13 +23,16 @@ pub fn runtime_settings_view(
     active_kind: RuntimeKind,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+
     let header = row![
         text(envr_core::i18n::tr_key(
             "gui.runtime_settings.header",
             "运行时设置（默认折叠）",
             "Runtime settings (collapsed by default)"
         ))
-        .size(15),
+        .size(ty.body),
         iced::widget::horizontal_space(),
         button(text(if state.expanded {
             envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -37,34 +40,33 @@ pub fn runtime_settings_view(
             envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
         }))
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ToggleExpand))
-        .padding([6, 10]),
+        .padding([sp.xs + 2, sp.sm + 2]),
     ]
     .align_y(Alignment::Center)
-    .spacing(10);
+    .spacing(sp.sm + 2);
 
     if !state.expanded {
-        return column![header]
-            .spacing(tokens.content_spacing().round() as u16)
-            .into();
+        return column![header].spacing(sp.md).into();
     }
 
-    let mut body = column![header].spacing(tokens.content_spacing().round() as u16);
+    let mut body = column![header].spacing(sp.md);
     let note = text(envr_core::i18n::tr_key(
         "gui.runtime_settings.note",
         "这些设置写入 settings.toml，并会影响 CLI/GUI 的运行时行为（例如 shim 同步、环境注入等）。",
         "These settings are saved to settings.toml and affect runtime behavior (shims/env injection, etc.).",
     ))
-    .size(12);
+    .size(ty.micro);
     body = body.push(note);
 
     match active_kind {
         RuntimeKind::Go => {
-            body = body
-                .push(text(envr_core::i18n::tr_key("gui.runtime.lang.go", "Go", "Go")).size(16));
+            body = body.push(
+                text(envr_core::i18n::tr_key("gui.runtime.lang.go", "Go", "Go")).size(ty.section),
+            );
             body = body.push(
                 text_input("runtime.go.goproxy", &state.go_goproxy_draft)
                     .on_input(|s| Message::RuntimeSettings(RuntimeSettingsMsg::GoGoproxyEdit(s)))
-                    .padding(8)
+                    .padding(sp.sm)
                     .width(Length::Fill),
             );
             body = body.push(
@@ -73,7 +75,7 @@ pub fn runtime_settings_view(
                     "留空表示不注入 GOPROXY；非空则会在 envr env/run/exec 作用域内注入。",
                     "Leave empty to not inject GOPROXY; otherwise injected in envr env/run/exec scope.",
                 ))
-                .size(12),
+                .size(ty.micro),
             );
         }
         RuntimeKind::Bun => {
@@ -83,7 +85,7 @@ pub fn runtime_settings_view(
                     "Bun",
                     "Bun",
                 ))
-                .size(16),
+                .size(ty.section),
             );
             body = body.push(
                 text_input(
@@ -91,7 +93,7 @@ pub fn runtime_settings_view(
                     &state.bun_global_bin_dir_draft,
                 )
                 .on_input(|s| Message::RuntimeSettings(RuntimeSettingsMsg::BunGlobalBinDirEdit(s)))
-                .padding(8)
+                .padding(sp.sm)
                 .width(Length::Fill),
             );
             body = body.push(
@@ -100,7 +102,7 @@ pub fn runtime_settings_view(
                     "可选：覆盖 `bun pm bin -g` 的结果，用于 shim 同步全局 Bun 可执行文件。",
                     "Optional: overrides `bun pm bin -g` result for syncing global Bun executables.",
                 ))
-                .size(12),
+                .size(ty.micro),
             );
         }
         _ => {
@@ -113,7 +115,7 @@ pub fn runtime_settings_view(
     }
 
     let status = match state.last_message.as_ref() {
-        Some(m) => text(m.clone()).size(12),
+        Some(m) => text(m.clone()).size(ty.micro),
         None => text("").size(1),
     };
 
@@ -124,16 +126,16 @@ pub fn runtime_settings_view(
             "Save"
         )))
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::Save))
-        .padding([8, 12]),
+        .padding([sp.sm, sp.md]),
         button(text(envr_core::i18n::tr_key(
             "gui.settings.reload_disk",
             "从磁盘重新加载",
             "Reload from disk",
         )))
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ReloadDisk))
-        .padding([8, 12]),
+        .padding([sp.sm, sp.md]),
     ]
-    .spacing(10);
+    .spacing(sp.sm + 2);
 
     body = body.push(actions).push(status);
     body.into()

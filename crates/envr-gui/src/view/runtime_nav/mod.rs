@@ -12,7 +12,8 @@ pub fn runtime_nav_bar(
     busy: bool,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
-    let mut r = row![].spacing(8).align_y(Alignment::Center);
+    let sp = tokens.space();
+    let mut r = row![].spacing(sp.sm).align_y(Alignment::Center);
 
     for kind in [
         RuntimeKind::Node,
@@ -27,7 +28,7 @@ pub fn runtime_nav_bar(
         let label = text(crate::view::env_center::kind_label(kind));
         let b = button(label)
             .on_press(Message::EnvCenter(EnvCenterMsg::PickKind(kind)))
-            .padding([6, 10]);
+            .padding([sp.xs + 2, sp.sm + 2]);
         let b = if kind == active {
             b.style(button::primary)
         } else {
@@ -37,6 +38,5 @@ pub fn runtime_nav_bar(
         r = r.push(b);
     }
 
-    let _ = tokens; // reserved for future spacing/styling
     r.into()
 }

@@ -87,6 +87,8 @@ pub struct TypographyScale {
     pub body_small: f32,
     pub caption: f32,
     pub micro: f32,
+    /// Dense secondary line (e.g. job status, footnotes).
+    pub tiny: f32,
 }
 
 /// Elevation / shadow tuning (cards, panels). Renderer may approximate.
@@ -177,6 +179,7 @@ impl ThemeTokens {
                 body_small: 14.0,
                 caption: 13.0,
                 micro: 12.0,
+                tiny: 11.0,
             },
             UiFlavor::LiquidGlass => TypographyScale {
                 page_title: 22.0,
@@ -186,6 +189,7 @@ impl ThemeTokens {
                 body_small: 14.0,
                 caption: 13.0,
                 micro: 12.0,
+                tiny: 11.0,
             },
             UiFlavor::Material3 => TypographyScale {
                 page_title: 22.0,
@@ -195,6 +199,7 @@ impl ThemeTokens {
                 body_small: 14.0,
                 caption: 13.0,
                 micro: 12.0,
+                tiny: 11.0,
             },
         }
     }
