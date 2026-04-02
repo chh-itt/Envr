@@ -22,12 +22,23 @@ pub fn iced_theme(tokens: ThemeTokens) -> Theme {
     Theme::custom(name, iced_palette(tokens))
 }
 
-pub fn to_color(s: Srgb) -> Color {
+pub(crate) fn to_color(s: Srgb) -> Color {
     Color {
         r: s.r,
         g: s.g,
         b: s.b,
         a: s.a,
+    }
+}
+
+/// Text/icon color on top of the primary brand color (sidebar selected item, etc.).
+pub(crate) fn contrast_on_primary(tokens: ThemeTokens) -> Color {
+    let bg = to_color(tokens.colors.primary);
+    let lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+    if lum > 0.55 {
+        Color::from_rgb(0.15, 0.15, 0.16)
+    } else {
+        Color::from_rgb(0.98, 0.98, 0.99)
     }
 }
 

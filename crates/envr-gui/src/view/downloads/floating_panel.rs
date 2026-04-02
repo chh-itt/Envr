@@ -6,7 +6,9 @@ use iced::widget::{button, column, container, progress_bar, row, scrollable, tex
 use iced::{Alignment, Element, Length, Theme};
 
 use crate::app::Message;
+use crate::icons::Lucide;
 use crate::theme as gui_theme;
+use crate::widget_styles::{ButtonVariant, button_style};
 
 pub fn floating_download_panel(
     state: &DownloadPanelState,
@@ -15,51 +17,92 @@ pub fn floating_download_panel(
     let ty = tokens.typography();
     let sp = tokens.space();
 
+    let txt = gui_theme::to_color(tokens.colors.text);
     if !state.visible {
-        return container(
-            button(text(envr_core::i18n::tr_key(
+        let open_lbl = row![
+            Lucide::Download.view(16.0, txt),
+            text(envr_core::i18n::tr_key(
                 "gui.downloads.open_button",
                 "下载",
                 "Downloads",
-            )))
-            .on_press(Message::Download(DownloadMsg::ToggleVisible))
-            .padding([sp.xs + 2, sp.sm + 2]),
+            )),
+        ]
+        .spacing(sp.xs)
+        .align_y(Alignment::Center);
+        return container(
+            button(open_lbl)
+                .on_press(Message::Download(DownloadMsg::ToggleVisible))
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .padding([0, sp.sm + 2])
+                .style(button_style(tokens, ButtonVariant::Secondary)),
         )
         .into();
     }
 
-    let header = row![
-        button(text("≡"))
-            .on_press(Message::Download(DownloadMsg::StartDrag))
-            .padding([sp.xs, sp.sm]),
+    let title_row = row![
+        Lucide::PanelLeftOpen.view(18.0, txt),
         text(envr_core::i18n::tr_key(
             "gui.downloads.panel_title",
             "下载任务",
             "Downloads",
         ))
         .size(ty.body),
+    ]
+    .spacing(sp.sm)
+    .align_y(Alignment::Center);
+
+    let header = row![
+        button(Lucide::Menu.view(18.0, txt))
+            .on_press(Message::Download(DownloadMsg::StartDrag))
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, ButtonVariant::Ghost)),
+        title_row,
         iced::widget::horizontal_space(),
-        button(text(envr_core::i18n::tr_key(
-            "gui.downloads.add_demo",
-            "添加演示下载",
-            "Add demo download",
-        )))
+        button(
+            row![
+                Lucide::Download.view(14.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.downloads.add_demo",
+                    "添加演示下载",
+                    "Add demo download",
+                )),
+            ]
+            .spacing(sp.xs)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-        .padding([sp.xs, sp.sm + 2]),
-        button(text(if state.expanded {
-            envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
-        } else {
-            envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
-        }))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.sm + 2])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+        button(
+            row![
+                Lucide::ChevronsUpDown.view(14.0, txt),
+                text(if state.expanded {
+                    envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
+                } else {
+                    envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
+                }),
+            ]
+            .spacing(sp.xs)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Download(DownloadMsg::ToggleExpand))
-        .padding([sp.xs, sp.sm + 2]),
-        button(text(envr_core::i18n::tr_key(
-            "gui.action.hide",
-            "隐藏",
-            "Hide"
-        )))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.sm + 2])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+        button(
+            row![
+                Lucide::EyeOff.view(14.0, txt),
+                text(envr_core::i18n::tr_key("gui.action.hide", "隐藏", "Hide")),
+            ]
+            .spacing(sp.xs)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Download(DownloadMsg::ToggleVisible))
-        .padding([sp.xs, sp.sm + 2]),
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.sm + 2])
+        .style(button_style(tokens, ButtonVariant::Ghost)),
     ]
     .spacing(sp.sm + 2)
     .align_y(Alignment::Center);
@@ -89,7 +132,10 @@ pub fn floating_download_panel(
                             "取消",
                             "Cancel",
                         )))
-                        .on_press(Message::Download(DownloadMsg::Cancel(j.id))),
+                        .on_press(Message::Download(DownloadMsg::Cancel(j.id)))
+                        .height(Length::Fixed(tokens.control_height_secondary))
+                        .padding([0, sp.sm])
+                        .style(button_style(tokens, ButtonVariant::Ghost)),
                     );
                 }
                 if j.state == JobState::Failed {
@@ -99,7 +145,10 @@ pub fn floating_download_panel(
                             "重试",
                             "Retry",
                         )))
-                        .on_press(Message::Download(DownloadMsg::Retry(j.id))),
+                        .on_press(Message::Download(DownloadMsg::Retry(j.id)))
+                        .height(Length::Fixed(tokens.control_height_secondary))
+                        .padding([0, sp.sm])
+                        .style(button_style(tokens, ButtonVariant::Secondary)),
                     );
                 }
                 list = list.push(

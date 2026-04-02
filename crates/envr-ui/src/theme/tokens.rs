@@ -178,6 +178,26 @@ impl ThemeTokens {
         SPACING_8PT.lg
     }
 
+    /// Card corner radius (`tasks_gui.md` GUI-020: ~12px).
+    pub fn card_corner_radius(&self) -> f32 {
+        12.0
+    }
+
+    /// Card interior padding (16px on the 8pt grid).
+    pub fn card_padding_px(&self) -> f32 {
+        SPACING_8PT.lg as f32
+    }
+
+    /// Minimum list / table row height (touch-friendly baseline).
+    pub fn list_row_height(&self) -> f32 {
+        44.0
+    }
+
+    /// Skeleton / placeholder rows when list data is pending (`tasks_gui.md` GUI-021).
+    pub fn list_skeleton_rows(&self) -> u8 {
+        5
+    }
+
     /// Default gap between major regions (content padding baseline).
     pub fn content_spacing(&self) -> f32 {
         SPACING_8PT.md as f32

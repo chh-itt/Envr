@@ -4,6 +4,7 @@ use iced::{Alignment, Element, Length, Padding, Theme};
 use envr_ui::theme::{ThemeTokens, UiFlavor};
 
 use crate::app::{AppState, Message, Route};
+use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::floating_download_panel;
@@ -11,6 +12,7 @@ use crate::view::env_center::env_center_view;
 use crate::view::runtime_nav::runtime_nav_bar;
 use crate::view::runtime_settings::runtime_settings_view;
 use crate::view::settings::settings_view;
+use crate::widget_styles::{ButtonVariant, button_style};
 
 use iced::widget::{button, column, horizontal_space, row, stack, vertical_space};
 
@@ -76,16 +78,23 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
     let style = gui_theme::error_banner_style(tokens);
     let ty = tokens.typography();
     let sp = tokens.space();
+    let danger = gui_theme::to_color(tokens.colors.danger);
+    let muted = gui_theme::to_color(tokens.colors.text);
+    let close_lbl = row![
+        Lucide::X.view(14.0, muted),
+        text(envr_core::i18n::tr_key("gui.action.close", "关闭", "Close",)),
+    ]
+    .spacing(sp.xs)
+    .align_y(Alignment::Center);
     container(
         row![
-            text(message).size(ty.body_small),
-            horizontal_space(),
-            button(text(envr_core::i18n::tr_key(
-                "gui.action.close",
-                "关闭",
-                "Close",
-            )))
-            .on_press(Message::DismissError),
+            Lucide::CircleAlert.view(20.0, danger),
+            text(message).size(ty.body_small).width(Length::Fill),
+            button(close_lbl)
+                .on_press(Message::DismissError)
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .padding([0, sp.sm])
+                .style(button_style(tokens, ButtonVariant::Ghost)),
         ]
         .spacing(sp.sm)
         .align_y(Alignment::Center),
@@ -108,16 +117,25 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 state.env_center.busy,
                 tokens,
             ));
-            col = col.push(
-                button(text(envr_core::i18n::tr_key(
+            let txt = gui_theme::to_color(tokens.colors.text);
+            let refresh_rt = row![
+                Lucide::RefreshCw.view(16.0, txt),
+                text(envr_core::i18n::tr_key(
                     "gui.action.refresh_current_runtime",
                     "刷新当前运行时",
                     "Refresh current runtime",
-                )))
-                .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
-                    crate::view::env_center::EnvCenterMsg::Refresh,
-                )))
-                .padding([sp.xs + 2, sp.md]),
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center);
+            col = col.push(
+                button(refresh_rt)
+                    .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
+                        crate::view::env_center::EnvCenterMsg::Refresh,
+                    )))
+                    .height(Length::Fixed(tokens.control_height_secondary))
+                    .padding([0, sp.md])
+                    .style(button_style(tokens, ButtonVariant::Secondary)),
             );
             col = col.push(runtime_settings_view(
                 &state.runtime_settings,
@@ -153,30 +171,46 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
             );
         }
         Route::About => {
+            let prim = gui_theme::to_color(tokens.colors.primary);
             col = col.push(
-                text(envr_core::i18n::tr_key(
-                    "gui.about.description",
-                    "关于本应用。",
-                    "About this app.",
-                ))
-                .size(ty.body),
+                row![
+                    Lucide::Info.view(22.0, prim),
+                    text(envr_core::i18n::tr_key(
+                        "gui.about.description",
+                        "关于本应用。",
+                        "About this app.",
+                    ))
+                    .size(ty.body),
+                ]
+                .spacing(sp.sm)
+                .align_y(Alignment::Center),
             );
         }
         Route::Dashboard => unreachable!("handled in app_view"),
     }
 
     if state.route() == Route::About {
-        col = col.push(
-            button(text(envr_core::i18n::tr_key(
+        let warn_icon = gui_theme::to_color(tokens.colors.warning);
+        let demo = row![
+            Lucide::CircleAlert.view(16.0, warn_icon),
+            text(envr_core::i18n::tr_key(
                 "gui.about.trigger_error",
                 "触发全局错误示例",
                 "Trigger global error (demo)",
-            )))
-            .on_press(Message::ReportError(envr_core::i18n::tr_key(
-                "gui.about.error_demo",
-                "示例：后台任务失败时可经此通道提示用户。",
-                "Demo: background task failures can be surfaced here.",
-            ))),
+            )),
+        ]
+        .spacing(sp.sm)
+        .align_y(Alignment::Center);
+        col = col.push(
+            button(demo)
+                .on_press(Message::ReportError(envr_core::i18n::tr_key(
+                    "gui.about.error_demo",
+                    "示例：后台任务失败时可经此通道提示用户。",
+                    "Demo: background task failures can be surfaced here.",
+                )))
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .padding([0, sp.md])
+                .style(button_style(tokens, ButtonVariant::Secondary)),
         );
     }
 
@@ -201,16 +235,29 @@ fn flavor_label_i18n(flavor: UiFlavor) -> String {
 
 fn flavor_picker_row(active: UiFlavor, tokens: ThemeTokens) -> Element<'static, Message> {
     let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
     let mut r = row![].spacing(sp.sm);
     for flavor in UiFlavor::ALL {
-        let b = button(text(flavor_label_i18n(flavor)))
-            .on_press(Message::SetFlavor(flavor))
-            .padding([sp.sm, sp.sm + 2]);
-        let b = if flavor == active {
-            b.style(button::primary)
+        let mut lbl = row![].spacing(sp.xs).align_y(Alignment::Center);
+        if flavor == active {
+            lbl = lbl.push(Lucide::ChevronsUpDown.view(14.0, txt));
+        }
+        lbl = lbl.push(text(flavor_label_i18n(flavor)));
+        let variant = if flavor == active {
+            ButtonVariant::Primary
         } else {
-            b.style(button::secondary)
+            ButtonVariant::Secondary
         };
+        let h = if flavor == active {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(lbl)
+            .on_press(Message::SetFlavor(flavor))
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm + 2])
+            .style(button_style(tokens, variant));
         r = r.push(b);
     }
     r.into()

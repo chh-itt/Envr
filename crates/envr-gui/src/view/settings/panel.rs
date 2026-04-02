@@ -1,11 +1,15 @@
 use envr_config::settings::{FontMode, LocaleMode, MirrorMode, ThemeMode};
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
-use iced::widget::{button, column, pick_list, row, text, text_input, toggler};
-use iced::{Element, Length};
+use iced::alignment::Vertical;
+use iced::widget::{button, column, container, pick_list, row, text, text_input, toggler};
+use iced::{Alignment, Element, Length};
 
 use crate::app::Message;
+use crate::icons::Lucide;
+use crate::theme as gui_theme;
 use crate::view::settings::state::SettingsViewState;
+use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
 
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
@@ -47,17 +51,23 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .size(ty.micro)
     };
 
-    let rr = text_input(
-        &envr_core::i18n::tr_key(
-            "gui.settings.runtime_root_placeholder",
-            "运行时根目录（可选）",
-            "Runtime root (optional)",
-        ),
-        &state.runtime_root_draft,
+    let rr = container(
+        text_input(
+            &envr_core::i18n::tr_key(
+                "gui.settings.runtime_root_placeholder",
+                "运行时根目录（可选）",
+                "Runtime root (optional)",
+            ),
+            &state.runtime_root_draft,
+        )
+        .on_input(|s| Message::Settings(SettingsMsg::RuntimeRootEdit(s)))
+        .padding(sp.sm)
+        .width(Length::Fill)
+        .style(text_input_style(tokens)),
     )
-    .on_input(|s| Message::Settings(SettingsMsg::RuntimeRootEdit(s)))
-    .padding(sp.sm)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .height(Length::Fixed(tokens.control_height_secondary))
+    .align_y(Vertical::Center);
 
     let mut mirror_row = row![
         text(envr_core::i18n::tr_key(
@@ -75,14 +85,21 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         MirrorMode::Offline,
     ] {
         let lab = SettingsViewState::mirror_mode_label(mode);
+        let variant = if mode == state.draft.mirror.mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == state.draft.mirror.mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
         let b = button(text(lab))
             .on_press(Message::Settings(SettingsMsg::SetMirrorMode(mode)))
-            .padding([sp.xs + 2, sp.sm]);
-        let b = if mode == state.draft.mirror.mode {
-            b.style(button::primary)
-        } else {
-            b.style(button::secondary)
-        };
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, variant));
         mirror_row = mirror_row.push(b);
     }
 
@@ -94,10 +111,16 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 "In manual mode, enter a mirror ID (from envr-mirror presets, e.g. official, cn-1, cn-2).",
             ))
             .size(ty.micro),
-            text_input("mirror.manual_id", &state.manual_id_draft)
-                .on_input(|s| Message::Settings(SettingsMsg::ManualIdEdit(s)))
-                .padding(sp.sm)
-                .width(Length::Fill),
+            container(
+                text_input("mirror.manual_id", &state.manual_id_draft)
+                    .on_input(|s| Message::Settings(SettingsMsg::ManualIdEdit(s)))
+                    .padding(sp.sm)
+                    .width(Length::Fill)
+                    .style(text_input_style(tokens)),
+            )
+            .width(Length::Fill)
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .align_y(Vertical::Center),
         ]
         .spacing(sp.xs + 2)
     } else {
@@ -135,14 +158,21 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "Custom",
         ),
     ] {
+        let variant = if mode == state.draft.appearance.font.mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == state.draft.appearance.font.mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
-            .padding([sp.xs + 2, sp.sm]);
-        let b = if mode == state.draft.appearance.font.mode {
-            b.style(button::primary)
-        } else {
-            b.style(button::secondary)
-        };
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, variant));
         font_mode_row = font_mode_row.push(b);
     }
 
@@ -168,17 +198,23 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                     "从候选字体中选择",
                     "Pick from candidates",
                 )),
-                text_input(
-                    &envr_core::i18n::tr_key(
-                        "gui.settings.font.family_name",
-                        "字体族名（Font family）",
-                        "Font family name",
-                    ),
-                    &state.font_family_draft
+                container(
+                    text_input(
+                        &envr_core::i18n::tr_key(
+                            "gui.settings.font.family_name",
+                            "字体族名（Font family）",
+                            "Font family name",
+                        ),
+                        &state.font_family_draft,
+                    )
+                    .on_input(|s| Message::Settings(SettingsMsg::FontFamilyEdit(s)))
+                    .padding(sp.sm)
+                    .width(Length::Fill)
+                    .style(text_input_style(tokens)),
                 )
-                .on_input(|s| Message::Settings(SettingsMsg::FontFamilyEdit(s)))
-                .padding(sp.sm)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .align_y(Vertical::Center),
             ]
             .spacing(sp.sm + 2),
         ]
@@ -223,14 +259,21 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ),
         (ThemeMode::Dark, "gui.settings.theme.dark", "深色", "Dark"),
     ] {
+        let variant = if mode == state.draft.appearance.theme_mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == state.draft.appearance.theme_mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
-            .padding([sp.xs + 2, sp.sm]);
-        let b = if mode == state.draft.appearance.theme_mode {
-            b.style(button::primary)
-        } else {
-            b.style(button::secondary)
-        };
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, variant));
         theme_mode_row = theme_mode_row.push(b);
     }
 
@@ -241,17 +284,23 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "Accent color (optional, #RGB / #RRGGBB)",
         ))
         .size(ty.subsection),
-        text_input(
-            &envr_core::i18n::tr_key(
-                "gui.settings.accent_placeholder",
-                "留空则使用平台默认主色",
-                "Leave empty for platform default primary",
-            ),
-            &state.accent_color_draft,
+        container(
+            text_input(
+                &envr_core::i18n::tr_key(
+                    "gui.settings.accent_placeholder",
+                    "留空则使用平台默认主色",
+                    "Leave empty for platform default primary",
+                ),
+                &state.accent_color_draft,
+            )
+            .on_input(|s| Message::Settings(SettingsMsg::AccentColorEdit(s)))
+            .padding(sp.sm)
+            .width(Length::Fill)
+            .style(text_input_style(tokens)),
         )
-        .on_input(|s| Message::Settings(SettingsMsg::AccentColorEdit(s)))
-        .padding(sp.sm)
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .align_y(Vertical::Center),
     ]
     .spacing(sp.xs);
 
@@ -265,10 +314,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .size(ty.caption),
             text_input(
                 &envr_core::i18n::tr_key("gui.settings.max_conc_example", "例如 4", "e.g. 4"),
-                &state.max_conc_text
+                &state.max_conc_text,
             )
             .on_input(|s| Message::Settings(SettingsMsg::MaxConcEdit(s)))
-            .padding(sp.xs + 2),
+            .padding(sp.xs + 2)
+            .style(text_input_style(tokens)),
         ]
         .spacing(sp.xs),
         column![
@@ -280,10 +330,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .size(ty.caption),
             text_input(
                 &envr_core::i18n::tr_key("gui.settings.retry_example", "例如 3", "e.g. 3"),
-                &state.retry_text
+                &state.retry_text,
             )
             .on_input(|s| Message::Settings(SettingsMsg::RetryEdit(s)))
-            .padding(sp.xs + 2),
+            .padding(sp.xs + 2)
+            .style(text_input_style(tokens)),
         ]
         .spacing(sp.xs),
     ]
@@ -294,21 +345,41 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         None => text("").size(1),
     };
 
+    let on_prim = gui_theme::contrast_on_primary(tokens);
+    let txt = gui_theme::to_color(tokens.colors.text);
     let actions = row![
-        button(text(envr_core::i18n::tr_key(
-            "gui.settings.save_to_file",
-            "保存到 settings.toml",
-            "Save to settings.toml",
-        )))
+        button(
+            row![
+                Lucide::Settings.view(16.0, on_prim),
+                text(envr_core::i18n::tr_key(
+                    "gui.settings.save_to_file",
+                    "保存到 settings.toml",
+                    "Save to settings.toml",
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Settings(SettingsMsg::Save))
-        .padding([sp.sm, sp.md]),
-        button(text(envr_core::i18n::tr_key(
-            "gui.settings.reload_disk",
-            "从磁盘重新加载",
-            "Reload from disk",
-        )))
+        .height(Length::Fixed(tokens.control_height_primary))
+        .padding([0, sp.md + 2])
+        .style(button_style(tokens, ButtonVariant::Primary)),
+        button(
+            row![
+                Lucide::RefreshCw.view(16.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.settings.reload_disk",
+                    "从磁盘重新加载",
+                    "Reload from disk",
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Settings(SettingsMsg::ReloadDisk))
-        .padding([sp.sm, sp.md]),
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.md])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
     .spacing(sp.sm + 2);
 
@@ -341,14 +412,21 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "English",
         ),
     ] {
+        let variant = if mode == state.locale_mode_draft {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == state.locale_mode_draft {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
-            .padding([sp.xs + 2, sp.sm]);
-        let b = if mode == state.locale_mode_draft {
-            b.style(button::primary)
-        } else {
-            b.style(button::secondary)
-        };
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm])
+            .style(button_style(tokens, variant));
         locale_row = locale_row.push(b);
     }
 

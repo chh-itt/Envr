@@ -1,11 +1,15 @@
-use iced::widget::{button, column, row, text, text_input};
+use iced::alignment::Vertical;
+use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Alignment, Element, Length};
 
 use envr_domain::runtime::RuntimeKind;
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::Message;
+use crate::icons::Lucide;
+use crate::theme as gui_theme;
 use crate::view::runtime_settings::state::RuntimeSettingsState;
+use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
 
 #[derive(Debug, Clone)]
 pub enum RuntimeSettingsMsg {
@@ -26,6 +30,17 @@ pub fn runtime_settings_view(
     let ty = tokens.typography();
     let sp = tokens.space();
 
+    let txt = gui_theme::to_color(tokens.colors.text);
+    let expand_lbl = row![
+        Lucide::ChevronsUpDown.view(16.0, txt),
+        text(if state.expanded {
+            envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
+        } else {
+            envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
+        }),
+    ]
+    .spacing(sp.xs)
+    .align_y(Alignment::Center);
     let header = row![
         text(envr_core::i18n::tr_key(
             "gui.runtime_settings.header",
@@ -34,13 +49,11 @@ pub fn runtime_settings_view(
         ))
         .size(ty.body),
         iced::widget::horizontal_space(),
-        button(text(if state.expanded {
-            envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
-        } else {
-            envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
-        }))
-        .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ToggleExpand))
-        .padding([sp.xs + 2, sp.sm + 2]),
+        button(expand_lbl)
+            .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ToggleExpand))
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .padding([0, sp.sm + 2])
+            .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
     .align_y(Alignment::Center)
     .spacing(sp.sm + 2);
@@ -64,10 +77,18 @@ pub fn runtime_settings_view(
                 text(envr_core::i18n::tr_key("gui.runtime.lang.go", "Go", "Go")).size(ty.section),
             );
             body = body.push(
-                text_input("runtime.go.goproxy", &state.go_goproxy_draft)
-                    .on_input(|s| Message::RuntimeSettings(RuntimeSettingsMsg::GoGoproxyEdit(s)))
-                    .padding(sp.sm)
-                    .width(Length::Fill),
+                container(
+                    text_input("runtime.go.goproxy", &state.go_goproxy_draft)
+                        .on_input(|s| {
+                            Message::RuntimeSettings(RuntimeSettingsMsg::GoGoproxyEdit(s))
+                        })
+                        .padding(sp.sm)
+                        .width(Length::Fill)
+                        .style(text_input_style(tokens)),
+                )
+                .width(Length::Fill)
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .align_y(Vertical::Center),
             );
             body = body.push(
                 text(envr_core::i18n::tr_key(
@@ -88,13 +109,21 @@ pub fn runtime_settings_view(
                 .size(ty.section),
             );
             body = body.push(
-                text_input(
-                    "runtime.bun.global_bin_dir",
-                    &state.bun_global_bin_dir_draft,
+                container(
+                    text_input(
+                        "runtime.bun.global_bin_dir",
+                        &state.bun_global_bin_dir_draft,
+                    )
+                    .on_input(|s| {
+                        Message::RuntimeSettings(RuntimeSettingsMsg::BunGlobalBinDirEdit(s))
+                    })
+                    .padding(sp.sm)
+                    .width(Length::Fill)
+                    .style(text_input_style(tokens)),
                 )
-                .on_input(|s| Message::RuntimeSettings(RuntimeSettingsMsg::BunGlobalBinDirEdit(s)))
-                .padding(sp.sm)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .align_y(Vertical::Center),
             );
             body = body.push(
                 text(envr_core::i18n::tr_key(
@@ -119,21 +148,36 @@ pub fn runtime_settings_view(
         None => text("").size(1),
     };
 
+    let on_prim = gui_theme::contrast_on_primary(tokens);
     let actions = row![
-        button(text(envr_core::i18n::tr_key(
-            "gui.action.save",
-            "保存",
-            "Save"
-        )))
+        button(
+            row![
+                Lucide::Settings.view(16.0, on_prim),
+                text(envr_core::i18n::tr_key("gui.action.save", "保存", "Save")),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::Save))
-        .padding([sp.sm, sp.md]),
-        button(text(envr_core::i18n::tr_key(
-            "gui.settings.reload_disk",
-            "从磁盘重新加载",
-            "Reload from disk",
-        )))
+        .height(Length::Fixed(tokens.control_height_primary))
+        .padding([0, sp.md])
+        .style(button_style(tokens, ButtonVariant::Primary)),
+        button(
+            row![
+                Lucide::RefreshCw.view(16.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.settings.reload_disk",
+                    "从磁盘重新加载",
+                    "Reload from disk",
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ReloadDisk))
-        .padding([sp.sm, sp.md]),
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.md])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
     .spacing(sp.sm + 2);
 

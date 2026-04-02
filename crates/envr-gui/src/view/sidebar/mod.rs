@@ -1,24 +1,54 @@
-use iced::widget::{button, column, container, text};
-use iced::{Element, Length, Theme};
+use iced::widget::{button, column, container, row, text};
+use iced::{Alignment, Element, Length, Theme};
 
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::{Message, Route};
+use crate::icons::Lucide;
 use crate::theme as gui_theme;
+use crate::widget_styles::{ButtonVariant, button_style};
+
+fn route_icon(route: Route) -> Lucide {
+    match route {
+        Route::Dashboard => Lucide::LayoutDashboard,
+        Route::Runtime => Lucide::Package,
+        Route::Settings => Lucide::Settings,
+        Route::About => Lucide::Info,
+    }
+}
 
 pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message> {
     let panel = gui_theme::panel_container_style(tokens);
     let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
     let mut col = column![].spacing(sp.sm);
     for route in Route::ALL {
-        let b = button(text(route.label()))
-            .on_press(Message::Navigate(route))
-            .width(Length::Fill);
-        let b = if route == current {
-            b.style(button::primary)
+        let selected = route == current;
+        let icon_c = if selected {
+            gui_theme::contrast_on_primary(tokens)
         } else {
-            b.style(button::secondary)
+            txt
         };
+        let icn_sz = if selected { 18.0 } else { 16.0 };
+        let label = row![route_icon(route).view(icn_sz, icon_c), text(route.label()),]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center);
+        let variant = if selected {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if selected {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(label)
+            .on_press(Message::Navigate(route))
+            .width(Length::Fill)
+            .height(Length::Fixed(h))
+            .padding([0, sp.sm + 2])
+            .style(button_style(tokens, variant));
         col = col.push(b);
     }
     container(col.width(Length::Fixed(tokens.sidebar_width())))

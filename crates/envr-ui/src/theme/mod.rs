@@ -106,6 +106,15 @@ mod tests {
     }
 
     #[test]
+    fn gui_020_gui_021_card_and_list_tokens() {
+        let t = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
+        assert_eq!(t.card_corner_radius(), 12.0);
+        assert_eq!(t.card_padding_px(), 16.0);
+        assert_eq!(t.list_row_height(), 44.0);
+        assert_eq!(t.list_skeleton_rows(), 5);
+    }
+
+    #[test]
     fn tokens_for_appearance_accent_overrides_primary() {
         let base = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
         let accent = super::Srgb::from_hex("#FF5500").expect("hex");

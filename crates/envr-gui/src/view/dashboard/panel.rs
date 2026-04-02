@@ -1,13 +1,15 @@
 use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Length, Theme};
+use iced::{Alignment, Element, Length, Padding, Theme};
 
 use envr_domain::runtime::RuntimeKind;
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::{Message, Route};
+use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
 use crate::view::downloads::{DownloadPanelState, JobState};
+use crate::widget_styles::{ButtonVariant, button_style, card_container_style};
 
 pub fn dashboard_view(
     state: &DashboardState,
@@ -16,6 +18,17 @@ pub fn dashboard_view(
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
+    let text_c = gui_theme::to_color(tokens.colors.text);
+    let refresh_lbl = row![
+        Lucide::RefreshCw.view(16.0, text_c),
+        text(envr_core::i18n::tr_key(
+            "gui.dashboard.refresh",
+            "刷新",
+            "Refresh",
+        )),
+    ]
+    .spacing(sp.sm)
+    .align_y(Alignment::Center);
     let mut col = column![
         row![
             text(envr_core::i18n::tr_key(
@@ -25,15 +38,13 @@ pub fn dashboard_view(
             ))
             .size(ty.page_title),
             iced::widget::horizontal_space(),
-            button(text(envr_core::i18n::tr_key(
-                "gui.dashboard.refresh",
-                "刷新",
-                "Refresh",
-            )))
-            .on_press(Message::Dashboard(
-                crate::view::dashboard::state::DashboardMsg::Refresh
-            ))
-            .padding([sp.xs + 2, sp.md]),
+            button(refresh_lbl)
+                .on_press(Message::Dashboard(
+                    crate::view::dashboard::state::DashboardMsg::Refresh
+                ))
+                .height(Length::Fixed(tokens.control_height_primary))
+                .padding([0, sp.md])
+                .style(button_style(tokens, ButtonVariant::Secondary)),
         ]
         .align_y(Alignment::Center)
     ]
@@ -79,13 +90,14 @@ fn card(
     body: Element<'static, Message>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
-    let panel = gui_theme::panel_container_style(tokens);
+    let card_s = card_container_style(tokens, 1);
     let ty = tokens.typography();
     let sp = tokens.space();
+    let pad = tokens.card_padding_px();
     container(column![text(title).size(ty.section), body].spacing(sp.sm + 2))
-        .padding(sp.md)
+        .padding(Padding::new(pad))
         .width(Length::Fill)
-        .style(move |theme: &Theme| panel(theme))
+        .style(move |theme: &Theme| card_s(theme))
         .into()
 }
 
@@ -217,21 +229,40 @@ fn recent_jobs_card(
 
 fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
     let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
     let actions = row![
-        button(text(envr_core::i18n::tr_key(
-            "gui.dashboard.open_runtimes",
-            "打开运行时",
-            "Open runtimes",
-        )))
+        button(
+            row![
+                Lucide::Package.view(16.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.dashboard.open_runtimes",
+                    "打开运行时",
+                    "Open runtimes",
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Navigate(Route::Runtime))
-        .padding([sp.xs + 2, sp.md]),
-        button(text(envr_core::i18n::tr_key(
-            "gui.dashboard.open_settings",
-            "打开设置",
-            "Open settings",
-        )))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.md])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+        button(
+            row![
+                Lucide::Settings.view(16.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.dashboard.open_settings",
+                    "打开设置",
+                    "Open settings",
+                )),
+            ]
+            .spacing(sp.sm)
+            .align_y(Alignment::Center),
+        )
         .on_press(Message::Navigate(Route::Settings))
-        .padding([sp.xs + 2, sp.md]),
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.md])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
     .spacing(sp.sm + 2);
     card(
