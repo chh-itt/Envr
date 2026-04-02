@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_config::project_config::PROJECT_CONFIG_FILE;
 use envr_error::EnvrError;
@@ -26,16 +26,27 @@ pub fn run(g: &GlobalArgs, path: PathBuf, force: bool) -> i32 {
     if !path.is_dir() {
         return common::print_envr_error(
             g,
-            EnvrError::Validation(format!("not a directory: {}", path.display())),
+            EnvrError::Validation(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.not_a_directory",
+                    "不是目录：{path}",
+                    "not a directory: {path}",
+                ),
+                &[("path", &path.display().to_string())],
+            )),
         );
     }
     let target = path.join(PROJECT_CONFIG_FILE);
     if target.exists() && !force {
         return common::print_envr_error(
             g,
-            EnvrError::Config(format!(
-                "{} already exists (use --force to overwrite)",
-                target.display()
+            EnvrError::Config(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.init_exists",
+                    "{path} 已存在（使用 --force 覆盖）",
+                    "{path} already exists (use --force to overwrite)",
+                ),
+                &[("path", &target.display().to_string())],
             )),
         );
     }
@@ -47,7 +58,17 @@ pub fn run(g: &GlobalArgs, path: PathBuf, force: bool) -> i32 {
     });
     output::emit_ok(g, "project_config_init", data, || {
         if !g.quiet {
-            println!("wrote {}", target.display());
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.init.wrote",
+                        "已写入 {path}",
+                        "wrote {path}",
+                    ),
+                    &[("path", &target.display().to_string())],
+                )
+            );
         }
     })
 }

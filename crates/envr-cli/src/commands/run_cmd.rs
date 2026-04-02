@@ -1,7 +1,7 @@
 use crate::cli::{GlobalArgs, OutputFormat};
 use crate::commands::child_env;
 use crate::commands::common;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_shim_core::ShimContext;
 use serde_json::json;
@@ -50,7 +50,14 @@ pub fn run(
     if exit == 0 {
         output::emit_ok(g, "child_completed", data, || {})
     } else {
-        let msg = format!("child process exited with code {exit}");
+        let msg = fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.child.exit_nonzero",
+                "子进程退出，代码 {exit}",
+                "child process exited with code {exit}",
+            ),
+            &[("exit", &exit.to_string())],
+        );
         match g.output_format.unwrap_or(OutputFormat::Text) {
             OutputFormat::Json => {
                 output::write_envelope(false, Some("child_exit"), &msg, data, &[]);

@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_config::project_config::load_project_config_profile;
 use envr_domain::runtime::parse_runtime_kind;
@@ -69,7 +69,39 @@ pub fn run(
     });
     output::emit_ok(g, "runtime_resolved", data, || {
         if !g.quiet {
-            println!("{}: {} (from {source})", lang, home.display());
+            let source_label = match source {
+                "cli_override" => envr_core::i18n::tr_key(
+                    "cli.resolve.source.cli_override",
+                    "命令行覆盖",
+                    "CLI override",
+                ),
+                "project" => envr_core::i18n::tr_key(
+                    "cli.resolve.source.project",
+                    "项目",
+                    "project",
+                ),
+                "global_current" => envr_core::i18n::tr_key(
+                    "cli.resolve.source.global_current",
+                    "全局 current",
+                    "global current",
+                ),
+                other => other.to_string(),
+            };
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.resolve.line",
+                        "{lang}：{path}（来源：{source}）",
+                        "{lang}: {path} (from {source})",
+                    ),
+                    &[
+                        ("lang", &lang),
+                        ("path", &home.display().to_string()),
+                        ("source", &source_label),
+                    ],
+                )
+            );
         }
     })
 }

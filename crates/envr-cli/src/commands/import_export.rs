@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_config::project_config::{
     PROJECT_CONFIG_FILE, ProjectConfig, load_project_config_disk_only, parse_project_config,
@@ -15,7 +15,14 @@ pub fn import_run(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> i32 {
     if !file.is_file() {
         return common::print_envr_error(
             g,
-            EnvrError::Validation(format!("not a file: {}", file.display())),
+            EnvrError::Validation(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.not_a_file",
+                    "不是文件：{path}",
+                    "not a file: {path}",
+                ),
+                &[("path", &file.display().to_string())],
+            )),
         );
     }
     let dest = path.join(PROJECT_CONFIG_FILE);
@@ -45,7 +52,17 @@ pub fn import_run(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> i32 {
     });
     output::emit_ok(g, "config_imported", data, || {
         if !g.quiet {
-            println!("merged into {}", dest.display());
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.import.merged",
+                        "已合并到 {path}",
+                        "merged into {path}",
+                    ),
+                    &[("path", &dest.display().to_string())],
+                )
+            );
         }
     })
 }
@@ -58,9 +75,13 @@ pub fn export_run(g: &GlobalArgs, path: PathBuf, output: Option<PathBuf>) -> i32
     let Some((cfg, loc)) = loaded else {
         return common::print_envr_error(
             g,
-            EnvrError::Validation(format!(
-                "no `.envr.toml` or `.envr.local.toml` found searching upward from {}",
-                path.display()
+            EnvrError::Validation(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.no_project_config",
+                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+                ),
+                &[("path", &path.display().to_string())],
             )),
         );
     };
@@ -81,7 +102,17 @@ pub fn export_run(g: &GlobalArgs, path: PathBuf, output: Option<PathBuf>) -> i32
         });
         output::emit_ok(g, "config_exported", data, || {
             if !g.quiet {
-                println!("wrote {}", out_path.display());
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.export.wrote",
+                            "已写入 {path}",
+                            "wrote {path}",
+                        ),
+                        &[("path", &out_path.display().to_string())],
+                    )
+                );
             }
         })
     } else {

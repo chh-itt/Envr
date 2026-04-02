@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, parse_runtime_kind};
@@ -49,10 +49,25 @@ pub fn run(
     let data = serde_json::json!({ "runtimes": runtimes });
 
     output::emit_ok(g, "list_remote", data, || {
+        let none_line = envr_core::i18n::tr_key(
+            "cli.list.indent_none",
+            "  （无）",
+            "  (none)",
+        );
         for (kind, versions) in rows {
-            println!("{} (remote):", kind_label(kind));
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.remote.header",
+                        "{kind}（远程）：",
+                        "{kind} (remote):",
+                    ),
+                    &[("kind", kind_label(kind))],
+                )
+            );
             if versions.is_empty() {
-                println!("  (none)");
+                println!("{none_line}");
             } else {
                 for v in versions {
                     println!("  {v}");

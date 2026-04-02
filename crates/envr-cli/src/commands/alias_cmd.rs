@@ -1,7 +1,7 @@
 //! `envr alias` — persist name → target strings in `config/aliases.toml`.
 
 use crate::cli::GlobalArgs;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_config::aliases::AliasesFile;
 use envr_platform::paths::current_platform_paths;
@@ -24,7 +24,14 @@ pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
                 let data = serde_json::json!({ "aliases": entries });
                 output::emit_ok(g, "alias_list", data, || {
                     if file.aliases.is_empty() {
-                        println!("(no aliases)");
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.alias.none",
+                                "（无别名）",
+                                "(no aliases)",
+                            )
+                        );
                         return;
                     }
                     for (name, target) in &file.aliases {
@@ -53,7 +60,17 @@ pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
                 Ok(()) => {
                     let data = serde_json::json!({ "name": name, "target": target });
                     output::emit_ok(g, "alias_added", data, || {
-                        println!("alias `{name}` -> `{target}`");
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.alias.added",
+                                    "别名 `{name}` -> `{target}`",
+                                    "alias `{name}` -> `{target}`",
+                                ),
+                                &[("name", &name), ("target", &target)],
+                            )
+                        );
                     })
                 }
                 Err(e) => crate::commands::common::print_envr_error(g, e),
@@ -81,9 +98,29 @@ pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
                     });
                     output::emit_ok(g, "alias_removed", data, || {
                         if removed.is_some() {
-                            println!("removed alias `{name}`");
+                            println!(
+                                "{}",
+                                fmt_template(
+                                    &envr_core::i18n::tr_key(
+                                        "cli.alias.removed",
+                                        "已移除别名 `{name}`",
+                                        "removed alias `{name}`",
+                                    ),
+                                    &[("name", &name)],
+                                )
+                            );
                         } else {
-                            println!("no alias named `{name}`");
+                            println!(
+                                "{}",
+                                fmt_template(
+                                    &envr_core::i18n::tr_key(
+                                        "cli.alias.not_found",
+                                        "没有名为 `{name}` 的别名",
+                                        "no alias named `{name}`",
+                                    ),
+                                    &[("name", &name)],
+                                )
+                            );
                         }
                     })
                 }

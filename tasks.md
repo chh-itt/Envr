@@ -1027,18 +1027,18 @@
     - 验收结果：`cargo check -p envr-core -p envr-gui` 与 `cargo test -p envr-core -p envr-gui` 通过；GUI 已改动区域文案可从 `locales/*` 读取并支持 fallback。
 
 ### T912 CLI 文本全量 i18n
-- [ ] **T912：CLI 所有用户输出与 help 文本迁移为 i18n key** #i18n #cli
+- [x] **T912：CLI 所有用户输出与 help 文本迁移为 i18n key** #i18n #cli
   - **描述**：覆盖命令说明、参数帮助、错误提示、成功提示、诊断建议文本。
   - **依赖**：T910,T028
   - **输入文档**：CLI 命令清单
   - **输出文件**：`crates/envr-cli/src/**`,`locales/*`
   - **验收**：CLI 无硬编码用户可见文本（专业术语白名单除外）。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：`main` 在解析前调用 `bootstrap_i18n()`，并用 `cli_help::localized_command()`（基于 `Cli::command()` + `mut_arg`/`about` 链式替换）生成与 `--help` 一致且随语言切换的说明；`envr_core::i18n::load_messages` 展平 TOML 点分嵌套表；`output::emit_validation` 与 `output::fmt_template`；各 `commands/*` 用户可见输出与常见 `EnvrError::Validation` 使用 `cli.*`；`doctor` 诊断条目随语言；JSON 信封 `message` 机器标识符（如 `list_installed`）不变；`i18n` 单测对修改全局 locale 的用例加互斥。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：clap 4.6 的 `mut_arg` 接收 `self` 并返回 `Self`，需链式调用；`Cli` 仍由 derive 生成 `FromArgMatches`，与 `localized_command()` 的 `get_matches()` 配对。
+    - 验收结果：`cargo check -p envr-cli`；`cargo test -p envr-cli --test help`；`cargo test -p envr-core --lib`。
 
 ### T913 i18n 术语表与专业术语白名单
 - [ ] **T913：建立术语表与专业术语白名单管理** #i18n

@@ -26,7 +26,17 @@ pub fn clean(g: &GlobalArgs, kind: Option<String>, all: bool) -> i32 {
             let data = serde_json::json!({ "removed": target.to_string_lossy() });
             output::emit_ok(g, "cache_cleaned", data, || {
                 if !g.quiet {
-                    println!("cache removed: {}", target.display());
+                    println!(
+                        "{}",
+                        crate::output::fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.cache.removed",
+                                "已移除缓存：{path}",
+                                "cache removed: {path}",
+                            ),
+                            &[("path", &target.display().to_string())],
+                        )
+                    );
                 }
             })
         }
@@ -39,9 +49,13 @@ fn remove_dir_if_exists(path: &PathBuf) -> EnvrResult<()> {
         return Ok(());
     }
     if path.is_file() {
-        return Err(EnvrError::Validation(format!(
-            "cache path is a file, expected directory: {}",
-            path.display()
+        return Err(EnvrError::Validation(crate::output::fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.cache_path_is_file",
+                "缓存路径是文件，应为目录：{path}",
+                "cache path is a file, expected directory: {path}",
+            ),
+            &[("path", &path.display().to_string())],
         )));
     }
     fs::remove_dir_all(path).map_err(EnvrError::from)?;

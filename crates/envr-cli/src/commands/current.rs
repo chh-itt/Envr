@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
@@ -45,10 +45,32 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService, lang: Option<String>) -> i3
     let data = serde_json::json!({ "current": runtimes });
 
     output::emit_ok(g, "show_current", data, || {
+        let none = envr_core::i18n::tr_key("cli.common.none", "（无）", "(none)");
         for (kind, version) in rows {
+            let k = kind_label(kind);
             match version {
-                Some(v) => println!("{}: {v}", kind_label(kind)),
-                None => println!("{}: (none)", kind_label(kind)),
+                Some(v) => println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.current.line",
+                            "{kind}：{version}",
+                            "{kind}: {version}",
+                        ),
+                        &[("kind", k), ("version", v.as_str())],
+                    )
+                ),
+                None => println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.current.none_line",
+                            "{kind}：{none}",
+                            "{kind}: {none}",
+                        ),
+                        &[("kind", k), ("none", &none)],
+                    )
+                ),
             }
         }
     })

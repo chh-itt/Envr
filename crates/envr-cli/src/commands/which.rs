@@ -14,8 +14,13 @@ pub fn run(g: &GlobalArgs, name: Option<String>) -> i32 {
 
     let base = normalize_invoked_basename(name.trim());
     let Some(cmd) = parse_core_command(&base) else {
-        let err = EnvrError::Validation(format!(
-            "unknown tool {name:?} (try node, npm, npx, python, pip, java, javac, bun, bunx)"
+        let err = EnvrError::Validation(crate::output::fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.unknown_tool",
+                "未知工具 `{name}`（可试 node、npm、npx、python、pip、java、javac、bun、bunx）",
+                "unknown tool `{name}` (try node, npm, npx, python, pip, java, javac, bun, bunx)",
+            ),
+            &[("name", name.trim())],
         ));
         return common::print_envr_error(g, err);
     };

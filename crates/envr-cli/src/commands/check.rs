@@ -1,6 +1,6 @@
 use crate::cli::{GlobalArgs, OutputFormat};
 use crate::commands::common;
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_config::project_config::load_project_config;
 use envr_domain::runtime::parse_runtime_kind;
@@ -17,9 +17,13 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
     let Some((cfg, loc)) = loaded else {
         return common::print_envr_error(
             g,
-            EnvrError::Validation(format!(
-                "no `.envr.toml` or `.envr.local.toml` found searching upward from {}",
-                path.display()
+            EnvrError::Validation(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.no_project_config",
+                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+                ),
+                &[("path", &path.display().to_string())],
             )),
         );
     };
@@ -32,8 +36,13 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
     let mut problems = Vec::new();
     for (key, rt) in &cfg.runtimes {
         if parse_runtime_kind(key).is_err() {
-            problems.push(format!(
-                "unknown runtime key `{key}` (expected node, python, or java)"
+            problems.push(fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.err.unknown_runtime_key",
+                    "未知的运行时键 `{key}`（应为 node、python 或 java）",
+                    "unknown runtime key `{key}` (expected node, python, or java)",
+                ),
+                &[("key", key.as_str())],
             ));
             continue;
         }
@@ -46,14 +55,18 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
     }
 
     if !problems.is_empty() {
-        let msg = "project configuration check failed";
+        let msg = envr_core::i18n::tr_key(
+            "cli.check.fail_heading",
+            "项目配置检查失败",
+            "project configuration check failed",
+        );
         match g.output_format.unwrap_or(OutputFormat::Text) {
             OutputFormat::Json => {
                 let data = json!({
                     "config_dir": loc.dir.to_string_lossy(),
                     "issues": problems,
                 });
-                output::write_envelope(false, Some("project_check_failed"), msg, data, &[]);
+                output::write_envelope(false, Some("project_check_failed"), &msg, data, &[]);
             }
             OutputFormat::Text => {
                 eprintln!("envr: {msg}");
@@ -73,7 +86,17 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
     });
     output::emit_ok(g, "project_config_ok", data, || {
         if !g.quiet {
-            println!("project config ok (root {})", loc.dir.display());
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.check.ok",
+                        "项目配置正常（根目录 {path}）",
+                        "project config ok (root {path})",
+                    ),
+                    &[("path", &loc.dir.display().to_string())],
+                )
+            );
         }
     })
 }

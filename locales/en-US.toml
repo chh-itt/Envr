@@ -126,3 +126,89 @@ gui.runtime_settings.goproxy_hint = "Leave empty to not inject GOPROXY; otherwis
 gui.runtime_settings.bun_bin_hint = "Optional: overrides `bun pm bin -g` result for syncing global Bun executables."
 gui.runtime_settings.no_extra = "No runtime-specific settings yet."
 gui.action.save = "Save"
+
+# CLI (T912)
+cli.bootstrap.logging_failed = "failed to init logging"
+cli.validation.missing_args = "missing arguments for `{cmd}` (example: {example})"
+cli.child.exit_nonzero = "child process exited with code {exit}"
+
+cli.common.none = "(none)"
+cli.list.indent_none = "  (none)"
+
+cli.doctor.runtime_root_label = "runtime root:"
+cli.doctor.env_override_label = "ENVR_RUNTIME_ROOT:"
+cli.doctor.line_installed_current = "{kind}: {count} installed, current = {current}"
+cli.doctor.line_installed_none = "{kind}: {count} installed, current = {none}"
+cli.doctor.issues_heading = "Issues:"
+cli.doctor.suggestions_heading = "Suggestions:"
+cli.doctor.json_fail_message = "environment checks found problems"
+
+cli.doctor.issue.root_missing = "runtime data root does not exist"
+cli.doctor.rec.root_create = "create `{path}` or set ENVR_RUNTIME_ROOT to a writable directory"
+cli.doctor.issue.root_not_writable = "runtime data root is not writable: {path}"
+cli.doctor.rec.root_permissions = "fix directory permissions or choose another ENVR_RUNTIME_ROOT"
+cli.doctor.rec.shims_empty = "`shims` directory is empty; after installing runtimes, add `shims` to PATH or refresh shims when integrated"
+cli.doctor.rec.shims_path = "ensure `{path}` is on your PATH ahead of other tool copies"
+cli.doctor.issue.list_failed = "{kind}: list_installed failed: {detail}"
+cli.doctor.issue.current_failed = "{kind}: current failed: {detail}"
+cli.doctor.rec.no_current = "{kind} has installed versions but no `current` symlink; run `envr use {kind} <version>`"
+
+cli.diagnostics.bundle_wrote = "wrote diagnostics bundle: {path}"
+cli.diagnostics.write_failed = "failed to write {path}: {detail}"
+cli.diagnostics.export_failed = "diagnostics export failed: {detail}"
+
+cli.shim.sync_ok = "shims refreshed under {path}"
+cli.cache.removed = "cache removed: {path}"
+cli.err.cache_path_is_file = "cache path is a file, expected directory: {path}"
+cli.err.shim_exe_no_parent = "current_exe has no parent directory"
+cli.err.shim_exe_not_found = "envr-shim executable not found next to {path}"
+
+cli.remote.header = "{kind} (remote):"
+cli.list.header = "{kind}:"
+cli.current.line = "{kind}: {version}"
+cli.current.none_line = "{kind}: {none}"
+
+cli.prune.dry_run_hint = "Dry run (no versions uninstalled). Use --execute to apply."
+cli.prune.nothing_to_prune_kind = "{kind}: nothing to prune (no current, or only current installed)"
+cli.prune.would_remove_header = "{kind}: would remove:"
+cli.prune.nothing_pruned = "nothing pruned"
+cli.prune.uninstalled_line = "{kind} {version} uninstalled"
+
+cli.resolve.line = "{lang}: {path} (from {source})"
+cli.resolve.source.cli_override = "CLI override"
+cli.resolve.source.project = "project"
+cli.resolve.source.global_current = "global current"
+
+cli.check.fail_heading = "project configuration check failed"
+cli.check.ok = "project config ok (root {path})"
+
+cli.init.wrote = "wrote {path}"
+cli.import.merged = "merged into {path}"
+cli.export.wrote = "wrote {path}"
+
+cli.update.version_line = "envr {version}"
+cli.update.release_check_pending = "(release check is not implemented yet)"
+cli.update.self_update_hint = "Self-update is not implemented; reinstall from your package source when upgrades are available."
+
+cli.alias.none = "(no aliases)"
+cli.alias.added = "alias `{name}` -> `{target}`"
+cli.alias.removed = "removed alias `{name}`"
+cli.alias.not_found = "no alias named `{name}`"
+
+cli.profile.none_in_dir = "(no profiles in {path})"
+cli.profile.show_header = "profile `{name}` (root {path})"
+
+cli.err.not_a_file = "not a file: {path}"
+cli.err.not_a_directory = "not a directory: {path}"
+cli.err.init_exists = "{path} already exists (use --force to overwrite)"
+cli.err.no_project_config = "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}"
+cli.err.no_profile = "no profile `{name}` in {path}"
+cli.err.unknown_runtime_key = "unknown runtime key `{key}` (expected node, python, or java)"
+cli.err.unknown_tool = "unknown tool `{name}` (try node, npm, npx, python, pip, java, javac, bun, bunx)"
+
+cli.install.ok = "{kind} {version} installed"
+cli.use.ok = "{kind} current set to {version}"
+cli.uninstall.ok = "{kind} {version} uninstalled"
+
+cli.help.global.format_long = "`text`: human-readable. `json`: one JSON line per envelope for automation."
+cli.help.arg.shell_long = "`posix`: POSIX shell. `cmd`: Windows cmd. `powershell`: PowerShell."

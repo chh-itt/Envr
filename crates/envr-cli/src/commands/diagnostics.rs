@@ -75,7 +75,17 @@ fn emit_export_ok(g: &GlobalArgs, zip_path: &Path) -> i32 {
     let path_str = zip_path.display().to_string();
     let data = json!({ "path": path_str });
     output::emit_ok(g, "diagnostics_export_ok", data, || {
-        println!("wrote diagnostics bundle: {}", zip_path.display());
+        println!(
+            "{}",
+            output::fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.diagnostics.bundle_wrote",
+                    "已写入诊断包：{path}",
+                    "wrote diagnostics bundle: {path}",
+                ),
+                &[("path", &zip_path.display().to_string())],
+            )
+        );
     })
 }
 
@@ -83,7 +93,14 @@ fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
     let path_str = zip_path.display().to_string();
     match g.output_format.unwrap_or(OutputFormat::Text) {
         OutputFormat::Json => {
-            let msg = format!("diagnostics export failed: {err}");
+            let msg = output::fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.diagnostics.export_failed",
+                    "导出诊断失败：{detail}",
+                    "diagnostics export failed: {detail}",
+                ),
+                &[("detail", &err.to_string())],
+            );
             output::write_envelope(
                 false,
                 Some("diagnostics_export_failed"),
@@ -93,7 +110,18 @@ fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
             );
         }
         OutputFormat::Text => {
-            eprintln!("envr: failed to write {}: {err}", zip_path.display());
+            let line = output::fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.diagnostics.write_failed",
+                    "写入 {path} 失败：{detail}",
+                    "failed to write {path}: {detail}",
+                ),
+                &[
+                    ("path", &zip_path.display().to_string()),
+                    ("detail", &err.to_string()),
+                ],
+            );
+            eprintln!("envr: {line}");
         }
     }
     output::exit_code_for_error(&err)

@@ -46,7 +46,17 @@ pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
 
     output::emit_ok(g, "shims_synced", data, || {
         if !g.quiet {
-            println!("shims refreshed under {}", root.join("shims").display());
+            println!(
+                "{}",
+                crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.shim.sync_ok",
+                        "已在 {path} 下刷新 shims",
+                        "shims refreshed under {path}",
+                    ),
+                    &[("path", &root.join("shims").display().to_string())],
+                )
+            );
         }
     })
 }
@@ -56,7 +66,15 @@ fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {
     let exe = std::env::current_exe().map_err(EnvrError::from)?;
     let dir = exe
         .parent()
-        .ok_or_else(|| EnvrError::Runtime("current_exe has no parent directory".into()))?;
+        .ok_or_else(|| {
+            EnvrError::Runtime(
+                envr_core::i18n::tr_key(
+                    "cli.err.shim_exe_no_parent",
+                    "current_exe 没有父目录",
+                    "current_exe has no parent directory",
+                ),
+            )
+        })?;
 
     #[cfg(windows)]
     let candidates = ["envr-shim.exe", "envr-shim"];
@@ -70,8 +88,12 @@ fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {
         }
     }
 
-    Err(EnvrError::Runtime(format!(
-        "envr-shim executable not found next to {}",
-        exe.display()
+    Err(EnvrError::Runtime(crate::output::fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.err.shim_exe_not_found",
+            "在 {path} 旁未找到 envr-shim 可执行文件",
+            "envr-shim executable not found next to {path}",
+        ),
+        &[("path", &exe.display().to_string())],
     )))
 }

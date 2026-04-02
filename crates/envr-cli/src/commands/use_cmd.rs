@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
-use crate::output;
+use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
@@ -42,7 +42,17 @@ fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {
     });
     output::emit_ok(g, "current_runtime_set", data, || {
         if !g.quiet {
-            println!("{} current set to {}", kind_label(kind), v.0);
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.use.ok",
+                        "已将 {kind} 的 current 设为 {version}",
+                        "{kind} current set to {version}",
+                    ),
+                    &[("kind", kind_label(kind)), ("version", &v.0)],
+                )
+            );
         }
     })
 }

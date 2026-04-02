@@ -166,9 +166,31 @@ fn load_messages(raw: &str) -> HashMap<String, String> {
     let Some(tbl) = parsed.get("messages").and_then(|v| v.as_table()) else {
         return HashMap::new();
     };
-    tbl.iter()
-        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-        .collect()
+    let mut out = HashMap::new();
+    flatten_message_table("", tbl, &mut out);
+    out
+}
+
+/// Dotted keys in TOML (`a.b.c = "x"`) nest tables; flatten to lookup keys `a.b.c`.
+fn flatten_message_table(
+    prefix: &str,
+    tbl: &toml::map::Map<String, toml::Value>,
+    out: &mut HashMap<String, String>,
+) {
+    for (k, v) in tbl {
+        let full = if prefix.is_empty() {
+            k.clone()
+        } else {
+            format!("{prefix}.{k}")
+        };
+        match v {
+            toml::Value::String(s) => {
+                out.insert(full, s.clone());
+            }
+            toml::Value::Table(t) => flatten_message_table(&full, t, out),
+            _ => {}
+        }
+    }
 }
 
 /// Translate by i18n key, fallback to inline zh/en literals when key is missing.
@@ -189,6 +211,10 @@ pub fn tr_key(key: &str, zh_cn_fallback: &'static str, en_us_fallback: &'static 
 mod tests {
     use super::*;
     use envr_config::settings::{I18nSettings, Settings};
+    use std::sync::Mutex;
+
+    /// `CURRENT` is process-global; serialize tests that call `set` / `init_from_settings`.
+    static I18N_LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parses_locale_name_from_reg_output() {
@@ -202,6 +228,7 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn set_and_tr_follow_current_locale() {
+        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
         set(Locale::ZhCn);
         assert_eq!(tr("中文", "English"), "中文");
         set(Locale::EnUs);
@@ -210,6 +237,7 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn init_from_settings_uses_explicit_locale() {
+        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
         let mut s = Settings {
             i18n: I18nSettings {
                 locale: LocaleMode::ZhCn,
@@ -238,10 +266,51 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn tr_key_uses_locales_and_falls_back() {
+        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
         set(Locale::EnUs);
         assert_eq!(tr_key("gui.action.install", "安装", "Install"), "Install");
-        assert_eq!(tr_key("missing.key", "中文默认", "English default"), "English default");
+        assert_eq!(
+            tr_key(
+                "__envr_no_such_message_key__",
+                "中文默认",
+                "English default",
+            ),
+            "English default"
+        );
         set(Locale::ZhCn);
         assert_eq!(tr_key("gui.action.install", "安装", "Install"), "安装");
+    }
+
+    #[test]
+    fn tr_key_loads_cli_locale_entries() {
+        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
+        set(Locale::EnUs);
+        assert_eq!(
+            tr_key(
+                "cli.bootstrap.logging_failed",
+                "初始化日志失败",
+                "failed to init logging",
+            ),
+            "failed to init logging"
+        );
+        set(Locale::ZhCn);
+        assert_eq!(
+            tr_key(
+                "cli.bootstrap.logging_failed",
+                "初始化日志失败",
+                "failed to init logging",
+            ),
+            "初始化日志失败"
+        );
+    }
+
+    #[test]
+    fn load_messages_flattens_dotted_toml_keys() {
+        let raw = r#"
+[messages]
+a.b.c = "nested"
+"#;
+        let m = super::load_messages(raw);
+        assert_eq!(m.get("a.b.c").map(String::as_str), Some("nested"));
     }
 }

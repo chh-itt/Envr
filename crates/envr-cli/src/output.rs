@@ -5,6 +5,15 @@ use crate::cli::{GlobalArgs, OutputFormat};
 use envr_error::{EnvrError, ErrorCode};
 use serde_json::{Map, Value, json};
 
+/// Replace `{name}` placeholders in a localized template (order-independent).
+pub fn fmt_template(tmpl: &str, vars: &[(&str, &str)]) -> String {
+    let mut s = tmpl.to_string();
+    for (k, v) in vars {
+        s = s.replace(&format!("{{{k}}}"), v);
+    }
+    s
+}
+
 /// Stable snake_case code strings aligned with [`ErrorCode`] serialization.
 pub fn error_code_token(code: ErrorCode) -> &'static str {
     match code {
@@ -48,7 +57,12 @@ pub fn write_envelope(
 }
 
 pub fn emit_validation(g: &GlobalArgs, cmd: &str, example: &str) -> i32 {
-    let msg = format!("missing arguments for `{cmd}` (example: {example})");
+    let tmpl = envr_core::i18n::tr_key(
+        "cli.validation.missing_args",
+        "`{cmd}` 缺少参数（示例：{example}）",
+        "missing arguments for `{cmd}` (example: {example})",
+    );
+    let msg = fmt_template(&tmpl, &[("cmd", cmd), ("example", example)]);
     match g.output_format.unwrap_or(OutputFormat::Text) {
         OutputFormat::Json => {
             write_envelope(false, Some("validation"), &msg, Value::Null, &[]);
