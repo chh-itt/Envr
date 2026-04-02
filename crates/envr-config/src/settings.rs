@@ -135,13 +135,13 @@ pub struct AppearanceSettings {
 }
 
 /// GUI-only state persisted in `settings.toml` so window layout/UX preferences survive restarts.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GuiSettings {
     #[serde(default)]
     pub downloads_panel: DownloadsPanelSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DownloadsPanelSettings {
     /// Whether the floating downloads panel is visible.
     #[serde(default = "defaults::downloads_panel_visible")]
@@ -155,6 +155,53 @@ pub struct DownloadsPanelSettings {
     /// Bottom offset in pixels from the window's bottom edge.
     #[serde(default = "defaults::downloads_panel_y")]
     pub y: i32,
+    /// Normalized horizontal inset: `x ≈ x_frac * (client_w - 2*pad - panel_w)` (`tasks_gui.md` GUI-061).
+    #[serde(default)]
+    pub x_frac: Option<f32>,
+    /// Normalized bottom inset: `y ≈ y_frac * (client_h - 2*pad)` (`tasks_gui.md` GUI-061).
+    #[serde(default)]
+    pub y_frac: Option<f32>,
+}
+
+impl DownloadsPanelSettings {
+    /// Pixel insets for the panel, using fractional coords when present (DPI / resize stable).
+    pub fn pixel_insets(
+        &self,
+        client_w: f32,
+        client_h: f32,
+        content_pad: f32,
+        panel_w: f32,
+    ) -> (i32, i32) {
+        let inner_w = (client_w - 2.0 * content_pad).max(1.0);
+        let inner_h = (client_h - 2.0 * content_pad).max(1.0);
+        let avail_x = (inner_w - panel_w).max(1.0);
+        if let (Some(xf), Some(yf)) = (self.x_frac, self.y_frac) {
+            let x = (xf.clamp(0.0, 1.0) * avail_x).round() as i32;
+            let y = (yf.clamp(0.0, 1.0) * inner_h).round() as i32;
+            (x.max(0), y.max(0))
+        } else {
+            (self.x.max(0), self.y.max(0))
+        }
+    }
+
+    /// Writes [`Self::x_frac`] / [`Self::y_frac`] from current pixel offsets (for persistence).
+    pub fn sync_frac_from_pixels(
+        &mut self,
+        x: i32,
+        y: i32,
+        client_w: f32,
+        client_h: f32,
+        content_pad: f32,
+        panel_w: f32,
+    ) {
+        let inner_w = (client_w - 2.0 * content_pad).max(1.0);
+        let inner_h = (client_h - 2.0 * content_pad).max(1.0);
+        let avail_x = (inner_w - panel_w).max(1.0);
+        self.x = x.max(0);
+        self.y = y.max(0);
+        self.x_frac = Some((self.x as f32 / avail_x).clamp(0.0, 1.0));
+        self.y_frac = Some((self.y as f32 / inner_h).clamp(0.0, 1.0));
+    }
 }
 
 impl Default for DownloadsPanelSettings {
@@ -164,6 +211,8 @@ impl Default for DownloadsPanelSettings {
             expanded: defaults::downloads_panel_expanded(),
             x: defaults::downloads_panel_x(),
             y: defaults::downloads_panel_y(),
+            x_frac: None,
+            y_frac: None,
         }
     }
 }
@@ -192,7 +241,7 @@ pub struct BunRuntimeSettings {
     pub global_bin_dir: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     pub paths: PathSettings,
@@ -289,6 +338,21 @@ impl Settings {
             return Err(EnvrError::Validation(
                 "gui.downloads_panel x/y must be >= 0".to_string(),
             ));
+        }
+
+        if let Some(xf) = self.gui.downloads_panel.x_frac {
+            if !xf.is_finite() || !(0.0..=1.0).contains(&xf) {
+                return Err(EnvrError::Validation(
+                    "gui.downloads_panel x_frac must be in [0, 1]".to_string(),
+                ));
+            }
+        }
+        if let Some(yf) = self.gui.downloads_panel.y_frac {
+            if !yf.is_finite() || !(0.0..=1.0).contains(&yf) {
+                return Err(EnvrError::Validation(
+                    "gui.downloads_panel y_frac must be in [0, 1]".to_string(),
+                ));
+            }
         }
 
         Ok(())
@@ -503,6 +567,16 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    fn downloads_panel_frac_roundtrip_stable() {
+        let mut p = DownloadsPanelSettings::default();
+        p.sync_frac_from_pixels(100, 48, 960.0, 600.0, 12.0, 320.0);
+        let (x, y) = p.pixel_insets(960.0, 600.0, 12.0, 320.0);
+        assert_eq!((x, y), (100, 48));
+        let (x2, y2) = p.pixel_insets(1200.0, 720.0, 12.0, 320.0);
+        assert!(x2 > x && y2 > y, "larger window should allow larger insets");
+    }
+
+    #[test]
     fn read_write_roundtrip_is_consistent() {
         let tmp = TempDir::new().expect("tmp");
         let path = tmp.path().join("settings.toml");
@@ -528,6 +602,8 @@ mod tests {
                     expanded: false,
                     x: 24,
                     y: 18,
+                    x_frac: None,
+                    y_frac: None,
                 },
             },
             download: DownloadSettings {

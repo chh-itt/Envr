@@ -21,6 +21,8 @@ pub enum Lucide {
     EyeOff,
     CircleAlert,
     Package,
+    /// Reserved for sidebar / panel affordances (asset kept with Lucide bundle).
+    #[allow(dead_code)]
     PanelLeftOpen,
     X,
     Menu,

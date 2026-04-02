@@ -2,8 +2,9 @@ use super::model::{DownloadPanelState, JobState};
 use super::panel::DownloadMsg;
 use super::panel::format_job_state_line;
 use envr_ui::theme::ThemeTokens;
+use iced::mouse;
 use iced::widget::{
-    button, column, container, progress_bar, row, scrollable, text, vertical_space,
+    button, column, container, mouse_area, progress_bar, row, scrollable, text, vertical_space,
 };
 use iced::{Alignment, Element, Length, Theme};
 
@@ -11,6 +12,9 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::widget_styles::{ButtonVariant, button_style};
+
+/// Card width matches layout geometry / persistence (`tasks_gui.md` GUI-061).
+pub const DOWNLOAD_PANEL_SHELL_W: f32 = 320.0;
 
 pub fn floating_download_panel(
     state: &DownloadPanelState,
@@ -45,73 +49,56 @@ pub fn floating_download_panel(
         .into();
     }
 
-    let title_row = row![
-        Lucide::PanelLeftOpen.view(18.0, txt),
-        text(envr_core::i18n::tr_key(
-            "gui.downloads.panel_title",
-            "下载任务",
-            "Downloads",
-        ))
-        .size(ty.body),
-    ]
-    .spacing(sp.sm)
-    .align_y(Alignment::Center);
+    let title_txt = envr_core::i18n::tr_key("gui.downloads.panel_title", "下载任务", "Downloads");
+    let title_row = container(
+        row![
+            Lucide::Menu.view(16.0, txt),
+            text(title_txt).size(ty.body).width(Length::Fill),
+        ]
+        .spacing(sp.sm)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .clip(true);
 
-    let header = row![
-        button(Lucide::Menu.view(18.0, txt))
-            .on_press(Message::Download(DownloadMsg::StartDrag))
-            .height(Length::Fixed(btn_h))
-            .padding([0, sp.sm])
-            .style(button_style(tokens, ButtonVariant::Ghost)),
-        title_row,
-        iced::widget::horizontal_space(),
-        button(
-            row![
-                Lucide::Download.view(14.0, txt),
-                text(envr_core::i18n::tr_key(
-                    "gui.downloads.add_demo",
-                    "添加演示下载",
-                    "Add demo download",
-                )),
-            ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
-        .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-        .height(Length::Fixed(btn_h))
-        .padding([0, sp.sm + 2])
-        .style(button_style(tokens, ButtonVariant::Secondary)),
-        button(
-            row![
-                Lucide::ChevronsUpDown.view(14.0, txt),
-                text(if state.expanded {
-                    envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
-                } else {
-                    envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
-                }),
-            ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
-        .on_press(Message::Download(DownloadMsg::ToggleExpand))
-        .height(Length::Fixed(btn_h))
-        .padding([0, sp.sm + 2])
-        .style(button_style(tokens, ButtonVariant::Secondary)),
-        button(
-            row![
-                Lucide::EyeOff.view(14.0, txt),
-                text(envr_core::i18n::tr_key("gui.action.hide", "隐藏", "Hide")),
-            ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
-        .on_press(Message::Download(DownloadMsg::ToggleVisible))
-        .height(Length::Fixed(btn_h))
-        .padding([0, sp.sm + 2])
-        .style(button_style(tokens, ButtonVariant::Ghost)),
-    ]
-    .spacing(sp.sm + 2)
-    .align_y(Alignment::Center);
+    let title_drag_strip = mouse_area(title_row)
+        .on_press(Message::Download(DownloadMsg::TitleBarPress))
+        .interaction(mouse::Interaction::Grab);
+
+    // Icon-only actions scroll horizontally (`tasks_gui.md` GUI-060).
+    let toolbar = scrollable(
+        row![
+            button(Lucide::Download.view(16.0, txt))
+                .on_press(Message::Download(DownloadMsg::EnqueueDemo))
+                .width(Length::Fixed(btn_h))
+                .height(Length::Fixed(btn_h))
+                .padding(0)
+                .style(button_style(tokens, ButtonVariant::Secondary)),
+            button(Lucide::ChevronsUpDown.view(16.0, txt))
+                .on_press(Message::Download(DownloadMsg::ToggleExpand))
+                .width(Length::Fixed(btn_h))
+                .height(Length::Fixed(btn_h))
+                .padding(0)
+                .style(button_style(tokens, ButtonVariant::Secondary)),
+            button(Lucide::EyeOff.view(16.0, txt))
+                .on_press(Message::Download(DownloadMsg::ToggleVisible))
+                .width(Length::Fixed(btn_h))
+                .height(Length::Fixed(btn_h))
+                .padding(0)
+                .style(button_style(tokens, ButtonVariant::Ghost)),
+        ]
+        .spacing(sp.sm)
+        .align_y(Alignment::Center),
+    )
+    .direction(scrollable::Direction::Horizontal(
+        scrollable::Scrollbar::default(),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fixed(btn_h));
+
+    let header = column![title_drag_strip, toolbar]
+        .spacing(sp.xs)
+        .width(Length::Fill);
 
     let mut body = column![header].spacing(sp.sm + 2);
 
@@ -174,7 +161,7 @@ pub fn floating_download_panel(
     let slide_px = (1.0 - rev) * 14.0;
     let card = container(body)
         .padding(sp.sm + 2)
-        .width(Length::Fixed(320.0))
+        .width(Length::Fixed(DOWNLOAD_PANEL_SHELL_W))
         .style(move |theme: &Theme| gui_theme::download_panel_container_style(tokens, rev)(theme));
 
     column![vertical_space().height(Length::Fixed(slide_px)), card,].into()

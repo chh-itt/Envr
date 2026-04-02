@@ -66,6 +66,7 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
     .width(Length::Fill)
     .height(Length::Fill);
 
+    // `stack` draw order: main chrome first, downloads overlay second → above content, below future modals (`tasks_gui.md` GUI-062).
     container(stack![chrome, floating])
         .width(Length::Fill)
         .height(Length::Fill)

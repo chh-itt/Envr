@@ -5,7 +5,8 @@ pub enum DownloadMsg {
     Tick,
     ToggleVisible,
     ToggleExpand,
-    StartDrag,
+    /// Pointer down on title / drag strip (long-press then drag — GUI-061).
+    TitleBarPress,
     Event(iced::Event),
     EnqueueDemo,
     Finished {

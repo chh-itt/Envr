@@ -2,7 +2,7 @@ use envr_download::task::CancelToken;
 use envr_ui::theme::ThemeTokens;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
@@ -63,6 +63,9 @@ pub struct PanelRevealAnim {
     pub duration_ms: u16,
 }
 
+/// Long-press duration before a title-bar drag arms (`tasks_gui.md` GUI-061).
+pub const TITLE_DRAG_HOLD: Duration = Duration::from_millis(280);
+
 pub struct DownloadPanelState {
     pub jobs: Vec<DownloadJob>,
     pub next_id: u64,
@@ -82,6 +85,10 @@ pub struct DownloadPanelState {
     pub dragging: bool,
     pub drag_from_cursor: Option<(f32, f32)>,
     pub drag_from_pos: Option<(i32, i32)>,
+    /// Left button down on the title / drag strip — drag starts after [`TITLE_DRAG_HOLD`].
+    pub title_drag_armed_since: Option<Instant>,
+    /// Latest pointer (window coords) while tracking a title drag.
+    pub last_drag_pointer: Option<(f32, f32)>,
 }
 
 impl Default for DownloadPanelState {
@@ -100,6 +107,8 @@ impl Default for DownloadPanelState {
             dragging: false,
             drag_from_cursor: None,
             drag_from_pos: None,
+            title_drag_armed_since: None,
+            last_drag_pointer: None,
         }
     }
 }

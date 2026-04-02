@@ -14,6 +14,7 @@ use envr_ui::theme::{
 };
 use iced::font::Family;
 use iced::widget::scrollable::{self, AbsoluteOffset};
+use iced::window;
 use iced::{Element, Size, Subscription, Task, application};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -22,7 +23,9 @@ use crate::download_runner;
 use crate::gui_ops;
 use crate::theme as gui_theme;
 use crate::view::dashboard::{DashboardMsg, DashboardState};
-use crate::view::downloads::{DownloadJob, DownloadMsg, DownloadPanelState, JobState};
+use crate::view::downloads::{
+    DOWNLOAD_PANEL_SHELL_W, DownloadJob, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
+};
 use crate::view::env_center::{ENV_INSTALLED_LIST_SCROLL_ID, EnvCenterMsg, EnvCenterState};
 use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
@@ -60,6 +63,8 @@ impl Route {
 pub struct AppState {
     route: Route,
     error: Option<String>,
+    /// Last main window **inner** size (physical px) for panel geometry (`tasks_gui.md` GUI-061).
+    window_inner_px: Option<(f32, f32)>,
     /// Active skin; user can override the OS default on the Settings page.
     flavor: UiFlavor,
     /// System / env reduced motion (`tasks_gui.md` GUI-052).
@@ -79,6 +84,7 @@ impl Default for AppState {
         Self {
             route: Route::default(),
             error: None,
+            window_inner_px: None,
             flavor: default_flavor_for_target(),
             reduce_motion: envr_platform::a11y::prefers_reduced_motion(),
             ui_text_scale: ui_text_scale_from_env(),
@@ -103,8 +109,16 @@ impl Default for AppState {
 
 fn load_gui_downloads_panel_settings_cached() -> (bool, bool, i32, i32) {
     let st = STARTUP_SETTINGS.get().cloned().unwrap_or_default();
-    let p = st.gui.downloads_panel;
-    (p.visible, p.expanded, p.x.max(0), p.y.max(0))
+    let p = &st.gui.downloads_panel;
+    // Matches `envr_ui::theme` 8pt grid `md` (12px) used as shell `content_spacing`.
+    let pad = 12.0_f32;
+    let (x, y) = p.pixel_insets(
+        layout_shell::WINDOW_DEFAULT_W,
+        layout_shell::WINDOW_DEFAULT_H,
+        pad,
+        DOWNLOAD_PANEL_SHELL_W,
+    );
+    (p.visible, p.expanded, x, y)
 }
 
 fn ui_text_scale_from_env() -> f32 {
@@ -160,6 +174,8 @@ pub enum Message {
     MotionTick,
     /// Re-check OS / env accessibility hints (`tasks_gui.md` GUI-052).
     A11yPollTick,
+    /// Main window resized — keep downloads panel in client bounds (`tasks_gui.md` GUI-061).
+    WindowResized(Size),
     Navigate(Route),
     DismissError,
     ReportError(String),
@@ -179,6 +195,7 @@ pub fn run() -> iced::Result {
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
             let need_motion = state.downloads.needs_motion_tick()
+                || state.downloads.title_drag_armed_since.is_some()
                 || (matches!(state.route(), Route::Runtime)
                     && state.env_center.busy
                     && state.env_center.installed.is_empty());
@@ -191,9 +208,9 @@ pub fn run() -> iced::Result {
                 .then(|| iced::time::every(Duration::from_millis(400)))
                 .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
 
-            let maybe_events = state
-                .downloads
-                .dragging
+            let need_pointer_events =
+                state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
+            let maybe_events = need_pointer_events
                 .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
 
             let theme_poll = (state.settings.draft.appearance.theme_mode
@@ -215,6 +232,7 @@ pub fn run() -> iced::Result {
                 subs.push(t);
             }
             subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
+            subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
             Subscription::batch(subs)
         })
         .window(iced::window::Settings {
@@ -271,6 +289,10 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::A11yPollTick => {
             state.reduce_motion = envr_platform::a11y::prefers_reduced_motion();
             state.ui_text_scale = ui_text_scale_from_env();
+            Task::none()
+        }
+        Message::WindowResized(size) => {
+            on_main_window_resized(state, size);
             Task::none()
         }
         Message::MotionTick => handle_motion_tick(state),
@@ -632,10 +654,18 @@ fn settings_path() -> PathBuf {
 }
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
+    if let Some(since) = state.downloads.title_drag_armed_since {
+        if !state.downloads.dragging && since.elapsed() >= TITLE_DRAG_HOLD {
+            state.downloads.dragging = true;
+            state.downloads.drag_from_cursor = None;
+            state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
+            state.downloads.title_drag_armed_since = None;
+        }
+    }
     let tokens = state.tokens();
     state.downloads.advance_reveal(tokens);
     if state.downloads.take_persist_after_hide() {
-        let _ = persist_download_panel_settings(&state.downloads);
+        let _ = persist_download_panel_settings(state);
     }
     state.downloads.maybe_progress_tick_on_motion_frame();
     if !state.reduce_motion
@@ -660,19 +690,18 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
                 state.downloads.start_hide_anim(tokens);
             } else if !state.downloads.visible {
                 state.downloads.start_show_anim(tokens);
-                let _ = persist_download_panel_settings(&state.downloads);
+                let _ = persist_download_panel_settings(state);
             }
             Task::none()
         }
         DownloadMsg::ToggleExpand => {
             state.downloads.expanded = !state.downloads.expanded;
-            let _ = persist_download_panel_settings(&state.downloads);
+            let _ = persist_download_panel_settings(state);
             Task::none()
         }
-        DownloadMsg::StartDrag => {
-            state.downloads.dragging = true;
-            state.downloads.drag_from_cursor = None;
-            state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
+        DownloadMsg::TitleBarPress => {
+            state.downloads.title_drag_armed_since = Some(std::time::Instant::now());
+            state.downloads.last_drag_pointer = None;
             Task::none()
         }
         DownloadMsg::Event(e) => {
@@ -680,10 +709,14 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
             use iced::mouse;
             match e {
                 Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    let (cx, cy) = (position.x, position.y);
+                    if state.downloads.title_drag_armed_since.is_some() && !state.downloads.dragging
+                    {
+                        state.downloads.last_drag_pointer = Some((cx, cy));
+                    }
                     if !state.downloads.dragging {
                         return Task::none();
                     }
-                    let (cx, cy) = (position.x, position.y);
                     if state.downloads.drag_from_cursor.is_none() {
                         state.downloads.drag_from_cursor = Some((cx, cy));
                         return Task::none();
@@ -698,6 +731,7 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
                     let dy = cy - sy;
                     state.downloads.x = (px + dx.round() as i32).max(0);
                     state.downloads.y = (py - dy.round() as i32).max(0);
+                    clamp_download_panel_to_window(state);
                     Task::none()
                 }
                 Event::Mouse(mouse::Event::ButtonReleased(_btn)) => {
@@ -705,8 +739,9 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
                         state.downloads.dragging = false;
                         state.downloads.drag_from_cursor = None;
                         state.downloads.drag_from_pos = None;
-                        let _ = persist_download_panel_settings(&state.downloads);
+                        let _ = persist_download_panel_settings(state);
                     }
+                    state.downloads.title_drag_armed_since = None;
                     Task::none()
                 }
                 _ => Task::none(),
@@ -759,18 +794,59 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
     }
 }
 
-fn persist_download_panel_settings(
-    panel: &DownloadPanelState,
-) -> Result<(), envr_error::EnvrError> {
+fn persist_download_panel_settings(state: &AppState) -> Result<(), envr_error::EnvrError> {
     let paths = envr_platform::paths::current_platform_paths()?;
     let settings_path = envr_config::settings::settings_path_from_platform(&paths);
     let mut st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+    let panel = &state.downloads;
     st.gui.downloads_panel.visible = panel.visible;
     st.gui.downloads_panel.expanded = panel.expanded;
-    st.gui.downloads_panel.x = panel.x.max(0);
-    st.gui.downloads_panel.y = panel.y.max(0);
+    let (cw, ch) = state.window_inner_px.unwrap_or((
+        layout_shell::WINDOW_DEFAULT_W,
+        layout_shell::WINDOW_DEFAULT_H,
+    ));
+    let pad = state.tokens().content_spacing();
+    st.gui.downloads_panel.sync_frac_from_pixels(
+        panel.x,
+        panel.y,
+        cw,
+        ch,
+        pad,
+        DOWNLOAD_PANEL_SHELL_W,
+    );
     st.save_to(&settings_path)?;
     Ok(())
+}
+
+fn on_main_window_resized(state: &mut AppState, new: Size) {
+    let pad = state.tokens().content_spacing();
+    if let Some((old_w, old_h)) = state.window_inner_px {
+        let inner_w_old = (old_w - 2.0 * pad).max(1.0);
+        let inner_h_old = (old_h - 2.0 * pad).max(1.0);
+        let avail_x_old = (inner_w_old - DOWNLOAD_PANEL_SHELL_W).max(1.0);
+        let xf = state.downloads.x as f32 / avail_x_old;
+        let yf = state.downloads.y as f32 / inner_h_old;
+        let inner_w = (new.width - 2.0 * pad).max(1.0);
+        let inner_h = (new.height - 2.0 * pad).max(1.0);
+        let avail_x = (inner_w - DOWNLOAD_PANEL_SHELL_W).max(1.0);
+        state.downloads.x = (xf.clamp(0.0, 1.0) * avail_x).round() as i32;
+        state.downloads.y = (yf.clamp(0.0, 1.0) * inner_h).round() as i32;
+    }
+    state.window_inner_px = Some((new.width, new.height));
+    clamp_download_panel_to_window(state);
+}
+
+fn clamp_download_panel_to_window(state: &mut AppState) {
+    let Some((ww, wh)) = state.window_inner_px else {
+        return;
+    };
+    let pad = state.tokens().content_spacing();
+    let inner_w = (ww - 2.0 * pad).max(1.0);
+    let inner_h = (wh - 2.0 * pad).max(1.0);
+    let max_x = (inner_w - DOWNLOAD_PANEL_SHELL_W).max(0.0).round() as i32;
+    let max_y = inner_h.max(0.0).round() as i32;
+    state.downloads.x = state.downloads.x.clamp(0, max_x);
+    state.downloads.y = state.downloads.y.clamp(0, max_y);
 }
 
 fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {
