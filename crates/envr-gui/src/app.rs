@@ -42,21 +42,15 @@ impl Route {
         Route::About,
     ];
 
-    pub(crate) fn label(self) -> &'static str {
-        envr_core::i18n::tr(
-            match self {
-                Route::Dashboard => "仪表盘",
-                Route::Runtime => "运行时",
-                Route::Settings => "设置",
-                Route::About => "关于",
-            },
-            match self {
-                Route::Dashboard => "Dashboard",
-                Route::Runtime => "Runtimes",
-                Route::Settings => "Settings",
-                Route::About => "About",
-            },
-        )
+    pub(crate) fn label(self) -> String {
+        match self {
+            Route::Dashboard => {
+                envr_core::i18n::tr_key("gui.route.dashboard", "仪表盘", "Dashboard")
+            }
+            Route::Runtime => envr_core::i18n::tr_key("gui.route.runtime", "运行时", "Runtimes"),
+            Route::Settings => envr_core::i18n::tr_key("gui.route.settings", "设置", "Settings"),
+            Route::About => envr_core::i18n::tr_key("gui.route.about", "关于", "About"),
+        }
     }
 }
 
@@ -207,8 +201,9 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 return gui_ops::refresh_dashboard();
             }
             if route == Route::Settings {
-                state.settings.last_message =
-                    Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+                state.settings.last_message = Some(
+                    envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…").into(),
+                );
                 let path = settings_path();
                 return Task::perform(
                     async move {
@@ -248,8 +243,9 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::ReloadDisk => {
-            state.runtime_settings.last_message =
-                Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+            state.runtime_settings.last_message = Some(
+                envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…").into(),
+            );
             let path = settings_path();
             Task::perform(
                 async move {
@@ -268,8 +264,9 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
             Task::none()
         }
         RuntimeSettingsMsg::Save => {
-            state.runtime_settings.last_message =
-                Some(envr_core::i18n::tr("正在保存…", "Saving…").into());
+            state.runtime_settings.last_message = Some(
+                envr_core::i18n::tr_key("gui.app.saving", "正在保存…", "Saving…").into(),
+            );
             let path = settings_path();
             let next = state
                 .runtime_settings
@@ -291,7 +288,11 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
                     if let Err(e) = state.runtime_settings.sync_from_cache() {
                         state.runtime_settings.last_message = Some(format!(
                             "{}: {e}",
-                            envr_core::i18n::tr("同步失败", "Sync failed")
+                            envr_core::i18n::tr_key(
+                                "gui.app.sync_failed",
+                                "同步失败",
+                                "Sync failed"
+                            )
                         ));
                     } else {
                         state.runtime_settings.last_message = None;
@@ -300,7 +301,11 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
                 Err(e) => {
                     state.runtime_settings.last_message = Some(format!(
                         "{}: {e}",
-                        envr_core::i18n::tr("重新加载失败", "Reload failed")
+                        envr_core::i18n::tr_key(
+                            "gui.app.reload_failed",
+                            "重新加载失败",
+                            "Reload failed"
+                        )
                     ));
                 }
             }
@@ -313,17 +318,27 @@ fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Tas
                     if let Err(e) = state.runtime_settings.sync_from_cache() {
                         state.runtime_settings.last_message = Some(format!(
                             "{}: {e}",
-                            envr_core::i18n::tr("同步失败", "Sync failed")
+                            envr_core::i18n::tr_key(
+                                "gui.app.sync_failed",
+                                "同步失败",
+                                "Sync failed"
+                            )
                         ));
                     } else {
-                        state.runtime_settings.last_message =
-                            Some(envr_core::i18n::tr("已保存。", "Saved.").into());
+                        state.runtime_settings.last_message = Some(
+                            envr_core::i18n::tr_key(
+                                "gui.app.saved_short",
+                                "已保存。",
+                                "Saved.",
+                            )
+                            .into(),
+                        );
                     }
                 }
                 Err(e) => {
                     state.runtime_settings.last_message = Some(format!(
                         "{}: {e}",
-                        envr_core::i18n::tr("保存失败", "Save failed")
+                        envr_core::i18n::tr_key("gui.app.save_failed", "保存失败", "Save failed")
                     ));
                 }
             }
@@ -409,7 +424,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             Task::none()
         }
         SettingsMsg::Save => {
-            state.settings.last_message = Some(envr_core::i18n::tr("正在保存…", "Saving…").into());
+            state.settings.last_message = Some(
+                envr_core::i18n::tr_key("gui.app.saving", "正在保存…", "Saving…").into(),
+            );
             let path = settings_path();
             let next = state.settings.build_settings().map_err(|e| e.to_string());
             Task::perform(
@@ -422,7 +439,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             )
         }
         SettingsMsg::ReloadDisk => {
-            state.settings.last_message = Some(envr_core::i18n::tr("正在加载…", "Loading…").into());
+            state.settings.last_message = Some(
+                envr_core::i18n::tr_key("gui.app.loading", "正在加载…", "Loading…").into(),
+            );
             let path = settings_path();
             Task::perform(
                 async move {
@@ -439,18 +458,31 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
                             "{}: {e}",
-                            envr_core::i18n::tr("同步失败", "Sync failed")
+                            envr_core::i18n::tr_key(
+                                "gui.app.sync_failed",
+                                "同步失败",
+                                "Sync failed"
+                            )
                         ));
                     } else {
                         state.settings.last_message = Some(
-                            envr_core::i18n::tr("已从磁盘重新加载。", "Reloaded from disk.").into(),
+                            envr_core::i18n::tr_key(
+                                "gui.app.reloaded_from_disk",
+                                "已从磁盘重新加载。",
+                                "Reloaded from disk.",
+                            )
+                            .into(),
                         );
                     }
                 }
                 Err(e) => {
                     state.settings.last_message = Some(format!(
                         "{}: {e}",
-                        envr_core::i18n::tr("重新加载失败", "Reload failed")
+                        envr_core::i18n::tr_key(
+                            "gui.app.reload_failed",
+                            "重新加载失败",
+                            "Reload failed"
+                        )
                     ));
                 }
             }
@@ -463,17 +495,27 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
                             "{}: {e}",
-                            envr_core::i18n::tr("同步失败", "Sync failed")
+                            envr_core::i18n::tr_key(
+                                "gui.app.sync_failed",
+                                "同步失败",
+                                "Sync failed"
+                            )
                         ));
                     } else {
-                        state.settings.last_message =
-                            Some(envr_core::i18n::tr("已保存到 settings.toml。", "Saved.").into());
+                        state.settings.last_message = Some(
+                            envr_core::i18n::tr_key(
+                                "gui.app.saved_settings_toml",
+                                "已保存到 settings.toml。",
+                                "Saved.",
+                            )
+                            .into(),
+                        );
                     }
                 }
                 Err(e) => {
                     state.settings.last_message = Some(format!(
                         "{}: {e}",
-                        envr_core::i18n::tr("保存失败", "Save failed")
+                        envr_core::i18n::tr_key("gui.app.save_failed", "保存失败", "Save failed")
                     ));
                 }
             }
@@ -587,7 +629,7 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
                 &url_str,
                 &format!(
                     "{label} {}",
-                    envr_core::i18n::tr("(重试)", "(retry)")
+                    envr_core::i18n::tr_key("gui.action.retry_suffix", "(重试)", "(retry)")
                 ),
             )
         }
@@ -614,7 +656,7 @@ fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {
         download_runner::DEMO_URL,
         &format!(
             "{} #{}",
-            envr_core::i18n::tr("演示", "Demo"),
+            envr_core::i18n::tr_key("gui.label.demo", "演示", "Demo"),
             state.downloads.next_id
         ),
     )
@@ -626,7 +668,11 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
         Err(e) => {
             state.error = Some(format!(
                 "{}: {e}",
-                envr_core::i18n::tr("URL 解析失败", "URL parse failed")
+                envr_core::i18n::tr_key(
+                    "gui.error.url_parse_failed",
+                    "URL 解析失败",
+                    "URL parse failed",
+                )
             ));
             return Task::none();
         }
@@ -687,7 +733,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let spec = state.env_center.install_input.trim().to_string();
             if spec.is_empty() {
                 state.error = Some(
-                    envr_core::i18n::tr("请输入版本 spec", "Please enter a version spec").into(),
+                    envr_core::i18n::tr_key(
+                        "gui.error.version_spec_required",
+                        "请输入版本 spec",
+                        "Please enter a version spec",
+                    ),
                 );
                 return Task::none();
             }
@@ -699,7 +749,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let spec = state.env_center.install_input.trim().to_string();
             if spec.is_empty() {
                 state.error = Some(
-                    envr_core::i18n::tr("请输入版本 spec", "Please enter a version spec").into(),
+                    envr_core::i18n::tr_key(
+                        "gui.error.version_spec_required",
+                        "请输入版本 spec",
+                        "Please enter a version spec",
+                    ),
                 );
                 return Task::none();
             }

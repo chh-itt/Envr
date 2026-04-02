@@ -1020,10 +1020,11 @@
   - **验收**：GUI 无硬编码展示文本（专业术语白名单除外）。
   - **进度**：done
   - **实现记录**：
-    - 实现要点：完成 `crates/envr-gui/src/view/**` 与 `crates/envr-gui/src/app.rs` 可见文本迁移收口：修复 `env_center/panel.rs` 的乱码文案并统一为双语 `tr(...)`；将运行时管理与下载流程中残留硬编码（如 URL 解析失败、版本 spec 为空、重试标签、演示任务名）改为 i18n 文案；`settings/state.rs` 的镜像模式标签和校验错误改为双语输出；`shell/mod.rs` 中当前外观标签按当前语言显示（不再固定中文）。
+    - 实现要点：完成 `crates/envr-gui/src/view/**` 与 `crates/envr-gui/src/app.rs` 可见文本迁移收口：修复 `env_center/panel.rs` 的乱码文案并统一为 i18n；将运行时管理与下载流程中残留硬编码（URL 解析失败、版本 spec 为空、重试标签、演示任务名）改为 i18n 文案；`settings/state.rs` 的镜像模式标签和校验错误改为多语言输出；并新增 `locales/zh-CN.toml`、`locales/en-US.toml` 与 `envr_core::i18n::tr_key(...)`，使 T911 起始阶段即引入 `locales/*` 资源文件。
+    - **补记**：GUI 用户可见文案（含顶部全局错误条 `error_banner`、设置页与运行时设置页的 `last_message` 状态行）已统一经 `locales/*` + `tr_key` 下发；`crates/envr-gui` 内不再直接调用 `i18n::tr`。
     - 相关提交/PR：
-    - 遇到的问题/决策：当前仓库 i18n 机制为代码内 `envr_core::i18n::tr(zh, en)`，尚未引入 `locales/*` 资源文件；本任务按现有架构完成 GUI 可见文本国际化，后续若切换 key+资源文件方案可在 T914/T915 基础上演进。
-    - 验收结果：`cargo check -p envr-gui` 与 `cargo test -p envr-gui` 通过；GUI 新增/修复的可见文本均支持中英文切换。
+    - 遇到的问题/决策：为兼容现有代码，曾采用“`tr_key`（优先资源文件）+ `tr`（内联 fallback）”双轨策略，避免一次性大改造成回归风险；GUI 收口后 `envr-gui` 仅使用 `tr_key`（`tr` 仍可供 CLI 等 crate 使用）。
+    - 验收结果：`cargo check -p envr-core -p envr-gui` 与 `cargo test -p envr-core -p envr-gui` 通过；GUI 已改动区域文案可从 `locales/*` 读取并支持 fallback。
 
 ### T912 CLI 文本全量 i18n
 - [ ] **T912：CLI 所有用户输出与 help 文本迁移为 i18n key** #i18n #cli

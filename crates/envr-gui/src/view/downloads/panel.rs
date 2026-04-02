@@ -24,32 +24,46 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
             let t = job.total_display();
             let eta = job
                 .eta_secs()
-                .map(|s| format!(" · {} {s}s", envr_core::i18n::tr("约剩余", "ETA")))
+                .map(|s| {
+                    format!(
+                        " · {} {s}s",
+                        envr_core::i18n::tr_key("gui.downloads.eta_label", "约剩余", "ETA")
+                    )
+                })
                 .unwrap_or_default();
+            let bytes = envr_core::i18n::tr_key("gui.downloads.bytes", "字节", "bytes");
             let sz = if t > 0 {
-                format!("{d} / {t} {}", envr_core::i18n::tr("字节", "bytes"))
+                format!("{d} / {t} {bytes}")
             } else {
-                format!("{d} {}", envr_core::i18n::tr("字节", "bytes"))
+                format!("{d} {bytes}")
             };
             format!(
                 "{} · {sz} · {spd}{eta}",
-                envr_core::i18n::tr("进行中", "Running")
+                envr_core::i18n::tr_key("gui.job.running", "进行中", "Running")
             )
         }
         JobState::Done => format!(
             "{} · {} {}",
-            envr_core::i18n::tr("完成", "Done"),
+            envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
             job.downloaded_display(),
-            envr_core::i18n::tr("字节", "bytes")
+            envr_core::i18n::tr_key("gui.downloads.bytes", "字节", "bytes")
         ),
-        JobState::Failed => format!(
-            "{}: {}",
-            envr_core::i18n::tr("失败", "Failed"),
-            job.last_error
-                .as_deref()
-                .unwrap_or(envr_core::i18n::tr("未知错误", "unknown error"))
-        ),
-        JobState::Cancelled => envr_core::i18n::tr("已取消", "Cancelled").to_string(),
+        JobState::Failed => {
+            let detail = job.last_error.clone().unwrap_or_else(|| {
+                envr_core::i18n::tr_key(
+                    "gui.downloads.unknown_error",
+                    "未知错误",
+                    "unknown error",
+                )
+            });
+            format!(
+                "{}: {detail}",
+                envr_core::i18n::tr_key("gui.job.failed", "失败", "Failed"),
+            )
+        }
+        JobState::Cancelled => {
+            envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
+        }
     }
 }
 

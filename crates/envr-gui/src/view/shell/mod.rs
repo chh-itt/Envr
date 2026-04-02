@@ -1,7 +1,7 @@
 use iced::widget::{container, scrollable, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
-use envr_ui::theme::ThemeTokens;
+use envr_ui::theme::{ThemeTokens, UiFlavor};
 
 use crate::app::{AppState, Message, Route};
 use crate::theme as gui_theme;
@@ -63,7 +63,12 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
         row![
             text(message).size(14),
             horizontal_space(),
-            button(text(envr_core::i18n::tr("关闭", "Close"))).on_press(Message::DismissError),
+            button(text(envr_core::i18n::tr_key(
+                "gui.action.close",
+                "关闭",
+                "Close",
+            )))
+            .on_press(Message::DismissError),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -89,7 +94,8 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 tokens,
             ));
             col = col.push(
-                button(text(envr_core::i18n::tr(
+                button(text(envr_core::i18n::tr_key(
+                    "gui.action.refresh_current_runtime",
                     "刷新当前运行时",
                     "Refresh current runtime",
                 )))
@@ -107,18 +113,25 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         }
         Route::Settings => {
             col = col.push(settings_view(&state.settings, tokens));
-            col = col.push(text(envr_core::i18n::tr("外观", "Appearance")).size(17));
+            col = col.push(
+                text(envr_core::i18n::tr_key(
+                    "gui.label.appearance",
+                    "外观",
+                    "Appearance",
+                ))
+                .size(17),
+            );
             col = col.push(flavor_picker_row(state.flavor()));
             col = col.push(
                 text(format!(
                     "{} {} · {} md {:.1} · {} blur {:.0} · {} {} ms",
-                    envr_core::i18n::tr("当前：", "Current:"),
-                    envr_core::i18n::tr(state.flavor().label_zh(), state.flavor().label_en()),
-                    envr_core::i18n::tr("圆角", "Radius"),
+                    envr_core::i18n::tr_key("gui.flavor.current", "当前：", "Current:"),
+                    flavor_label_i18n(state.flavor()),
+                    envr_core::i18n::tr_key("gui.label.radius", "圆角", "Radius"),
                     tokens.radius_md,
-                    envr_core::i18n::tr("阴影", "Shadow"),
+                    envr_core::i18n::tr_key("gui.label.shadow", "阴影", "Shadow"),
                     tokens.shadow.blur_radius,
-                    envr_core::i18n::tr("动效", "Motion"),
+                    envr_core::i18n::tr_key("gui.label.motion", "动效", "Motion"),
                     tokens.motion.standard_ms
                 ))
                 .size(13),
@@ -126,22 +139,30 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         }
         Route::Dashboard => unreachable!("handled by early return"),
         Route::About => {
-            col = col.push(text(envr_core::i18n::tr("关于本应用。", "About this app.")).size(15));
+            col = col.push(
+                text(envr_core::i18n::tr_key(
+                    "gui.about.description",
+                    "关于本应用。",
+                    "About this app.",
+                ))
+                .size(15),
+            );
         }
     }
 
     if state.route() == Route::About {
         col = col.push(
-            button(text(envr_core::i18n::tr(
+            button(text(envr_core::i18n::tr_key(
+                "gui.about.trigger_error",
                 "触发全局错误示例",
                 "Trigger global error (demo)",
             )))
             .on_press(Message::ReportError(
-                envr_core::i18n::tr(
+                envr_core::i18n::tr_key(
+                    "gui.about.error_demo",
                     "示例：后台任务失败时可经此通道提示用户。",
                     "Demo: background task failures can be surfaced here.",
                 )
-                .into(),
             )),
         );
     }
@@ -152,13 +173,30 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         .into()
 }
 
-fn flavor_picker_row(active: envr_ui::theme::UiFlavor) -> Element<'static, Message> {
-    let mut r = row![].spacing(8);
-    for flavor in envr_ui::theme::UiFlavor::ALL {
-        let b = button(text(envr_core::i18n::tr(
+fn flavor_label_i18n(flavor: UiFlavor) -> String {
+    match flavor {
+        UiFlavor::Fluent => envr_core::i18n::tr_key(
+            "gui.flavor.fluent",
             flavor.label_zh(),
             flavor.label_en(),
-        )))
+        ),
+        UiFlavor::LiquidGlass => envr_core::i18n::tr_key(
+            "gui.flavor.liquid_glass",
+            flavor.label_zh(),
+            flavor.label_en(),
+        ),
+        UiFlavor::Material3 => envr_core::i18n::tr_key(
+            "gui.flavor.material3",
+            flavor.label_zh(),
+            flavor.label_en(),
+        ),
+    }
+}
+
+fn flavor_picker_row(active: UiFlavor) -> Element<'static, Message> {
+    let mut r = row![].spacing(8);
+    for flavor in UiFlavor::ALL {
+        let b = button(text(flavor_label_i18n(flavor)))
         .on_press(Message::SetFlavor(flavor))
         .padding([8, 10]);
         let b = if flavor == active {

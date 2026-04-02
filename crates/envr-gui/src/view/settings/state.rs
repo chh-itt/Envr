@@ -63,20 +63,20 @@ impl SettingsViewState {
         };
         s.download.max_concurrent_downloads = self.max_conc_text.trim().parse().map_err(|_| {
             envr_error::EnvrError::Validation(
-                envr_core::i18n::tr(
+                envr_core::i18n::tr_key(
+                    "gui.settings.err.max_conc",
                     "download.max_concurrent_downloads 必须是正整数",
                     "download.max_concurrent_downloads must be a positive integer",
-                )
-                .to_string(),
+                ),
             )
         })?;
         s.download.retry_max = self.retry_text.trim().parse().map_err(|_| {
             envr_error::EnvrError::Validation(
-                envr_core::i18n::tr(
+                envr_core::i18n::tr_key(
+                    "gui.settings.err.retry",
                     "download.retry_max 必须是整数",
                     "download.retry_max must be an integer",
-                )
-                .to_string(),
+                ),
             )
         })?;
 
@@ -102,12 +102,28 @@ impl SettingsViewState {
             .unwrap_or(false)
     }
 
-    pub fn mirror_mode_label(m: MirrorMode) -> &'static str {
+    pub fn mirror_mode_label(m: MirrorMode) -> String {
         match m {
-            MirrorMode::Official => envr_core::i18n::tr("official（仅官方）", "official (upstream only)"),
-            MirrorMode::Auto => envr_core::i18n::tr("auto（自动测速）", "auto (probe fastest mirror)"),
-            MirrorMode::Manual => envr_core::i18n::tr("manual（指定镜像 ID）", "manual (specific mirror ID)"),
-            MirrorMode::Offline => "offline",
+            MirrorMode::Official => envr_core::i18n::tr_key(
+                "gui.settings.mirror.official",
+                "official（仅官方）",
+                "official (upstream only)",
+            ),
+            MirrorMode::Auto => envr_core::i18n::tr_key(
+                "gui.settings.mirror.auto",
+                "auto（自动测速）",
+                "auto (probe fastest mirror)",
+            ),
+            MirrorMode::Manual => envr_core::i18n::tr_key(
+                "gui.settings.mirror.manual",
+                "manual（指定镜像 ID）",
+                "manual (specific mirror ID)",
+            ),
+            MirrorMode::Offline => envr_core::i18n::tr_key(
+                "gui.settings.mirror.offline",
+                "offline",
+                "offline",
+            ),
         }
     }
 }

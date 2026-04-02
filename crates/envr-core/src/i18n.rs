@@ -1,5 +1,7 @@
 use envr_config::settings::{LocaleMode, Settings};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Locale {
@@ -146,6 +148,43 @@ pub fn tr(zh_cn: &'static str, en_us: &'static str) -> &'static str {
     }
 }
 
+fn zh_messages() -> &'static HashMap<String, String> {
+    static ZH: OnceLock<HashMap<String, String>> = OnceLock::new();
+    ZH.get_or_init(|| load_messages(include_str!("../../../locales/zh-CN.toml")))
+}
+
+fn en_messages() -> &'static HashMap<String, String> {
+    static EN: OnceLock<HashMap<String, String>> = OnceLock::new();
+    EN.get_or_init(|| load_messages(include_str!("../../../locales/en-US.toml")))
+}
+
+fn load_messages(raw: &str) -> HashMap<String, String> {
+    let parsed = match raw.parse::<toml::Value>() {
+        Ok(v) => v,
+        Err(_) => return HashMap::new(),
+    };
+    let Some(tbl) = parsed.get("messages").and_then(|v| v.as_table()) else {
+        return HashMap::new();
+    };
+    tbl.iter()
+        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+        .collect()
+}
+
+/// Translate by i18n key, fallback to inline zh/en literals when key is missing.
+pub fn tr_key(key: &str, zh_cn_fallback: &'static str, en_us_fallback: &'static str) -> String {
+    match current() {
+        Locale::ZhCn => zh_messages()
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| zh_cn_fallback.to_string()),
+        Locale::EnUs => en_messages()
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| en_us_fallback.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +234,14 @@ HKEY_CURRENT_USER\Control Panel\International
     fn bcp47_name_mapping_handles_zh_and_non_zh() {
         assert_eq!(locale_from_bcp47_name("zh-Hans-CN"), Locale::ZhCn);
         assert_eq!(locale_from_bcp47_name("en-US"), Locale::EnUs);
+    }
+
+    #[test]
+    fn tr_key_uses_locales_and_falls_back() {
+        set(Locale::EnUs);
+        assert_eq!(tr_key("gui.action.install", "安装", "Install"), "Install");
+        assert_eq!(tr_key("missing.key", "中文默认", "English default"), "English default");
+        set(Locale::ZhCn);
+        assert_eq!(tr_key("gui.action.install", "安装", "Install"), "安装");
     }
 }

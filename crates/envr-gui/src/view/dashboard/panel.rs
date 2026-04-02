@@ -16,13 +16,22 @@ pub fn dashboard_view(
 ) -> Element<'static, Message> {
     let mut col = column![
         row![
-            text(envr_core::i18n::tr("仪表盘", "Dashboard")).size(22),
+            text(envr_core::i18n::tr_key(
+                "gui.route.dashboard",
+                "仪表盘",
+                "Dashboard",
+            ))
+            .size(22),
             iced::widget::horizontal_space(),
-            button(text(envr_core::i18n::tr("刷新", "Refresh")))
-                .on_press(Message::Dashboard(
-                    crate::view::dashboard::state::DashboardMsg::Refresh
-                ))
-                .padding([6, 12]),
+            button(text(envr_core::i18n::tr_key(
+                "gui.dashboard.refresh",
+                "刷新",
+                "Refresh",
+            )))
+            .on_press(Message::Dashboard(
+                crate::view::dashboard::state::DashboardMsg::Refresh
+            ))
+            .padding([6, 12]),
         ]
         .align_y(Alignment::Center)
     ]
@@ -31,14 +40,15 @@ pub fn dashboard_view(
     if let Some(err) = state.last_error.as_deref() {
         col = col.push(text(format!(
             "{}: {err}",
-            envr_core::i18n::tr("加载失败", "Failed")
+            envr_core::i18n::tr_key("gui.dashboard.load_failed", "加载失败", "Failed")
         )));
     }
 
     let data = match state.data.as_ref() {
         Some(d) => d,
         None => {
-            col = col.push(text(envr_core::i18n::tr(
+            col = col.push(text(envr_core::i18n::tr_key(
+                "gui.dashboard.no_data_yet",
                 "尚无数据。点击「刷新」。",
                 "No data yet. Click Refresh.",
             )));
@@ -81,12 +91,19 @@ fn runtime_overview_card(rows: &[RuntimeRow], tokens: ThemeTokens) -> Element<'s
         let label = kind_label(r.kind);
         let cur = r
             .current
-            .as_deref()
-            .unwrap_or(envr_core::i18n::tr("(未设置)", "(none)"));
+            .as_ref()
+            .map(|v| v.clone())
+            .unwrap_or_else(|| {
+                envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
+            });
         list = list.push(text(format!("{label}: {} · {}", r.installed, cur)).size(13));
     }
     card(
-        envr_core::i18n::tr("运行时概览", "Runtimes overview").to_string(),
+        envr_core::i18n::tr_key(
+            "gui.dashboard.runtimes_overview",
+            "运行时概览",
+            "Runtimes overview",
+        ),
         list.into(),
         tokens,
     )
@@ -103,28 +120,34 @@ fn doctor_card(
     let mut body = column![
         text(format!(
             "{}: {runtime_root}",
-            envr_core::i18n::tr("运行时根目录", "Runtime root")
+            envr_core::i18n::tr_key(
+                "gui.dashboard.runtime_root",
+                "运行时根目录",
+                "Runtime root",
+            )
         ))
         .size(13)
     ]
     .spacing(6);
+    let shims_suffix = if shims_empty {
+        envr_core::i18n::tr_key("gui.dashboard.shims_empty", "（空）", " (empty)")
+    } else {
+        String::new()
+    };
     body = body.push(text(format!(
-        "{}: {shims_dir}{}",
-        envr_core::i18n::tr("Shims", "Shims"),
-        if shims_empty {
-            envr_core::i18n::tr("（空）", " (empty)")
-        } else {
-            ""
-        }
+        "{}: {shims_dir}{shims_suffix}",
+        envr_core::i18n::tr_key("gui.label.shims", "Shims", "Shims"),
     )));
 
     if issues.is_empty() {
-        body = body.push(text(envr_core::i18n::tr(
+        body = body.push(text(envr_core::i18n::tr_key(
+            "gui.dashboard.health_check_ok",
             "健康检查：通过",
             "Health check: OK",
         )));
     } else {
-        body = body.push(text(envr_core::i18n::tr(
+        body = body.push(text(envr_core::i18n::tr_key(
+            "gui.dashboard.health_check_issues",
             "健康检查：发现问题",
             "Health check: issues found",
         )));
@@ -133,14 +156,25 @@ fn doctor_card(
         }
     }
     if !recs.is_empty() {
-        body = body.push(text(envr_core::i18n::tr("建议：", "Suggestions:")).size(13));
+        body = body.push(
+            text(envr_core::i18n::tr_key(
+                "gui.dashboard.suggestions_label",
+                "建议：",
+                "Suggestions:",
+            ))
+            .size(13),
+        );
         for r in recs {
             body = body.push(text(format!("- {r}")).size(12));
         }
     }
 
     card(
-        envr_core::i18n::tr("健康检查", "Health").to_string(),
+        envr_core::i18n::tr_key(
+            "gui.dashboard.health_card_title",
+            "健康检查",
+            "Health",
+        ),
         body.into(),
         tokens,
     )
@@ -152,23 +186,30 @@ fn recent_jobs_card(
 ) -> Element<'static, Message> {
     let mut body = column![].spacing(6);
     if downloads.jobs.is_empty() {
-        body = body.push(text(envr_core::i18n::tr(
+        body = body.push(text(envr_core::i18n::tr_key(
+            "gui.dashboard.no_recent_jobs",
             "暂无下载/安装任务。",
             "No download/install jobs yet.",
         )));
     } else {
         for j in downloads.jobs.iter().rev().take(5) {
             let st = match j.state {
-                JobState::Running => envr_core::i18n::tr("进行中", "Running"),
-                JobState::Done => envr_core::i18n::tr("完成", "Done"),
-                JobState::Failed => envr_core::i18n::tr("失败", "Failed"),
-                JobState::Cancelled => envr_core::i18n::tr("已取消", "Cancelled"),
+                JobState::Running => envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
+                JobState::Done => envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
+                JobState::Failed => envr_core::i18n::tr_key("gui.job.failed", "失败", "Failed"),
+                JobState::Cancelled => {
+                    envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
+                }
             };
             body = body.push(text(format!("{} · {} · {}", j.label, st, j.url)).size(12));
         }
     }
     card(
-        envr_core::i18n::tr("最近任务", "Recent activity").to_string(),
+        envr_core::i18n::tr_key(
+            "gui.dashboard.recent_activity",
+            "最近任务",
+            "Recent activity",
+        ),
         body.into(),
         tokens,
     )
@@ -176,16 +217,28 @@ fn recent_jobs_card(
 
 fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
     let actions = row![
-        button(text(envr_core::i18n::tr("打开运行时", "Open runtimes")))
-            .on_press(Message::Navigate(Route::Runtime))
-            .padding([6, 12]),
-        button(text(envr_core::i18n::tr("打开设置", "Open settings")))
-            .on_press(Message::Navigate(Route::Settings))
-            .padding([6, 12]),
+        button(text(envr_core::i18n::tr_key(
+            "gui.dashboard.open_runtimes",
+            "打开运行时",
+            "Open runtimes",
+        )))
+        .on_press(Message::Navigate(Route::Runtime))
+        .padding([6, 12]),
+        button(text(envr_core::i18n::tr_key(
+            "gui.dashboard.open_settings",
+            "打开设置",
+            "Open settings",
+        )))
+        .on_press(Message::Navigate(Route::Settings))
+        .padding([6, 12]),
     ]
     .spacing(10);
     card(
-        envr_core::i18n::tr("推荐操作", "Recommended actions").to_string(),
+        envr_core::i18n::tr_key(
+            "gui.dashboard.recommended_actions",
+            "推荐操作",
+            "Recommended actions",
+        ),
         actions.into(),
         tokens,
     )

@@ -879,6 +879,7 @@ dependencies = [
  "envr-runtime-rust",
  "envr-shim-core",
  "tempfile",
+ "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

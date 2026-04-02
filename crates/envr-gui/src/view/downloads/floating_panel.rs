@@ -13,11 +13,14 @@ pub fn floating_download_panel(
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     if !state.visible {
-        // Small reopen button pinned to corner (same position).
         return container(
-            button(text(envr_core::i18n::tr("下载", "Downloads")))
-                .on_press(Message::Download(DownloadMsg::ToggleVisible))
-                .padding([6, 10]),
+            button(text(envr_core::i18n::tr_key(
+                "gui.downloads.open_button",
+                "下载",
+                "Downloads",
+            )))
+            .on_press(Message::Download(DownloadMsg::ToggleVisible))
+            .padding([6, 10]),
         )
         .into();
     }
@@ -26,22 +29,28 @@ pub fn floating_download_panel(
         button(text("≡"))
             .on_press(Message::Download(DownloadMsg::StartDrag))
             .padding([4, 8]),
-        text(envr_core::i18n::tr("下载任务", "Downloads")).size(15),
+        text(envr_core::i18n::tr_key(
+            "gui.downloads.panel_title",
+            "下载任务",
+            "Downloads",
+        ))
+        .size(15),
         iced::widget::horizontal_space(),
-        button(text(envr_core::i18n::tr(
+        button(text(envr_core::i18n::tr_key(
+            "gui.downloads.add_demo",
             "添加演示下载",
-            "Add demo download"
+            "Add demo download",
         )))
         .on_press(Message::Download(DownloadMsg::EnqueueDemo))
         .padding([4, 10]),
         button(text(if state.expanded {
-            envr_core::i18n::tr("折叠", "Collapse")
+            envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
         } else {
-            envr_core::i18n::tr("展开", "Expand")
+            envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
         }))
         .on_press(Message::Download(DownloadMsg::ToggleExpand))
         .padding([4, 10]),
-        button(text(envr_core::i18n::tr("隐藏", "Hide")))
+        button(text(envr_core::i18n::tr_key("gui.action.hide", "隐藏", "Hide")))
             .on_press(Message::Download(DownloadMsg::ToggleVisible))
             .padding([4, 10]),
     ]
@@ -52,7 +61,14 @@ pub fn floating_download_panel(
 
     if state.expanded {
         if state.jobs.is_empty() {
-            body = body.push(text(envr_core::i18n::tr("暂无任务。", "No jobs.")).size(12));
+            body = body.push(
+                text(envr_core::i18n::tr_key(
+                    "gui.downloads.no_jobs",
+                    "暂无任务。",
+                    "No jobs.",
+                ))
+                .size(12),
+            );
         } else {
             let mut list = column![].spacing(10);
             for j in state.jobs.iter().rev().take(6) {
@@ -61,14 +77,22 @@ pub fn floating_download_panel(
                 let mut actions = row![].spacing(8);
                 if j.state == JobState::Running {
                     actions = actions.push(
-                        button(text(envr_core::i18n::tr("取消", "Cancel")))
-                            .on_press(Message::Download(DownloadMsg::Cancel(j.id))),
+                        button(text(envr_core::i18n::tr_key(
+                            "gui.action.cancel",
+                            "取消",
+                            "Cancel",
+                        )))
+                        .on_press(Message::Download(DownloadMsg::Cancel(j.id))),
                     );
                 }
                 if j.state == JobState::Failed {
                     actions = actions.push(
-                        button(text(envr_core::i18n::tr("重试", "Retry")))
-                            .on_press(Message::Download(DownloadMsg::Retry(j.id))),
+                        button(text(envr_core::i18n::tr_key(
+                            "gui.action.retry",
+                            "重试",
+                            "Retry",
+                        )))
+                        .on_press(Message::Download(DownloadMsg::Retry(j.id))),
                     );
                 }
                 list = list.push(
