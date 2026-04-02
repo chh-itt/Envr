@@ -3,9 +3,8 @@
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
-use iced::widget::scrollable::Id as ScrollableId;
 use iced::widget::{
-    Rule, button, column, container, row, scrollable, text, text_input, vertical_space,
+    button, column, container, row, rule, scrollable, space, text, text_input, Id,
 };
 use iced::{Alignment, Element, Length, Theme};
 
@@ -13,12 +12,14 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block};
-use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
+use crate::widget_styles::{
+    ButtonVariant, button_content_centered, button_style, section_card, text_input_style,
+};
 
 /// Fixed list viewport height (`tasks_gui.md` GUI-021); keeps layout stable vs. skeleton rows.
 const ENV_LIST_VIEWPORT_H: f32 = 260.0;
 
-/// [`scrollable::Id`] for the installed-versions list (scroll position + `scroll_to` sync).
+/// [`Id`] on the installed-versions scrollable (scroll position + `scroll_to` sync).
 pub const ENV_INSTALLED_LIST_SCROLL_ID: &str = "envr-env-installed-list";
 
 const LIST_SEP_PX: f32 = 1.0;
@@ -134,25 +135,27 @@ fn installed_version_row(
         format!("{} {}", kind_label(state.kind), ver.0)
     };
 
+    let pad_v = sp.sm as f32;
     row![
         text(ver_line).width(Length::Fill),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Package.view(14.0, txt),
                 text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
             ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press_maybe(use_msg)
         .height(Length::Fixed(
             tokens
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.sm])
+        .padding([pad_v, sp.sm as f32])
         .style(button_style(tokens, ButtonVariant::Ghost)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
                 text(envr_core::i18n::tr_key(
@@ -161,19 +164,20 @@ fn installed_version_row(
                     "Uninstall",
                 )),
             ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press_maybe(uninstall_msg)
         .height(Length::Fixed(
             tokens
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.sm])
+        .padding([pad_v, sp.sm as f32])
         .style(button_style(tokens, ButtonVariant::Danger)),
     ]
-    .spacing(sp.sm)
+    .spacing(sp.sm as f32)
     .align_y(Alignment::Center)
     .height(Length::Fixed(tokens.list_row_height()))
     .into()
@@ -205,7 +209,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         ))
         .size(ty.body_small)
     ]
-    .spacing(sp.sm);
+    .spacing(sp.sm as f32);
     for (m, key, zh, en) in [
         (
             VersionMode::Smart,
@@ -231,11 +235,14 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             tokens.control_height_secondary
         }
         .max(tokens.min_click_target_px());
-        let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
-            .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
-            .height(Length::Fixed(h))
-            .padding([0, sp.sm + 2])
-            .style(button_style(tokens, variant));
+        let b = button(button_content_centered(
+            text(envr_core::i18n::tr_key(key, zh, en)).into(),
+        ))
+        .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(h))
+        .padding([sp.sm as f32, (sp.sm + 2) as f32])
+        .style(button_style(tokens, variant));
         mode_row = mode_row.push(b);
     }
 
@@ -266,9 +273,10 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     .align_y(iced::alignment::Vertical::Center);
 
     let txt = gui_theme::to_color(tokens.colors.text);
+    let pad_v = sp.sm as f32;
     let install_row = row![
         spec_field,
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Download.view(15.0, txt),
                 text(envr_core::i18n::tr_key(
@@ -277,9 +285,10 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                     "Install",
                 )),
             ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press_maybe(
             (!busy && !input.is_empty() && (state.mode == VersionMode::Smart || !installed_match))
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
@@ -289,9 +298,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.md])
+        .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Download.view(15.0, txt),
                 text(envr_core::i18n::tr_key(
@@ -300,9 +309,10 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                     "Install & Use",
                 )),
             ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press_maybe(
             (state.mode == VersionMode::Smart && !busy && !input.is_empty() && !installed_match)
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
@@ -312,16 +322,17 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.md])
+        .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Primary)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Package.view(15.0, txt),
                 text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
             ]
-            .spacing(sp.xs)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press_maybe(
             (!busy && !input.is_empty() && installed_match && !current_match).then_some(
                 Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string())),
@@ -332,10 +343,10 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.md])
+        .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
-    .spacing(sp.sm + 2)
+    .spacing((sp.sm + 2) as f32)
     .align_y(Alignment::Center);
 
     let list_content: Element<'static, Message> = if busy && state.installed.is_empty() {
@@ -393,19 +404,19 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             let bottom_h = list_total_height(n, row_h) - list_prefix_height(last + 1, n, row_h);
             let mut col = column![].spacing(0);
             if top_h > 0.5 {
-                col = col.push(vertical_space().height(Length::Fixed(top_h)));
+                col = col.push(space().height(Length::Fixed(top_h)));
             }
             for i in first..=last {
                 col = col.push(installed_version_row(state, i, tokens, sp, txt, busy));
                 if i + 1 < n {
-                    col = col.push(Rule::horizontal(1));
+                    col = col.push(rule::horizontal(1.0));
                 }
             }
             if bottom_h > 0.5 {
-                col = col.push(vertical_space().height(Length::Fixed(bottom_h)));
+                col = col.push(space().height(Length::Fixed(bottom_h)));
             }
             scrollable(col)
-                .id(ScrollableId::new(ENV_INSTALLED_LIST_SCROLL_ID))
+                .id(Id::new(ENV_INSTALLED_LIST_SCROLL_ID))
                 .on_scroll(scroll_on)
                 .width(Length::Fill)
                 .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
@@ -415,11 +426,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             for i in 0..n {
                 col = col.push(installed_version_row(state, i, tokens, sp, txt, busy));
                 if i + 1 < n {
-                    col = col.push(Rule::horizontal(1));
+                    col = col.push(rule::horizontal(1.0));
                 }
             }
             scrollable(col)
-                .id(ScrollableId::new(ENV_INSTALLED_LIST_SCROLL_ID))
+                .id(Id::new(ENV_INSTALLED_LIST_SCROLL_ID))
                 .on_scroll(scroll_on)
                 .width(Length::Fill)
                 .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
@@ -428,33 +439,42 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         list_col
     };
 
-    let body = column![
-        text(format!(
-            "{}: {}",
-            envr_core::i18n::tr_key("gui.runtime.title", "运行时", "Runtime"),
-            kind_label(state.kind)
-        ))
-        .size(ty.section),
-        mode_row,
-        text(cur_line).size(ty.body_small),
-        text(envr_core::i18n::tr_key(
-            "gui.action.install",
-            "安装",
-            "Install"
-        ))
-        .size(ty.section),
-        install_row,
-        text(envr_core::i18n::tr_key(
-            "gui.runtime.installed",
-            "已安装",
-            "Installed",
-        ))
-        .size(ty.section),
-        list_content,
-    ]
-    .spacing(tokens.page_title_gap());
+    let runtime_title = format!(
+        "{}: {}",
+        envr_core::i18n::tr_key("gui.runtime.title", "运行时", "Runtime"),
+        kind_label(state.kind)
+    );
 
-    body.into()
+    let context_card = section_card(
+        tokens,
+        runtime_title,
+        column![
+            mode_row,
+            text(cur_line).size(ty.body_small),
+        ]
+        .spacing(sp.md as f32)
+        .width(Length::Fill)
+        .into(),
+    );
+
+    let install_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key("gui.action.install", "安装", "Install"),
+        container(install_row)
+            .width(Length::Fill)
+            .into(),
+    );
+
+    let installed_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.installed", "已安装", "Installed"),
+        list_content,
+    );
+
+    column![context_card, install_card, installed_card]
+        .spacing(sp.lg as f32)
+        .width(Length::Fill)
+        .into()
 }
 
 fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Message> {
@@ -469,7 +489,7 @@ fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Me
     for i in 0..n {
         col = col.push(
             container(
-                vertical_space()
+                space()
                     .width(Length::Fill)
                     .height(Length::Fixed(bar_h)),
             )
@@ -482,7 +502,7 @@ fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Me
             }),
         );
         if i + 1 < n {
-            col = col.push(Rule::horizontal(1));
+            col = col.push(rule::horizontal(1.0));
         }
     }
     col.into()

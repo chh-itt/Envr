@@ -4,7 +4,7 @@ use super::panel::format_job_state_line;
 use envr_ui::theme::ThemeTokens;
 use iced::mouse;
 use iced::widget::{
-    button, column, container, mouse_area, progress_bar, row, scrollable, text, vertical_space,
+    button, column, container, mouse_area, progress_bar, row, scrollable, space, text,
 };
 use iced::{Alignment, Element, Length, Theme};
 
@@ -38,7 +38,7 @@ pub fn floating_download_panel(
                 "Downloads",
             )),
         ]
-        .spacing(sp.xs)
+        .spacing(sp.xs as f32)
         .align_y(Alignment::Center);
         return container(
             button(open_lbl)
@@ -56,7 +56,7 @@ pub fn floating_download_panel(
             Lucide::Menu.view(16.0, txt),
             text(title_txt).size(ty.body).width(Length::Fill),
         ]
-        .spacing(sp.sm)
+        .spacing(sp.sm as f32)
         .align_y(Alignment::Center),
     )
     .width(Length::Fill)
@@ -88,7 +88,7 @@ pub fn floating_download_panel(
                 .padding(0)
                 .style(button_style(tokens, ButtonVariant::Ghost)),
         ]
-        .spacing(sp.sm)
+        .spacing(sp.sm as f32)
         .align_y(Alignment::Center),
     )
     .direction(scrollable::Direction::Horizontal(
@@ -98,10 +98,10 @@ pub fn floating_download_panel(
     .height(Length::Fixed(btn_h));
 
     let header = column![title_drag_strip, toolbar]
-        .spacing(sp.xs)
+        .spacing(sp.xs as f32)
         .width(Length::Fill);
 
-    let mut body = column![header].spacing(sp.sm + 2);
+    let mut body = column![header].spacing((sp.sm + 2) as f32);
 
     if state.expanded {
         if state.jobs.is_empty() {
@@ -130,11 +130,11 @@ pub fn floating_download_panel(
                 empty_hint,
             ));
         } else {
-            let mut list = column![].spacing(sp.sm + 2);
+            let mut list = column![].spacing((sp.sm + 2) as f32);
             for j in state.jobs.iter().rev().take(6) {
                 let ratio = j.progress_ratio();
                 let line = format_job_state_line(j);
-                let mut actions = row![].spacing(sp.sm);
+                let mut actions = row![].spacing(sp.sm as f32);
                 if j.state == JobState::Running {
                     actions = actions.push(
                         button(text(envr_core::i18n::tr_key(
@@ -168,7 +168,7 @@ pub fn floating_download_panel(
                         text(line).size(ty.tiny),
                         actions,
                     ]
-                    .spacing(sp.xs),
+                    .spacing(sp.xs as f32),
                 );
             }
             body = body.push(scrollable(list).height(Length::Fixed(220.0)));
@@ -181,5 +181,5 @@ pub fn floating_download_panel(
         .width(Length::Fixed(DOWNLOAD_PANEL_SHELL_W))
         .style(move |theme: &Theme| gui_theme::download_panel_container_style(tokens, rev)(theme));
 
-    column![vertical_space().height(Length::Fixed(slide_px)), card,].into()
+    column![space().height(Length::Fixed(slide_px)), card,].into()
 }

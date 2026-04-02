@@ -24,7 +24,9 @@ pub fn scheme_for_mode(mode: ThemeMode) -> UiScheme {
 }
 
 struct Cache {
-    last_check: Instant,
+    /// `None` until the first successful probe — avoids `Instant - Duration` underflow
+    /// when the process has been running for less than the “fake age” we’d subtract.
+    last_check: Option<Instant>,
     prefers_dark: bool,
 }
 
@@ -35,19 +37,21 @@ pub fn system_prefers_dark_cached() -> bool {
     let mut g = C
         .get_or_init(|| {
             Mutex::new(Cache {
-                last_check: now - Duration::from_secs(3600),
+                last_check: None,
                 prefers_dark: false,
             })
         })
         .lock()
         .expect("theme scheme cache lock");
 
-    if now.duration_since(g.last_check) < Duration::from_millis(900) {
-        return g.prefers_dark;
+    if let Some(prev) = g.last_check {
+        if now.duration_since(prev) < Duration::from_millis(900) {
+            return g.prefers_dark;
+        }
     }
 
     let v = detect_system_prefers_dark();
-    g.last_check = now;
+    g.last_check = Some(now);
     g.prefers_dark = v;
     v
 }

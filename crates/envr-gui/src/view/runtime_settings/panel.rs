@@ -1,5 +1,5 @@
 use iced::alignment::Vertical;
-use iced::widget::{button, column, container, row, text, text_input};
+use iced::widget::{button, column, container, row, space, text, text_input};
 use iced::{Alignment, Element, Length};
 
 use envr_domain::runtime::RuntimeKind;
@@ -9,7 +9,9 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::runtime_settings::state::RuntimeSettingsState;
-use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
+use crate::widget_styles::{
+    ButtonVariant, button_content_centered, button_style, section_card, text_input_style,
+};
 
 #[derive(Debug, Clone)]
 pub enum RuntimeSettingsMsg {
@@ -39,30 +41,35 @@ pub fn runtime_settings_view(
             envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
         }),
     ]
-    .spacing(sp.xs)
+    .spacing(sp.xs as f32)
     .align_y(Alignment::Center);
-    let header = row![
-        text(envr_core::i18n::tr_key(
-            "gui.runtime_settings.header",
-            "运行时设置（默认折叠）",
-            "Runtime settings (collapsed by default)"
-        ))
-        .size(ty.body),
-        iced::widget::horizontal_space(),
-        button(expand_lbl)
-            .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ToggleExpand))
-            .height(Length::Fixed(tokens.control_height_secondary))
-            .padding([0, sp.sm + 2])
-            .style(button_style(tokens, ButtonVariant::Secondary)),
+
+    let expand_btn = button(button_content_centered(expand_lbl.into()))
+        .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ToggleExpand))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([sp.sm as f32, (sp.sm + 2) as f32])
+        .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let header_bar = row![
+        space::horizontal(),
+        expand_btn,
     ]
     .align_y(Alignment::Center)
-    .spacing(sp.sm + 2);
+    .spacing(sp.sm as f32);
+
+    let card_title = envr_core::i18n::tr_key(
+        "gui.runtime_settings.card_title",
+        "运行时设置",
+        "Runtime settings",
+    );
 
     if !state.expanded {
-        return column![header].spacing(sp.md).into();
+        return section_card(tokens, card_title, header_bar.into());
     }
 
-    let mut body = column![header].spacing(sp.md);
+    let on_prim = gui_theme::contrast_on_primary(tokens);
+    let pad_v = sp.sm as f32;
+    let mut body = column![header_bar].spacing(sp.md as f32);
     let note = text(envr_core::i18n::tr_key(
         "gui.runtime_settings.note",
         "这些设置写入 settings.toml，并会影响 CLI/GUI 的运行时行为（例如 shim 同步、环境注入等）。",
@@ -148,21 +155,21 @@ pub fn runtime_settings_view(
         None => text("").size(1),
     };
 
-    let on_prim = gui_theme::contrast_on_primary(tokens);
     let actions = row![
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Settings.view(16.0, on_prim),
                 text(envr_core::i18n::tr_key("gui.action.save", "保存", "Save")),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::Save))
         .height(Length::Fixed(tokens.control_height_primary))
-        .padding([0, sp.md])
+        .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Primary)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::RefreshCw.view(16.0, txt),
                 text(envr_core::i18n::tr_key(
@@ -171,16 +178,17 @@ pub fn runtime_settings_view(
                     "Reload from disk",
                 )),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::RuntimeSettings(RuntimeSettingsMsg::ReloadDisk))
         .height(Length::Fixed(tokens.control_height_secondary))
-        .padding([0, sp.md])
+        .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
-    .spacing(sp.sm + 2);
+    .spacing((sp.sm + 2) as f32);
 
     body = body.push(actions).push(status);
-    body.into()
+    section_card(tokens, card_title, body.into())
 }

@@ -3,11 +3,13 @@
 use envr_ui::theme::ThemeTokens;
 use iced::border;
 use iced::widget::button;
+use iced::widget::column;
 use iced::widget::container;
+use iced::widget::text;
 use iced::widget::text_input;
-use iced::{Background, Color, Theme};
+use iced::{Background, Color, Element, Length, Padding, Theme};
 
-use crate::theme::to_color;
+use crate::theme::{contrast_on_primary, to_color};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ButtonVariant {
@@ -70,6 +72,7 @@ pub fn button_style(
                     text_color: tc,
                     border: pill_border(r),
                     shadow: Default::default(),
+                    snap: false,
                 }
             }
             ButtonVariant::Secondary => {
@@ -89,6 +92,7 @@ pub fn button_style(
                     text_color: tc.scale_alpha(txt_a),
                     border: border::rounded(r).width(1.0).color(line_a),
                     shadow: Default::default(),
+                    snap: false,
                 }
             }
             ButtonVariant::Ghost => {
@@ -108,6 +112,7 @@ pub fn button_style(
                     text_color: tc,
                     border: pill_border(r),
                     shadow: Default::default(),
+                    snap: false,
                 }
             }
             ButtonVariant::Danger => {
@@ -124,10 +129,62 @@ pub fn button_style(
                     text_color: tc,
                     border: pill_border(r),
                     shadow: Default::default(),
+                    snap: false,
                 }
             }
         }
     }
+}
+
+/// Label with a color matching [`button_style`] so text stays visible inside nested layouts
+/// (iced 0.13 often does not propagate `button::Style::text_color` to [`text`] under [`container`]).
+pub fn button_label_for_variant<Message: 'static>(
+    label: impl Into<String>,
+    tokens: ThemeTokens,
+    variant: ButtonVariant,
+) -> Element<'static, Message> {
+    let c = match variant {
+        ButtonVariant::Primary => contrast_on_primary(tokens),
+        ButtonVariant::Secondary => to_color(tokens.colors.text),
+        ButtonVariant::Ghost => to_color(tokens.colors.primary),
+        ButtonVariant::Danger => contrast_text_on(to_color(tokens.colors.danger)),
+    };
+    text(label.into()).color(c).into()
+}
+
+/// Vertically centers label inside fixed-height [`button`]s without forcing horizontal `Fill`
+/// (a `Fill` width hint makes every button expand and can break text layout in iced 0.13).
+pub fn button_content_centered<Message: Clone + 'static>(
+    content: Element<'static, Message>,
+) -> Element<'static, Message> {
+    container(content)
+        .center_y(Length::Fill)
+        .into()
+}
+
+/// Grouped surface for settings / runtime pages (title + body with card chrome).
+pub fn section_card<Message: 'static>(
+    tokens: ThemeTokens,
+    title: String,
+    body: Element<'static, Message>,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let pad = tokens.card_padding_px();
+    let inset = Padding::from([pad + 4.0, pad + 4.0]);
+    let card_s = card_container_style(tokens, 1);
+    container(
+        column![
+            text(title).size(ty.section),
+            body,
+        ]
+        .spacing(sp.md as f32)
+        .width(Length::Fill),
+    )
+    .padding(inset)
+    .width(Length::Fill)
+    .style(move |theme: &Theme| card_s(theme))
+    .into()
 }
 
 /// Card surface: semantic `surface`, token radius & padding applied at call site.
@@ -191,7 +248,7 @@ pub fn text_input_style(
                 border: border::rounded(r).color(muted.scale_alpha(0.72)).width(1.0),
                 ..base
             },
-            text_input::Status::Focused => text_input::Style {
+            text_input::Status::Focused { .. } => text_input::Style {
                 border: border::width(tokens.focus_ring_width_px())
                     .color(primary)
                     .rounded(r),

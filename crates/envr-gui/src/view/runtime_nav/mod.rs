@@ -8,7 +8,7 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::env_center::EnvCenterMsg;
-use crate::widget_styles::{ButtonVariant, button_style};
+use crate::widget_styles::{ButtonVariant, button_content_centered, button_style};
 
 pub fn runtime_nav_bar(
     active: RuntimeKind,
@@ -17,7 +17,7 @@ pub fn runtime_nav_bar(
 ) -> Element<'static, Message> {
     let sp = tokens.space();
     let txt = gui_theme::to_color(tokens.colors.text);
-    let mut r = row![].spacing(sp.sm).align_y(Alignment::Center);
+    let mut r = row![].spacing(sp.sm as f32).align_y(Alignment::Center);
 
     for kind in [
         RuntimeKind::Node,
@@ -33,7 +33,7 @@ pub fn runtime_nav_bar(
             Lucide::Package.view(14.0, txt),
             text(crate::view::env_center::kind_label(kind)),
         ]
-        .spacing(sp.xs)
+        .spacing(sp.xs as f32)
         .align_y(Alignment::Center);
         let variant = if kind == active {
             ButtonVariant::Primary
@@ -46,10 +46,10 @@ pub fn runtime_nav_bar(
             tokens.control_height_secondary
         }
         .max(tokens.min_click_target_px());
-        let b = button(label)
+        let b = button(button_content_centered(label.into()))
             .on_press(Message::EnvCenter(EnvCenterMsg::PickKind(kind)))
             .height(Length::Fixed(h))
-            .padding([0, sp.sm + 2])
+            .padding([sp.sm as f32, (sp.sm + 2) as f32])
             .style(button_style(tokens, variant));
         let b = if busy { b.on_press_maybe(None) } else { b };
         r = r.push(b);

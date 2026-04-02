@@ -13,6 +13,7 @@ pub fn iced_palette(tokens: ThemeTokens) -> Palette {
         text: to_color(c.text),
         primary: to_color(c.primary),
         success: to_color(c.success),
+        warning: to_color(c.warning),
         danger: to_color(c.danger),
     }
 }

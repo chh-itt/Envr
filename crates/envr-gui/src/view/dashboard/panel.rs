@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, text};
+use iced::widget::{button, column, container, row, space, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use envr_domain::runtime::RuntimeKind;
@@ -10,7 +10,9 @@ use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
 use crate::view::downloads::{DownloadPanelState, JobState};
 use crate::view::empty_state::{EmptyTone, illustrative_block, illustrative_block_compact};
-use crate::widget_styles::{ButtonVariant, button_style, card_container_style};
+use crate::widget_styles::{
+    ButtonVariant, button_content_centered, button_style, card_container_style,
+};
 
 pub fn dashboard_view(
     state: &DashboardState,
@@ -28,7 +30,7 @@ pub fn dashboard_view(
             "Refresh",
         )),
     ]
-    .spacing(sp.sm)
+    .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
     let mut col = column![
         row![
@@ -38,8 +40,8 @@ pub fn dashboard_view(
                 "Dashboard",
             ))
             .size(ty.page_title),
-            iced::widget::horizontal_space(),
-            button(refresh_lbl)
+            space::horizontal(),
+            button(button_content_centered(refresh_lbl.into()))
                 .on_press(Message::Dashboard(
                     crate::view::dashboard::state::DashboardMsg::Refresh
                 ))
@@ -48,12 +50,12 @@ pub fn dashboard_view(
                         .control_height_primary
                         .max(tokens.min_click_target_px()),
                 ))
-                .padding([0, sp.md])
+                .padding([sp.sm as f32, sp.md as f32])
                 .style(button_style(tokens, ButtonVariant::Secondary)),
         ]
         .align_y(Alignment::Center)
     ]
-    .spacing(tokens.page_title_gap());
+    .spacing(tokens.page_title_gap() as f32);
 
     if let Some(data) = state.data.as_ref() {
         if let Some(err) = state.last_error.as_deref() {
@@ -158,17 +160,23 @@ fn card(
     let ty = tokens.typography();
     let sp = tokens.space();
     let pad = tokens.card_padding_px();
-    container(column![text(title).size(ty.section), body].spacing(sp.sm + 2))
-        .padding(Padding::new(pad))
-        .width(Length::Fill)
-        .style(move |theme: &Theme| card_s(theme))
-        .into()
+    // Extra vertical + horizontal inset so copy is not visually "stuck" to card edges.
+    let inset = Padding::from([pad + 6.0, pad + 4.0]);
+    container(
+        column![text(title).size(ty.section), body]
+            .spacing(sp.md as f32)
+            .align_x(Alignment::Start),
+    )
+    .padding(inset)
+    .width(Length::Fill)
+    .style(move |theme: &Theme| card_s(theme))
+    .into()
 }
 
 fn runtime_overview_card(rows: &[RuntimeRow], tokens: ThemeTokens) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
-    let mut list = column![].spacing(sp.xs + 2);
+    let mut list = column![].spacing((sp.xs + 2) as f32);
     for r in rows {
         let label = kind_label(r.kind);
         let cur = r.current.clone().unwrap_or_else(|| {
@@ -204,7 +212,7 @@ fn doctor_card(
         ))
         .size(ty.caption)
     ]
-    .spacing(sp.xs + 2);
+    .spacing((sp.xs + 2) as f32);
     let shims_suffix = if shims_empty {
         envr_core::i18n::tr_key("gui.dashboard.shims_empty", "（空）", " (empty)")
     } else {
@@ -258,7 +266,7 @@ fn recent_jobs_card(
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
-    let mut body = column![].spacing(sp.xs + 2);
+    let mut body = column![].spacing((sp.xs + 2) as f32);
     if downloads.jobs.is_empty() {
         let title = envr_core::i18n::tr_key(
             "gui.empty.title.no_recent_activity",
@@ -314,7 +322,7 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
     let sp = tokens.space();
     let txt = gui_theme::to_color(tokens.colors.text);
     let actions = row![
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Package.view(16.0, txt),
                 text(envr_core::i18n::tr_key(
@@ -323,18 +331,20 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
                     "Open runtimes",
                 )),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::Navigate(Route::Runtime))
+        .width(Length::FillPortion(1))
         .height(Length::Fixed(
             tokens
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.md])
+        .padding([sp.sm as f32, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Settings.view(16.0, txt),
                 text(envr_core::i18n::tr_key(
@@ -343,19 +353,21 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
                     "Open settings",
                 )),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::Navigate(Route::Settings))
+        .width(Length::FillPortion(1))
         .height(Length::Fixed(
             tokens
                 .control_height_secondary
                 .max(tokens.min_click_target_px()),
         ))
-        .padding([0, sp.md])
+        .padding([sp.sm as f32, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
-    .spacing(sp.sm + 2);
+    .spacing((sp.sm + 2) as f32);
     card(
         envr_core::i18n::tr_key(
             "gui.dashboard.recommended_actions",

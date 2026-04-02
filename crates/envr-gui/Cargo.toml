@@ -13,6 +13,6 @@ envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-ui = { path = "../envr-ui" }
 reqwest = { workspace = true }
-iced = { version = "0.13", default-features = false, features = ["wgpu", "tiny-skia", "tokio", "svg"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "tokio", "svg"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }

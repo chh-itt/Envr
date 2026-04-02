@@ -21,7 +21,7 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
     let panel = gui_theme::panel_container_style(tokens);
     let sp = tokens.space();
     let txt = gui_theme::to_color(tokens.colors.text);
-    let mut col = column![].spacing(sp.sm);
+    let mut col = column![].spacing(sp.sm as f32);
     for route in Route::ALL {
         let selected = route == current;
         let icon_c = if selected {
@@ -31,7 +31,7 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
         };
         let icn_sz = if selected { 18.0 } else { 16.0 };
         let label = row![route_icon(route).view(icn_sz, icon_c), text(route.label()),]
-            .spacing(sp.sm)
+            .spacing(sp.sm as f32)
             .align_y(Alignment::Center);
         let variant = if selected {
             ButtonVariant::Primary
@@ -48,7 +48,7 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
             .on_press(Message::Navigate(route))
             .width(Length::Fill)
             .height(Length::Fixed(h))
-            .padding([0, sp.sm + 2])
+            .padding([sp.sm as f32, (sp.sm + 2) as f32])
             .style(button_style(tokens, variant));
         col = col.push(b);
     }

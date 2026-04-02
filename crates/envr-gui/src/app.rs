@@ -13,7 +13,7 @@ use envr_ui::theme::{
     tokens_for_appearance,
 };
 use iced::font::Family;
-use iced::widget::scrollable::{self, AbsoluteOffset};
+use iced::widget::{operation, Id};
 use iced::window;
 use iced::{Element, Size, Subscription, Task, application};
 use std::path::PathBuf;
@@ -30,6 +30,16 @@ use crate::view::env_center::{ENV_INSTALLED_LIST_SCROLL_ID, EnvCenterMsg, EnvCen
 use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
+
+fn scroll_env_installed_list(y: f32) -> Task<Message> {
+    operation::scroll_to(
+        Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
+        operation::AbsoluteOffset {
+            x: Some(0.0),
+            y: Some(y),
+        },
+    )
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -190,9 +200,19 @@ pub enum Message {
 pub fn run() -> iced::Result {
     let startup = load_startup_settings();
     envr_core::i18n::init_from_settings(&startup);
-    application("Envr", update, view)
-        .default_font(configured_default_font(&startup))
-        .theme(|state| gui_theme::iced_theme(state.tokens()))
+    application(
+        || {
+            let mut state = AppState::default();
+            state.dashboard.busy = true;
+            state.dashboard.last_error = None;
+            (state, gui_ops::refresh_dashboard())
+        },
+        update,
+        view,
+    )
+    .title("Envr")
+    .default_font(configured_default_font(&startup))
+    .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
             let need_motion = state.downloads.needs_motion_tick()
                 || state.downloads.title_drag_armed_since.is_some()
@@ -303,13 +323,12 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             if route == Route::Runtime {
                 return Task::batch([
                     gui_ops::refresh_runtimes(state.env_center.kind),
-                    scrollable::scroll_to(
-                        scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
-                        AbsoluteOffset { x: 0.0, y: 0.0 },
-                    ),
+                    scroll_env_installed_list(0.0),
                 ]);
             }
             if route == Route::Dashboard {
+                state.dashboard.busy = true;
+                state.dashboard.last_error = None;
                 return gui_ops::refresh_dashboard();
             }
             if route == Route::Settings {
@@ -908,10 +927,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.list_scroll_y = 0.0;
             Task::batch([
                 gui_ops::refresh_runtimes(k),
-                scrollable::scroll_to(
-                    scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
-                    AbsoluteOffset { x: 0.0, y: 0.0 },
-                ),
+                scroll_env_installed_list(0.0),
             ])
         }
         EnvCenterMsg::ListScroll(y) => {
@@ -939,10 +955,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.clamp_list_scroll(state.tokens());
             let y = state.env_center.list_scroll_y;
-            scrollable::scroll_to(
-                scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
-                AbsoluteOffset { x: 0.0, y },
-            )
+            scroll_env_installed_list(y)
         }
         EnvCenterMsg::SubmitInstall => {
             let spec = state.env_center.install_input.trim().to_string();

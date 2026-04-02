@@ -9,7 +9,10 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::settings::state::SettingsViewState;
-use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
+use crate::widget_styles::{
+    ButtonVariant, button_content_centered, button_label_for_variant, button_style, section_card,
+    text_input_style,
+};
 
 #[derive(Debug, Clone)]
 pub enum SettingsMsg {
@@ -77,7 +80,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ))
         .size(ty.body),
     ]
-    .spacing(sp.sm);
+    .spacing(sp.sm as f32);
     for mode in [
         MirrorMode::Official,
         MirrorMode::Auto,
@@ -95,10 +98,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
-        let b = button(text(lab))
+        let b = button(button_content_centered(text(lab).into()))
             .on_press(Message::Settings(SettingsMsg::SetMirrorMode(mode)))
+            .width(Length::FillPortion(1))
             .height(Length::Fixed(h))
-            .padding([0, sp.sm])
+            .padding([sp.sm as f32, sp.sm as f32])
             .style(button_style(tokens, variant));
         mirror_row = mirror_row.push(b);
     }
@@ -122,7 +126,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .height(Length::Fixed(tokens.control_height_secondary))
             .align_y(Vertical::Center),
         ]
-        .spacing(sp.xs + 2)
+        .spacing((sp.xs + 2) as f32)
     } else {
         column![]
     };
@@ -143,7 +147,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ))
         .size(ty.body)
     ]
-    .spacing(sp.sm);
+    .spacing(sp.sm as f32);
     for (mode, key, zh, en) in [
         (
             FontMode::Auto,
@@ -168,11 +172,19 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
-        let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
-            .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
-            .height(Length::Fixed(h))
-            .padding([0, sp.sm])
-            .style(button_style(tokens, variant));
+        let b = button(button_content_centered(
+            button_label_for_variant(
+                envr_core::i18n::tr_key(key, zh, en),
+                tokens,
+                variant,
+            )
+            .into(),
+        ))
+        .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(h))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, variant));
         font_mode_row = font_mode_row.push(b);
     }
 
@@ -216,9 +228,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 .height(Length::Fixed(tokens.control_height_secondary))
                 .align_y(Vertical::Center),
             ]
-            .spacing(sp.sm + 2),
+            .spacing((sp.sm + 2) as f32),
         ]
-        .spacing(sp.xs + 2)
+        .spacing((sp.xs + 2) as f32)
     } else {
         column![
             text(format!(
@@ -232,7 +244,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             ))
             .size(ty.micro),
         ]
-        .spacing(sp.xs + 2)
+        .spacing((sp.xs + 2) as f32)
     };
 
     let mut theme_mode_row = row![
@@ -243,7 +255,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ))
         .size(ty.body)
     ]
-    .spacing(sp.sm);
+    .spacing(sp.sm as f32);
     for (mode, key, zh, en) in [
         (
             ThemeMode::FollowSystem,
@@ -269,11 +281,19 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
-        let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
-            .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
-            .height(Length::Fixed(h))
-            .padding([0, sp.sm])
-            .style(button_style(tokens, variant));
+        let b = button(button_content_centered(
+            button_label_for_variant(
+                envr_core::i18n::tr_key(key, zh, en),
+                tokens,
+                variant,
+            )
+            .into(),
+        ))
+        .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(h))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, variant));
         theme_mode_row = theme_mode_row.push(b);
     }
 
@@ -302,7 +322,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .height(Length::Fixed(tokens.control_height_secondary))
         .align_y(Vertical::Center),
     ]
-    .spacing(sp.xs);
+    .spacing(sp.xs as f32);
 
     let dl_row = row![
         column![
@@ -320,7 +340,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .padding(sp.xs + 2)
             .style(text_input_style(tokens)),
         ]
-        .spacing(sp.xs),
+        .spacing(sp.xs as f32),
         column![
             text(envr_core::i18n::tr_key(
                 "gui.settings.retry_limit",
@@ -336,9 +356,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .padding(sp.xs + 2)
             .style(text_input_style(tokens)),
         ]
-        .spacing(sp.xs),
+        .spacing(sp.xs as f32),
     ]
-    .spacing(sp.lg);
+    .spacing(sp.lg as f32);
 
     let status = match state.last_message.as_ref() {
         Some(m) => text(m.clone()).size(ty.caption),
@@ -348,40 +368,44 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     let on_prim = gui_theme::contrast_on_primary(tokens);
     let txt = gui_theme::to_color(tokens.colors.text);
     let actions = row![
-        button(
+        button(button_content_centered(
             row![
                 Lucide::Settings.view(16.0, on_prim),
                 text(envr_core::i18n::tr_key(
                     "gui.settings.save_to_file",
                     "保存到 settings.toml",
                     "Save to settings.toml",
-                )),
+                ))
+                .color(on_prim),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::Settings(SettingsMsg::Save))
         .height(Length::Fixed(tokens.control_height_primary))
-        .padding([0, sp.md + 2])
+        .padding([sp.sm as f32, (sp.md + 2) as f32])
         .style(button_style(tokens, ButtonVariant::Primary)),
-        button(
+        button(button_content_centered(
             row![
                 Lucide::RefreshCw.view(16.0, txt),
                 text(envr_core::i18n::tr_key(
                     "gui.settings.reload_disk",
                     "从磁盘重新加载",
                     "Reload from disk",
-                )),
+                ))
+                .color(txt),
             ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center),
-        )
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
         .on_press(Message::Settings(SettingsMsg::ReloadDisk))
         .height(Length::Fixed(tokens.control_height_secondary))
-        .padding([0, sp.md])
+        .padding([sp.sm as f32, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]
-    .spacing(sp.sm + 2);
+    .spacing((sp.sm + 2) as f32);
 
     let mut locale_row = row![
         text(envr_core::i18n::tr_key(
@@ -391,7 +415,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ))
         .size(ty.body)
     ]
-    .spacing(sp.sm);
+    .spacing(sp.sm as f32);
     for (mode, key, zh, en) in [
         (
             LocaleMode::FollowSystem,
@@ -422,35 +446,75 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
-        let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
-            .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
-            .height(Length::Fixed(h))
-            .padding([0, sp.sm])
-            .style(button_style(tokens, variant));
+        let b = button(button_content_centered(
+            button_label_for_variant(
+                envr_core::i18n::tr_key(key, zh, en),
+                tokens,
+                variant,
+            )
+            .into(),
+        ))
+        .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(h))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, variant));
         locale_row = locale_row.push(b);
     }
 
-    column![
-        env_note,
-        rr,
-        mirror_row,
-        manual,
-        cleanup,
-        font_mode_row,
-        font_custom,
-        theme_mode_row,
-        accent_row,
-        locale_row,
-        text(envr_core::i18n::tr_key(
+    let paths_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.settings.group.paths_mirror",
+            "存储路径与镜像",
+            "Storage & mirrors",
+        ),
+        column![
+            env_note,
+            rr,
+            mirror_row,
+            manual,
+            cleanup,
+        ]
+        .spacing(sp.md as f32)
+        .into(),
+    );
+
+    let look_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.settings.group.look_feel",
+            "外观、字体与语言",
+            "Appearance, font & language",
+        ),
+        column![
+            font_mode_row,
+            font_custom,
+            theme_mode_row,
+            accent_row,
+            locale_row,
+        ]
+        .spacing(sp.md as f32)
+        .into(),
+    );
+
+    let dl_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key(
             "gui.settings.downloads_section",
             "下载",
             "Downloads",
-        ))
-        .size(ty.subsection),
-        dl_row,
+        ),
+        column![dl_row].spacing(sp.sm as f32).into(),
+    );
+
+    column![
+        paths_card,
+        look_card,
+        dl_card,
         actions,
         status,
     ]
-    .spacing(sp.md)
+    .spacing(sp.lg as f32)
     .into()
 }
