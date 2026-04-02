@@ -353,12 +353,6 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     }
 
     column![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.title",
-            "设置",
-            "Settings"
-        ))
-        .size(ty.section),
         env_note,
         rr,
         mirror_row,

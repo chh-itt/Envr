@@ -152,10 +152,30 @@ pub static SPACING_8PT: SpacingScale = SpacingScale {
     xxl: 32,
 };
 
+/// Shell / window layout (`tasks_gui.md` GUI-010). Values are logical px.
+pub mod shell {
+    pub const WINDOW_DEFAULT_W: f32 = 1200.0;
+    pub const WINDOW_DEFAULT_H: f32 = 720.0;
+    pub const WINDOW_MIN_W: f32 = 960.0;
+    pub const WINDOW_MIN_H: f32 = 600.0;
+    /// Main reading column cap (12 × 80px grid units); keeps lines from stretching on ultra-wide windows.
+    pub const CONTENT_MAX_WIDTH: f32 = 960.0;
+}
+
 impl ThemeTokens {
     /// Application shell: suggested sidebar width (`tasks_gui.md` GUI-010: 240px).
     pub fn sidebar_width(&self) -> f32 {
         240.0
+    }
+
+    /// Max width for the primary content column (centered when window is wider).
+    pub fn content_max_width(&self) -> f32 {
+        shell::CONTENT_MAX_WIDTH
+    }
+
+    /// Vertical gap after the page title before toolbar or first block (`tasks_gui.md` GUI-011).
+    pub fn page_title_gap(&self) -> u16 {
+        SPACING_8PT.lg
     }
 
     /// Default gap between major regions (content padding baseline).

@@ -1,4 +1,4 @@
-use iced::widget::{container, scrollable, text};
+use iced::widget::{Rule, container, scrollable, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use envr_ui::theme::{ThemeTokens, UiFlavor};
@@ -17,18 +17,32 @@ use iced::widget::{button, column, horizontal_space, row, stack, vertical_space}
 pub fn app_view(state: &AppState) -> Element<'_, Message> {
     let t = state.tokens();
     let bg = gui_theme::to_color(t.colors.background);
+    let sp = t.space();
+
+    let page_scroll = scrollable(if state.route() == Route::Dashboard {
+        dashboard_view(&state.dashboard, &state.downloads, t)
+    } else {
+        page_body(state, t)
+    })
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let page = container(page_scroll)
+        .width(Length::Fill)
+        .max_width(t.content_max_width())
+        .align_x(Alignment::Center);
 
     let main_row = row![
         crate::view::sidebar::sidebar(state.route(), t),
-        container(page_body(state, t))
+        Rule::vertical(1),
+        container(page)
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(Padding::from(t.content_spacing())),
     ]
-    .spacing(t.content_spacing().round() as u16)
+    .spacing(0)
     .height(Length::Fill);
 
-    let sp = t.space();
     let body = column![main_row].spacing(sp.sm).height(Length::Fill);
 
     let chrome = if let Some(err) = state.error_message() {
@@ -82,14 +96,10 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
 }
 
 fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
-    if state.route() == Route::Dashboard {
-        return dashboard_view(&state.dashboard, &state.downloads, tokens);
-    }
-
     let ty = tokens.typography();
     let sp = tokens.space();
     let title = text(state.route().label()).size(ty.page_title);
-    let mut col = column![title].spacing(sp.sm + sp.xs);
+    let mut col = column![title].spacing(tokens.page_title_gap());
 
     match state.route() {
         Route::Runtime => {
@@ -142,7 +152,6 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 .size(ty.caption),
             );
         }
-        Route::Dashboard => unreachable!("handled by early return"),
         Route::About => {
             col = col.push(
                 text(envr_core::i18n::tr_key(
@@ -153,6 +162,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 .size(ty.body),
             );
         }
+        Route::Dashboard => unreachable!("handled in app_view"),
     }
 
     if state.route() == Route::About {
@@ -170,10 +180,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
         );
     }
 
-    scrollable(col)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    col.into()
 }
 
 fn flavor_label_i18n(flavor: UiFlavor) -> String {

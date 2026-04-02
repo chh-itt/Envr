@@ -9,10 +9,11 @@ use envr_download::task::CancelToken;
 use envr_ui::font;
 use envr_ui::theme::Srgb;
 use envr_ui::theme::{
-    ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, tokens_for_appearance,
+    ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, shell as layout_shell,
+    tokens_for_appearance,
 };
 use iced::font::Family;
-use iced::{Element, Subscription, Task, application};
+use iced::{Element, Size, Subscription, Task, application};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -180,8 +181,18 @@ pub fn run() -> iced::Result {
                 Subscription::batch(subs)
             }
         })
-        .centered()
-        .window_size((960.0, 640.0))
+        .window(iced::window::Settings {
+            size: Size::new(
+                layout_shell::WINDOW_DEFAULT_W,
+                layout_shell::WINDOW_DEFAULT_H,
+            ),
+            min_size: Some(Size::new(
+                layout_shell::WINDOW_MIN_W,
+                layout_shell::WINDOW_MIN_H,
+            )),
+            position: iced::window::Position::Centered,
+            ..iced::window::Settings::default()
+        })
         .run()
 }
 

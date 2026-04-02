@@ -258,7 +258,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .size(ty.section),
         scrollable(list_col).height(Length::Fixed(260.0)),
     ]
-    .spacing(tokens.content_spacing().round().max(sp.sm as f32) as u16);
+    .spacing(tokens.page_title_gap());
 
     body.into()
 }

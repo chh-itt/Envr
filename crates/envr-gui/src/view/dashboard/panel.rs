@@ -37,7 +37,7 @@ pub fn dashboard_view(
         ]
         .align_y(Alignment::Center)
     ]
-    .spacing(sp.md);
+    .spacing(tokens.page_title_gap());
 
     if let Some(err) = state.last_error.as_deref() {
         col = col.push(text(format!(

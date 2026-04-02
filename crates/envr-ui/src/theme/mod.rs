@@ -16,7 +16,7 @@ pub use flavor::UiFlavor;
 pub use presets::{tokens_for_appearance, tokens_for_scheme};
 pub use scheme::{UiScheme, scheme_for_mode, system_prefers_dark_cached};
 pub use tokens::{
-    MotionTokens, SemanticColors, ShadowTokens, SpacingScale, ThemeTokens, TypographyScale,
+    MotionTokens, SemanticColors, ShadowTokens, SpacingScale, ThemeTokens, TypographyScale, shell,
 };
 
 #[cfg(test)]
@@ -93,6 +93,16 @@ mod tests {
             ..t
         };
         assert_eq!(t2.content_spacing(), t.content_spacing());
+    }
+
+    #[test]
+    fn shell_layout_matches_gui_010_doc() {
+        use super::shell;
+        assert_eq!(shell::WINDOW_DEFAULT_W, 1200.0);
+        assert_eq!(shell::CONTENT_MAX_WIDTH, 960.0);
+        let t = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
+        assert_eq!(t.content_max_width(), shell::CONTENT_MAX_WIDTH);
+        assert_eq!(t.page_title_gap(), 16);
     }
 
     #[test]
