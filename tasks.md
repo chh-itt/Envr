@@ -1041,18 +1041,18 @@
     - 验收结果：`cargo check -p envr-cli`；`cargo test -p envr-cli --test help`；`cargo test -p envr-core --lib`。
 
 ### T913 i18n 术语表与专业术语白名单
-- [ ] **T913：建立术语表与专业术语白名单管理** #i18n
+- [x] **T913：建立术语表与专业术语白名单管理** #i18n
   - **描述**：统一术语翻译、大小写、缩写规范，避免同义词混乱。
   - **依赖**：T910
   - **输入文档**：现有词条
   - **输出文件**：`docs/i18n/glossary.md`,`docs/i18n/whitelist.md`
   - **验收**：关键术语在 GUI/CLI 中一致，专业术语白名单可审计。
-  - **进度**：todo
+  - **进度**：done
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `docs/i18n/glossary.md`（产品/GUI/CLI 术语表，含 en/zh 首选译法、大小写与同义词约束）与 `docs/i18n/whitelist.md`（协议/文件名/语言键/镜像枚举/JSON 契约 message token/UI 专名等免译条目及审计原则）；在 `style-guide.md` 中与两文件交叉引用。
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：白名单与 `locales/*` 当前混排英文（如 Shims、spec）对齐记录于表内「范围」列，后续新增 UI 若改译法须先改 glossary 再改词条。
+    - 验收结果：两文档可独立评审；与 T910 规范 §2/§8 一致。
 
 ### T914 i18n 完整性自动检查
 - [ ] **T914：建立 i18n lint（缺失 key/未使用 key/硬编码文本）** #i18n #quality
