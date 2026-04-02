@@ -13,6 +13,7 @@ use envr_ui::theme::{
     tokens_for_appearance,
 };
 use iced::font::Family;
+use iced::widget::scrollable::{self, AbsoluteOffset};
 use iced::{Element, Size, Subscription, Task, application};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -22,7 +23,7 @@ use crate::gui_ops;
 use crate::theme as gui_theme;
 use crate::view::dashboard::{DashboardMsg, DashboardState};
 use crate::view::downloads::{DownloadJob, DownloadMsg, DownloadPanelState, JobState};
-use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
+use crate::view::env_center::{ENV_INSTALLED_LIST_SCROLL_ID, EnvCenterMsg, EnvCenterState};
 use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
@@ -76,12 +77,16 @@ impl Default for AppState {
             error: None,
             flavor: default_flavor_for_target(),
             env_center: EnvCenterState::default(),
-            downloads: DownloadPanelState {
-                visible: gui_defaults.0,
-                expanded: gui_defaults.1,
-                x: gui_defaults.2,
-                y: gui_defaults.3,
-                ..DownloadPanelState::default()
+            downloads: {
+                let vis = gui_defaults.0;
+                DownloadPanelState {
+                    visible: vis,
+                    reveal: if vis { 1.0 } else { 0.0 },
+                    expanded: gui_defaults.1,
+                    x: gui_defaults.2,
+                    y: gui_defaults.3,
+                    ..DownloadPanelState::default()
+                }
             },
             settings: SettingsViewState::new(),
             dashboard: DashboardState::default(),
@@ -131,6 +136,8 @@ impl AppState {
 pub enum Message {
     /// Re-resolve `FollowSystem` scheme when OS appearance changes (cheap tick).
     ThemePollTick,
+    /// ~32ms: panel reveal, skeleton shimmer, throttled download progress (`tasks_gui.md` GUI-040–042, 041).
+    MotionTick,
     Navigate(Route),
     DismissError,
     ReportError(String),
@@ -149,9 +156,16 @@ pub fn run() -> iced::Result {
         .default_font(configured_default_font(&startup))
         .theme(|state| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
-            let maybe_tick = state
-                .downloads
-                .needs_tick()
+            let need_motion = state.downloads.needs_motion_tick()
+                || (matches!(state.route(), Route::Runtime)
+                    && state.env_center.busy
+                    && state.env_center.installed.is_empty());
+            let maybe_motion = need_motion
+                .then(|| iced::time::every(Duration::from_millis(32)))
+                .map(|s| s.map(|_| Message::MotionTick));
+
+            let progress_only = state.downloads.needs_tick() && !need_motion;
+            let maybe_tick = progress_only
                 .then(|| iced::time::every(Duration::from_millis(400)))
                 .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
 
@@ -166,6 +180,9 @@ pub fn run() -> iced::Result {
                 .map(|s| s.map(|_| Message::ThemePollTick));
 
             let mut subs = Vec::new();
+            if let Some(t) = maybe_motion {
+                subs.push(t);
+            }
             if let Some(t) = maybe_tick {
                 subs.push(t);
             }
@@ -232,11 +249,19 @@ fn configured_default_font(st: &Settings) -> iced::Font {
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
     match message {
         Message::ThemePollTick => Task::none(),
+        Message::MotionTick => handle_motion_tick(state),
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
             state.route = route;
+            state.env_center.list_scroll_y = 0.0;
             if route == Route::Runtime {
-                return gui_ops::refresh_runtimes(state.env_center.kind);
+                return Task::batch([
+                    gui_ops::refresh_runtimes(state.env_center.kind),
+                    scrollable::scroll_to(
+                        scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
+                        AbsoluteOffset { x: 0.0, y: 0.0 },
+                    ),
+                ]);
             }
             if route == Route::Dashboard {
                 return gui_ops::refresh_dashboard();
@@ -582,6 +607,22 @@ fn settings_path() -> PathBuf {
     envr_config::settings::settings_path_from_platform(&paths)
 }
 
+fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
+    let tokens = state.tokens();
+    state.downloads.advance_reveal(tokens);
+    if state.downloads.take_persist_after_hide() {
+        let _ = persist_download_panel_settings(&state.downloads);
+    }
+    state.downloads.maybe_progress_tick_on_motion_frame();
+    if matches!(state.route(), Route::Runtime)
+        && state.env_center.busy
+        && state.env_center.installed.is_empty()
+    {
+        state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
+    }
+    Task::none()
+}
+
 fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
     match msg {
         DownloadMsg::Tick => {
@@ -589,8 +630,13 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
             Task::none()
         }
         DownloadMsg::ToggleVisible => {
-            state.downloads.visible = !state.downloads.visible;
-            let _ = persist_download_panel_settings(&state.downloads);
+            let tokens = state.tokens();
+            if state.downloads.visible && state.downloads.reveal_anim.is_none() {
+                state.downloads.start_hide_anim(tokens);
+            } else if !state.downloads.visible {
+                state.downloads.start_show_anim(tokens);
+                let _ = persist_download_panel_settings(&state.downloads);
+            }
             Task::none()
         }
         DownloadMsg::ToggleExpand => {
@@ -758,7 +804,18 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.env_center.kind = k;
-            gui_ops::refresh_runtimes(k)
+            state.env_center.list_scroll_y = 0.0;
+            Task::batch([
+                gui_ops::refresh_runtimes(k),
+                scrollable::scroll_to(
+                    scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
+                    AbsoluteOffset { x: 0.0, y: 0.0 },
+                ),
+            ])
+        }
+        EnvCenterMsg::ListScroll(y) => {
+            state.env_center.list_scroll_y = y;
+            Task::none()
         }
         EnvCenterMsg::SetMode(m) => {
             state.env_center.mode = m;
@@ -779,7 +836,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
                 Err(e) => state.error = Some(e),
             }
-            Task::none()
+            state.env_center.clamp_list_scroll(state.tokens());
+            let y = state.env_center.list_scroll_y;
+            scrollable::scroll_to(
+                scrollable::Id::new(ENV_INSTALLED_LIST_SCROLL_ID),
+                AbsoluteOffset { x: 0.0, y },
+            )
         }
         EnvCenterMsg::SubmitInstall => {
             let spec = state.env_center.install_input.trim().to_string();

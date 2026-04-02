@@ -3,6 +3,7 @@
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
+use iced::widget::scrollable::Id as ScrollableId;
 use iced::widget::{
     Rule, button, column, container, row, scrollable, text, text_input, vertical_space,
 };
@@ -15,6 +16,12 @@ use crate::widget_styles::{ButtonVariant, button_style, text_input_style};
 
 /// Fixed list viewport height (`tasks_gui.md` GUI-021); keeps layout stable vs. skeleton rows.
 const ENV_LIST_VIEWPORT_H: f32 = 260.0;
+
+/// [`scrollable::Id`] for the installed-versions list (scroll position + `scroll_to` sync).
+pub const ENV_INSTALLED_LIST_SCROLL_ID: &str = "envr-env-installed-list";
+
+const LIST_SEP_PX: f32 = 1.0;
+const VIRT_OVERSCAN: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VersionMode {
@@ -37,6 +44,8 @@ pub enum EnvCenterMsg {
     UseFinished(Result<(), String>),
     SubmitUninstall(String),
     UninstallFinished(Result<(), String>),
+    /// Vertical scroll offset (px) in the installed-versions list.
+    ListScroll(f32),
 }
 
 #[derive(Debug)]
@@ -47,6 +56,9 @@ pub struct EnvCenterState {
     pub installed: Vec<RuntimeVersion>,
     pub current: Option<RuntimeVersion>,
     pub busy: bool,
+    pub list_scroll_y: f32,
+    /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
+    pub skeleton_phase: f32,
 }
 
 impl Default for EnvCenterState {
@@ -58,7 +70,19 @@ impl Default for EnvCenterState {
             installed: Vec::new(),
             current: None,
             busy: false,
+            list_scroll_y: 0.0,
+            skeleton_phase: 0.0,
         }
+    }
+}
+
+impl EnvCenterState {
+    pub fn clamp_list_scroll(&mut self, tokens: ThemeTokens) {
+        let n = self.installed.len();
+        let row_h = tokens.list_row_height();
+        let total = list_total_height(n, row_h);
+        let max_y = (total - ENV_LIST_VIEWPORT_H).max(0.0);
+        self.list_scroll_y = self.list_scroll_y.clamp(0.0, max_y);
     }
 }
 
@@ -73,6 +97,77 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Deno => "Deno",
         RuntimeKind::Bun => "Bun",
     }
+}
+
+fn installed_version_row(
+    state: &EnvCenterState,
+    idx: usize,
+    tokens: ThemeTokens,
+    sp: &envr_ui::theme::SpacingScale,
+    txt: iced::Color,
+    busy: bool,
+) -> Element<'static, Message> {
+    let ver = &state.installed[idx];
+    let active = state.current.as_ref() == Some(ver);
+    let use_msg = if active || busy {
+        None
+    } else {
+        Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(ver.0.clone())))
+    };
+    let uninstall_msg = if active || busy {
+        None
+    } else {
+        Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+            ver.0.clone(),
+        )))
+    };
+
+    let ver_line = if active {
+        format!(
+            "{} {} {}",
+            kind_label(state.kind),
+            ver.0,
+            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)",)
+        )
+    } else {
+        format!("{} {}", kind_label(state.kind), ver.0)
+    };
+
+    row![
+        text(ver_line).width(Length::Fill),
+        button(
+            row![
+                Lucide::Package.view(14.0, txt),
+                text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+            ]
+            .spacing(sp.xs)
+            .align_y(Alignment::Center),
+        )
+        .on_press_maybe(use_msg)
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.sm])
+        .style(button_style(tokens, ButtonVariant::Ghost)),
+        button(
+            row![
+                Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                text(envr_core::i18n::tr_key(
+                    "gui.action.uninstall",
+                    "卸载",
+                    "Uninstall",
+                )),
+            ]
+            .spacing(sp.xs)
+            .align_y(Alignment::Center),
+        )
+        .on_press_maybe(uninstall_msg)
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([0, sp.sm])
+        .style(button_style(tokens, ButtonVariant::Danger)),
+    ]
+    .spacing(sp.sm)
+    .align_y(Alignment::Center)
+    .height(Length::Fixed(tokens.list_row_height()))
+    .into()
 }
 
 pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
@@ -218,7 +313,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     .align_y(Alignment::Center);
 
     let list_content: Element<'static, Message> = if busy && state.installed.is_empty() {
-        container(list_loading_skeleton(tokens))
+        container(list_loading_skeleton(tokens, state.skeleton_phase))
             .width(Length::Fill)
             .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
             .into()
@@ -243,77 +338,52 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     } else {
         let row_h = tokens.list_row_height();
         let n = state.installed.len();
-        let mut list_col = column![].spacing(0);
-        for (i, ver) in state.installed.iter().enumerate() {
-            let active = state.current.as_ref() == Some(ver);
-            let use_msg = if active || busy {
-                None
-            } else {
-                Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(ver.0.clone())))
-            };
-            let uninstall_msg = if active || busy {
-                None
-            } else {
-                Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
-                    ver.0.clone(),
-                )))
-            };
+        let scroll_on = |v: iced::widget::scrollable::Viewport| {
+            Message::EnvCenter(EnvCenterMsg::ListScroll(v.absolute_offset().y))
+        };
 
-            let ver_line = if active {
-                format!(
-                    "{} {} {}",
-                    kind_label(state.kind),
-                    ver.0,
-                    envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)",)
-                )
-            } else {
-                format!("{} {}", kind_label(state.kind), ver.0)
-            };
-
-            let line = row![
-                text(ver_line).width(Length::Fill),
-                button(
-                    row![
-                        Lucide::Package.view(14.0, txt),
-                        text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                    ]
-                    .spacing(sp.xs)
-                    .align_y(Alignment::Center),
-                )
-                .on_press_maybe(use_msg)
-                .height(Length::Fixed(tokens.control_height_secondary))
-                .padding([0, sp.sm])
-                .style(button_style(tokens, ButtonVariant::Ghost)),
-                button(
-                    row![
-                        Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                        text(envr_core::i18n::tr_key(
-                            "gui.action.uninstall",
-                            "卸载",
-                            "Uninstall",
-                        )),
-                    ]
-                    .spacing(sp.xs)
-                    .align_y(Alignment::Center),
-                )
-                .on_press_maybe(uninstall_msg)
-                .height(Length::Fixed(tokens.control_height_secondary))
-                .padding([0, sp.sm])
-                .style(button_style(tokens, ButtonVariant::Danger)),
-            ]
-            .spacing(sp.sm)
-            .align_y(Alignment::Center)
-            .height(Length::Fixed(row_h));
-
-            list_col = list_col.push(line);
-            if i + 1 < n {
-                list_col = list_col.push(Rule::horizontal(1));
+        let list_col: Element<'static, Message> = if n >= tokens.list_virtualize_min_row_count() {
+            let scroll_y = state.list_scroll_y;
+            let first = first_visible_row(scroll_y, n, row_h).saturating_sub(VIRT_OVERSCAN);
+            let last = (last_visible_row(scroll_y, ENV_LIST_VIEWPORT_H, n, row_h) + VIRT_OVERSCAN)
+                .min(n.saturating_sub(1));
+            let top_h = list_prefix_height(first, n, row_h);
+            let bottom_h = list_total_height(n, row_h) - list_prefix_height(last + 1, n, row_h);
+            let mut col = column![].spacing(0);
+            if top_h > 0.5 {
+                col = col.push(vertical_space().height(Length::Fixed(top_h)));
             }
-        }
-        scrollable(list_col)
-            .width(Length::Fill)
-            .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
-            .into()
+            for i in first..=last {
+                col = col.push(installed_version_row(state, i, tokens, sp, txt, busy));
+                if i + 1 < n {
+                    col = col.push(Rule::horizontal(1));
+                }
+            }
+            if bottom_h > 0.5 {
+                col = col.push(vertical_space().height(Length::Fixed(bottom_h)));
+            }
+            scrollable(col)
+                .id(ScrollableId::new(ENV_INSTALLED_LIST_SCROLL_ID))
+                .on_scroll(scroll_on)
+                .width(Length::Fill)
+                .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
+                .into()
+        } else {
+            let mut col = column![].spacing(0);
+            for i in 0..n {
+                col = col.push(installed_version_row(state, i, tokens, sp, txt, busy));
+                if i + 1 < n {
+                    col = col.push(Rule::horizontal(1));
+                }
+            }
+            scrollable(col)
+                .id(ScrollableId::new(ENV_INSTALLED_LIST_SCROLL_ID))
+                .on_scroll(scroll_on)
+                .width(Length::Fill)
+                .height(Length::Fixed(ENV_LIST_VIEWPORT_H))
+                .into()
+        };
+        list_col
     };
 
     let body = column![
@@ -345,10 +415,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     body.into()
 }
 
-fn list_loading_skeleton(tokens: ThemeTokens) -> Element<'static, Message> {
+fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Message> {
     use iced::Background;
 
-    let fill = gui_theme::to_color(tokens.colors.text_muted).scale_alpha(0.14);
+    let pulse = (phase * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+    let fill = gui_theme::to_color(tokens.colors.text_muted).scale_alpha(0.07 + 0.16 * pulse);
     let row_h = tokens.list_row_height();
     let bar_h = row_h * 0.42;
     let n = tokens.list_skeleton_rows();
@@ -373,4 +444,63 @@ fn list_loading_skeleton(tokens: ThemeTokens) -> Element<'static, Message> {
         }
     }
     col.into()
+}
+
+fn list_prefix_height(k: usize, n: usize, row_h: f32) -> f32 {
+    if k == 0 || n == 0 {
+        return 0.0;
+    }
+    let k = k.min(n);
+    k as f32 * row_h + k.saturating_sub(1).min(n.saturating_sub(1)) as f32 * LIST_SEP_PX
+}
+
+fn list_total_height(n: usize, row_h: f32) -> f32 {
+    if n == 0 {
+        0.0
+    } else {
+        n as f32 * row_h + (n - 1) as f32 * LIST_SEP_PX
+    }
+}
+
+fn first_visible_row(scroll_y: f32, n: usize, row_h: f32) -> usize {
+    if n == 0 || scroll_y <= 0.0 {
+        return 0;
+    }
+    let total = list_prefix_height(n, n, row_h);
+    if scroll_y >= total {
+        return n.saturating_sub(1);
+    }
+    let mut lo = 0usize;
+    let mut hi = n.saturating_sub(1);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if list_prefix_height(mid + 1, n, row_h) <= scroll_y {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
+fn last_visible_row(scroll_y: f32, viewport_h: f32, n: usize, row_h: f32) -> usize {
+    if n == 0 {
+        return 0;
+    }
+    let target = scroll_y + viewport_h;
+    let tot = list_total_height(n, row_h);
+    if target >= tot {
+        return n - 1;
+    }
+    let mut lo = 0usize;
+    let mut hi = n - 1;
+    while lo < hi {
+        let mid = (lo + hi + 1) / 2;
+        if list_prefix_height(mid, n, row_h) < target {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    lo.min(n - 1)
 }

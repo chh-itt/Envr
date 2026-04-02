@@ -85,6 +85,7 @@ mod tests {
             motion,
             panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.0,
+            list_virtualize_min_rows: 28,
         };
         assert_eq!(t.content_spacing(), 12.0);
         assert_eq!(t.sidebar_width(), 240.0);
@@ -110,8 +111,28 @@ mod tests {
         let t = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
         assert_eq!(t.card_corner_radius(), 12.0);
         assert_eq!(t.card_padding_px(), 16.0);
+        assert_eq!(t.download_panel_corner_radius(), 12.0);
         assert_eq!(t.list_row_height(), 44.0);
         assert_eq!(t.list_skeleton_rows(), 5);
+        assert_eq!(t.list_virtualize_min_rows, 28);
+        assert_eq!(t.list_virtualize_min_row_count(), 28);
+    }
+
+    #[test]
+    fn gui_040_ease_standard_endpoints_and_monotonic() {
+        let t = tokens_for_scheme(UiFlavor::Fluent, UiScheme::Light);
+        assert!((t.ease_standard(0.0) - 0.0).abs() < 1e-4);
+        assert!((t.ease_standard(1.0) - 1.0).abs() < 1e-4);
+        let mut prev = 0.0f32;
+        for i in 1..=20 {
+            let x = i as f32 / 20.0;
+            let y = t.ease_standard(x);
+            assert!(
+                y >= prev - 1e-5,
+                "ease should be roughly monotonic: {y} vs {prev}"
+            );
+            prev = y;
+        }
     }
 
     #[test]

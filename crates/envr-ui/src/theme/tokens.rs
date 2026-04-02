@@ -141,6 +141,8 @@ pub struct ThemeTokens {
     pub panel_border_alpha: f32,
     /// Hint for acrylic / blur passes (0 = none).
     pub backdrop_blur_hint: f32,
+    /// Virtualize long scroll lists when row count ≥ this (`tasks_gui.md` GUI-044).
+    pub list_virtualize_min_rows: u16,
 }
 
 pub static SPACING_8PT: SpacingScale = SpacingScale {
@@ -188,6 +190,20 @@ impl ThemeTokens {
         SPACING_8PT.lg as f32
     }
 
+    /// Download floating panel corner radius (`tasks_gui.md` GUI-043: 12px).
+    #[inline]
+    pub fn download_panel_corner_radius(&self) -> f32 {
+        self.card_corner_radius()
+    }
+
+    /// Standard UI easing: maps linear progress *t* ∈ [0,1] using [`MotionTokens::easing_standard`]
+    /// as a CSS-style cubic-bezier *(0,0)* → *(1,1)* with control points *P1, P2* (`tasks_gui.md` GUI-040).
+    pub fn ease_standard(&self, t: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        let [x1, y1, x2, y2] = self.motion.easing_standard;
+        cubic_bezier_y_at_x(t, x1, y1, x2, y2)
+    }
+
     /// Minimum list / table row height (touch-friendly baseline).
     pub fn list_row_height(&self) -> f32 {
         44.0
@@ -196,6 +212,12 @@ impl ThemeTokens {
     /// Skeleton / placeholder rows when list data is pending (`tasks_gui.md` GUI-021).
     pub fn list_skeleton_rows(&self) -> u8 {
         5
+    }
+
+    /// [`ThemeTokens::list_virtualize_min_rows`] as `usize` for comparisons with collection lengths.
+    #[inline]
+    pub fn list_virtualize_min_row_count(&self) -> usize {
+        self.list_virtualize_min_rows as usize
     }
 
     /// Default gap between major regions (content padding baseline).
@@ -243,4 +265,31 @@ impl ThemeTokens {
             },
         }
     }
+}
+
+fn cubic_bezier_y_at_x(x_target: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    if x_target <= 0.0 {
+        return 0.0;
+    }
+    if x_target >= 1.0 {
+        return 1.0;
+    }
+    let mut u_lo = 0.0f32;
+    let mut u_hi = 1.0f32;
+    for _ in 0..28 {
+        let u = (u_lo + u_hi) * 0.5;
+        let x = bezier_1d(u, 0.0, x1, x2, 1.0);
+        if x < x_target {
+            u_lo = u;
+        } else {
+            u_hi = u;
+        }
+    }
+    let u = (u_lo + u_hi) * 0.5;
+    bezier_1d(u, 0.0, y1, y2, 1.0)
+}
+
+fn bezier_1d(t: f32, p0: f32, p1: f32, p2: f32, p3: f32) -> f32 {
+    let u = 1.0 - t;
+    u * u * u * p0 + 3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t * p3
 }

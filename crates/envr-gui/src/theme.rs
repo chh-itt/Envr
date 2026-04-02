@@ -83,3 +83,44 @@ pub fn error_banner_style(tokens: ThemeTokens) -> container::Style {
         a: 0.12,
     })
 }
+
+/// Download overlay (`tasks_gui.md` GUI-043): 12px radius, translucent “glass” (blur not supported by iced yet — alpha mix only).
+pub fn download_panel_container_style(
+    tokens: ThemeTokens,
+    reveal: f32,
+) -> impl Fn(&Theme) -> container::Style + Copy {
+    let r = tokens.download_panel_corner_radius();
+    let surf = to_color(tokens.colors.surface);
+    let page = to_color(tokens.colors.background);
+    let blend = 0.78 + (tokens.backdrop_blur_hint.min(24.0) / 24.0) * 0.12;
+    let inv = 1.0 - blend;
+    let base_a = 0.88_f32;
+    let line = to_color(tokens.colors.text_muted).scale_alpha(0.2);
+    let shadow_alpha = (tokens.shadow.color_alpha * 0.9).min(0.35) * reveal.clamp(0.0, 1.0);
+    move |_theme: &Theme| {
+        let a = (base_a * reveal).clamp(0.0, 1.0);
+        let bg = Color {
+            r: surf.r * blend + page.r * inv,
+            g: surf.g * blend + page.g * inv,
+            b: surf.b * blend + page.b * inv,
+            a,
+        };
+        container::Style::default()
+            .background(bg)
+            .border(
+                border::rounded(r)
+                    .color(line.scale_alpha(reveal.clamp(0.15, 1.0)))
+                    .width(1.0),
+            )
+            .shadow(iced::Shadow {
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: shadow_alpha,
+                },
+                offset: iced::Vector::new(0.0, tokens.shadow.offset_y + 1.0),
+                blur_radius: tokens.shadow.blur_radius * 1.05,
+            })
+    }
+}

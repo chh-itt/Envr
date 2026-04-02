@@ -1,4 +1,1 @@
-lucide-icons 0.469.0 (MIT)
-Source: https://github.com/lucide-icons/lucide
-SVG files in this folder match the upstream icon set (stroke 2, 24×24 viewBox).
-Refresh from source: scripts/fetch_lucide_icons.ps1
+lucide-icons 0.469.0 (MIT) https://github.com/lucide-icons/lucide

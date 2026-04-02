@@ -2,7 +2,9 @@ use super::model::{DownloadPanelState, JobState};
 use super::panel::DownloadMsg;
 use super::panel::format_job_state_line;
 use envr_ui::theme::ThemeTokens;
-use iced::widget::{button, column, container, progress_bar, row, scrollable, text};
+use iced::widget::{
+    button, column, container, progress_bar, row, scrollable, text, vertical_space,
+};
 use iced::{Alignment, Element, Length, Theme};
 
 use crate::app::Message;
@@ -16,9 +18,10 @@ pub fn floating_download_panel(
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
-
     let txt = gui_theme::to_color(tokens.colors.text);
-    if !state.visible {
+    let rev = state.reveal.clamp(0.0, 1.0);
+
+    if !state.visible && state.reveal_anim.is_none() {
         let open_lbl = row![
             Lucide::Download.view(16.0, txt),
             text(envr_core::i18n::tr_key(
@@ -165,10 +168,11 @@ pub fn floating_download_panel(
         }
     }
 
-    let panel = gui_theme::panel_container_style(tokens);
-    container(body)
+    let slide_px = (1.0 - rev) * 14.0;
+    let card = container(body)
         .padding(sp.sm + 2)
         .width(Length::Fixed(320.0))
-        .style(move |theme: &Theme| panel(theme))
-        .into()
+        .style(move |theme: &Theme| gui_theme::download_panel_container_style(tokens, rev)(theme));
+
+    column![vertical_space().height(Length::Fixed(slide_px)), card,].into()
 }
