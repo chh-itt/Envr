@@ -37,8 +37,8 @@ pub mod base {
     /// Primary text — `#E0E0E0` (dark scheme)
     pub const TEXT_PRIMARY_DARK: Srgb = Srgb::new(224.0 / 255.0, 224.0 / 255.0, 224.0 / 255.0);
 
-    /// Secondary text — `#6C6C6C` (light)
-    pub const TEXT_MUTED_LIGHT: Srgb = Srgb::new(108.0 / 255.0, 108.0 / 255.0, 108.0 / 255.0);
+    /// Secondary text — tuned for ≥ **4.5:1** on [`SURFACE_CARD_LIGHT`] (WCAG AA, `tasks_gui.md` GUI-050).
+    pub const TEXT_MUTED_LIGHT: Srgb = Srgb::new(89.0 / 255.0, 89.0 / 255.0, 89.0 / 255.0);
     /// Secondary text — `#9E9E9E` (dark)
     pub const TEXT_MUTED_DARK: Srgb = Srgb::new(158.0 / 255.0, 158.0 / 255.0, 158.0 / 255.0);
 
@@ -143,6 +143,10 @@ pub struct ThemeTokens {
     pub backdrop_blur_hint: f32,
     /// Virtualize long scroll lists when row count ≥ this (`tasks_gui.md` GUI-044).
     pub list_virtualize_min_rows: u16,
+    /// Minimum hit target (px); WCAG 2.5.5 target 44×44 (`tasks_gui.md` GUI-051).
+    pub min_interactive_size: f32,
+    /// Scales [`ThemeTokens::typography`] (e.g. `ENVR_UI_SCALE` via app shell — GUI-051).
+    pub content_text_scale: f32,
 }
 
 pub static SPACING_8PT: SpacingScale = SpacingScale {
@@ -220,6 +224,18 @@ impl ThemeTokens {
         self.list_virtualize_min_rows as usize
     }
 
+    /// Minimum interactive height/width hint (native controls should use `max` with layout heights).
+    #[inline]
+    pub fn min_click_target_px(&self) -> f32 {
+        self.min_interactive_size
+    }
+
+    /// Focus ring stroke on [`text_input`] when focused (GUI-050).
+    #[inline]
+    pub fn focus_ring_width_px(&self) -> f32 {
+        3.0
+    }
+
     /// Default gap between major regions (content padding baseline).
     pub fn content_spacing(&self) -> f32 {
         SPACING_8PT.md as f32
@@ -230,39 +246,19 @@ impl ThemeTokens {
         &SPACING_8PT
     }
 
-    /// Typography ramp; slightly larger on Liquid Glass (capsule / airy layout).
+    /// Typography ramp; scaled by [`ThemeTokens::content_text_scale`] (GUI-051).
     pub fn typography(&self) -> TypographyScale {
-        match self.flavor {
-            UiFlavor::Fluent => TypographyScale {
-                page_title: 22.0,
-                section: 20.0,
-                subsection: 17.0,
-                body: 15.0,
-                body_small: 14.0,
-                caption: 13.0,
-                micro: 12.0,
-                tiny: 11.0,
-            },
-            UiFlavor::LiquidGlass => TypographyScale {
-                page_title: 22.0,
-                section: 20.0,
-                subsection: 17.0,
-                body: 15.0,
-                body_small: 14.0,
-                caption: 13.0,
-                micro: 12.0,
-                tiny: 11.0,
-            },
-            UiFlavor::Material3 => TypographyScale {
-                page_title: 22.0,
-                section: 20.0,
-                subsection: 17.0,
-                body: 15.0,
-                body_small: 14.0,
-                caption: 13.0,
-                micro: 12.0,
-                tiny: 11.0,
-            },
+        let s = self.content_text_scale.clamp(0.85, 1.35);
+        let _ = self.flavor;
+        TypographyScale {
+            page_title: 22.0 * s,
+            section: 20.0 * s,
+            subsection: 17.0 * s,
+            body: 15.0 * s,
+            body_small: 14.0 * s,
+            caption: 13.0 * s,
+            micro: 12.0 * s,
+            tiny: 11.0 * s,
         }
     }
 }

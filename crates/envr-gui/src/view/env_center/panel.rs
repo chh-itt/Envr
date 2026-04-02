@@ -144,7 +144,11 @@ fn installed_version_row(
             .align_y(Alignment::Center),
         )
         .on_press_maybe(use_msg)
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.sm])
         .style(button_style(tokens, ButtonVariant::Ghost)),
         button(
@@ -160,7 +164,11 @@ fn installed_version_row(
             .align_y(Alignment::Center),
         )
         .on_press_maybe(uninstall_msg)
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.sm])
         .style(button_style(tokens, ButtonVariant::Danger)),
     ]
@@ -220,7 +228,8 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             tokens.control_height_primary
         } else {
             tokens.control_height_secondary
-        };
+        }
+        .max(tokens.min_click_target_px());
         let b = button(text(envr_core::i18n::tr_key(key, zh, en)))
             .on_press(Message::EnvCenter(EnvCenterMsg::SetMode(m)))
             .height(Length::Fixed(h))
@@ -248,7 +257,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .style(text_input_style(tokens)),
     )
     .width(Length::Fill)
-    .height(Length::Fixed(tokens.control_height_secondary))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
     .align_y(iced::alignment::Vertical::Center);
 
     let txt = gui_theme::to_color(tokens.colors.text);
@@ -270,7 +283,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             (!busy && !input.is_empty() && (state.mode == VersionMode::Smart || !installed_match))
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstall)),
         )
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.md])
         .style(button_style(tokens, ButtonVariant::Secondary)),
         button(
@@ -289,7 +306,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             (state.mode == VersionMode::Smart && !busy && !input.is_empty() && !installed_match)
                 .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse)),
         )
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.md])
         .style(button_style(tokens, ButtonVariant::Primary)),
         button(
@@ -305,7 +326,11 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 Message::EnvCenter(EnvCenterMsg::SubmitUse(input.to_string())),
             ),
         )
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.md])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]

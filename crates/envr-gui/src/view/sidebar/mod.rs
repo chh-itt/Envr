@@ -42,7 +42,8 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
             tokens.control_height_primary
         } else {
             tokens.control_height_secondary
-        };
+        }
+        .max(tokens.min_click_target_px());
         let b = button(label)
             .on_press(Message::Navigate(route))
             .width(Length::Fill)

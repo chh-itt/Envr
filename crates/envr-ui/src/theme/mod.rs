@@ -3,6 +3,7 @@
 //! Renderer mappings (e.g. `iced::Theme`) live in `envr-gui` to keep this crate free of GUI stacks.
 
 mod color;
+mod contrast;
 mod detect;
 mod flavor;
 mod material_seed;
@@ -11,6 +12,7 @@ mod scheme;
 mod tokens;
 
 pub use color::Srgb;
+pub use contrast::{contrast_ratio, relative_luminance};
 pub use detect::default_flavor_for_target;
 pub use flavor::UiFlavor;
 pub use presets::{tokens_for_appearance, tokens_for_scheme};
@@ -86,6 +88,8 @@ mod tests {
             panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.0,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         };
         assert_eq!(t.content_spacing(), 12.0);
         assert_eq!(t.sidebar_width(), 240.0);
@@ -116,6 +120,29 @@ mod tests {
         assert_eq!(t.list_skeleton_rows(), 5);
         assert_eq!(t.list_virtualize_min_rows, 28);
         assert_eq!(t.list_virtualize_min_row_count(), 28);
+        assert!((t.min_click_target_px() - 44.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn gui_050_muted_text_meets_wcag_aa_on_card_light() {
+        use super::contrast_ratio;
+        use super::tokens::base::{SURFACE_CARD_LIGHT, TEXT_MUTED_LIGHT};
+        let r = contrast_ratio(TEXT_MUTED_LIGHT, SURFACE_CARD_LIGHT);
+        assert!(
+            r >= 4.5,
+            "muted on card light should be >= 4.5:1 for body text, got {r:.2}"
+        );
+    }
+
+    #[test]
+    fn gui_050_muted_text_meets_wcag_aa_on_card_dark() {
+        use super::contrast_ratio;
+        use super::tokens::base::{SURFACE_CARD_DARK, TEXT_MUTED_DARK};
+        let r = contrast_ratio(TEXT_MUTED_DARK, SURFACE_CARD_DARK);
+        assert!(
+            r >= 4.5,
+            "muted on card dark should be >= 4.5:1 for body text, got {r:.2}"
+        );
     }
 
     #[test]

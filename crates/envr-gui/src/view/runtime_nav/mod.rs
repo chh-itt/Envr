@@ -44,7 +44,8 @@ pub fn runtime_nav_bar(
             tokens.control_height_primary
         } else {
             tokens.control_height_secondary
-        };
+        }
+        .max(tokens.min_click_target_px());
         let b = button(label)
             .on_press(Message::EnvCenter(EnvCenterMsg::PickKind(kind)))
             .height(Length::Fixed(h))

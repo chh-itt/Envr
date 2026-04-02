@@ -115,6 +115,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.35,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
         (UiFlavor::Fluent, UiScheme::Dark) => ThemeTokens {
             flavor,
@@ -133,6 +135,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.35,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
         (UiFlavor::LiquidGlass, UiScheme::Light) => ThemeTokens {
             flavor,
@@ -151,6 +155,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.55,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
         (UiFlavor::LiquidGlass, UiScheme::Dark) => ThemeTokens {
             flavor,
@@ -169,6 +175,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.55,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
         (UiFlavor::Material3, UiScheme::Light) => ThemeTokens {
             flavor,
@@ -187,6 +195,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.06,
             backdrop_blur_hint: 0.15,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
         (UiFlavor::Material3, UiScheme::Dark) => ThemeTokens {
             flavor,
@@ -205,6 +215,8 @@ fn raw_tokens(flavor: UiFlavor, scheme: UiScheme) -> ThemeTokens {
             panel_border_alpha: 0.08,
             backdrop_blur_hint: 0.15,
             list_virtualize_min_rows: 28,
+            min_interactive_size: 44.0,
+            content_text_scale: 1.0,
         },
     }
 }

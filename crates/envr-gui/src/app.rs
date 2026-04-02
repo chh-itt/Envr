@@ -62,6 +62,10 @@ pub struct AppState {
     error: Option<String>,
     /// Active skin; user can override the OS default on the Settings page.
     flavor: UiFlavor,
+    /// System / env reduced motion (`tasks_gui.md` GUI-052).
+    reduce_motion: bool,
+    /// Text ramp scale from `ENVR_UI_SCALE` (`tasks_gui.md` GUI-051).
+    ui_text_scale: f32,
     pub env_center: EnvCenterState,
     pub downloads: DownloadPanelState,
     pub settings: SettingsViewState,
@@ -76,6 +80,8 @@ impl Default for AppState {
             route: Route::default(),
             error: None,
             flavor: default_flavor_for_target(),
+            reduce_motion: envr_platform::a11y::prefers_reduced_motion(),
+            ui_text_scale: ui_text_scale_from_env(),
             env_center: EnvCenterState::default(),
             downloads: {
                 let vis = gui_defaults.0;
@@ -101,6 +107,14 @@ fn load_gui_downloads_panel_settings_cached() -> (bool, bool, i32, i32) {
     (p.visible, p.expanded, p.x.max(0), p.y.max(0))
 }
 
+fn ui_text_scale_from_env() -> f32 {
+    std::env::var("ENVR_UI_SCALE")
+        .ok()
+        .and_then(|s| s.trim().parse::<f32>().ok())
+        .unwrap_or(1.0)
+        .clamp(0.85, 1.35)
+}
+
 fn accent_from_settings(st: &Settings) -> Option<Srgb> {
     st.appearance.accent_color.as_deref().and_then(|s| {
         let t = s.trim();
@@ -116,7 +130,13 @@ impl AppState {
     pub(crate) fn tokens(&self) -> ThemeTokens {
         let scheme = scheme_for_mode(self.settings.draft.appearance.theme_mode);
         let accent = accent_from_settings(&self.settings.draft);
-        tokens_for_appearance(self.flavor, scheme, accent)
+        let mut t = tokens_for_appearance(self.flavor, scheme, accent);
+        t.content_text_scale = self.ui_text_scale;
+        if self.reduce_motion {
+            t.motion.standard_ms = 0;
+            t.motion.emphasized_ms = 0;
+        }
+        t
     }
 
     pub fn route(&self) -> Route {
@@ -138,6 +158,8 @@ pub enum Message {
     ThemePollTick,
     /// ~32ms: panel reveal, skeleton shimmer, throttled download progress (`tasks_gui.md` GUI-040–042, 041).
     MotionTick,
+    /// Re-check OS / env accessibility hints (`tasks_gui.md` GUI-052).
+    A11yPollTick,
     Navigate(Route),
     DismissError,
     ReportError(String),
@@ -192,11 +214,8 @@ pub fn run() -> iced::Result {
             if let Some(t) = theme_poll {
                 subs.push(t);
             }
-            if subs.is_empty() {
-                Subscription::none()
-            } else {
-                Subscription::batch(subs)
-            }
+            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
+            Subscription::batch(subs)
         })
         .window(iced::window::Settings {
             size: Size::new(
@@ -249,6 +268,11 @@ fn configured_default_font(st: &Settings) -> iced::Font {
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
     match message {
         Message::ThemePollTick => Task::none(),
+        Message::A11yPollTick => {
+            state.reduce_motion = envr_platform::a11y::prefers_reduced_motion();
+            state.ui_text_scale = ui_text_scale_from_env();
+            Task::none()
+        }
         Message::MotionTick => handle_motion_tick(state),
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
@@ -614,7 +638,8 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         let _ = persist_download_panel_settings(&state.downloads);
     }
     state.downloads.maybe_progress_tick_on_motion_frame();
-    if matches!(state.route(), Route::Runtime)
+    if !state.reduce_motion
+        && matches!(state.route(), Route::Runtime)
         && state.env_center.busy
         && state.env_center.installed.is_empty()
     {

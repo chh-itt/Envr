@@ -152,8 +152,18 @@ impl DownloadPanelState {
             Some(a) => a,
             None => return,
         };
+        if anim.duration_ms == 0 {
+            self.reveal = anim.to;
+            let was_hide = anim.to < 0.05;
+            self.reveal_anim = None;
+            if was_hide {
+                self.visible = false;
+                self.persist_after_hide_anim = true;
+            }
+            return;
+        }
         let elapsed_ms = anim.started.elapsed().as_secs_f32() * 1000.0;
-        let t = (elapsed_ms / anim.duration_ms.max(1) as f32).min(1.0);
+        let t = (elapsed_ms / anim.duration_ms as f32).min(1.0);
         let k = tokens.ease_standard(t);
         self.reveal = anim.from + (anim.to - anim.from) * k;
         if t >= 1.0 - 1e-5 {

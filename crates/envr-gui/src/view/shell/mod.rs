@@ -92,7 +92,11 @@ fn error_banner(tokens: ThemeTokens, message: &str) -> Element<'_, Message> {
             text(message).size(ty.body_small).width(Length::Fill),
             button(close_lbl)
                 .on_press(Message::DismissError)
-                .height(Length::Fixed(tokens.control_height_secondary))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
                 .padding([0, sp.sm])
                 .style(button_style(tokens, ButtonVariant::Ghost)),
         ]
@@ -133,7 +137,11 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .on_press_maybe((!state.env_center.busy).then_some(Message::EnvCenter(
                         crate::view::env_center::EnvCenterMsg::Refresh,
                     )))
-                    .height(Length::Fixed(tokens.control_height_secondary))
+                    .height(Length::Fixed(
+                        tokens
+                            .control_height_secondary
+                            .max(tokens.min_click_target_px()),
+                    ))
                     .padding([0, sp.md])
                     .style(button_style(tokens, ButtonVariant::Secondary)),
             );
@@ -208,7 +216,11 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     "示例：后台任务失败时可经此通道提示用户。",
                     "Demo: background task failures can be surfaced here.",
                 )))
-                .height(Length::Fixed(tokens.control_height_secondary))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
                 .padding([0, sp.md])
                 .style(button_style(tokens, ButtonVariant::Secondary)),
         );
@@ -252,7 +264,8 @@ fn flavor_picker_row(active: UiFlavor, tokens: ThemeTokens) -> Element<'static, 
             tokens.control_height_primary
         } else {
             tokens.control_height_secondary
-        };
+        }
+        .max(tokens.min_click_target_px());
         let b = button(lbl)
             .on_press(Message::SetFlavor(flavor))
             .height(Length::Fixed(h))

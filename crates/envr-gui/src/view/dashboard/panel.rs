@@ -42,7 +42,11 @@ pub fn dashboard_view(
                 .on_press(Message::Dashboard(
                     crate::view::dashboard::state::DashboardMsg::Refresh
                 ))
-                .height(Length::Fixed(tokens.control_height_primary))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_primary
+                        .max(tokens.min_click_target_px()),
+                ))
                 .padding([0, sp.md])
                 .style(button_style(tokens, ButtonVariant::Secondary)),
         ]
@@ -244,7 +248,11 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
             .align_y(Alignment::Center),
         )
         .on_press(Message::Navigate(Route::Runtime))
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.md])
         .style(button_style(tokens, ButtonVariant::Secondary)),
         button(
@@ -260,7 +268,11 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
             .align_y(Alignment::Center),
         )
         .on_press(Message::Navigate(Route::Settings))
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([0, sp.md])
         .style(button_style(tokens, ButtonVariant::Secondary)),
     ]

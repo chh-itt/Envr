@@ -18,6 +18,9 @@ pub fn floating_download_panel(
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
+    let btn_h = tokens
+        .control_height_secondary
+        .max(tokens.min_click_target_px());
     let txt = gui_theme::to_color(tokens.colors.text);
     let rev = state.reveal.clamp(0.0, 1.0);
 
@@ -35,7 +38,7 @@ pub fn floating_download_panel(
         return container(
             button(open_lbl)
                 .on_press(Message::Download(DownloadMsg::ToggleVisible))
-                .height(Length::Fixed(tokens.control_height_secondary))
+                .height(Length::Fixed(btn_h))
                 .padding([0, sp.sm + 2])
                 .style(button_style(tokens, ButtonVariant::Secondary)),
         )
@@ -57,7 +60,7 @@ pub fn floating_download_panel(
     let header = row![
         button(Lucide::Menu.view(18.0, txt))
             .on_press(Message::Download(DownloadMsg::StartDrag))
-            .height(Length::Fixed(tokens.control_height_secondary))
+            .height(Length::Fixed(btn_h))
             .padding([0, sp.sm])
             .style(button_style(tokens, ButtonVariant::Ghost)),
         title_row,
@@ -75,7 +78,7 @@ pub fn floating_download_panel(
             .align_y(Alignment::Center),
         )
         .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(btn_h))
         .padding([0, sp.sm + 2])
         .style(button_style(tokens, ButtonVariant::Secondary)),
         button(
@@ -91,7 +94,7 @@ pub fn floating_download_panel(
             .align_y(Alignment::Center),
         )
         .on_press(Message::Download(DownloadMsg::ToggleExpand))
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(btn_h))
         .padding([0, sp.sm + 2])
         .style(button_style(tokens, ButtonVariant::Secondary)),
         button(
@@ -103,7 +106,7 @@ pub fn floating_download_panel(
             .align_y(Alignment::Center),
         )
         .on_press(Message::Download(DownloadMsg::ToggleVisible))
-        .height(Length::Fixed(tokens.control_height_secondary))
+        .height(Length::Fixed(btn_h))
         .padding([0, sp.sm + 2])
         .style(button_style(tokens, ButtonVariant::Ghost)),
     ]
@@ -136,7 +139,7 @@ pub fn floating_download_panel(
                             "Cancel",
                         )))
                         .on_press(Message::Download(DownloadMsg::Cancel(j.id)))
-                        .height(Length::Fixed(tokens.control_height_secondary))
+                        .height(Length::Fixed(btn_h))
                         .padding([0, sp.sm])
                         .style(button_style(tokens, ButtonVariant::Ghost)),
                     );
@@ -149,7 +152,7 @@ pub fn floating_download_panel(
                             "Retry",
                         )))
                         .on_press(Message::Download(DownloadMsg::Retry(j.id)))
-                        .height(Length::Fixed(tokens.control_height_secondary))
+                        .height(Length::Fixed(btn_h))
                         .padding([0, sp.sm])
                         .style(button_style(tokens, ButtonVariant::Secondary)),
                     );

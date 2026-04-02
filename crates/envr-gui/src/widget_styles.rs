@@ -192,7 +192,9 @@ pub fn text_input_style(
                 ..base
             },
             text_input::Status::Focused => text_input::Style {
-                border: border::width(2.0).color(primary).rounded(r),
+                border: border::width(tokens.focus_ring_width_px())
+                    .color(primary)
+                    .rounded(r),
                 ..base
             },
             text_input::Status::Disabled => text_input::Style {
