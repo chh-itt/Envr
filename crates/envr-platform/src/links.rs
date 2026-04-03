@@ -52,10 +52,49 @@ fn read_link_target(path: &Path) -> EnvrResult<PathBuf> {
 #[cfg(windows)]
 fn create_symlink(src: &Path, dst: &Path) -> EnvrResult<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
-    if src.is_dir() {
-        symlink_dir(src, dst).map_err(EnvrError::from)
+    let is_dir = src.is_dir();
+    let res = if is_dir {
+        symlink_dir(src, dst)
     } else {
-        symlink_file(src, dst).map_err(EnvrError::from)
+        symlink_file(src, dst)
+    };
+
+    match res {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // On Windows, creating symlinks may require extra privileges.
+            // When that happens, we should still be able to set up `current` links.
+            // - For directories: fall back to junction (`mklink /J`), which doesn't require
+            //   "Create symbolic links" privilege in most setups.
+            // - For files: fall back to hard link.
+            if e.raw_os_error() == Some(1314) {
+                if is_dir {
+                    if try_create_junction(src, dst)? {
+                        return Ok(());
+                    }
+                } else if fs::hard_link(src, dst).is_ok() {
+                    return Ok(());
+                }
+            }
+            Err(EnvrError::from(e))
+        }
+    }
+}
+
+#[cfg(windows)]
+fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
+    use std::process::Command;
+
+    // `mklink /J <dst> <src>` creates a junction.
+    // We intentionally run through `cmd /C` to let Windows handle quoting.
+    let cmdline = format!("mklink /J \"{}\" \"{}\"", dst.display(), src.display());
+    let status = Command::new("cmd")
+        .args(["/C", &cmdline])
+        .status();
+
+    match status {
+        Ok(st) if st.success() => Ok(true),
+        _ => Ok(false),
     }
 }
 

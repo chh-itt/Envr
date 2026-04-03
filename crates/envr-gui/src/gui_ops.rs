@@ -278,14 +278,23 @@ pub fn refresh_dashboard() -> Task<Message> {
                     RuntimeKind::Deno,
                     RuntimeKind::Bun,
                 ] {
-                    let installed = svc
-                        .list_installed(kind)
-                        .map_err(|e: EnvrError| e.to_string())?;
-                    let current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                    // Lazy-load Rust: probing Rust calls `rustup`, which creates
+                    // `{runtime_root}/runtimes/rust/rustup/settings.toml` on first run.
+                    // We only want that side-effect when the user actually opens the Rust page.
+                    let (installed, current) = if kind == RuntimeKind::Rust {
+                        (0usize, None)
+                    } else {
+                        let installed = svc
+                            .list_installed(kind)
+                            .map_err(|e: EnvrError| e.to_string())?;
+                        let current =
+                            svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                        (installed.len(), current.map(|v| v.0))
+                    };
                     rows.push(crate::view::dashboard::RuntimeRow {
                         kind,
-                        installed: installed.len(),
-                        current: current.map(|v| v.0),
+                        installed,
+                        current,
                     });
                 }
 

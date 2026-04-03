@@ -252,6 +252,12 @@ pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<(
     if final_dir.exists() {
         fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
     }
+    // `fs::rename(src, dst)` requires the destination parent to exist.
+    // Ensure it to avoid Windows `os error 3` when the runtimes dir hasn't been created yet.
+    let parent = final_dir
+        .parent()
+        .ok_or_else(|| EnvrError::Validation("final_dir has no parent".into()))?;
+    fs::create_dir_all(parent).map_err(EnvrError::from)?;
     fs::rename(&inner, final_dir).map_err(EnvrError::from)?;
     Ok(())
 }
