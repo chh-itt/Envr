@@ -12,6 +12,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(windows)]
+const JS_BIN_EXTS: [&str; 3] = ["js", "cjs", "mjs"];
+
+#[cfg(windows)]
+fn normalize_windows_path_for_cmd(p: &Path) -> String {
+    let s = p.display().to_string();
+    // Rust/Windows canonicalize often produces `\\?\` long paths.
+    // `cmd.exe` and some Win32 CreateProcess paths don't like them in batch files.
+    let b = s.as_bytes();
+    if b.len() >= 4 && b[0] == b'\\' && b[1] == b'\\' && b[2] == b'?' && b[3] == b'\\' {
+        s[4..].to_string()
+    } else {
+        s
+    }
+}
+
 fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)] {
     match kind {
         RuntimeKind::Node => &[
@@ -123,7 +139,16 @@ impl ShimService {
         if !link.exists() {
             return None;
         }
-        fs::canonicalize(&link).ok()
+        if link.is_file() {
+            let s = fs::read_to_string(&link).ok()?;
+            let t = s.trim();
+            if t.is_empty() {
+                return None;
+            }
+            fs::canonicalize(t).ok()
+        } else {
+            fs::canonicalize(&link).ok()
+        }
     }
 
     fn try_current_bun_home(&self) -> Option<PathBuf> {
@@ -135,23 +160,25 @@ impl ShimService {
     }
 
     fn npm_global_bin_dir(&self, npm: &Path, node_home: &Path) -> EnvrResult<PathBuf> {
+        // `npm bin -g` was removed/changed in some npm versions.
+        // The stable way is to use `npm root -g` and then look under `.bin`.
         let mut cmd = Command::new(npm);
-        cmd.args(["bin", "-g"]);
+        cmd.args(["root", "-g"]);
         cmd.env("PATH", npm_path_env(node_home)?);
         let out = cmd.output().map_err(EnvrError::from)?;
         if !out.status.success() {
             return Err(EnvrError::Runtime(format!(
-                "npm bin -g failed: {}",
+                "npm root -g failed: {}",
                 String::from_utf8_lossy(&out.stderr)
             )));
         }
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if s.is_empty() {
             return Err(EnvrError::Runtime(
-                "npm bin -g returned empty output".into(),
+                "npm root -g returned empty output".into(),
             ));
         }
-        Ok(PathBuf::from(s))
+        Ok(PathBuf::from(s).join(".bin"))
     }
 
     fn bun_global_bin_dir(&self, bun: &Path, bun_home: &Path) -> EnvrResult<PathBuf> {
@@ -191,7 +218,7 @@ impl ShimService {
                 continue;
             }
             seen.insert(stem.clone());
-            self.write_global_forward(&path, &stem)?;
+            self.write_global_forward(&path, &stem, None)?;
         }
         Ok(seen)
     }
@@ -204,11 +231,166 @@ impl ShimService {
             Ok(p) => p,
             Err(_) => return Ok(HashSet::new()),
         };
+
+        // Preferred: scan `<npm root -g>/.bin` for wrapper scripts.
+        // Fallback: some npm versions or policies may not create `.bin` wrappers
+        // (e.g. missing symlink privileges). Then we parse `package.json#bin` from
+        // global packages and generate forwarders ourselves.
         let global_bin = match self.npm_global_bin_dir(&npm, &node_home) {
             Ok(p) => p,
             Err(_) => return Ok(HashSet::new()),
         };
-        self.scan_bin_dir(&global_bin)
+        if global_bin.is_dir() {
+            return self.scan_bin_dir(&global_bin);
+        }
+
+        // Fallback: scan global node_modules packages and their `bin` entries.
+        let node_exe = match core_tool_executable(&node_home, CoreCommand::Node) {
+            Ok(p) => p,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        self.scan_node_global_bins_from_package_json(&npm, &node_home, &node_exe)
+    }
+
+    fn scan_node_global_bins_from_package_json(
+        &self,
+        npm: &Path,
+        node_home: &Path,
+        node_exe: &Path,
+    ) -> EnvrResult<HashSet<String>> {
+        let global_root = self.npm_global_root_dir(npm, node_home)?;
+        let mut seen = HashSet::<String>::new();
+
+        // Enumerate both plain packages and scoped packages.
+        let entries = match fs::read_dir(&global_root) {
+            Ok(e) => e,
+            Err(_) => return Ok(HashSet::new()),
+        };
+
+        for e in entries.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let name = match p.file_name().and_then(|s| s.to_str()) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            if name.starts_with('@') {
+                // Scoped package directory: `@scope/pkg/...`
+                let scoped_entries = match fs::read_dir(&p) {
+                    Ok(se) => se,
+                    Err(_) => continue,
+                };
+                for se in scoped_entries.flatten() {
+                    if let Some(pkg_dir) = se.path().is_dir().then_some(se.path()) {
+                        self.scan_single_node_pkg_bin(&pkg_dir, node_exe, &mut seen)?;
+                    }
+                }
+            } else {
+                self.scan_single_node_pkg_bin(&p, node_exe, &mut seen)?;
+            }
+        }
+
+        Ok(seen)
+    }
+
+    fn scan_single_node_pkg_bin(
+        &self,
+        pkg_dir: &Path,
+        node_exe: &Path,
+        seen: &mut HashSet<String>,
+    ) -> EnvrResult<()> {
+        let pkg_json_path = pkg_dir.join("package.json");
+        if !pkg_json_path.is_file() {
+            return Ok(());
+        }
+        let s = match fs::read_to_string(&pkg_json_path) {
+            Ok(s) => s,
+            Err(_) => return Ok(()),
+        };
+        let v: serde_json::Value = match serde_json::from_str(&s) {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+
+        let pkg_name = v
+            .get("name")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let Some(bin) = v.get("bin") else {
+            return Ok(());
+        };
+
+        match bin {
+            serde_json::Value::String(rel) => {
+                let stem = pkg_name
+                    .split('/')
+                    .last()
+                    .unwrap_or(&pkg_name)
+                    .to_ascii_lowercase();
+                self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, node_exe, seen)?;
+            }
+            serde_json::Value::Object(map) => {
+                for (k, rel_v) in map {
+                    let stem = k.to_ascii_lowercase();
+                    let rel = rel_v.as_str().unwrap_or("");
+                    if rel.is_empty() {
+                        continue;
+                    }
+                    self.try_write_pkg_bin(
+                        &pkg_dir.join(rel),
+                        &stem,
+                        node_exe,
+                        seen,
+                    )?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn try_write_pkg_bin(
+        &self,
+        target: &Path,
+        stem: &str,
+        node_exe: &Path,
+        seen: &mut HashSet<String>,
+    ) -> EnvrResult<()> {
+        if is_global_skip_stem(stem) {
+            return Ok(());
+        }
+        if !target.is_file() {
+            return Ok(());
+        }
+        seen.insert(stem.to_string());
+        self.write_global_forward(target, stem, Some(node_exe))?;
+        Ok(())
+    }
+
+    fn npm_global_root_dir(&self, npm: &Path, node_home: &Path) -> EnvrResult<PathBuf> {
+        // `npm root -g` returns the global node_modules directory.
+        let mut cmd = Command::new(npm);
+        cmd.args(["root", "-g"]);
+        cmd.env("PATH", npm_path_env(node_home)?);
+        let out = cmd.output().map_err(EnvrError::from)?;
+        if !out.status.success() {
+            return Err(EnvrError::Runtime(format!(
+                "npm root -g failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )));
+        }
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if s.is_empty() {
+            return Err(EnvrError::Runtime(
+                "npm root -g returned empty output".into(),
+            ));
+        }
+        Ok(PathBuf::from(s))
     }
 
     fn scan_bun_global_bins(&self) -> EnvrResult<HashSet<String>> {
@@ -270,11 +452,30 @@ impl ShimService {
         Ok(())
     }
 
-    fn write_global_forward(&self, target: &Path, stem: &str) -> EnvrResult<()> {
+    fn write_global_forward(
+        &self,
+        target: &Path,
+        stem: &str,
+        node_exe: Option<&Path>,
+    ) -> EnvrResult<()> {
         let dst = self.shim_dir().join(shim_filename(stem));
         #[cfg(windows)]
         {
-            let body = format!("@echo off\r\ncall \"{}\" %*\r\n", target.display());
+            let body = match (node_exe, target.extension().and_then(|e| e.to_str())) {
+                (Some(node_exe), Some(ext)) if JS_BIN_EXTS.contains(&ext) => {
+                    let node_s = normalize_windows_path_for_cmd(node_exe);
+                    let target_s = normalize_windows_path_for_cmd(target);
+                    format!(
+                        "@echo off\r\n\"{}\" \"{}\" %*\r\n",
+                        node_s,
+                        target_s
+                    )
+                }
+                _ => {
+                    let target_s = normalize_windows_path_for_cmd(target);
+                    format!("@echo off\r\ncall \"{}\" %*\r\n", target_s)
+                }
+            };
             fs::write(&dst, body).map_err(EnvrError::from)?;
         }
         #[cfg(not(windows))]
@@ -341,7 +542,6 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "npx"
             | "corepack"
             | "yarn"
-            | "pnpm"
             | "python"
             | "python3"
             | "pip"

@@ -105,6 +105,24 @@ fn preferred_suffixes(os: &str, arch: &str) -> EnvrResult<&'static [&'static str
     }
 }
 
+fn set_current_pointer_file(cur: &Path, abs_target_dir: &Path) -> EnvrResult<()> {
+    if cur.exists() {
+        if cur.is_dir() {
+            // For junction/symlink this should remove only the link, not the versions dir.
+            // If it removes more than desired, it's still constrained to whatever `current`
+            // pointed to previously.
+            fs::remove_dir_all(cur).map_err(EnvrError::from)?;
+        } else {
+            fs::remove_file(cur).map_err(EnvrError::from)?;
+        }
+    }
+    if let Some(parent) = cur.parent() {
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
+    }
+    fs::write(cur, abs_target_dir.to_string_lossy().to_string()).map_err(EnvrError::from)?;
+    Ok(())
+}
+
 pub fn pick_node_dist_artifact(
     entries: &[(String, String)],
     os: &str,
@@ -214,18 +232,34 @@ pub fn read_current(paths: &NodePaths) -> EnvrResult<Option<RuntimeVersion>> {
     if !cur.exists() {
         return Ok(None);
     }
-    let target = match fs::read_link(&cur) {
-        Ok(t) => t,
-        Err(_) => return Ok(None),
-    };
-    let resolved = if target.is_relative() {
-        cur.parent().map(|p| p.join(&target)).unwrap_or(target)
-    } else {
-        target
-    };
-    let name = resolved
+    // 1) Usual case: `current` is a symlink/junction.
+    if let Ok(target) = fs::read_link(&cur) {
+        let resolved = if target.is_relative() {
+            cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+        } else {
+            target
+        };
+        let name = resolved
+            .file_name()
+            .ok_or_else(|| EnvrError::Runtime("invalid node current link".into()))?
+            .to_string_lossy()
+            .into_owned();
+        return Ok(Some(RuntimeVersion(name)));
+    }
+
+    // 2) Fallback: `current` is a pointer file whose content is the absolute target dir.
+    let s = fs::read_to_string(&cur).map_err(EnvrError::from)?;
+    let t = s.trim();
+    if t.is_empty() {
+        return Ok(None);
+    }
+    let target = PathBuf::from(t);
+    if !target.is_dir() {
+        return Ok(None);
+    }
+    let name = target
         .file_name()
-        .ok_or_else(|| EnvrError::Runtime("invalid node current link".into()))?
+        .ok_or_else(|| EnvrError::Runtime("invalid node current pointer".into()))?
         .to_string_lossy()
         .into_owned();
     Ok(Some(RuntimeVersion(name)))
@@ -321,8 +355,18 @@ impl NodeManager {
             )));
         }
         let abs = fs::canonicalize(&dir).map_err(EnvrError::from)?;
-        ensure_link(LinkType::Soft, &abs, self.paths.current_link())?;
-        Ok(())
+        let cur = self.paths.current_link();
+        match ensure_link(LinkType::Soft, &abs, &cur) {
+            Ok(()) => Ok(()),
+            // Windows may forbid creating symlinks/junctions in some environments
+            // (e.g. missing "Create symbolic links" privilege).
+            // Fall back to a pointer file that shim resolution can follow.
+            Err(EnvrError::Io(e)) if e.raw_os_error() == Some(1314) => {
+                set_current_pointer_file(&cur, &abs)?;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

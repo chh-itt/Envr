@@ -812,6 +812,7 @@ dependencies = [
  "envr-runtime-python",
  "envr-runtime-rust",
  "envr-shim-core",
+ "serde_json",
  "tempfile",
  "toml",
  "tracing",

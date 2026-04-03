@@ -1,6 +1,7 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
+use envr_config::settings::resolve_runtime_root;
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::paths::{EnvSnapshot, current_platform_paths};
+use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -18,11 +19,14 @@ impl ShimContext {
     /// `working_dir` is [`std::env::current_dir`].
     pub fn from_process_env() -> EnvrResult<Self> {
         let envs = EnvSnapshot::capture_current()?;
-        let runtime_root = if let Some(r) = envs.get("ENVR_RUNTIME_ROOT").filter(|s| !s.is_empty())
+        let runtime_root = if let Some(r) =
+            envs.get("ENVR_RUNTIME_ROOT").filter(|s| !s.is_empty())
         {
             PathBuf::from(r)
         } else {
-            current_platform_paths()?.runtime_root
+            // Keep shim resolution consistent with CLI/GUI settings.
+            // GUI edits `settings.toml` under the platform home, so read it here too.
+            resolve_runtime_root()?
         };
         let working_dir = std::env::current_dir().map_err(EnvrError::from)?;
         let profile = envs
@@ -242,7 +246,17 @@ fn runtime_home_for_key(
             current_link.display()
         )))
     } else {
-        std::fs::canonicalize(&current_link).map_err(EnvrError::from)
+        // `current` is usually a symlink/junction, but on Windows some environments
+        // forbid creating links. In that case we may fall back to a pointer file:
+        // `current` contains the absolute target dir.
+        if current_link.is_file() {
+            let s = std::fs::read_to_string(&current_link).map_err(EnvrError::from)?;
+            let t = s.trim();
+            let target = std::path::PathBuf::from(t);
+            std::fs::canonicalize(&target).map_err(EnvrError::from)
+        } else {
+            std::fs::canonicalize(&current_link).map_err(EnvrError::from)
+        }
     }
 }
 
