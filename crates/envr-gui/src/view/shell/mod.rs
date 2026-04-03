@@ -143,11 +143,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     tokens,
                 ));
             }
-            col = col.push(env_center_view(
-                &state.env_center,
-                state.settings.draft.behavior.runtime_install_mode,
-                tokens,
-            ));
+            col = col.push(env_center_view(&state.env_center, tokens));
         }
         Route::Settings => {
             col = col.push(settings_view(&state.settings, tokens));

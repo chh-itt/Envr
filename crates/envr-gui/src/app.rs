@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
-use envr_config::settings::{FontMode, RuntimeInstallMode, Settings, ThemeMode};
+use envr_config::settings::{FontMode, Settings, ThemeMode};
 use envr_download::task::CancelToken;
 use envr_ui::font;
 use envr_ui::theme::Srgb;
@@ -70,6 +70,8 @@ pub struct AppState {
     reduce_motion: bool,
     /// Text ramp scale from `ENVR_UI_SCALE` (`tasks_gui.md` GUI-051).
     ui_text_scale: f32,
+    /// GUI-101 experiment: disable runtime skeleton shimmer motion.
+    disable_runtime_skeleton_shimmer: bool,
     pub env_center: EnvCenterState,
     pub downloads: DownloadPanelState,
     pub settings: SettingsViewState,
@@ -87,6 +89,7 @@ impl Default for AppState {
             flavor: default_flavor_for_target(),
             reduce_motion: envr_platform::a11y::prefers_reduced_motion(),
             ui_text_scale: ui_text_scale_from_env(),
+            disable_runtime_skeleton_shimmer: env_flag("ENVR_GUI_DISABLE_SKELETON_SHIMMER"),
             env_center: EnvCenterState::default(),
             downloads: {
                 let vis = gui_defaults.0;
@@ -126,6 +129,16 @@ fn ui_text_scale_from_env() -> f32 {
         .and_then(|s| s.trim().parse::<f32>().ok())
         .unwrap_or(1.0)
         .clamp(0.85, 1.35)
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|s| {
+            let t = s.trim().to_ascii_lowercase();
+            t == "1" || t == "true" || t == "yes" || t == "on"
+        })
+        .unwrap_or(false)
 }
 
 fn accent_from_settings(st: &Settings) -> Option<Srgb> {
@@ -213,11 +226,15 @@ pub fn run() -> iced::Result {
     .default_font(configured_default_font(&startup))
     .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
         .subscription(|state| {
+            let runtime_skeleton = matches!(state.route(), Route::Runtime)
+                && state.env_center.installed.is_empty()
+                && (state.env_center.busy
+                    || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+                        && state.env_center.node_remote_refreshing
+                        && state.env_center.node_remote_latest.is_empty()));
             let need_motion = state.downloads.needs_motion_tick()
                 || state.downloads.title_drag_armed_since.is_some()
-                || (matches!(state.route(), Route::Runtime)
-                    && state.env_center.busy
-                    && state.env_center.installed.is_empty());
+                || runtime_skeleton;
             let maybe_motion = need_motion
                 .then(|| iced::time::every(Duration::from_millis(32)))
                 .map(|s| s.map(|_| Message::MotionTick));
@@ -319,21 +336,7 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             tracing::debug!(?route, "navigate");
             state.route = route;
             if route == Route::Runtime {
-                // Avoid any expensive remote fetches until the user actually navigates
-                // to the Runtime page.
-                let mode = state.settings.draft.behavior.runtime_install_mode;
-                if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-                    && mode == RuntimeInstallMode::Exact
-                    && state.env_center.remote_major_keys.is_empty()
-                    && !state.env_center.remote_major_loading
-                {
-                    state.env_center.remote_major_loading = true;
-                    return Task::batch([
-                        gui_ops::fetch_remote_major_keys(envr_domain::runtime::RuntimeKind::Node),
-                        gui_ops::refresh_runtimes(state.env_center.kind),
-                    ]);
-                }
-                return gui_ops::refresh_runtimes(state.env_center.kind);
+                return runtime_page_enter_tasks(state);
             }
             if route == Route::Dashboard {
                 state.dashboard.busy = true;
@@ -547,18 +550,30 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
         SettingsMsg::RuntimeRootBrowseResult(pb) => {
             if let Some(pb) = pb {
                 state.settings.runtime_root_draft = pb.to_string_lossy().to_string();
+                let rr = state.settings.runtime_root_draft.trim();
+                state.settings.draft.paths.runtime_root = if rr.is_empty() {
+                    None
+                } else {
+                    Some(rr.to_string())
+                };
+                state.settings.last_message = Some(envr_core::i18n::tr_key(
+                    "gui.app.saving",
+                    "正在保存…",
+                    "Saving…",
+                ));
+                return persist_settings_draft_task(state);
             }
             Task::none()
         }
         SettingsMsg::ClearRuntimeRoot => {
             state.settings.runtime_root_draft.clear();
-            Task::none()
-        }
-        SettingsMsg::SetRuntimeInstallMode(m) => {
-            state.settings.draft.behavior.runtime_install_mode = m;
-            // Defer any expensive remote major-key fetching until navigation
-            // to the Runtime page (see Message::Navigate(Route::Runtime)).
-            Task::none()
+            state.settings.draft.paths.runtime_root = None;
+            state.settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.saving",
+                "正在保存…",
+                "Saving…",
+            ));
+            persist_settings_draft_task(state)
         }
         SettingsMsg::ManualIdEdit(s) => {
             state.settings.manual_id_draft = s;
@@ -624,16 +639,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                 "正在保存…",
                 "Saving…",
             ));
-            let path = settings_path();
-            let next = state.settings.build_settings().map_err(|e| e.to_string());
-            Task::perform(
-                async move {
-                    let next = next?;
-                    next.save_to(&path).map_err(|e| e.to_string())?;
-                    Ok(next)
-                },
-                |res| Message::Settings(SettingsMsg::DiskSaved(res)),
-            )
+            persist_settings_draft_task(state)
         }
         SettingsMsg::ReloadDisk => {
             state.settings.last_message = Some(envr_core::i18n::tr_key(
@@ -653,6 +659,16 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
         SettingsMsg::DiskLoaded(res) => {
             match res {
                 Ok(st) => {
+                    // If the user picked a folder but never got a successful save, disk can still be
+                    // empty while `runtime_root_draft` holds the path — reloading would wipe it.
+                    let unsaved_rr = state.settings.runtime_root_draft.trim().to_string();
+                    let had_unsaved = !unsaved_rr.is_empty();
+                    let disk_rr_empty = st
+                        .paths
+                        .runtime_root
+                        .as_deref()
+                        .map_or(true, |r| r.trim().is_empty());
+
                     state.settings.cache.set_cached(st);
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
@@ -663,6 +679,16 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                                 "Sync failed"
                             )
                         ));
+                    } else if had_unsaved && disk_rr_empty {
+                        state.settings.runtime_root_draft = unsaved_rr.clone();
+                        state.settings.draft.paths.runtime_root = Some(unsaved_rr.clone());
+                        let mut merged = state.settings.cache.snapshot().clone();
+                        merged.paths.runtime_root = Some(unsaved_rr);
+                        state.settings.cache.set_cached(merged.clone());
+                        state.runtime_settings.cache.set_cached(merged);
+                        let _ = state.settings.sync_from_cache();
+                        let _ = state.runtime_settings.sync_from_cache();
+                        state.settings.last_message = None;
                     } else {
                         state.settings.last_message = Some(envr_core::i18n::tr_key(
                             "gui.app.reloaded_from_disk",
@@ -687,7 +713,8 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
         SettingsMsg::DiskSaved(res) => {
             match res {
                 Ok(st) => {
-                    state.settings.cache.set_cached(st);
+                    state.settings.cache.set_cached(st.clone());
+                    state.runtime_settings.cache.set_cached(st);
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
                             "{}: {e}",
@@ -698,6 +725,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             )
                         ));
                     } else {
+                        let _ = state.runtime_settings.sync_from_cache();
                         state.settings.last_message = Some(envr_core::i18n::tr_key(
                             "gui.app.saved_settings_toml",
                             "已保存到 settings.toml。",
@@ -723,6 +751,20 @@ fn settings_path() -> PathBuf {
     envr_config::settings::settings_path_from_platform(&paths)
 }
 
+/// Write [`SettingsViewState::build_settings`] to `settings.toml` and finish with [`SettingsMsg::DiskSaved`].
+fn persist_settings_draft_task(state: &AppState) -> Task<Message> {
+    let path = settings_path();
+    let next = state.settings.build_settings().map_err(|e| e.to_string());
+    Task::perform(
+        async move {
+            let next = next?;
+            next.save_to(&path).map_err(|e| e.to_string())?;
+            Ok(next)
+        },
+        |res| Message::Settings(SettingsMsg::DiskSaved(res)),
+    )
+}
+
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
     if let Some(since) = state.downloads.title_drag_armed_since {
         if !state.downloads.dragging && since.elapsed() >= TITLE_DRAG_HOLD {
@@ -738,10 +780,16 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         let _ = persist_download_panel_settings(state);
     }
     state.downloads.maybe_progress_tick_on_motion_frame();
+    let waiting_installed_list =
+        state.env_center.busy && state.env_center.installed.is_empty();
+    let waiting_node_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+        && state.env_center.node_remote_refreshing
+        && state.env_center.node_remote_latest.is_empty()
+        && state.env_center.installed.is_empty();
     if !state.reduce_motion
+        && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
-        && state.env_center.busy
-        && state.env_center.installed.is_empty()
+        && (waiting_installed_list || waiting_node_remote)
     {
         state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
     }
@@ -864,10 +912,30 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
     }
 }
 
-fn persist_download_panel_settings(state: &AppState) -> Result<(), envr_error::EnvrError> {
+fn persist_download_panel_settings(state: &mut AppState) -> Result<(), envr_error::EnvrError> {
     let paths = envr_platform::paths::current_platform_paths()?;
     let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-    let mut st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
+    let mut st = Settings::load_or_default_from(&settings_path)?;
+
+    // `paths.runtime_root` is edited on the Settings page and lives in `state.settings.cache`.
+    // If we only round-trip what `load_or_default_from` returns, a sparse `[paths]` on disk (or a
+    // failed parse that fell back to defaults earlier in the session) can drop the in-memory
+    // runtime root when we rewrite the whole file for the download panel.
+    let mem = state.settings.cache.snapshot();
+    let disk_rr_empty = st
+        .paths
+        .runtime_root
+        .as_deref()
+        .map_or(true, |s| s.trim().is_empty());
+    if disk_rr_empty {
+        if let Some(ref r) = mem.paths.runtime_root {
+            let t = r.trim();
+            if !t.is_empty() {
+                st.paths.runtime_root = Some(t.to_string());
+            }
+        }
+    }
+
     let panel = &state.downloads;
     st.gui.downloads_panel.visible = panel.visible;
     st.gui.downloads_panel.expanded = panel.expanded;
@@ -885,6 +953,10 @@ fn persist_download_panel_settings(state: &AppState) -> Result<(), envr_error::E
         DOWNLOAD_PANEL_SHELL_W,
     );
     st.save_to(&settings_path)?;
+    state.settings.cache.set_cached(st.clone());
+    state.runtime_settings.cache.set_cached(st);
+    let _ = state.settings.sync_from_cache();
+    let _ = state.runtime_settings.sync_from_cache();
     Ok(())
 }
 
@@ -968,6 +1040,21 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
     download_runner::start_http_job(id, url, dest, cancel, downloaded, total)
 }
 
+fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
+    let kind = state.env_center.kind;
+    if kind == envr_domain::runtime::RuntimeKind::Node {
+        state.env_center.node_remote_refreshing = true;
+        Task::batch([
+            gui_ops::refresh_runtimes(kind),
+            gui_ops::load_remote_latest_disk_snapshot(kind),
+            gui_ops::refresh_remote_latest_per_major(kind),
+        ])
+    } else {
+        state.env_center.node_remote_refreshing = false;
+        gui_ops::refresh_runtimes(kind)
+    }
+}
+
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
     match msg {
         EnvCenterMsg::PickKind(k) => {
@@ -975,32 +1062,30 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.env_center.kind = k;
-            // Reset remote caches / expansion state when switching runtime kind.
-            state.env_center.remote_cache.clear();
-            state.env_center.remote_major_keys.clear();
-            state.env_center.remote_major_loading = false;
-            state.env_center.expanded_exact_majors.clear();
-            state.env_center.remote_loading_majors.clear();
+            state.env_center.remote_error = None;
+            state.env_center.node_remote_latest.clear();
+            state.env_center.node_remote_refreshing = false;
             state.env_center.install_input.clear();
+            state.env_center.direct_install_input.clear();
             state.env_center.expanded = true;
             state.env_center.busy = false;
-            Task::batch([gui_ops::refresh_runtimes(k)])
+            if k == envr_domain::runtime::RuntimeKind::Node {
+                state.env_center.node_remote_refreshing = true;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else {
+                Task::batch([gui_ops::refresh_runtimes(k)])
+            }
         }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input = s;
-            // In Exact mode, interpret query as a `major` prefix (e.g. "25") and lazy-fetch children.
-            let mode = state.settings.draft.behavior.runtime_install_mode;
-            if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node && mode == RuntimeInstallMode::Exact {
-                if let Some(major) = parse_major_only(&state.env_center.install_input) {
-                    state.env_center.expanded_exact_majors.insert(major.clone());
-                    if !state.env_center.remote_cache.contains_key(&major)
-                        && !state.env_center.remote_loading_majors.contains(&major)
-                    {
-                        state.env_center.remote_loading_majors.insert(major.clone());
-                        return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
-                    }
-                }
-            }
+            Task::none()
+        }
+        EnvCenterMsg::DirectInstallInput(s) => {
+            state.env_center.direct_install_input = s;
             Task::none()
         }
         EnvCenterMsg::DataLoaded(res) => {
@@ -1009,47 +1094,49 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 Ok((list, cur)) => {
                     state.env_center.installed = list;
                     state.env_center.current = cur;
-
-                    // In Exact mode, auto-expand the current major and lazily fetch its remote children.
-                    if state.settings.draft.behavior.runtime_install_mode == RuntimeInstallMode::Exact
-                        && state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-                    {
-                        if let Some(cur_v) = state.env_center.current.as_ref() {
-                            if let Some(major) = parse_major_from_ver(&cur_v.0) {
-                                state.env_center
-                                    .expanded_exact_majors
-                                    .insert(major.clone());
-                                if !state.env_center.remote_cache.contains_key(&major)
-                                    && !state.env_center.remote_loading_majors.contains(&major)
-                                {
-                                    state.env_center.remote_loading_majors.insert(major.clone());
-                                    return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
-                                }
-                            }
-                        }
-                    }
                 }
                 Err(e) => state.error = Some(e),
             }
             Task::none()
         }
-        EnvCenterMsg::RemoteFetchedPrefix(res) => {
-            match res {
-                Ok((prefix, list)) => {
-                    state.env_center.remote_cache.insert(prefix.clone(), list);
-                    state.env_center.remote_loading_majors.remove(&prefix);
-                }
-                Err(e) => state.error = Some(e),
+        EnvCenterMsg::RemoteLatestDiskSnapshot(rows) => {
+            if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+                && state.env_center.node_remote_latest.is_empty()
+            {
+                state.env_center.node_remote_latest = rows;
             }
             Task::none()
         }
-        EnvCenterMsg::RemoteFetchedMajorKeys(res) => {
-            state.env_center.remote_major_loading = false;
+        EnvCenterMsg::RemoteLatestRefreshed(res) => {
+            state.env_center.node_remote_refreshing = false;
             match res {
-                Ok(keys) => state.env_center.remote_major_keys = keys,
-                Err(e) => state.error = Some(e),
+                Ok(rows) => {
+                    state.env_center.remote_error = None;
+                    state.env_center.node_remote_latest = rows;
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e);
+                }
             }
             Task::none()
+        }
+        EnvCenterMsg::SubmitDirectInstall => {
+            let spec = state.env_center.direct_install_input.trim().to_string();
+            if spec.is_empty() || !direct_install_spec_ok(&spec) {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::install_version_with_resolve_precheck(state.env_center.kind, spec)
+        }
+        EnvCenterMsg::SubmitDirectInstallAndUse => {
+            let spec = state.env_center.direct_install_input.trim().to_string();
+            if spec.is_empty() || !direct_install_spec_ok(&spec) {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::install_then_use_with_resolve_precheck(state.env_center.kind, spec)
         }
         EnvCenterMsg::SubmitInstall(spec) => {
             if spec.trim().is_empty() {
@@ -1106,44 +1193,18 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.expanded = !state.env_center.expanded;
             Task::none()
         }
-        EnvCenterMsg::ToggleExactMajor(major) => {
-            if state.env_center.expanded_exact_majors.contains(&major) {
-                state.env_center.expanded_exact_majors.remove(&major);
-                return Task::none();
-            }
-            state.env_center.expanded_exact_majors.insert(major.clone());
-            if !state.env_center.remote_cache.contains_key(&major)
-                && !state.env_center.remote_loading_majors.contains(&major)
-            {
-                state.env_center.remote_loading_majors.insert(major.clone());
-                return gui_ops::fetch_remote_prefix(state.env_center.kind, major);
-            }
-            Task::none()
-        }
     }
 }
 
-fn parse_major_only(s: &str) -> Option<String> {
-    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
-    if t.is_empty() {
-        return None;
+fn direct_install_spec_ok(spec: &str) -> bool {
+    let t = spec.trim();
+    if t.is_empty() || t.len() > 80 {
+        return false;
     }
-    if t.chars().all(|c| c.is_ascii_digit()) {
-        Some(t.to_string())
-    } else {
-        None
+    if t.chars().any(|c| c.is_control()) {
+        return false;
     }
-}
-
-fn parse_major_from_ver(ver: &str) -> Option<String> {
-    let t = ver.trim().strip_prefix('v').unwrap_or(ver.trim());
-    let first = t.split('.').next()?;
-    // Node versions are normally `MAJOR.MINOR.PATCH` (e.g. `20.11.1`).
-    if first.chars().all(|c| c.is_ascii_digit()) {
-        Some(first.to_string())
-    } else {
-        None
-    }
+    true
 }
 
 fn view(state: &AppState) -> Element<'_, Message> {

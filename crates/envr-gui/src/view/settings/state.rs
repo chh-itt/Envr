@@ -39,7 +39,7 @@ impl SettingsViewState {
     }
 
     pub fn sync_from_cache(&mut self) -> EnvrResult<()> {
-        let st = self.cache.get()?.clone();
+        let st = self.cache.snapshot().clone();
         self.draft = st.clone();
         self.runtime_root_draft = st.paths.runtime_root.clone().unwrap_or_default();
         self.manual_id_draft = st.mirror.manual_id.clone().unwrap_or_default();

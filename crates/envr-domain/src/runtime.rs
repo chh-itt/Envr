@@ -48,6 +48,17 @@ pub trait RuntimeProvider: Send + Sync {
     fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
         Ok(Vec::new())
     }
+
+    /// Latest patch per major line for GUI list rows (e.g. Node). Default: empty.
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(Vec::new())
+    }
+
+    /// Read cached [`Self::list_remote_latest_per_major`] from disk without TTL (for instant UI paint).
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        Vec::new()
+    }
+
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion>;
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion>;

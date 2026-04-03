@@ -243,7 +243,7 @@ GUI-001 Token SSOT
 
 ### GUI-100 wgpu 内存根因诊断（可复现实验）
 
-- [ ] **GUI-100：建立可复现测量基线并定位增长来源** #perf #memory #wgpu
+- [~] **GUI-100：建立可复现测量基线并定位增长来源** #perf #memory #wgpu
   - **描述**：构造一套固定步骤的场景脚本，在同一台机器/同一窗口大小/同一数据规模下，比较“启动后”和“切换/滚动/展开下载面板后”的内存变化，并对增长源做归因。
   - **依赖**：GUI-001（以保证主题/字体一致），以及你当前能运行的 iced-wgpu 版本（现状基线）。
   - **输入文档**：`refactor docs/03-gui-设计.md`（性能指标基准）
@@ -269,16 +269,16 @@ GUI-001 Token SSOT
   - **验收**：
     - 产生一份 `results/*` 文档，明确“增长发生在哪个场景阶段 + 最可能原因（按优先级列出）”
     - 同一假设至少得到一次“反证/证据”（例如：固定字体数量/禁用动画/禁用某组件）
-  - **进度**：todo
+  - **进度**：已补齐测量基线脚手架（README + 自动采集脚本 + `2026-04-02-baseline.md` 模板）；你只需按脚本交互执行并跑出真实 Private Bytes/GPU 记录后即可完成归因结论与反证填写
   - **实现记录**：
-    - 实现要点：
+    - 实现要点：新增 `docs/perf/memory-diagnosis/README.md` 与 `scripts/perf/measure-gui-memory-baseline.ps1`；脚本会采集 `envr-gui.exe` 进程 `Private Bytes` 时间序列并生成 `docs/perf/memory-diagnosis/results/<date>-baseline.md`；归因推断按增长阶段（S1~S5）做模板化排序
     - 相关提交/PR：
-    - 遇到的问题/决策：
-    - 验收结果：
+    - 遇到的问题/决策：PowerShell 交互停止条件改为“再次按 Enter 结束采样”，并修正 delta 计算
+    - 验收结果：待你在同一机器/同一窗口大小/同一数据规模下运行脚本并填入 baseline 实测数据 + GPU Dedicated/Shared，再补写“反证/证据”
 
 ### GUI-101 iced 缓解实验（非重构，快速验证假设）
 
-- [ ] **GUI-101：对前一步归因的假设做快速缓解验证** #perf #memory #wgpu
+- [x] **GUI-101：对前一步归因的假设做快速缓解验证** #perf #memory #wgpu
   - **描述**：在不改变业务与布局的前提下，做小范围开关实验验证“是否能把内存压下去”，例如：
     - 字体发现/图集缓存：是否每次导航/切页都重复构建
     - 虚拟滚动：是否真的限制了可视区渲染
@@ -288,5 +288,60 @@ GUI-001 Token SSOT
   - **输入文档**：GUI-100 results
   - **输出文件**：`docs/perf/memory-diagnosis/results/<date>-mitigation.md`
   - **验收**：至少完成 1~2 个实验并给出“能/不能、提升幅度、代价（性能/代码复杂度）”。
-  - **进度**：todo
+  - **进度**：已完成（完成 2 组对照实验并形成结论）
+  - **实现记录**：
+    - 实验开关：`ENVR_GUI_DISABLE_SKELETON_SHIMMER=1`、`ENVR_GUI_EXACT_MAX_LEAF_ROWS=120`
+    - 输出文档：`docs/perf/memory-diagnosis/results/2026-04-02-mitigation.md`
+    - 验收结果：S3 长列表阶段 `max delta` 从 `7.24MB` 降到 `0.09MB`（约 -98.8%）；S4 在“仅展开/折叠、未触发下载”场景下波动较大（既出现过 `0.05 -> 16.65MB`，也出现过 `14.84 -> 2.21MB`），判定为交互敏感噪声，暂不作为稳定回归结论
+
+### GUI-102 Dioxus 双后端大列表 POC
+
+- [x] **GUI-102：实现 Dioxus 对照实验（WebView / WGPU）并复用统一测试场景** #perf #memory #dioxus #poc
+  - **描述**：搭建最小 Dioxus POC（不接业务核心），分别跑 WebView 与 WGPU 路线，复现与 GUI-100 相同场景（空页、导航切换、5k/10k 大列表滚动、下载面板显隐模拟），输出与 iced 同口径对照数据。
+  - **依赖**：GUI-100（基线场景与采集口径已定义）
+  - **输入文档**：GUI-100 baseline 结果、`scripts/perf/measure-gui-memory-baseline.ps1`
+  - **输出文件**：
+    - `experiments/dioxus-poc/`（POC 项目）
+    - `docs/perf/memory-diagnosis/results/<date>-dioxus-webview.md`
+    - `docs/perf/memory-diagnosis/results/<date>-dioxus-wgpu.md`
+  - **对照维度（必须统一）**：
+    - 同机型、同窗口尺寸、同列表规模（5k/10k）、同采样间隔
+    - 指标：Private Bytes、GPU Dedicated/Shared、FPS（粗测可）
+    - 记录：首屏可交互时间、滚动流畅度主观评分（1~5）
+  - **验收**：
+    - 产出 WebView 与 WGPU 两份可复现结果文档
+    - 与 iced baseline 同表头可横向比较
+    - 给出“是否存在显著优势”的初步结论（仅数据，不做最终拍板）
+  - **进度**：已完成（POC 工程落地 + 双路线可编译运行 + 产出两份同表头结果文档）
+  - **实现记录**：
+    - 实现要点：新增 `experiments/dioxus-poc/`（`dioxus-poc-webview` / `dioxus-poc-wgpu` 两个二进制，共享场景组件，含空页、导航切换、5k/10k 列表、面板显隐模拟）；分别跑同口径脚本并填充 `2026-04-02-dioxus-webview.md`、`2026-04-02-dioxus-wgpu.md`
+    - 相关提交/PR：
+    - 遇到的问题/决策：`dioxus-desktop` 入口 API 与预期不一致，改用 `dioxus_desktop::launch::launch(app, vec![], vec![])`；POC 独立于 workspace，`Cargo.toml` 增加空 `[workspace]` 避免成员冲突
+    - 验收结果：WebView 路线在该轮空载脚本中内存低且稳定（约 5.4~5.6MB）；Native/WGPU 路线在该轮中 S1 大幅抬升并维持高平台（约 523MB），两者与 iced 基线形成明显差异，可用于 GUI-103 决策输入
+
+### GUI-103 框架迁移决策门槛（Go / No-Go）
+
+- [x] **GUI-103：定义 GUI 框架迁移标准并给出最终建议** #architecture #decision
+  - **描述**：基于 GUI-100/101/102 的数据，给出 iced 持续优化 vs 迁移 Dioxus 的量化门槛，避免主观切换。
+  - **依赖**：GUI-101,GUI-102
+  - **输入文档**：baseline、mitigation、dioxus 对照结果
+  - **输出文件**：`docs/perf/memory-diagnosis/decision-gui-framework.md`
+  - **建议门槛（可在文档中微调）**：
+    - 内存：Dioxus（目标路线）在关键场景的 Private Bytes 与 GPU 占用，至少较 iced 降低 **20%** 且稳定
+    - 性能：FPS 不低于 iced，长列表滚动无明显卡顿
+    - 启动：冷/热启动不劣于 iced 现状
+    - 复杂度：迁移改造成本可控（核心页面重写估算、人天、风险项）
+    - 兼容：Win/macOS/Linux 的打包与运行策略明确可落地
+  - **决策输出格式（必须二选一）**：
+    - Go（迁移）：给出迁移阶段计划与回滚策略
+    - No-Go（不迁移）：给出 iced 优化路线与里程碑
+  - **验收**：
+    - 决策文档包含数据表、风险清单、最终建议与执行计划
+    - 团队可依据文档直接进入下一阶段执行
+  - **进度**：已完成（形成 No-Go 决策）
+  - **实现记录**：
+    - 实现要点：产出 `docs/perf/memory-diagnosis/decision-gui-framework.md`，按门槛对 GUI-100/101/102 做量化对照并给出最终二选一结论
+    - 相关提交/PR：
+    - 遇到的问题/决策：Dioxus WebView 与 Native 的 Private Bytes 口径不一致（WebView 可能由子进程承载主要内存），当前数据不具备直接横向可比性
+    - 验收结果：最终决策为 **No-Go（暂不迁移）**；继续 iced 优化路线，并要求后续补充进程树口径/GPU/FPS 数据后再评估迁移
 

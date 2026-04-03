@@ -1,4 +1,4 @@
-use envr_config::settings::{FontMode, LocaleMode, MirrorMode, RuntimeInstallMode, ThemeMode};
+use envr_config::settings::{FontMode, LocaleMode, MirrorMode, ThemeMode};
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Vertical;
@@ -19,7 +19,6 @@ pub enum SettingsMsg {
     BrowseRuntimeRoot,
     RuntimeRootBrowseResult(Option<std::path::PathBuf>),
     ClearRuntimeRoot,
-    SetRuntimeInstallMode(RuntimeInstallMode),
     ManualIdEdit(String),
     MaxConcEdit(String),
     RetryEdit(String),
@@ -117,57 +116,6 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     ]
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
-
-    let install_mode_hint = text(envr_core::i18n::tr_key(
-        "gui.settings.runtime_install_mode_hint",
-        "影响「运行时」页安装框的解析方式；保存后写入 settings.toml。",
-        "Controls how the Runtimes install field is interpreted; saved to settings.toml.",
-    ))
-    .size(ty.micro);
-
-    let mut install_mode_row = row![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.runtime_install_mode_label",
-            "版本安装模式",
-            "Version install mode",
-        ))
-        .size(ty.body),
-    ]
-    .spacing(sp.sm as f32);
-    for (m, key, zh, en) in [
-        (
-            RuntimeInstallMode::Smart,
-            "gui.runtime.mode.smart",
-            "智能（Smart）",
-            "Smart",
-        ),
-        (
-            RuntimeInstallMode::Exact,
-            "gui.runtime.mode.exact",
-            "精确（Exact）",
-            "Exact",
-        ),
-    ] {
-        let variant = if m == state.draft.behavior.runtime_install_mode {
-            ButtonVariant::Primary
-        } else {
-            ButtonVariant::Secondary
-        };
-        let h = if m == state.draft.behavior.runtime_install_mode {
-            tokens.control_height_primary
-        } else {
-            tokens.control_height_secondary
-        };
-        let b = button(button_content_centered(
-            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
-        ))
-        .on_press(Message::Settings(SettingsMsg::SetRuntimeInstallMode(m)))
-        .width(Length::FillPortion(1))
-        .height(Length::Fixed(h))
-        .padding([sp.sm as f32, sp.sm as f32])
-        .style(button_style(tokens, variant));
-        install_mode_row = install_mode_row.push(b);
-    }
 
     let mut mirror_row = row![
         text(envr_core::i18n::tr_key(
@@ -569,8 +517,6 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         column![
             env_note,
             rr_row,
-            install_mode_hint,
-            install_mode_row,
             mirror_row,
             manual,
             cleanup,

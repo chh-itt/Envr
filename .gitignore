@@ -5,3 +5,4 @@
 .envr/
 **/*.rs.bk
 **/proptest-regressions/
+experiments/

@@ -1,6 +1,5 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
-use envr_config::settings::RuntimeInstallMode;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
@@ -21,18 +20,20 @@ use crate::widget_styles::{
 pub enum EnvCenterMsg {
     PickKind(RuntimeKind),
     InstallInput(String),
+    DirectInstallInput(String),
     DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>), String>),
-    RemoteFetchedPrefix(Result<(String, Vec<RuntimeVersion>), String>),
-    RemoteFetchedMajorKeys(Result<Vec<String>, String>),
+    RemoteLatestDiskSnapshot(Vec<RuntimeVersion>),
+    RemoteLatestRefreshed(Result<Vec<RuntimeVersion>, String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
+    SubmitDirectInstall,
+    SubmitDirectInstallAndUse,
     InstallFinished(Result<RuntimeVersion, String>),
     SubmitUse(String),
     UseFinished(Result<(), String>),
     SubmitUninstall(String),
     UninstallFinished(Result<(), String>),
     ToggleExpanded,
-    ToggleExactMajor(String),
 }
 
 #[derive(Debug)]
@@ -42,15 +43,14 @@ pub struct EnvCenterState {
     pub installed: Vec<RuntimeVersion>,
     pub current: Option<RuntimeVersion>,
     pub busy: bool,
-    /// Node + Exact 时：仅加载 remote 的 `major` key，用于渲染可展开的分组行（不渲染所有子版本）。
-    pub remote_major_keys: Vec<String>,
-    pub remote_major_loading: bool,
-    /// Remote versions fetched lazily by `major` prefix (e.g. `25` -> `25.x.x`).
-    pub remote_cache: HashMap<String, Vec<RuntimeVersion>>,
-    /// Expanded majors in Exact mode.
-    pub expanded_exact_majors: HashSet<String>,
-    /// Prefixes currently being fetched.
-    pub remote_loading_majors: HashSet<String>,
+    /// Non-fatal remote fetch/parse error shown inline (keeps global UI usable).
+    pub remote_error: Option<String>,
+    /// Node: latest patch per major from cache/network (see `list_remote_latest_per_major`).
+    pub node_remote_latest: Vec<RuntimeVersion>,
+    /// Node: background refresh of `node_remote_latest` (TTL / index) is in flight.
+    pub node_remote_refreshing: bool,
+    /// Optional version spec for direct install (right of search).
+    pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
     pub skeleton_phase: f32,
     /// Whether the env center panel is expanded (search + actions + list).
@@ -65,11 +65,10 @@ impl Default for EnvCenterState {
             installed: Vec::new(),
             current: None,
             busy: false,
-            remote_major_keys: Vec::new(),
-            remote_major_loading: false,
-            remote_cache: HashMap::new(),
-            expanded_exact_majors: HashSet::new(),
-            remote_loading_majors: HashSet::new(),
+            remote_error: None,
+            node_remote_latest: Vec::new(),
+            node_remote_refreshing: false,
+            direct_install_input: String::new(),
             skeleton_phase: 0.0,
             expanded: true,
         }
@@ -91,167 +90,40 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
     }
 }
 
-fn version_row(
-    state: &EnvCenterState,
-    version: &RuntimeVersion,
-    installed: bool,
-    tokens: ThemeTokens,
-    sp: &envr_ui::theme::SpacingScale,
-    txt: iced::Color,
-    install_mode: RuntimeInstallMode,
-    busy: bool,
-    indent_px: f32,
-) -> Element<'static, Message> {
-    let ver = version;
-    let active = state.current.as_ref() == Some(ver);
-
-    let use_msg = if !installed || active || busy {
-        None
-    } else {
-        Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(ver.0.clone())))
-    };
-    let uninstall_msg = if !installed || active || busy {
-        None
-    } else {
-        Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(ver.0.clone())))
-    };
-
-    let ver_line = if active {
-        format!(
-            "{} {} {}",
-            kind_label(state.kind),
-            ver.0,
-            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)",)
-        )
-    } else {
-        format!("{} {}", kind_label(state.kind), ver.0)
-    };
-
-    let install_msg = if installed || busy {
-        None
-    } else {
-        Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(ver.0.clone())))
-    };
-    let install_and_use_msg = if installed || busy || install_mode != RuntimeInstallMode::Smart {
-        None
-    } else {
-        Some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(ver.0.clone())))
-    };
-
-    let pad_v = sp.sm as f32;
-    let left_action: Element<'static, Message> = if installed {
-        button(button_content_centered(
-            row![
-                Lucide::Package.view(14.0, txt),
-                text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ))
-        .on_press_maybe(use_msg)
-        .height(Length::Fixed(
-            tokens
-                .control_height_secondary
-                .max(tokens.min_click_target_px()),
-        ))
-        .padding([pad_v, sp.sm as f32])
-        .style(button_style(tokens, ButtonVariant::Ghost))
-        .into()
-    } else {
-        button(button_content_centered(
-            row![
-                Lucide::Download.view(14.0, txt),
-                text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ))
-        .on_press_maybe(install_msg)
-        .height(Length::Fixed(
-            tokens
-                .control_height_secondary
-                .max(tokens.min_click_target_px()),
-        ))
-        .padding([pad_v, sp.md as f32])
-        .style(button_style(tokens, ButtonVariant::Secondary))
-        .into()
-    };
-
-    let right_action: Element<'static, Message> = if installed {
-        button(button_content_centered(
-            row![
-                Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                text(envr_core::i18n::tr_key(
-                    "gui.action.uninstall",
-                    "卸载",
-                    "Uninstall",
-                )),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ))
-        .on_press_maybe(uninstall_msg)
-        .height(Length::Fixed(
-            tokens
-                .control_height_secondary
-                .max(tokens.min_click_target_px()),
-        ))
-        .padding([pad_v, sp.sm as f32])
-        .style(button_style(tokens, ButtonVariant::Danger))
-        .into()
-    } else if install_mode == RuntimeInstallMode::Smart {
-        button(button_content_centered(
-            row![
-                Lucide::Download.view(14.0, txt),
-                text(envr_core::i18n::tr_key(
-                    "gui.action.install_use",
-                    "安装并切换",
-                    "Install & Use",
-                )),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ))
-        .on_press_maybe(install_and_use_msg)
-        .height(Length::Fixed(
-            tokens
-                .control_height_secondary
-                .max(tokens.min_click_target_px()),
-        ))
-        .padding([pad_v, sp.sm as f32])
-        .style(button_style(tokens, ButtonVariant::Primary))
-        .into()
-    } else {
-        // Exact mode: keep layout stable with an empty placeholder.
-        container(space().width(Length::Shrink).height(Length::Fixed(
-            tokens.control_height_secondary.max(tokens.min_click_target_px()),
-        )))
-        .into()
-    };
-
-    let card_s = card_container_style(tokens, 1);
-    let row = row![
-        space().width(Length::Fixed(indent_px)),
-        text(ver_line).width(Length::Fill),
-        left_action,
-        right_action,
-    ]
-    .spacing(sp.sm as f32)
-    .align_y(Alignment::Center)
-    .height(Length::Fixed(tokens.list_row_height()));
-
-    container(row).style(move |theme: &Theme| card_s(theme)).into()
+fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let warn = gui_theme::to_color(tokens.colors.warning);
+    let sp = tokens.space();
+    container(
+        row![
+            Lucide::CircleAlert.view(16.0, warn),
+            text(format!(
+                "{}: {}",
+                envr_core::i18n::tr_key("gui.runtime.remote_error", "远程列表不可用", "Remote list unavailable"),
+                error
+            ))
+            .size(ty.caption)
+            .color(muted)
+            .width(Length::Fill),
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center),
+    )
+    .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
 }
 
-pub fn env_center_view(
-    state: &EnvCenterState,
-    install_mode: RuntimeInstallMode,
-    tokens: ThemeTokens,
-) -> Element<'static, Message> {
+fn node_remote_latest_for_major(state: &EnvCenterState, major: &str) -> Option<RuntimeVersion> {
+    state
+        .node_remote_latest
+        .iter()
+        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(major))
+        .cloned()
+}
+
+pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let busy = state.busy;
@@ -335,18 +207,18 @@ pub fn env_center_view(
     }
 
     // Sort major numbers high -> low.
-    // In Exact mode, remote major keys are loaded lazily and used only to render
-    // expandable groups, not all leaf versions.
     let mut major_keys_set: HashSet<String> = installed_by_major.keys().cloned().collect();
-    for m in &state.remote_major_keys {
-        major_keys_set.insert(m.clone());
+    if state.kind == RuntimeKind::Node {
+        for v in &state.node_remote_latest {
+            if let Some(m) = parse_major_from_ver(&v.0) {
+                major_keys_set.insert(m);
+            }
+        }
     }
     let mut major_keys: Vec<String> = major_keys_set.into_iter().collect();
     major_keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
 
     let matches_empty_hint = || -> Element<'static, Message> {
-        // If search keyword is empty, this is typically "no installed versions"
-        // (remote is lazily loaded in Exact mode).
         let (title, body) = if query_norm.is_empty() {
             (
                 envr_core::i18n::tr_key(
@@ -356,8 +228,8 @@ pub fn env_center_view(
                 ),
                 envr_core::i18n::tr_key(
                     "gui.empty.hint.no_installed_versions",
-                    "在下方输入版本并安装；智能/精确模式在「设置」中调整。也可使用「刷新当前运行时」。",
-                    "Enter a version below to install; Smart/Exact mode is in Settings. You can also Refresh the runtime.",
+                    "左侧筛选列表；右侧输入精确版本安装。远程列表会先读本地缓存再静默更新。",
+                    "Filter on the left; enter an exact version on the right to install. Remote rows load from cache first, then refresh quietly.",
                 ),
             )
         } else {
@@ -396,307 +268,213 @@ pub fn env_center_view(
     // Use spacing instead of dense horizontal rules for a calmer UI.
     let mut list_col = column![].spacing(sp.sm as f32).width(Length::Fill);
 
-    match install_mode {
-        RuntimeInstallMode::Smart => {
-            // Smart mode shows one row per `major` group.
-            let mut show_majors: Vec<String> = if let Some(qm) = query_major.as_ref() {
-                vec![qm.clone()]
-            } else if query_norm.is_empty() {
-                major_keys.clone()
-            } else {
-                major_keys
-                    .into_iter()
-                    .filter(|m| m.contains(query_norm))
-                    .collect()
-            };
-            show_majors.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    let mut show_majors: Vec<String> = if let Some(qm) = query_major.as_ref() {
+        vec![qm.clone()]
+    } else if query_norm.is_empty() {
+        major_keys.clone()
+    } else {
+        major_keys
+            .into_iter()
+            .filter(|m| m.contains(query_norm))
+            .collect()
+    };
+    show_majors.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
 
-            if busy && show_majors.is_empty() {
-                list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
-            } else if show_majors.is_empty() {
-                list_col = list_col.push(matches_empty_hint());
-            } else {
-                for major in show_majors.iter() {
-                    let installed_versions = installed_by_major
-                        .get(major)
-                        .cloned()
-                        .unwrap_or_default();
-                    let current_major = state
-                        .current
-                        .as_ref()
-                        .and_then(|v| parse_major_from_ver(&v.0));
-                    let is_active = current_major.as_deref() == Some(major.as_str());
+    let node_waiting_remote = state.kind == RuntimeKind::Node
+        && state.node_remote_latest.is_empty()
+        && state.node_remote_refreshing;
 
-                    // Keep left layout stable: "Use"/"Install" buttons on the right.
-                    let highest_installed = installed_versions.first().cloned();
-
-                    let left_text = if is_active {
-                        format!(
-                            "{} {} {}",
-                            kind_label(state.kind),
-                            major,
-                            envr_core::i18n::tr_key(
-                                "gui.runtime.current_tag",
-                                "(当前)",
-                                "(current)",
-                            )
-                        )
-                    } else {
-                        format!("{} {}", kind_label(state.kind), major)
-                    };
-
-                    let action_btn: Element<'static, Message> = if is_active || busy {
-                        container(space()).into()
-                    } else if let Some(highest) = highest_installed {
-                        button(
-                            button_content_centered(
-                                row![
-                                    Lucide::Package.view(14.0, txt),
-                                    text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                                ]
-                                .spacing(sp.xs as f32)
-                                .align_y(Alignment::Center)
-                                .into(),
-                            ),
-                        )
-                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(
-                            highest.0.clone()
-                        ))))
-                        .style(button_style(tokens, ButtonVariant::Secondary))
-                        .into()
-                    } else {
-                        // No installed versions under this major.
-                        let install_btn = button(
-                            button_content_centered(
-                                row![
-                                    Lucide::Download.view(14.0, txt),
-                                    text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
-                                ]
-                                .spacing(sp.xs as f32)
-                                .align_y(Alignment::Center)
-                                .into(),
-                            ),
-                        )
-                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
-                            major.clone(),
-                        ))))
-                        .style(button_style(tokens, ButtonVariant::Primary));
-
-                        let install_and_use_btn = button(
-                            button_content_centered(
-                                row![
-                                    Lucide::RefreshCw.view(14.0, txt),
-                                    text(envr_core::i18n::tr_key(
-                                        "gui.action.install_use",
-                                        "安装并切换",
-                                        "Install & Use"
-                                    )),
-                                ]
-                                .spacing(sp.xs as f32)
-                                .align_y(Alignment::Center)
-                                .into(),
-                            ),
-                        )
-                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(
-                            major.clone(),
-                        ))))
-                        .style(button_style(tokens, ButtonVariant::Secondary));
-
-                        container(
-                            row![install_btn, install_and_use_btn]
-                                .spacing(sp.sm as f32)
-                                .align_y(Alignment::Center),
-                        )
-                        .into()
-                    };
-
-                    list_col = list_col.push(
-                        container(
-                            row![
-                                text(left_text).width(Length::Fill),
-                                action_btn,
-                            ]
-                            .spacing(sp.sm as f32)
-                            .align_y(Alignment::Center)
-                            .height(Length::Fixed(tokens.list_row_height()))
-                        )
-                        .style(card_container_style(tokens, 1))
-                        
-                    );
-                }
-            }
+    if let Some(err) = state.remote_error.as_deref() {
+        if state.kind == RuntimeKind::Node {
+            list_col = list_col.push(remote_error_inline(tokens, err));
         }
-        RuntimeInstallMode::Exact => {
-            // Exact mode shows major rows with expandable children.
-            // Display majors that are installed and/or expanded.
-            let mut show_majors_set: HashSet<String> = HashSet::new();
-            for k in installed_by_major.keys() {
-                show_majors_set.insert(k.clone());
-            }
-            for k in &state.remote_major_keys {
-                show_majors_set.insert(k.clone());
-            }
-            for k in &state.expanded_exact_majors {
-                show_majors_set.insert(k.clone());
-            }
-            if let Some(qm) = query_major.as_ref() {
-                show_majors_set.insert(qm.clone());
-            }
+    }
 
-            // Apply search filter to major rows.
-            if !query_norm.is_empty() {
-                if let Some(qm) = query_major.as_ref() {
-                    show_majors_set = [qm.clone()].into_iter().collect();
+    if (busy && show_majors.is_empty()) || (node_waiting_remote && show_majors.is_empty()) {
+        list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
+    } else if show_majors.is_empty() {
+        list_col = list_col.push(matches_empty_hint());
+    } else {
+        for major in show_majors.iter() {
+            let installed_versions = installed_by_major
+                .get(major)
+                .cloned()
+                .unwrap_or_default();
+            let current_major = state
+                .current
+                .as_ref()
+                .and_then(|v| parse_major_from_ver(&v.0));
+            let is_active = current_major.as_deref() == Some(major.as_str());
+
+            let highest_installed = installed_versions.first().cloned();
+
+            let label_base = if state.kind == RuntimeKind::Node {
+                if let Some(rv) = node_remote_latest_for_major(state, major) {
+                    format!("{} {}", kind_label(state.kind), rv.0)
                 } else {
-                    show_majors_set = show_majors_set
-                        .into_iter()
-                        .filter(|m| m.contains(query_norm))
-                        .collect();
+                    format!("{} {}", kind_label(state.kind), major)
                 }
-            }
-
-            let mut show_majors: Vec<String> = show_majors_set.into_iter().collect();
-            show_majors.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
-
-            if (busy || state.remote_major_loading) && show_majors.is_empty() {
-                list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
-            } else if show_majors.is_empty() {
-                list_col = list_col.push(matches_empty_hint());
             } else {
-                for major in show_majors.iter() {
-                    let expanded = state.expanded_exact_majors.contains(major);
-                    let current_major = state
-                        .current
-                        .as_ref()
-                        .and_then(|v| parse_major_from_ver(&v.0));
-                    let is_active = current_major.as_deref() == Some(major.as_str());
+                format!("{} {}", kind_label(state.kind), major)
+            };
 
-                    let expand_lbl = if expanded {
-                        envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
-                    } else {
-                        envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
-                    };
-                    let expand_btn: Element<'static, Message> = button(
-                        button_content_centered(
-                            row![
-                                Lucide::ChevronsUpDown.view(16.0, txt),
-                                text(expand_lbl),
-                            ]
-                            .spacing(sp.xs as f32)
-                            .align_y(Alignment::Center)
-                            .into(),
-                        ),
+            let left_text = if is_active {
+                format!(
+                    "{} {}",
+                    label_base,
+                    envr_core::i18n::tr_key(
+                        "gui.runtime.current_tag",
+                        "(当前)",
+                        "(current)",
                     )
-                    .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::ToggleExactMajor(
-                        major.clone(),
-                    ))))
-                    .style(button_style(tokens, ButtonVariant::Secondary))
-                    .into();
+                )
+            } else {
+                label_base
+            };
 
-                    let major_title = if is_active {
-                        format!(
-                            "{} {} {}",
-                            kind_label(state.kind),
-                            major,
-                            envr_core::i18n::tr_key(
-                                "gui.runtime.current_tag",
-                                "(当前)",
-                                "(current)",
-                            )
-                        )
-                    } else {
-                        format!("{} {}", kind_label(state.kind), major)
-                    };
-
-                    list_col = list_col.push(
-                        container(
-                            row![
-                                text(major_title).width(Length::Fill),
-                                expand_btn,
-                            ]
-                            .spacing(sp.sm as f32)
-                            .align_y(Alignment::Center)
-                            .height(Length::Fixed(tokens.list_row_height()))
-                        )
-                        .style(card_container_style(tokens, 1))
-                        
-                    );
-
-                    if expanded {
-                        // Children (leaf version rows).
-                            if state.remote_loading_majors.contains(major)
-                            && !state.remote_cache.contains_key(major)
-                        {
-                            list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
-                        } else {
-                            let installed_leaf = installed_by_major
-                                .get(major)
-                                .cloned()
-                                .unwrap_or_default();
-                            let installed_set = installed_leaf.iter().map(|v| v.0.clone()).collect::<HashSet<_>>();
-
-                            let mut remote_leaf = state
-                                .remote_cache
-                                .get(major)
-                                .cloned()
-                                .unwrap_or_default();
-                            remote_leaf.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
-                            remote_leaf.retain(|v| !installed_set.contains(&v.0));
-
-                            let mut leaf_versions: Vec<RuntimeVersion> = installed_leaf.into_iter().chain(remote_leaf).collect();
-
-                            if !query_norm.is_empty() && query_major.as_deref() != Some(major.as_str()) {
-                                leaf_versions = leaf_versions
-                                    .into_iter()
-                                    .filter(|v| v.0.contains(query_norm) || v.0.contains(query))
-                                    .collect();
-                            }
-
-                            if leaf_versions.is_empty() {
-                                list_col = list_col.push(
-                                    container(
-                                        text(envr_core::i18n::tr_key(
-                                            "gui.empty.hint.no_installed_versions",
-                                            "没有匹配的版本",
-                                            "No matching versions",
-                                        ))
-                                        .size(ty.micro)
-                                        .color(gui_theme::to_color(tokens.colors.text_muted))
-                                        .width(Length::Fill)
-                                        .align_x(Horizontal::Center)
-                                        .align_y(iced::alignment::Vertical::Center),
-                                    )
-                                    .width(Length::Fill),
-                                );
-                            } else {
-                                for v in leaf_versions.iter() {
-                                    let installed = state.installed.iter().any(|x| x.0 == v.0);
-                                    list_col = list_col.push(version_row(
-                                        state,
-                                        v,
-                                        installed,
-                                        tokens,
-                                        sp,
-                                        txt,
-                                        install_mode,
-                                        busy,
-                                        sp.sm as f32,
-                                    ));
-                                }
-                            }
-                        }
-                    }
-
+            let install_spec = || -> String {
+                if state.kind == RuntimeKind::Node {
+                    node_remote_latest_for_major(state, major)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| major.clone())
+                } else {
+                    major.clone()
                 }
-            }
+            };
+
+            let action_btn: Element<'static, Message> = if is_active || busy {
+                container(space()).into()
+            } else if let Some(highest) = highest_installed {
+                let use_btn = button(
+                    button_content_centered(
+                        row![
+                            Lucide::Package.view(14.0, txt),
+                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ),
+                )
+                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(
+                    highest.0.clone(),
+                ))))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, ButtonVariant::Secondary));
+
+                let uninstall_btn = button(
+                    button_content_centered(
+                        row![
+                            Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                            text(envr_core::i18n::tr_key(
+                                "gui.action.uninstall",
+                                "卸载",
+                                "Uninstall",
+                            )),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ),
+                )
+                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+                    highest.0.clone(),
+                ))))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, ButtonVariant::Danger));
+
+                container(
+                    row![use_btn, uninstall_btn]
+                        .spacing(sp.sm as f32)
+                        .align_y(Alignment::Center),
+                )
+                .into()
+            } else {
+                let spec = install_spec();
+                let install_btn = button(
+                    button_content_centered(
+                        row![
+                            Lucide::Download.view(14.0, txt),
+                            text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ),
+                )
+                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
+                    spec.clone(),
+                ))))
+                .style(button_style(tokens, ButtonVariant::Primary));
+
+                let install_and_use_btn = button(
+                    button_content_centered(
+                        row![
+                            Lucide::RefreshCw.view(14.0, txt),
+                            text(envr_core::i18n::tr_key(
+                                "gui.action.install_use",
+                                "安装并切换",
+                                "Install & Use"
+                            )),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ),
+                )
+                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(
+                    spec,
+                ))))
+                .style(button_style(tokens, ButtonVariant::Secondary));
+
+                container(
+                    row![install_btn, install_and_use_btn]
+                        .spacing(sp.sm as f32)
+                        .align_y(Alignment::Center),
+                )
+                .into()
+            };
+
+            list_col = list_col.push(
+                container(
+                    row![
+                        text(left_text).width(Length::Fill),
+                        action_btn,
+                    ]
+                    .spacing(sp.sm as f32)
+                    .align_y(Alignment::Center)
+                    .height(Length::Fixed(tokens.list_row_height())),
+                )
+                .style(card_container_style(tokens, 1)),
+            );
         }
     }
 
     let search_ph = envr_core::i18n::tr_key(
         "gui.runtime.search_placeholder",
-        "搜索版本（例如 24）",
-        "Search versions (e.g. 24)",
+        "筛选主版本（例如 24）",
+        "Filter by major (e.g. 24)",
     );
+
+    let direct_ph = envr_core::i18n::tr_key(
+        "gui.runtime.direct_install_placeholder",
+        "指定版本安装",
+        "Exact version to install",
+    );
+
+    let ctrl_h = tokens
+        .control_height_secondary
+        .max(tokens.min_click_target_px());
 
     let search: Element<'static, Message> = container(
         text_input(&search_ph, &state.install_input)
@@ -706,16 +484,82 @@ pub fn env_center_view(
             .style(text_input_style(tokens)),
     )
     .width(Length::Fill)
-    .height(Length::Fixed(
-        tokens
-            .control_height_secondary
-            .max(tokens.min_click_target_px()),
-    ))
+    .height(Length::Fixed(ctrl_h))
     .align_y(iced::alignment::Vertical::Center)
     .into();
 
+    let direct_input_el: Element<'static, Message> = container(
+        text_input(&direct_ph, &state.direct_install_input)
+            .on_input(|s| Message::EnvCenter(EnvCenterMsg::DirectInstallInput(s)))
+            .padding(sp.sm)
+            .width(Length::Fill)
+            .style(text_input_style(tokens)),
+    )
+    .width(Length::Fill)
+    .height(Length::Fixed(ctrl_h))
+    .align_y(iced::alignment::Vertical::Center)
+    .into();
+
+    let direct_spec_nonempty = !state.direct_install_input.trim().is_empty();
+    let direct_install_btn = button(
+        button_content_centered(
+            row![
+                Lucide::Download.view(14.0, txt),
+                text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
+            ]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ),
+    )
+    .on_press_maybe(
+        (direct_spec_nonempty && !busy)
+            .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
+    )
+    .height(Length::Fixed(ctrl_h))
+    .padding([sp.sm as f32, sp.md as f32])
+    .style(button_style(tokens, ButtonVariant::Primary));
+
+    let direct_install_use_btn = button(
+        button_content_centered(
+            row![
+                Lucide::RefreshCw.view(14.0, txt),
+                text(envr_core::i18n::tr_key(
+                    "gui.action.install_use",
+                    "安装并切换",
+                    "Install & Use",
+                )),
+            ]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ),
+    )
+    .on_press_maybe(
+        (direct_spec_nonempty && !busy)
+            .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstallAndUse)),
+    )
+    .height(Length::Fixed(ctrl_h))
+    .padding([sp.sm as f32, sp.md as f32])
+    .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let filter_row = row![
+        container(search)
+            .width(Length::FillPortion(3))
+            .height(Length::Fixed(ctrl_h)),
+        container(direct_input_el)
+            .width(Length::FillPortion(2))
+            .height(Length::Fixed(ctrl_h)),
+        direct_install_btn,
+        direct_install_use_btn,
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
     let muted = gui_theme::to_color(tokens.colors.text_muted);
-    let mut col = column![header, search].spacing(sp.sm as f32).width(Length::Fill);
+    let mut col = column![header, filter_row]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill);
     if busy {
         col = col.push(
             text(envr_core::i18n::tr_key(

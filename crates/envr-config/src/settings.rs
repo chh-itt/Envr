@@ -60,24 +60,11 @@ pub struct PathSettings {
     pub runtime_root: Option<String>,
 }
 
-/// How the GUI interprets the install text field on the Runtimes page (`Smart` vs `Exact`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeInstallMode {
-    #[default]
-    Smart,
-    Exact,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct BehaviorSettings {
     /// Remove staging/temp artifacts after a successful install (providers may adopt later).
     #[serde(default)]
     pub cleanup_downloads_after_install: bool,
-
-    /// Install field semantics on the Runtimes page (also persisted for CLI parity if adopted later).
-    #[serde(default)]
-    pub runtime_install_mode: RuntimeInstallMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -464,6 +451,15 @@ impl SettingsCache {
         // Keep mtime tracking consistent so `get()` can stay in-memory unless disk changed.
         self.last_modified = file_mtime(&self.path).ok();
     }
+
+    /// In-memory settings (last load / [`Self::set_cached`] / [`Self::reload`]).
+    ///
+    /// Prefer this over [`Self::get`] when syncing UI immediately after [`Self::set_cached`]:
+    /// `get()` may re-read disk if mtime differs slightly; a failed parse would replace the cache
+    /// with defaults and wipe fields like `paths.runtime_root`.
+    pub fn snapshot(&self) -> &Settings {
+        &self.cached
+    }
 }
 
 pub fn settings_path_from_platform(paths: &EnvrPaths) -> PathBuf {
@@ -600,7 +596,6 @@ mod tests {
             },
             behavior: BehaviorSettings {
                 cleanup_downloads_after_install: true,
-                runtime_install_mode: RuntimeInstallMode::default(),
             },
             appearance: AppearanceSettings {
                 font: FontSettings {
@@ -644,6 +639,20 @@ mod tests {
         settings.save_to(&path).expect("save");
         let loaded = Settings::load_from(&path).expect("load");
         assert_eq!(settings, loaded);
+    }
+
+    #[test]
+    fn windows_style_runtime_root_roundtrips() {
+        let tmp = TempDir::new().expect("tmp");
+        let path = tmp.path().join("settings.toml");
+        let mut s = Settings::default();
+        s.paths.runtime_root = Some(r"D:\environment\runtimes".to_string());
+        s.save_to(&path).expect("save");
+        let loaded = Settings::load_from(&path).expect("load");
+        assert_eq!(
+            loaded.paths.runtime_root.as_deref(),
+            Some(r"D:\environment\runtimes")
+        );
     }
 
     #[test]

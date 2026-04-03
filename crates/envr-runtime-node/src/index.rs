@@ -59,8 +59,7 @@ pub fn parse_node_index(json: &str) -> EnvrResult<Vec<NodeRelease>> {
 /// Parse `index.json` and extract remote version `major` keys without materializing
 /// all releases into memory at once.
 ///
-/// This is used by the GUI in Exact mode to render expandable `major` groups while
-/// keeping memory usage stable.
+/// Used when only major keys are needed while keeping memory usage stable.
 pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec<String>> {
     let mut majors: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -84,6 +83,43 @@ pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec
         nb.cmp(&na)
     });
     Ok(out)
+}
+
+/// One entry per major (e.g. `24` → newest `24.x.y` for this platform), sorted major descending.
+pub fn list_latest_patch_per_major(
+    releases: &[NodeRelease],
+    os: &str,
+    arch: &str,
+) -> EnvrResult<Vec<RuntimeVersion>> {
+    use std::collections::HashMap;
+
+    let mut best: HashMap<String, (SemVerKey, String)> = HashMap::new();
+    for r in releases {
+        if !release_has_platform(&r.files, os, arch) {
+            continue;
+        }
+        let key = semver_key(&r.version)?;
+        let v = normalize_node_version(&r.version);
+        let major = key.0.to_string();
+        best
+            .entry(major)
+            .and_modify(|e| {
+                if key > e.0 {
+                    *e = (key, v.clone());
+                }
+            })
+            .or_insert((key, v));
+    }
+
+    let mut pairs: Vec<(u64, String)> = best
+        .into_iter()
+        .filter_map(|(m, (_k, ver))| m.parse::<u64>().ok().map(|n| (n, ver)))
+        .collect();
+    pairs.sort_by(|a, b| b.0.cmp(&a.0));
+    Ok(pairs
+        .into_iter()
+        .map(|(_, v)| RuntimeVersion(v))
+        .collect())
 }
 
 pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
@@ -423,6 +459,14 @@ mod tests {
         assert!(release_has_platform(&rel[0].files, "linux", "x86_64"));
         assert!(release_has_platform(&rel[0].files, "macos", "x86_64"));
         assert!(!release_has_platform(&rel[3].files, "macos", "x86_64"));
+    }
+
+    #[test]
+    fn list_latest_patch_per_major_linux() {
+        let rel = parsed();
+        let rows = list_latest_patch_per_major(&rel, "linux", "x86_64").expect("majors");
+        let majors: Vec<&str> = rows.iter().map(|v| v.0.as_str()).collect();
+        assert_eq!(majors, vec!["30.0.0", "24.2.0", "22.10.0"]);
     }
 
     #[test]

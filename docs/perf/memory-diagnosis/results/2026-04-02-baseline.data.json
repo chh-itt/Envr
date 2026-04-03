@@ -1,0 +1,63 @@
+﻿{
+    "meta":  {
+                 "repo_root":  "D:\\project\\rust\\envr-workspace",
+                 "metric_scope":  "process_tree_private_bytes",
+                 "sample_interval_ms":  1000,
+                 "gui_exe":  "experiments\\dioxus-poc\\target\\debug\\dioxus-poc-wgpu.exe",
+                 "repeat":  1,
+                 "out_date":  "2026-04-02"
+             },
+    "runs":  [
+                 {
+                     "run_index":  1,
+                     "pid":  33932,
+                     "phases":  [
+                                    {
+                                        "phase":  "S1_cold_start",
+                                        "stats":  {
+                                                      "start_mb":  422.71484375,
+                                                      "end_mb":  427.9609375,
+                                                      "max_delta_mb":  5.49609375
+                                                  },
+                                        "samples_count":  50
+                                    },
+                                    {
+                                        "phase":  "S2_navigation_toggle",
+                                        "stats":  {
+                                                      "start_mb":  427.9609375,
+                                                      "end_mb":  427.51171875,
+                                                      "max_delta_mb":  0
+                                                  },
+                                        "samples_count":  50
+                                    },
+                                    {
+                                        "phase":  "S3_long_list_scroll",
+                                        "stats":  {
+                                                      "start_mb":  427.51171875,
+                                                      "end_mb":  427.28515625,
+                                                      "max_delta_mb":  0
+                                                  },
+                                        "samples_count":  75
+                                    },
+                                    {
+                                        "phase":  "S4_download_panel",
+                                        "stats":  {
+                                                      "start_mb":  427.28515625,
+                                                      "end_mb":  427.46484375,
+                                                      "max_delta_mb":  0.1796875
+                                                  },
+                                        "samples_count":  150
+                                    },
+                                    {
+                                        "phase":  "S5_resource_release",
+                                        "stats":  {
+                                                      "start_mb":  427.46484375,
+                                                      "end_mb":  0,
+                                                      "max_delta_mb":  0
+                                                  },
+                                        "samples_count":  51
+                                    }
+                                ]
+                 }
+             ]
+}

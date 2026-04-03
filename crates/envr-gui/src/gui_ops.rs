@@ -1,6 +1,6 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
-use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeKind, RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrError;
 
 use crate::app::Message;
@@ -34,9 +34,26 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     })
 }
 
-pub fn fetch_remote_prefix(kind: RuntimeKind, prefix: String) -> Task<Message> {
+pub fn load_remote_latest_disk_snapshot(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
-    let prefix_for_req = prefix.clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Vec<RuntimeVersion> {
+                let Ok(svc) = open_runtime_service() else {
+                    return Vec::new();
+                };
+                svc.try_load_remote_latest_per_major_from_disk(kind)
+            })
+            .await;
+
+        Message::EnvCenter(EnvCenterMsg::RemoteLatestDiskSnapshot(
+            res.unwrap_or_default(),
+        ))
+    })
+}
+
+pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
+    let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<Vec<RuntimeVersion>, String> {
@@ -44,42 +61,43 @@ pub fn fetch_remote_prefix(kind: RuntimeKind, prefix: String) -> Task<Message> {
                     return Ok(Vec::new());
                 }
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                svc.list_remote(
-                    kind,
-                    &RemoteFilter {
-                        prefix: Some(prefix_for_req),
-                    },
-                )
-                .map_err(|e| e.to_string())
+                svc.list_remote_latest_per_major(kind)
+                    .map_err(|e: EnvrError| e.to_string())
             })
             .await;
 
         let msg = match res {
-            Ok(Ok(list)) => EnvCenterMsg::RemoteFetchedPrefix(Ok((prefix, list))),
-            Ok(Err(e)) => EnvCenterMsg::RemoteFetchedPrefix(Err(e)),
-            Err(e) => EnvCenterMsg::RemoteFetchedPrefix(Err(e.to_string())),
+            Ok(Ok(list)) => EnvCenterMsg::RemoteLatestRefreshed(Ok(list)),
+            Ok(Err(e)) => EnvCenterMsg::RemoteLatestRefreshed(Err(e)),
+            Err(e) => EnvCenterMsg::RemoteLatestRefreshed(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
     })
 }
 
-pub fn fetch_remote_major_keys(kind: RuntimeKind) -> Task<Message> {
+/// Like [`install_version`], but runs [`RuntimeService::resolve`] first so invalid specs fail before download.
+pub fn install_version_with_resolve_precheck(kind: RuntimeKind, spec: String) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Result<Vec<String>, String> {
-                if kind != RuntimeKind::Node {
-                    return Ok(Vec::new());
-                }
+            .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                svc.list_remote_majors(kind).map_err(|e| e.to_string())
+                let vs = VersionSpec(spec.clone());
+                svc.resolve(kind, &vs)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                svc.install(
+                    kind,
+                    &InstallRequest {
+                        spec: VersionSpec(spec),
+                    },
+                )
+                .map_err(|e: EnvrError| e.to_string())
             })
             .await;
-
         let msg = match res {
-            Ok(Ok(list)) => EnvCenterMsg::RemoteFetchedMajorKeys(Ok(list)),
-            Ok(Err(e)) => EnvCenterMsg::RemoteFetchedMajorKeys(Err(e)),
-            Err(e) => EnvCenterMsg::RemoteFetchedMajorKeys(Err(e.to_string())),
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
+            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
     })
@@ -98,6 +116,38 @@ pub fn install_version(kind: RuntimeKind, spec: String) -> Task<Message> {
                     },
                 )
                 .map_err(|e: EnvrError| e.to_string())
+            })
+            .await;
+        let msg = match res {
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
+            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+/// Like [`install_then_use`], but resolves the spec before install (fail fast on bad input).
+pub fn install_then_use_with_resolve_precheck(kind: RuntimeKind, spec: String) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<RuntimeVersion, String> {
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                let vs = VersionSpec(spec.clone());
+                svc.resolve(kind, &vs)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                let installed = svc
+                    .install(
+                        kind,
+                        &InstallRequest {
+                            spec: VersionSpec(spec),
+                        },
+                    )
+                    .map_err(|e: EnvrError| e.to_string())?;
+                svc.set_current(kind, &installed)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                Ok(installed)
             })
             .await;
         let msg = match res {

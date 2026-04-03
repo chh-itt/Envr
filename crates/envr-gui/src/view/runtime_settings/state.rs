@@ -29,7 +29,7 @@ impl RuntimeSettingsState {
     }
 
     pub fn sync_from_cache(&mut self) -> EnvrResult<()> {
-        let st = self.cache.get()?.clone();
+        let st = self.cache.snapshot().clone();
         self.draft = st.clone();
         self.go_goproxy_draft = st.runtime.go.goproxy.clone().unwrap_or_default();
         self.bun_global_bin_dir_draft = st.runtime.bun.global_bin_dir.clone().unwrap_or_default();
