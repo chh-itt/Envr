@@ -714,7 +714,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             match res {
                 Ok(st) => {
                     state.settings.cache.set_cached(st.clone());
-                    state.runtime_settings.cache.set_cached(st);
+                    state.runtime_settings.cache.set_cached(st.clone());
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
                             "{}: {e}",
@@ -731,6 +731,19 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             "已保存到 settings.toml。",
                             "Saved.",
                         ));
+                    }
+                    let refresh_node_remote = matches!(state.route(), Route::Runtime)
+                        && state.env_center.kind == envr_domain::runtime::RuntimeKind::Node;
+                    if refresh_node_remote {
+                        state.env_center.node_remote_refreshing = true;
+                        return Task::batch([
+                            gui_ops::load_remote_latest_disk_snapshot(
+                                envr_domain::runtime::RuntimeKind::Node,
+                            ),
+                            gui_ops::refresh_remote_latest_per_major(
+                                envr_domain::runtime::RuntimeKind::Node,
+                            ),
+                        ]);
                     }
                 }
                 Err(e) => {
@@ -763,6 +776,51 @@ fn persist_settings_draft_task(state: &AppState) -> Task<Message> {
         },
         |res| Message::Settings(SettingsMsg::DiskSaved(res)),
     )
+}
+
+fn apply_npm_registry_cli(url: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    let npm = "npm.cmd";
+    #[cfg(not(windows))]
+    let npm = "npm";
+    let status = std::process::Command::new(npm)
+        .args(["config", "set", "registry", url])
+        .status()
+        .map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("npm config set registry failed: {status}"))
+    }
+}
+
+/// Save a full [`Settings`] snapshot (e.g. runtime.node edits from the env center) and mirror [`SettingsMsg::DiskSaved`].
+fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
+    let path = settings_path();
+    Task::perform(
+        async move {
+            settings.validate().map_err(|e| e.to_string())?;
+            settings.save_to(&path).map_err(|e| e.to_string())?;
+            if let Some(url) = envr_config::settings::npm_registry_url_to_apply(&settings) {
+                if let Err(e) = apply_npm_registry_cli(url) {
+                    tracing::warn!(%e, "npm config set registry skipped after settings save");
+                }
+            }
+            Ok(settings)
+        },
+        |res| Message::Settings(SettingsMsg::DiskSaved(res)),
+    )
+}
+
+fn node_path_proxy_blocks_use(state: &AppState) -> bool {
+    state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+        && !state
+            .settings
+            .cache
+            .snapshot()
+            .runtime
+            .node
+            .path_proxy_enabled
 }
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
@@ -871,8 +929,9 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
                 match &result {
                     Ok(_) => j.state = JobState::Done,
                     Err(e) => {
-                        if e.contains("cancelled") {
+                        if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
+                            j.last_error = None;
                         } else {
                             j.state = JobState::Failed;
                             j.last_error = Some(e.clone());
@@ -1040,6 +1099,56 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
     download_runner::start_http_job(id, url, dest, cancel, downloaded, total)
 }
 
+fn enqueue_runtime_install_job(
+    state: &mut AppState,
+    label: String,
+) -> (u64, Arc<AtomicU64>, Arc<AtomicU64>, CancelToken) {
+    let id = state.downloads.next_id;
+    state.downloads.next_id += 1;
+    let downloaded = Arc::new(AtomicU64::new(0));
+    let total = Arc::new(AtomicU64::new(0));
+    let cancel = CancelToken::new();
+    // Empty `url` marks a local install task (see downloads panel / `format_job_state_line`).
+    state.downloads.jobs.push(DownloadJob {
+        id,
+        label,
+        url: String::new(),
+        state: JobState::Running,
+        downloaded: downloaded.clone(),
+        total: total.clone(),
+        cancel: cancel.clone(),
+        last_error: None,
+        tick_prev_bytes: 0,
+        tick_prev_at: None,
+        speed_bps: 0.0,
+    });
+    let tokens = state.tokens();
+    if !state.downloads.visible {
+        state.downloads.start_show_anim(tokens);
+    }
+    (id, downloaded, total, cancel)
+}
+
+fn looks_like_user_cancelled(err: &str) -> bool {
+    let l = err.to_ascii_lowercase();
+    l.contains("cancelled")
+        || l.contains("canceled")
+        || l.contains("download cancel")
+}
+
+fn runtime_install_task_label(
+    kind: envr_domain::runtime::RuntimeKind,
+    spec: &str,
+    install_and_use: bool,
+) -> String {
+    let k = crate::view::env_center::kind_label_zh(kind);
+    if install_and_use {
+        format!("正在安装并切换为 {k} {spec}")
+    } else {
+        format!("正在安装 {k} {spec}")
+    }
+}
+
 fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
     let kind = state.env_center.kind;
     if kind == envr_domain::runtime::RuntimeKind::Node {
@@ -1067,8 +1176,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.node_remote_refreshing = false;
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
-            state.env_center.expanded = true;
-            state.env_center.busy = false;
+            state.env_center.node_settings_expanded = false;
             if k == envr_domain::runtime::RuntimeKind::Node {
                 state.env_center.node_remote_refreshing = true;
                 Task::batch([
@@ -1121,51 +1229,118 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::SubmitDirectInstall => {
+            if state.env_center.busy {
+                return Task::none();
+            }
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
                 return Task::none();
             }
             state.env_center.busy = true;
             state.error = None;
-            gui_ops::install_version_with_resolve_precheck(state.env_center.kind, spec)
+            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+                state,
+                runtime_install_task_label(state.env_center.kind, &spec, false),
+            );
+            state.env_center.op_job_id = Some(id);
+            gui_ops::install_version_with_resolve_precheck(
+                state.env_center.kind,
+                spec,
+                downloaded,
+                total,
+                cancel,
+            )
         }
         EnvCenterMsg::SubmitDirectInstallAndUse => {
+            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+                return Task::none();
+            }
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
                 return Task::none();
             }
             state.env_center.busy = true;
             state.error = None;
-            gui_ops::install_then_use_with_resolve_precheck(state.env_center.kind, spec)
+            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+                state,
+                runtime_install_task_label(state.env_center.kind, &spec, true),
+            );
+            state.env_center.op_job_id = Some(id);
+            gui_ops::install_then_use_with_resolve_precheck(
+                state.env_center.kind,
+                spec,
+                downloaded,
+                total,
+                cancel,
+            )
         }
         EnvCenterMsg::SubmitInstall(spec) => {
+            if state.env_center.busy {
+                return Task::none();
+            }
             if spec.trim().is_empty() {
                 return Task::none();
             }
             state.env_center.busy = true;
             state.error = None;
-            gui_ops::install_version(state.env_center.kind, spec)
+            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+                state,
+                runtime_install_task_label(state.env_center.kind, &spec, false),
+            );
+            state.env_center.op_job_id = Some(id);
+            gui_ops::install_version(state.env_center.kind, spec, downloaded, total, cancel)
         }
         EnvCenterMsg::SubmitInstallAndUse(spec) => {
+            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+                return Task::none();
+            }
             if spec.trim().is_empty() {
                 return Task::none();
             }
             state.env_center.busy = true;
             state.error = None;
-            gui_ops::install_then_use(state.env_center.kind, spec)
+            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+                state,
+                runtime_install_task_label(state.env_center.kind, &spec, true),
+            );
+            state.env_center.op_job_id = Some(id);
+            gui_ops::install_then_use(state.env_center.kind, spec, downloaded, total, cancel)
         }
         EnvCenterMsg::InstallFinished(res) => {
             state.env_center.busy = false;
+            if let Some(id) = state.env_center.op_job_id.take()
+                && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
+            {
+                match &res {
+                    Ok(_) => j.state = JobState::Done,
+                    Err(e) => {
+                        if looks_like_user_cancelled(e) {
+                            j.state = JobState::Cancelled;
+                            j.last_error = None;
+                        } else {
+                            j.state = JobState::Failed;
+                            j.last_error = Some(e.clone());
+                        }
+                    }
+                }
+            }
             match &res {
                 Ok(v) => {
                     tracing::info!(version = %v.0, "gui install ok");
                     // `install_input` is now the search keyword; keep it for better feedback.
                 }
-                Err(e) => state.error = Some(e.clone()),
+                Err(e) => {
+                    if !looks_like_user_cancelled(e) {
+                        state.error = Some(e.clone());
+                    }
+                }
             }
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
         EnvCenterMsg::SubmitUse(v) => {
+            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+                return Task::none();
+            }
             state.env_center.busy = true;
             state.error = None;
             gui_ops::use_version(state.env_center.kind, v)
@@ -1178,6 +1353,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
         EnvCenterMsg::SubmitUninstall(v) => {
+            if state.env_center.busy {
+                return Task::none();
+            }
             state.env_center.busy = true;
             state.error = None;
             gui_ops::uninstall_version(state.env_center.kind, v)
@@ -1189,9 +1367,36 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
-        EnvCenterMsg::ToggleExpanded => {
-            state.env_center.expanded = !state.env_center.expanded;
+        EnvCenterMsg::ToggleNodeSettings => {
+            state.env_center.node_settings_expanded = !state.env_center.node_settings_expanded;
             Task::none()
+        }
+        EnvCenterMsg::SetNodeDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.node.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetNpmRegistryMode(mode) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.node.npm_registry_mode = mode;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetNodePathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.node.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
         }
     }
 }

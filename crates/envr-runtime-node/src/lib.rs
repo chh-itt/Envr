@@ -12,6 +12,7 @@ pub use manager::{
     read_current,
 };
 
+use envr_config::settings;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
@@ -23,7 +24,8 @@ use std::path::{Path, PathBuf};
 
 /// Node.js runtime provider (remote index, install layout under envr data root).
 pub struct NodeRuntimeProvider {
-    index_json_url: String,
+    /// When set, bypasses `settings.toml` [`settings::node_index_json_url`] (tests / advanced).
+    index_json_override: Option<String>,
     /// When `None`, uses [`current_platform_paths`].
     runtime_root_override: Option<std::path::PathBuf>,
 }
@@ -31,14 +33,14 @@ pub struct NodeRuntimeProvider {
 impl NodeRuntimeProvider {
     pub fn new() -> Self {
         Self {
-            index_json_url: DEFAULT_NODE_INDEX_JSON_URL.to_string(),
+            index_json_override: None,
             runtime_root_override: None,
         }
     }
 
     pub fn with_index_json_url(url: impl Into<String>) -> Self {
         Self {
-            index_json_url: url.into(),
+            index_json_override: Some(url.into()),
             runtime_root_override: None,
         }
     }
@@ -55,8 +57,18 @@ impl NodeRuntimeProvider {
         })
     }
 
+    fn resolved_index_json_url(&self) -> EnvrResult<String> {
+        if let Some(u) = &self.index_json_override {
+            return Ok(u.clone());
+        }
+        let platform = current_platform_paths()?;
+        let path = settings::settings_path_from_platform(&platform);
+        let s = settings::Settings::load_or_default_from(&path)?;
+        Ok(settings::node_index_json_url(&s))
+    }
+
     fn manager(&self) -> EnvrResult<NodeManager> {
-        NodeManager::try_new(self.runtime_root()?, self.index_json_url.clone())
+        NodeManager::try_new(self.runtime_root()?, self.resolved_index_json_url()?)
     }
 
     /// Seconds to reuse on-disk `index.json`, `remote_majors_*.json`, and
@@ -82,9 +94,10 @@ impl NodeRuntimeProvider {
         h
     }
 
-    fn index_body_cache_path(&self, cache_dir: &Path) -> PathBuf {
-        let h = Self::fnv1a64_url_key(&self.index_json_url);
-        cache_dir.join(format!("index_body_{h:016x}.json"))
+    fn index_body_cache_path(&self, cache_dir: &Path) -> EnvrResult<PathBuf> {
+        let url = self.resolved_index_json_url()?;
+        let h = Self::fnv1a64_url_key(&url);
+        Ok(cache_dir.join(format!("index_body_{h:016x}.json")))
     }
 
     fn file_is_within_ttl(path: &Path, ttl_secs: u64) -> bool {
@@ -107,7 +120,7 @@ impl NodeRuntimeProvider {
     fn load_index_body_cached(&self) -> EnvrResult<String> {
         let paths = NodePaths::new(self.runtime_root()?);
         let cache_dir = paths.cache_dir();
-        let index_cache = self.index_body_cache_path(&cache_dir);
+        let index_cache = self.index_body_cache_path(&cache_dir)?;
         let ttl_secs = Self::remote_cache_ttl_secs();
 
         if Self::file_is_within_ttl(&index_cache, ttl_secs) {
@@ -119,8 +132,9 @@ impl NodeRuntimeProvider {
             }
         }
 
+        let url = self.resolved_index_json_url()?;
         let client = index::blocking_http_client()?;
-        let body = index::fetch_node_index(&client, &self.index_json_url)?;
+        let body = index::fetch_node_index(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(&cache_dir)?;
             std::fs::write(&index_cache, &body)?;
@@ -320,7 +334,7 @@ impl RuntimeProvider for NodeRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(&request.spec)
+        self.manager()?.install_from_spec(request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

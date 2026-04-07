@@ -15,6 +15,7 @@ pub enum JobState {
 pub struct DownloadJob {
     pub id: u64,
     pub label: String,
+    /// HTTP(S) source, or empty for GUI runtime **install** tasks (no URL line; see panel UI).
     pub url: String,
     pub state: JobState,
     pub downloaded: Arc<AtomicU64>,
@@ -27,7 +28,36 @@ pub struct DownloadJob {
 }
 
 impl DownloadJob {
+    fn has_no_transfer_stats(&self) -> bool {
+        self.downloaded_display() == 0 && self.total_display() == 0
+    }
+
+    /// Runtime install row: no URL line in the panel (bytes still update via atomics).
+    pub fn is_runtime_install_row(&self) -> bool {
+        self.url.is_empty()
+    }
+
+    /// Resolve / connect / wait for first byte — before `Content-Length` or any chunk.
+    pub fn is_install_warmup_phase(&self) -> bool {
+        self.state == JobState::Running && self.is_runtime_install_row() && self.has_no_transfer_stats()
+    }
+
+    /// Done install that never reported transfer (edge case); show a short status line.
+    pub fn is_local_install_done_minimal(&self) -> bool {
+        self.state == JobState::Done && self.is_runtime_install_row() && self.has_no_transfer_stats()
+    }
+
     pub fn progress_ratio(&self) -> f32 {
+        if self.is_install_warmup_phase() {
+            return 0.0;
+        }
+        if self.is_runtime_install_row() && self.has_no_transfer_stats() {
+            return match self.state {
+                JobState::Done => 100.0,
+                JobState::Failed | JobState::Cancelled => 0.0,
+                JobState::Running => 0.0,
+            };
+        }
         let d = self.downloaded.load(Ordering::Relaxed);
         let t = self.total.load(Ordering::Relaxed);
         if t == 0 {

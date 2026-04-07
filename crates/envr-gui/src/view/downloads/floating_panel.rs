@@ -161,17 +161,30 @@ pub fn floating_download_panel(
                         .style(button_style(tokens, ButtonVariant::Secondary)),
                     );
                 }
+                let title_line = if j.url.is_empty() {
+                    j.label.clone()
+                } else {
+                    format!("{} — {}", j.label, j.url)
+                };
+                let bar = container(progress_bar(0.0..=100.0, ratio))
+                    .width(Length::Fill)
+                    .height(Length::Fixed(8.0));
                 list = list.push(
                     column![
-                        text(format!("{} — {}", j.label, j.url)).size(ty.micro),
-                        progress_bar(0.0..=100.0, ratio),
-                        text(line).size(ty.tiny),
+                        text(title_line).size(ty.micro).width(Length::Fill),
+                        bar,
+                        text(line).size(ty.tiny).width(Length::Fill),
                         actions,
                     ]
-                    .spacing(sp.xs as f32),
+                    .spacing(sp.xs as f32)
+                    .width(Length::Fill),
                 );
             }
-            body = body.push(scrollable(list).height(Length::Fixed(220.0)));
+            body = body.push(
+                scrollable(list)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(220.0)),
+            );
         }
     }
 

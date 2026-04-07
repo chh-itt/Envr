@@ -20,6 +20,17 @@ pub enum DownloadMsg {
 pub fn format_job_state_line(job: &DownloadJob) -> String {
     match job.state {
         JobState::Running => {
+            if job.is_install_warmup_phase() {
+                return format!(
+                    "{} · {}",
+                    envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
+                    envr_core::i18n::tr_key(
+                        "gui.downloads.install_preparing",
+                        "正在准备下载…",
+                        "Preparing download…",
+                    ),
+                );
+            }
             let spd = format_speed(job.speed_bps);
             let d = job.downloaded_display();
             let t = job.total_display();
@@ -32,23 +43,30 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
                     )
                 })
                 .unwrap_or_default();
-            let bytes = envr_core::i18n::tr_key("gui.downloads.bytes", "字节", "bytes");
             let sz = if t > 0 {
-                format!("{d} / {t} {bytes}")
+                format!(
+                    "{} / {}",
+                    format_transfer_size(d),
+                    format_transfer_size(t)
+                )
             } else {
-                format!("{d} {bytes}")
+                format_transfer_size(d)
             };
             format!(
                 "{} · {sz} · {spd}{eta}",
                 envr_core::i18n::tr_key("gui.job.running", "进行中", "Running")
             )
         }
-        JobState::Done => format!(
-            "{} · {} {}",
-            envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
-            job.downloaded_display(),
-            envr_core::i18n::tr_key("gui.downloads.bytes", "字节", "bytes")
-        ),
+        JobState::Done => {
+            if job.is_local_install_done_minimal() {
+                return envr_core::i18n::tr_key("gui.job.done", "完成", "Done").to_string();
+            }
+            format!(
+                "{} · {}",
+                envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
+                format_transfer_size(job.downloaded_display()),
+            )
+        },
         JobState::Failed => {
             let detail = job.last_error.clone().unwrap_or_else(|| {
                 envr_core::i18n::tr_key("gui.downloads.unknown_error", "未知错误", "unknown error")
@@ -69,5 +87,22 @@ fn format_speed(bps: f64) -> String {
         format!("{:.1} KiB/s", bps / 1024.0)
     } else {
         format!("{:.0} B/s", bps)
+    }
+}
+
+/// Human-readable size for progress text (binary units, consistent with [`format_speed`]).
+fn format_transfer_size(n: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = 1024.0 * 1024.0;
+    let nf = n as f64;
+    if nf >= MIB {
+        format!("{:.1} MiB", nf / MIB)
+    } else if nf >= KIB {
+        format!("{:.1} KiB", nf / KIB)
+    } else {
+        format!(
+            "{n} {}",
+            envr_core::i18n::tr_key("gui.downloads.bytes", "字节", "bytes")
+        )
     }
 }

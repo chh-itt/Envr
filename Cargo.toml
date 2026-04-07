@@ -17,7 +17,8 @@ toml = { version = "0.8", default-features = false, features = ["parse", "displa
 # async/runtime/network
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "fs", "process", "time", "sync"] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "gzip", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "gzip", "json", "system-proxy"] }
+sys-locale = { version = "0.3.2", default-features = false }
 
 # cli/error/support
 thiserror = { version = "2", default-features = false }

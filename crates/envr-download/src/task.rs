@@ -64,6 +64,11 @@ impl CancelToken {
         }
     }
 
+    /// Same flag as [`Self::cancel`] / [`Self::is_cancelled`], for code paths that only accept an `Arc<AtomicBool>`.
+    pub fn shared_atomic(&self) -> Arc<AtomicBool> {
+        self.cancelled.clone()
+    }
+
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
     }

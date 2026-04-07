@@ -217,8 +217,64 @@ impl Default for DownloadsPanelSettings {
     }
 }
 
+/// Node.js distribution index (`index.json`) selection for installs / remote lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeDownloadSource {
+    /// Prefer npmmirror when UI locale suggests China, else nodejs.org.
+    #[default]
+    Auto,
+    /// npmmirror.com mirror (China).
+    Domestic,
+    /// nodejs.org official.
+    Official,
+}
+
+/// How GUI manages `npm config registry` (Restore leaves user `.npmrc` untouched).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NpmRegistryMode {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+    /// Do not run `npm config set`; user may use a custom registry.
+    Restore,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeRuntimeSettings {
+    #[serde(default)]
+    pub download_source: NodeDownloadSource,
+    #[serde(default)]
+    pub npm_registry_mode: NpmRegistryMode,
+    /// When false, Node/npm/npx shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::node_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for NodeRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: NodeDownloadSource::default(),
+            npm_registry_mode: NpmRegistryMode::default(),
+            path_proxy_enabled: defaults::node_path_proxy_enabled(),
+        }
+    }
+}
+
+/// Official Node `index.json` URL.
+pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
+/// Common China mirror (npmmirror) `index.json`.
+pub const NODE_INDEX_JSON_DOMESTIC: &str = "https://npmmirror.com/mirrors/node/index.json";
+
+pub const NPM_REGISTRY_OFFICIAL: &str = "https://registry.npmjs.org/";
+pub const NPM_REGISTRY_DOMESTIC: &str = "https://registry.npmmirror.com/";
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RuntimeSettings {
+    #[serde(default)]
+    pub node: NodeRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -489,6 +545,94 @@ pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
     Ok(platform.runtime_root.clone())
 }
 
+/// True when the primary language subtag of a BCP-47–style tag is `zh` (e.g. `zh-CN`, `zh_TW.UTF-8`).
+fn bcp47_primary_language_is_zh(tag: &str) -> bool {
+    let t = tag.trim();
+    let first = t
+        .split(|c| c == '-' || c == '_')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    first == "zh"
+}
+
+/// POSIX `LANG` / `LC_*` hints (Unix shells, CI, WSL); secondary to [`sys_locale::get_locale`].
+fn env_locale_vars_suggest_chinese() -> bool {
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        if let Ok(v) = std::env::var(key) {
+            let l = v.to_ascii_lowercase();
+            if l.contains("zh_cn")
+                || l.contains("zh-cn")
+                || l.contains("zh_hans")
+                || l.starts_with("zh.")
+                || bcp47_primary_language_is_zh(&v)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Heuristic: OS or environment suggests a Chinese locale (used when [`LocaleMode::FollowSystem`]).
+///
+/// Order: [`sys_locale::get_locale`] (cross-platform OS API), then `LC_*` / `LANG` / `LANGUAGE`.
+pub fn system_locale_suggests_chinese() -> bool {
+    if let Some(tag) = sys_locale::get_locale() {
+        if bcp47_primary_language_is_zh(&tag) {
+            return true;
+        }
+    }
+    env_locale_vars_suggest_chinese()
+}
+
+pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
+    match settings.i18n.locale {
+        LocaleMode::ZhCn => true,
+        LocaleMode::EnUs => false,
+        LocaleMode::FollowSystem => system_locale_suggests_chinese(),
+    }
+}
+
+pub fn node_index_json_url(settings: &Settings) -> String {
+    match settings.runtime.node.download_source {
+        NodeDownloadSource::Official => NODE_INDEX_JSON_OFFICIAL.to_string(),
+        NodeDownloadSource::Domestic => NODE_INDEX_JSON_DOMESTIC.to_string(),
+        NodeDownloadSource::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                NODE_INDEX_JSON_DOMESTIC.to_string()
+            } else {
+                NODE_INDEX_JSON_OFFICIAL.to_string()
+            }
+        }
+    }
+}
+
+/// Resolved registry URL to pass to `npm config set registry`, or `None` for [`NpmRegistryMode::Restore`].
+pub fn npm_registry_url_to_apply(settings: &Settings) -> Option<&'static str> {
+    match settings.runtime.node.npm_registry_mode {
+        NpmRegistryMode::Restore => None,
+        NpmRegistryMode::Official => Some(NPM_REGISTRY_OFFICIAL),
+        NpmRegistryMode::Domestic => Some(NPM_REGISTRY_DOMESTIC),
+        NpmRegistryMode::Auto => Some(if prefer_china_mirror_locale(settings) {
+            NPM_REGISTRY_DOMESTIC
+        } else {
+            NPM_REGISTRY_OFFICIAL
+        }),
+    }
+}
+
+/// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn node_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.node.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
     let meta = fs::metadata(path).map_err(EnvrError::from)?;
     meta.modified()
@@ -567,6 +711,10 @@ mod defaults {
     pub fn downloads_panel_y() -> i32 {
         12
     }
+
+    pub fn node_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -627,6 +775,7 @@ mod tests {
                 locale: LocaleMode::EnUs,
             },
             runtime: RuntimeSettings {
+                node: NodeRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                 },
@@ -700,6 +849,14 @@ retry_max = -1
 
         let loaded = Settings::load_or_default_from(&path).expect("load_or_default");
         assert_eq!(loaded, Settings::default());
+    }
+
+    #[test]
+    fn bcp47_primary_language_zh() {
+        assert!(super::bcp47_primary_language_is_zh("zh-CN"));
+        assert!(super::bcp47_primary_language_is_zh("zh_TW.UTF-8"));
+        assert!(!super::bcp47_primary_language_is_zh("en-US"));
+        assert!(!super::bcp47_primary_language_is_zh(""));
     }
 
     #[test]

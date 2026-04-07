@@ -1,4 +1,6 @@
 use envr_error::{EnvrError, EnvrResult};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RuntimeKind {
@@ -18,9 +20,14 @@ pub struct VersionSpec(pub String);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeVersion(pub String);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct InstallRequest {
     pub spec: VersionSpec,
+    /// Optional progress counters for GUI observability.
+    pub progress_downloaded: Option<Arc<AtomicU64>>,
+    pub progress_total: Option<Arc<AtomicU64>>,
+    /// When set, installers should poll and abort long work (e.g. artifact download) cooperatively.
+    pub cancel: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

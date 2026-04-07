@@ -27,6 +27,9 @@ pub fn run(
 
     let request = InstallRequest {
         spec: VersionSpec(ver),
+        progress_downloaded: None,
+        progress_total: None,
+        cancel: None,
     };
 
     match service.install(kind, &request) {

@@ -304,7 +304,12 @@ fn recent_jobs_card(
                     envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
                 }
             };
-            body = body.push(text(format!("{} · {} · {}", j.label, st, j.url)).size(ty.micro));
+            let line = if j.url.is_empty() {
+                format!("{} · {}", j.label, st)
+            } else {
+                format!("{} · {} · {}", j.label, st, j.url)
+            };
+            body = body.push(text(line).size(ty.micro));
         }
     }
     card(

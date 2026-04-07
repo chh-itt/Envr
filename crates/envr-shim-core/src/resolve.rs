@@ -1,5 +1,5 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
-use envr_config::settings::resolve_runtime_root;
+use envr_config::settings::{node_path_proxy_enabled_from_disk, resolve_runtime_root};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
@@ -387,8 +387,81 @@ pub fn parse_shim_invocation(args: &[OsString]) -> EnvrResult<(CoreCommand, Vec<
     )))
 }
 
+fn is_likely_envr_shims_dir(dir: &Path) -> bool {
+    let name = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if name != "shims" {
+        return false;
+    }
+    dir.parent()
+        .and_then(|p| p.to_str())
+        .is_some_and(|s| s.to_ascii_lowercase().contains("envr"))
+}
+
+fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
+    let path_os = std::env::var_os("PATH").ok_or_else(|| {
+        EnvrError::Runtime("PATH is not set; cannot bypass envr Node shims".into())
+    })?;
+    #[cfg(windows)]
+    let suffixes: &[&str] = &[".cmd", ".exe", ".bat", ""];
+    #[cfg(not(windows))]
+    let suffixes: &[&str] = &[""];
+
+    for dir in std::env::split_paths(&path_os) {
+        if !dir.is_dir() {
+            continue;
+        }
+        if is_likely_envr_shims_dir(&dir) {
+            continue;
+        }
+        for suf in suffixes {
+            let fname = if suf.is_empty() {
+                tool_stem.to_string()
+            } else {
+                format!("{tool_stem}{suf}")
+            };
+            let candidate = dir.join(fname);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err(EnvrError::Runtime(format!(
+        "could not find `{tool_stem}` on PATH outside envr shims (enable PATH proxy in settings if you use envr-managed Node)"
+    )))
+}
+
+fn resolve_node_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Node => "node",
+        CoreCommand::Npm => "npm",
+        CoreCommand::Npx => "npx",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports node tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
+    if matches!(
+        cmd,
+        CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx
+    ) && !node_path_proxy_enabled_from_disk()
+    {
+        return resolve_node_tool_bypass_envr(cmd);
+    }
+
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 

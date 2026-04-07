@@ -12,7 +12,7 @@ use crate::widget_styles::{ButtonVariant, button_content_centered, button_style}
 
 pub fn runtime_nav_bar(
     active: RuntimeKind,
-    busy: bool,
+    _busy: bool,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let sp = tokens.space();
@@ -51,7 +51,6 @@ pub fn runtime_nav_bar(
             .height(Length::Fixed(h))
             .padding([sp.sm as f32, (sp.sm + 2) as f32])
             .style(button_style(tokens, variant));
-        let b = if busy { b.on_press_maybe(None) } else { b };
         r = r.push(b);
     }
 

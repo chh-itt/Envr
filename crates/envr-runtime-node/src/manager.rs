@@ -4,13 +4,16 @@ use crate::index::{
     NodeRelease, blocking_http_client, fetch_node_index, node_version_v_prefix,
     normalize_node_version, parse_node_index, resolve_node_version,
 };
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::{LinkType, ensure_link};
 use std::{
     fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Arc,
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 /// Layout: `{runtime_root}/runtimes/node/versions/<semver>/...` and `current` → version dir.
@@ -142,7 +145,17 @@ pub fn pick_node_dist_artifact(
     )))
 }
 
-fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) -> EnvrResult<()> {
+fn download_to_path(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+        return Err(EnvrError::Download("download cancelled".to_string()));
+    }
     let mut response = client
         .get(url)
         .send()
@@ -157,10 +170,30 @@ fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
+    if let Some(t) = progress_total {
+        let total = response.content_length().unwrap_or(0);
+        t.store(total, Ordering::Relaxed);
+    }
+    if let Some(d) = progress_downloaded {
+        d.store(0, Ordering::Relaxed);
+    }
     let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    response
-        .copy_to(&mut f)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
+        let n = response
+            .read(&mut buf)
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+        if let Some(d) = progress_downloaded {
+            d.fetch_add(n as u64, Ordering::Relaxed);
+        }
+    }
     Ok(())
 }
 
@@ -289,18 +322,33 @@ impl NodeManager {
         parse_node_index(&body)
     }
 
-    pub fn install_from_spec(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
+    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let releases = self.load_releases()?;
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
-        let label = resolve_node_version(&releases, os, arch, &spec.0)?;
-        self.install_resolved_version(&RuntimeVersion(label))
+        let label = resolve_node_version(&releases, os, arch, &request.spec.0)?;
+        self.install_resolved_version(
+            &RuntimeVersion(label),
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
-    pub fn install_resolved_version(&self, version: &RuntimeVersion) -> EnvrResult<RuntimeVersion> {
+    pub fn install_resolved_version(
+        &self,
+        version: &RuntimeVersion,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion> {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
         let version_v = node_version_v_prefix(&version.0);
+
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
 
         let shasums_url = join_url_path(&self.dist_root(), &format!("{version_v}/SHASUMS256.txt"));
         let shasums_text = self
@@ -325,7 +373,14 @@ impl NodeManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(&filename);
-        download_to_path(&self.client, &artifact_url, &cache_file)?;
+        download_to_path(
+            &self.client,
+            &artifact_url,
+            &cache_file,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )?;
         checksum::verify_sha256_hex(&cache_file, &sha_expect)?;
 
         let staging_parent = self.paths.cache_dir().join(&version.0);

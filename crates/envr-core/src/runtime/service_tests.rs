@@ -97,6 +97,9 @@ fn passthrough_methods_delegate_to_stub_provider() {
             RuntimeKind::Go,
             &InstallRequest {
                 spec: VersionSpec("latest".to_string()),
+                progress_downloaded: None,
+                progress_total: None,
+                cancel: None,
             },
         )
         .expect("install"),

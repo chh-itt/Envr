@@ -1,9 +1,10 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
+use envr_config::settings::{NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode};
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
-use iced::widget::{button, column, container, row, rule, space, text, text_input};
+use iced::widget::{button, column, container, row, rule, space, text, text_input, toggler};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
@@ -33,7 +34,11 @@ pub enum EnvCenterMsg {
     UseFinished(Result<(), String>),
     SubmitUninstall(String),
     UninstallFinished(Result<(), String>),
-    ToggleExpanded,
+    /// Fold/unfold Node-only settings (download mirror, npm registry, PATH proxy).
+    ToggleNodeSettings,
+    SetNodeDownloadSource(NodeDownloadSource),
+    SetNpmRegistryMode(NpmRegistryMode),
+    SetNodePathProxy(bool),
 }
 
 #[derive(Debug)]
@@ -53,8 +58,10 @@ pub struct EnvCenterState {
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
     pub skeleton_phase: f32,
-    /// Whether the env center panel is expanded (search + actions + list).
-    pub expanded: bool,
+    /// Node: whether the settings strip (mirrors / npm / PATH proxy) is visible (`03-gui-设计.md`).
+    pub node_settings_expanded: bool,
+    /// Synthetic job shown in downloads panel for current env-center operation.
+    pub op_job_id: Option<u64>,
 }
 
 impl Default for EnvCenterState {
@@ -70,7 +77,8 @@ impl Default for EnvCenterState {
             node_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
-            expanded: true,
+            node_settings_expanded: false,
+            op_job_id: None,
         }
     }
 }
@@ -88,6 +96,169 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Deno => "Deno",
         RuntimeKind::Bun => "Bun",
     }
+}
+
+/// Display name for download-panel install tasks (Chinese UI copy).
+pub(crate) fn kind_label_zh(kind: RuntimeKind) -> &'static str {
+    match kind {
+        RuntimeKind::Node => "Node.js",
+        RuntimeKind::Python => "Python",
+        RuntimeKind::Java => "Java",
+        RuntimeKind::Go => "Go",
+        RuntimeKind::Rust => "Rust",
+        RuntimeKind::Php => "PHP",
+        RuntimeKind::Deno => "Deno",
+        RuntimeKind::Bun => "Bun",
+    }
+}
+
+fn node_runtime_settings_section(
+    node: &NodeRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let dl_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.node.download_source",
+        "Node 下载源",
+        "Node download source",
+    ))
+    .size(ty.body);
+
+    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    for src in [
+        NodeDownloadSource::Auto,
+        NodeDownloadSource::Domestic,
+        NodeDownloadSource::Official,
+    ] {
+        let lab = match src {
+            NodeDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.node.ds.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            NodeDownloadSource::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.node.ds.domestic",
+                "国内镜像",
+                "China mirror",
+            ),
+            NodeDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.node.ds.official", "官方", "Official")
+            }
+        };
+        let variant = if src == node.download_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if src == node.download_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(text(lab).into()))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetNodeDownloadSource(src)))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(h))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, variant));
+        dl_row = dl_row.push(b);
+    }
+
+    let npm_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.node.npm_registry",
+        "npm 源",
+        "npm registry",
+    ))
+    .size(ty.body);
+
+    let mut npm_row = row![npm_title].spacing(sp.sm as f32);
+    for mode in [
+        NpmRegistryMode::Auto,
+        NpmRegistryMode::Domestic,
+        NpmRegistryMode::Official,
+        NpmRegistryMode::Restore,
+    ] {
+        let lab = match mode {
+            NpmRegistryMode::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.node.npm.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            NpmRegistryMode::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.node.npm.domestic",
+                "国内镜像",
+                "China mirror",
+            ),
+            NpmRegistryMode::Official => {
+                envr_core::i18n::tr_key("gui.runtime.node.npm.official", "官方", "Official")
+            }
+            NpmRegistryMode::Restore => envr_core::i18n::tr_key(
+                "gui.runtime.node.npm.restore",
+                "还原（不修改 npm）",
+                "Restore (leave npm as-is)",
+            ),
+        };
+        let variant = if mode == node.npm_registry_mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == node.npm_registry_mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(text(lab).into()))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetNpmRegistryMode(mode)))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(h))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, variant));
+        npm_row = npm_row.push(b);
+    }
+
+    let proxy_label = text(envr_core::i18n::tr_key(
+        "gui.runtime.node.path_proxy",
+        "PATH 代理",
+        "PATH proxy",
+    ))
+    .size(ty.body);
+
+    let proxy_toggle = toggler(node.path_proxy_enabled)
+        .label(envr_core::i18n::tr_key(
+            "gui.runtime.node.path_proxy.hint",
+            "开启时由 envr 接管 node/npm/npx；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages node/npm/npx; when off, shims delegate to your system PATH.",
+        ))
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetNodePathProxy(v)));
+
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.node.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」；再次开启后不会自动恢复上次版本，需手动切换。",
+        "While off, Use / Install & Use are disabled; turning on again does not auto-restore the previous version.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    let proxy_block = column![proxy_label, proxy_toggle, proxy_note]
+        .spacing((sp.xs + 2) as f32)
+        .width(Length::Fill);
+
+    container(
+        column![
+            dl_row,
+            npm_row,
+            proxy_block,
+        ]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
 }
 
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
@@ -123,11 +294,20 @@ fn node_remote_latest_for_major(state: &EnvCenterState, major: &str) -> Option<R
         .cloned()
 }
 
-pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'static, Message> {
+pub fn env_center_view(
+    state: &EnvCenterState,
+    node_runtime: Option<&NodeRuntimeSettings>,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let busy = state.busy;
     let card_s = card_container_style(tokens, 1);
+
+    let path_proxy_on = state.kind != RuntimeKind::Node
+        || node_runtime
+            .map(|n| n.path_proxy_enabled)
+            .unwrap_or(true);
 
     let cur_line = match &state.current {
         Some(v) => format!(
@@ -143,7 +323,8 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let toggle_lbl = if state.expanded {
+    let show_node_fold = state.kind == RuntimeKind::Node;
+    let toggle_lbl = if state.node_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
     } else {
         envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
@@ -160,21 +341,27 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             .into()
         ),
     )
-    .on_press(Message::EnvCenter(EnvCenterMsg::ToggleExpanded))
+    .on_press_maybe(
+        show_node_fold.then_some(Message::EnvCenter(EnvCenterMsg::ToggleNodeSettings)),
+    )
     .height(Length::Fixed(tokens.control_height_secondary))
     .style(button_style(tokens, ButtonVariant::Secondary));
 
-    let header_content = if state.expanded {
+    let cur_el = text(cur_line)
+        .size(ty.caption)
+        .color(gui_theme::to_color(tokens.colors.text_muted));
+
+    let header_content = if show_node_fold {
         row![
             text(header_title).size(ty.section),
-            text(cur_line).size(ty.caption).color(gui_theme::to_color(tokens.colors.text_muted)),
+            cur_el,
             toggle_btn,
         ]
         .spacing(sp.sm as f32)
         .align_y(Alignment::Center)
         .width(Length::Fill)
     } else {
-        row![text(header_title).size(ty.section), toggle_btn]
+        row![text(header_title).size(ty.section), cur_el]
             .spacing(sp.sm as f32)
             .align_y(Alignment::Center)
             .width(Length::Fill)
@@ -185,10 +372,15 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         .style(move |theme: &Theme| card_s(theme));
 
     let txt = gui_theme::to_color(tokens.colors.text);
-    // When collapsed, only render the header row.
-    if !state.expanded {
-        return header.into();
-    }
+
+    let node_settings_block: Element<'static, Message> =
+        if state.kind == RuntimeKind::Node && state.node_settings_expanded {
+            node_runtime
+                .map(|n| node_runtime_settings_section(n, tokens))
+                .unwrap_or_else(|| column![].into())
+        } else {
+            column![].into()
+        };
 
     // Search/filter text (we reuse `install_input` field).
     let query = state.install_input.trim();
@@ -342,7 +534,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                 }
             };
 
-            let action_btn: Element<'static, Message> = if is_active || busy {
+            let action_btn: Element<'static, Message> = if is_active {
                 container(space()).into()
             } else if let Some(highest) = highest_installed {
                 let use_btn = button(
@@ -356,9 +548,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                         .into(),
                     ),
                 )
-                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUse(
-                    highest.0.clone(),
-                ))))
+                .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
+                    EnvCenterMsg::SubmitUse(highest.0.clone()),
+                )))
                 .height(Length::Fixed(
                     tokens
                         .control_height_secondary
@@ -432,9 +624,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
                         .into(),
                     ),
                 )
-                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(
-                    spec,
-                ))))
+                .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
+                    EnvCenterMsg::SubmitInstallAndUse(spec),
+                )))
                 .style(button_style(tokens, ButtonVariant::Secondary));
 
                 container(
@@ -512,10 +704,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
             .into(),
         ),
     )
-    .on_press_maybe(
-        (direct_spec_nonempty && !busy)
-            .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
-    )
+    .on_press_maybe(direct_spec_nonempty.then_some(Message::EnvCenter(
+        EnvCenterMsg::SubmitDirectInstall,
+    )))
     .height(Length::Fixed(ctrl_h))
     .padding([sp.sm as f32, sp.md as f32])
     .style(button_style(tokens, ButtonVariant::Primary));
@@ -536,8 +727,9 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
         ),
     )
     .on_press_maybe(
-        (direct_spec_nonempty && !busy)
-            .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstallAndUse)),
+        (direct_spec_nonempty && path_proxy_on).then_some(Message::EnvCenter(
+            EnvCenterMsg::SubmitDirectInstallAndUse,
+        )),
     )
     .height(Length::Fixed(ctrl_h))
     .padding([sp.sm as f32, sp.md as f32])
@@ -557,7 +749,7 @@ pub fn env_center_view(state: &EnvCenterState, tokens: ThemeTokens) -> Element<'
     .align_y(Alignment::Center);
 
     let muted = gui_theme::to_color(tokens.colors.text_muted);
-    let mut col = column![header, filter_row]
+    let mut col = column![header, node_settings_block, filter_row]
         .spacing(sp.sm as f32)
         .width(Length::Fill);
     if busy {

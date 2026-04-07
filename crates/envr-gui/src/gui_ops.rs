@@ -2,7 +2,10 @@
 
 use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_core::shim_service::ShimService;
+use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use crate::app::Message;
 use crate::runtime_exec::runtime;
@@ -77,7 +80,13 @@ pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
 }
 
 /// Like [`install_version`], but runs [`RuntimeService::resolve`] first so invalid specs fail before download.
-pub fn install_version_with_resolve_precheck(kind: RuntimeKind, spec: String) -> Task<Message> {
+pub fn install_version_with_resolve_precheck(
+    kind: RuntimeKind,
+    spec: String,
+    progress_downloaded: Arc<AtomicU64>,
+    progress_total: Arc<AtomicU64>,
+    cancel: CancelToken,
+) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
@@ -86,13 +95,23 @@ pub fn install_version_with_resolve_precheck(kind: RuntimeKind, spec: String) ->
                 let vs = VersionSpec(spec.clone());
                 svc.resolve(kind, &vs)
                     .map_err(|e: EnvrError| e.to_string())?;
+                let prev_current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                let cancel_flag = cancel.shared_atomic();
                 svc.install(
                     kind,
                     &InstallRequest {
                         spec: VersionSpec(spec),
+                        progress_downloaded: Some(progress_downloaded),
+                        progress_total: Some(progress_total),
+                        cancel: Some(cancel_flag),
                     },
                 )
                 .map_err(|e: EnvrError| e.to_string())
+                .inspect(|_| {
+                    if let Some(prev) = prev_current.as_ref() {
+                        let _ = svc.set_current(kind, prev);
+                    }
+                })
             })
             .await;
         let msg = match res {
@@ -104,19 +123,35 @@ pub fn install_version_with_resolve_precheck(kind: RuntimeKind, spec: String) ->
     })
 }
 
-pub fn install_version(kind: RuntimeKind, spec: String) -> Task<Message> {
+pub fn install_version(
+    kind: RuntimeKind,
+    spec: String,
+    progress_downloaded: Arc<AtomicU64>,
+    progress_total: Arc<AtomicU64>,
+    cancel: CancelToken,
+) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                let prev_current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                let cancel_flag = cancel.shared_atomic();
                 svc.install(
                     kind,
                     &InstallRequest {
                         spec: VersionSpec(spec),
+                        progress_downloaded: Some(progress_downloaded),
+                        progress_total: Some(progress_total),
+                        cancel: Some(cancel_flag),
                     },
                 )
                 .map_err(|e: EnvrError| e.to_string())
+                .inspect(|_| {
+                    if let Some(prev) = prev_current.as_ref() {
+                        let _ = svc.set_current(kind, prev);
+                    }
+                })
             })
             .await;
         let msg = match res {
@@ -129,7 +164,13 @@ pub fn install_version(kind: RuntimeKind, spec: String) -> Task<Message> {
 }
 
 /// Like [`install_then_use`], but resolves the spec before install (fail fast on bad input).
-pub fn install_then_use_with_resolve_precheck(kind: RuntimeKind, spec: String) -> Task<Message> {
+pub fn install_then_use_with_resolve_precheck(
+    kind: RuntimeKind,
+    spec: String,
+    progress_downloaded: Arc<AtomicU64>,
+    progress_total: Arc<AtomicU64>,
+    cancel: CancelToken,
+) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
@@ -138,11 +179,15 @@ pub fn install_then_use_with_resolve_precheck(kind: RuntimeKind, spec: String) -
                 let vs = VersionSpec(spec.clone());
                 svc.resolve(kind, &vs)
                     .map_err(|e: EnvrError| e.to_string())?;
+                let cancel_flag = cancel.shared_atomic();
                 let installed = svc
                     .install(
                         kind,
                         &InstallRequest {
                             spec: VersionSpec(spec),
+                            progress_downloaded: Some(progress_downloaded),
+                            progress_total: Some(progress_total),
+                            cancel: Some(cancel_flag),
                         },
                     )
                     .map_err(|e: EnvrError| e.to_string())?;
@@ -161,17 +206,27 @@ pub fn install_then_use_with_resolve_precheck(kind: RuntimeKind, spec: String) -
     })
 }
 
-pub fn install_then_use(kind: RuntimeKind, spec: String) -> Task<Message> {
+pub fn install_then_use(
+    kind: RuntimeKind,
+    spec: String,
+    progress_downloaded: Arc<AtomicU64>,
+    progress_total: Arc<AtomicU64>,
+    cancel: CancelToken,
+) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                let cancel_flag = cancel.shared_atomic();
                 let installed = svc
                     .install(
                         kind,
                         &InstallRequest {
                             spec: VersionSpec(spec.clone()),
+                            progress_downloaded: Some(progress_downloaded),
+                            progress_total: Some(progress_total),
+                            cancel: Some(cancel_flag),
                         },
                     )
                     .map_err(|e: EnvrError| e.to_string())?;
