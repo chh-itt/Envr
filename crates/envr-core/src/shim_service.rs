@@ -1,4 +1,4 @@
-//! Writes launcher stubs under `{runtime_root}/shims` for `PATH`, and syncs Node global-bin forwards.
+//! Writes launcher stubs under `{runtime_root}/shims` for `PATH`, and syncs runtime global-bin forwards.
 //!
 //! Core tools use [`envr_shim_core::CoreCommand`] dispatch names (`envr-shim node`, ??. Global npm
 //! packages get small stubs that `call` / symlink the real file under `npm bin -g`.
@@ -109,7 +109,8 @@ impl ShimService {
 
     /// Refreshes stubs for global package executables (excluding core tools).
     ///
-    /// - For Node: scans `npm bin -g`
+    /// - For Node: scans `npm bin -g` (or package.json fallback)
+    /// - For Python: scans `Scripts` / `bin`
     /// - For Bun: scans `bun pm bin -g`
     ///
     /// Removes stale forwards across all supported global-bin sources to avoid deleting
@@ -120,15 +121,18 @@ impl ShimService {
         _version_label: &str,
     ) -> EnvrResult<()> {
         match kind {
-            RuntimeKind::Node | RuntimeKind::Bun => self.sync_all_global_package_shims(),
+            RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Bun => {
+                self.sync_all_global_package_shims()
+            }
             _ => Ok(()),
         }
     }
 
-    /// Sync global executable forwards for Node + Bun, then drop stale non-core stubs.
+    /// Sync global executable forwards for Node + Python + Bun, then drop stale non-core stubs.
     pub fn sync_all_global_package_shims(&self) -> EnvrResult<()> {
         let mut seen = HashSet::<String>::new();
         seen.extend(self.scan_node_global_bins()?);
+        seen.extend(self.scan_python_global_bins()?);
         seen.extend(self.scan_bun_global_bins()?);
         self.remove_stale_non_core_shims(&seen)?;
         Ok(())
@@ -153,6 +157,14 @@ impl ShimService {
 
     fn try_current_bun_home(&self) -> Option<PathBuf> {
         let link = self.runtime_root.join("runtimes/bun/current");
+        if !link.exists() {
+            return None;
+        }
+        fs::canonicalize(&link).ok()
+    }
+
+    fn try_current_python_home(&self) -> Option<PathBuf> {
+        let link = self.runtime_root.join("runtimes/python/current");
         if !link.exists() {
             return None;
         }
@@ -409,6 +421,26 @@ impl ShimService {
             None => return Ok(HashSet::new()),
         };
         self.scan_bin_dir(&global_bin)
+    }
+
+    fn scan_python_global_bins(&self) -> EnvrResult<HashSet<String>> {
+        let Some(py_home) = self.try_current_python_home() else {
+            return Ok(HashSet::new());
+        };
+        #[cfg(windows)]
+        let global_bin = py_home.join("Scripts");
+        #[cfg(not(windows))]
+        let global_bin = py_home.join("bin");
+        self.scan_bin_dir(&global_bin)
+    }
+
+    /// Fast path for Python switching: refresh current Python script forwards only.
+    ///
+    /// This intentionally skips stale cleanup across other runtimes to avoid slow
+    /// Node/Bun global-bin probing on every Python "切换".
+    pub fn sync_python_global_package_shims_fast(&self) -> EnvrResult<()> {
+        let _ = self.scan_python_global_bins()?;
+        Ok(())
     }
 
     fn bun_global_bin_dir_from_settings(&self) -> Option<PathBuf> {

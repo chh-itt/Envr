@@ -1,6 +1,9 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
-use envr_config::settings::{NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode};
+use envr_config::settings::{
+    NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode, PipRegistryMode,
+    PythonDownloadSource, PythonRuntimeSettings,
+};
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
@@ -23,8 +26,8 @@ pub enum EnvCenterMsg {
     InstallInput(String),
     DirectInstallInput(String),
     DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>), String>),
-    RemoteLatestDiskSnapshot(Vec<RuntimeVersion>),
-    RemoteLatestRefreshed(Result<Vec<RuntimeVersion>, String>),
+    RemoteLatestDiskSnapshot(RuntimeKind, Vec<RuntimeVersion>),
+    RemoteLatestRefreshed(RuntimeKind, Result<Vec<RuntimeVersion>, String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
@@ -35,10 +38,13 @@ pub enum EnvCenterMsg {
     SubmitUninstall(String),
     UninstallFinished(Result<(), String>),
     /// Fold/unfold Node-only settings (download mirror, npm registry, PATH proxy).
-    ToggleNodeSettings,
+    ToggleRuntimeSettings,
     SetNodeDownloadSource(NodeDownloadSource),
     SetNpmRegistryMode(NpmRegistryMode),
     SetNodePathProxy(bool),
+    SetPythonDownloadSource(PythonDownloadSource),
+    SetPipRegistryMode(PipRegistryMode),
+    SetPythonPathProxy(bool),
 }
 
 #[derive(Debug)]
@@ -54,12 +60,16 @@ pub struct EnvCenterState {
     pub node_remote_latest: Vec<RuntimeVersion>,
     /// Node: background refresh of `node_remote_latest` (TTL / index) is in flight.
     pub node_remote_refreshing: bool,
+    /// Python: latest patch per major from cache/network (see `list_remote_latest_per_major`).
+    pub python_remote_latest: Vec<RuntimeVersion>,
+    /// Python: background refresh of `python_remote_latest` (TTL / index) is in flight.
+    pub python_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
     pub skeleton_phase: f32,
-    /// Node: whether the settings strip (mirrors / npm / PATH proxy) is visible (`03-gui-设计.md`).
-    pub node_settings_expanded: bool,
+    /// Runtime: whether the settings strip is visible (`03-gui-设计.md`).
+    pub runtime_settings_expanded: bool,
     /// Synthetic job shown in downloads panel for current env-center operation.
     pub op_job_id: Option<u64>,
 }
@@ -75,9 +85,11 @@ impl Default for EnvCenterState {
             remote_error: None,
             node_remote_latest: Vec::new(),
             node_remote_refreshing: false,
+            python_remote_latest: Vec::new(),
+            python_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
-            node_settings_expanded: false,
+            runtime_settings_expanded: false,
             op_job_id: None,
         }
     }
@@ -261,6 +273,154 @@ fn node_runtime_settings_section(
     .into()
 }
 
+fn python_runtime_settings_section(
+    py: &PythonRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let dl_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.python.download_source",
+        "Python 下载源（影响 Python 安装包与 get-pip.py）",
+        "Python download source (affects Python artifacts + get-pip.py)",
+    ))
+    .size(ty.body);
+    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    for src in [
+        PythonDownloadSource::Auto,
+        PythonDownloadSource::Domestic,
+        PythonDownloadSource::Official,
+    ] {
+        let lab = match src {
+            PythonDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.python.ds.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            PythonDownloadSource::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.python.ds.domestic",
+                "国内镜像",
+                "China mirror",
+            ),
+            PythonDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.python.ds.official", "官方", "Official")
+            }
+        };
+        let variant = if src == py.download_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if src == py.download_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        dl_row = dl_row.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPythonDownloadSource(src)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+
+    let pip_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.python.pip_registry",
+        "pip 引导源",
+        "pip bootstrap index",
+    ))
+    .size(ty.body);
+    let mut pip_row = row![pip_title].spacing(sp.sm as f32);
+    for mode in [
+        PipRegistryMode::Auto,
+        PipRegistryMode::Domestic,
+        PipRegistryMode::Official,
+        PipRegistryMode::Restore,
+    ] {
+        let lab = match mode {
+            PipRegistryMode::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.python.pip.auto",
+                "自动（按区域）",
+                "Auto (locale)",
+            ),
+            PipRegistryMode::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.python.pip.domestic",
+                "国内镜像",
+                "China mirror",
+            ),
+            PipRegistryMode::Official => {
+                envr_core::i18n::tr_key("gui.runtime.python.pip.official", "官方", "Official")
+            }
+            PipRegistryMode::Restore => envr_core::i18n::tr_key(
+                "gui.runtime.python.pip.restore",
+                "还原（不改源）",
+                "Restore (no change)",
+            ),
+        };
+        let variant = if mode == py.pip_registry_mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == py.pip_registry_mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        pip_row = pip_row.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPipRegistryMode(mode)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+
+    let proxy_toggle = toggler(py.path_proxy_enabled)
+        .label(envr_core::i18n::tr_key(
+            "gui.runtime.python.path_proxy.hint",
+            "开启时由 envr 接管 python/pip；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages python/pip; when off, shims delegate to your system PATH.",
+        ))
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPythonPathProxy(v)));
+
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.python.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "While off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    let cache_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.python.getpip.cache",
+        "get-pip.py 会缓存在用户目录并按天刷新；download_source 也会决定其下载地址。",
+        "get-pip.py is cached under user data and refreshed daily; download_source also affects where it is fetched from.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![
+            dl_row,
+            pip_row,
+            proxy_toggle,
+            proxy_note,
+            cache_note,
+        ]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
     let ty = tokens.typography();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -286,17 +446,29 @@ fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Mes
     .into()
 }
 
-fn node_remote_latest_for_major(state: &EnvCenterState, major: &str) -> Option<RuntimeVersion> {
+fn node_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
     state
         .node_remote_latest
         .iter()
-        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(major))
+        .find(|v| parse_node_major_key(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
+fn python_remote_latest_for_key(
+    state: &EnvCenterState,
+    key: &str,
+) -> Option<RuntimeVersion> {
+    state
+        .python_remote_latest
+        .iter()
+        .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
         .cloned()
 }
 
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
+    python_runtime: Option<&PythonRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -304,10 +476,11 @@ pub fn env_center_view(
     let busy = state.busy;
     let card_s = card_container_style(tokens, 1);
 
-    let path_proxy_on = state.kind != RuntimeKind::Node
-        || node_runtime
-            .map(|n| n.path_proxy_enabled)
-            .unwrap_or(true);
+    let path_proxy_on = match state.kind {
+        RuntimeKind::Node => node_runtime.map(|n| n.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
+        _ => true,
+    };
 
     let cur_line = match &state.current {
         Some(v) => format!(
@@ -323,8 +496,8 @@ pub fn env_center_view(
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let show_node_fold = state.kind == RuntimeKind::Node;
-    let toggle_lbl = if state.node_settings_expanded {
+    let show_runtime_fold = matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python);
+    let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
     } else {
         envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
@@ -342,7 +515,7 @@ pub fn env_center_view(
         ),
     )
     .on_press_maybe(
-        show_node_fold.then_some(Message::EnvCenter(EnvCenterMsg::ToggleNodeSettings)),
+        show_runtime_fold.then_some(Message::EnvCenter(EnvCenterMsg::ToggleRuntimeSettings)),
     )
     .height(Length::Fixed(tokens.control_height_secondary))
     .style(button_style(tokens, ButtonVariant::Secondary));
@@ -351,7 +524,7 @@ pub fn env_center_view(
         .size(ty.caption)
         .color(gui_theme::to_color(tokens.colors.text_muted));
 
-    let header_content = if show_node_fold {
+    let header_content = if show_runtime_fold {
         row![
             text(header_title).size(ty.section),
             cur_el,
@@ -373,42 +546,65 @@ pub fn env_center_view(
 
     let txt = gui_theme::to_color(tokens.colors.text);
 
-    let node_settings_block: Element<'static, Message> =
-        if state.kind == RuntimeKind::Node && state.node_settings_expanded {
-            node_runtime
-                .map(|n| node_runtime_settings_section(n, tokens))
-                .unwrap_or_else(|| column![].into())
-        } else {
-            column![].into()
-        };
+    let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
+        column![].into()
+    } else if state.kind == RuntimeKind::Node {
+        node_runtime
+            .map(|n| node_runtime_settings_section(n, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Python {
+        python_runtime
+            .map(|p| python_runtime_settings_section(p, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else {
+        column![].into()
+    };
 
     // Search/filter text (we reuse `install_input` field).
     let query = state.install_input.trim();
     let query_norm = query.strip_prefix('v').unwrap_or(query);
-    let query_major = parse_major_only(query_norm);
+    let query_key = match state.kind {
+        RuntimeKind::Python => parse_python_major_minor_only(query_norm),
+        _ => parse_major_only(query_norm),
+    };
 
-    // Group installed versions by `major`.
-    let mut installed_by_major: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
+    // Group installed versions by key (Node: major, Python: major.minor, else: major).
+    let mut installed_by_key: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
     for v in &state.installed {
-        if let Some(major) = parse_major_from_ver(&v.0) {
-            installed_by_major.entry(major).or_default().push(v.clone());
+        let key = match state.kind {
+            RuntimeKind::Python => parse_python_major_minor_key(&v.0),
+            RuntimeKind::Node => parse_node_major_key(&v.0),
+            _ => parse_major_from_ver(&v.0),
+        };
+        if let Some(k) = key {
+            installed_by_key.entry(k).or_default().push(v.clone());
         }
     }
-    for (_major, versions) in installed_by_major.iter_mut() {
+    for (_k, versions) in installed_by_key.iter_mut() {
         versions.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
     }
 
-    // Sort major numbers high -> low.
-    let mut major_keys_set: HashSet<String> = installed_by_major.keys().cloned().collect();
+    // Merge remote keys when available (so empty installs still show suggestions).
+    let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
     if state.kind == RuntimeKind::Node {
         for v in &state.node_remote_latest {
-            if let Some(m) = parse_major_from_ver(&v.0) {
-                major_keys_set.insert(m);
+            if let Some(k) = parse_node_major_key(&v.0) {
+                keys_set.insert(k);
+            }
+        }
+    } else if state.kind == RuntimeKind::Python {
+        for v in &state.python_remote_latest {
+            if let Some(k) = parse_python_major_minor_key(&v.0) {
+                keys_set.insert(k);
             }
         }
     }
-    let mut major_keys: Vec<String> = major_keys_set.into_iter().collect();
-    major_keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    let mut keys: Vec<String> = keys_set.into_iter().collect();
+    if state.kind == RuntimeKind::Python {
+        keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+    } else {
+        keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    }
 
     let matches_empty_hint = || -> Element<'static, Message> {
         let (title, body) = if query_norm.is_empty() {
@@ -460,57 +656,88 @@ pub fn env_center_view(
     // Use spacing instead of dense horizontal rules for a calmer UI.
     let mut list_col = column![].spacing(sp.sm as f32).width(Length::Fill);
 
-    let mut show_majors: Vec<String> = if let Some(qm) = query_major.as_ref() {
-        vec![qm.clone()]
-    } else if query_norm.is_empty() {
-        major_keys.clone()
+    let mut show_keys: Vec<String> = if query_norm.is_empty() {
+        keys.clone()
     } else {
-        major_keys
-            .into_iter()
-            .filter(|m| m.contains(query_norm))
-            .collect()
+        let needle = query_key.as_deref().unwrap_or(query_norm);
+        match state.kind {
+            RuntimeKind::Node => keys
+                .into_iter()
+                .filter(|k| k.contains(needle))
+                .collect(),
+            RuntimeKind::Python => {
+                if needle.contains('.') {
+                    keys.into_iter().filter(|k| k.starts_with(needle)).collect()
+                } else {
+                    keys.into_iter()
+                        .filter(|k| {
+                            let mut it = k.split('.');
+                            let major = it.next().unwrap_or("");
+                            let minor = it.next().unwrap_or("");
+                            major == needle || minor == needle
+                        })
+                        .collect()
+                }
+            }
+            _ => keys.into_iter().filter(|k| k.starts_with(needle)).collect(),
+        }
     };
-    show_majors.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    if state.kind == RuntimeKind::Python {
+        show_keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+    } else {
+        show_keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    }
 
     let node_waiting_remote = state.kind == RuntimeKind::Node
         && state.node_remote_latest.is_empty()
         && state.node_remote_refreshing;
+    let python_waiting_remote = state.kind == RuntimeKind::Python
+        && state.python_remote_latest.is_empty()
+        && state.python_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref() {
-        if state.kind == RuntimeKind::Node {
+        if matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
     }
 
-    if (busy && show_majors.is_empty()) || (node_waiting_remote && show_majors.is_empty()) {
+    if (busy && show_keys.is_empty())
+        || (node_waiting_remote && show_keys.is_empty())
+        || (python_waiting_remote && show_keys.is_empty())
+    {
         list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
-    } else if show_majors.is_empty() {
+    } else if show_keys.is_empty() {
         list_col = list_col.push(matches_empty_hint());
     } else {
-        for major in show_majors.iter() {
-            let installed_versions = installed_by_major
-                .get(major)
+        for key in show_keys.iter() {
+            let installed_versions = installed_by_key
+                .get(key)
                 .cloned()
                 .unwrap_or_default();
-            let current_major = state
-                .current
-                .as_ref()
-                .and_then(|v| parse_major_from_ver(&v.0));
-            let is_active = current_major.as_deref() == Some(major.as_str());
+            let current_key = state.current.as_ref().and_then(|v| match state.kind {
+                RuntimeKind::Python => parse_python_major_minor_key(&v.0),
+                RuntimeKind::Node => parse_node_major_key(&v.0),
+                _ => parse_major_from_ver(&v.0),
+            });
+            let is_active = current_key.as_deref() == Some(key.as_str());
+            let show_as_active = is_active && path_proxy_on;
 
             let highest_installed = installed_versions.first().cloned();
 
             let label_base = if state.kind == RuntimeKind::Node {
-                if let Some(rv) = node_remote_latest_for_major(state, major) {
-                    format!("{} {}", kind_label(state.kind), rv.0)
+                if let Some(_rv) = node_remote_latest_for_key(state, key) {
+                    // Keep list stable: show `Node <major>` but use latest patch for install spec.
+                    format!("{} {}", kind_label(state.kind), key)
                 } else {
-                    format!("{} {}", kind_label(state.kind), major)
+                    format!("{} {}", kind_label(state.kind), key)
                 }
+            } else if state.kind == RuntimeKind::Python {
+                format!("{} {}", kind_label(state.kind), key)
             } else {
-                format!("{} {}", kind_label(state.kind), major)
+                format!("{} {}", kind_label(state.kind), key)
             };
 
-            let left_text = if is_active {
+            let left_text = if show_as_active {
                 format!(
                     "{} {}",
                     label_base,
@@ -526,15 +753,19 @@ pub fn env_center_view(
 
             let install_spec = || -> String {
                 if state.kind == RuntimeKind::Node {
-                    node_remote_latest_for_major(state, major)
+                    node_remote_latest_for_key(state, key)
                         .map(|v| v.0)
-                        .unwrap_or_else(|| major.clone())
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Python {
+                    python_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
                 } else {
-                    major.clone()
+                    key.clone()
                 }
             };
 
-            let action_btn: Element<'static, Message> = if is_active {
+            let action_btn: Element<'static, Message> = if show_as_active {
                 container(space()).into()
             } else if let Some(highest) = highest_installed {
                 let use_btn = button(
@@ -652,11 +883,19 @@ pub fn env_center_view(
         }
     }
 
-    let search_ph = envr_core::i18n::tr_key(
-        "gui.runtime.search_placeholder",
-        "筛选主版本（例如 24）",
-        "Filter by major (e.g. 24)",
-    );
+    let search_ph = if state.kind == RuntimeKind::Python {
+        envr_core::i18n::tr_key(
+            "gui.runtime.search_placeholder.python",
+            "筛选主版本（例如 3.14）",
+            "Filter by major.minor (e.g. 3.14)",
+        )
+    } else {
+        envr_core::i18n::tr_key(
+            "gui.runtime.search_placeholder",
+            "筛选主版本（例如 24）",
+            "Filter by major (e.g. 24)",
+        )
+    };
 
     let direct_ph = envr_core::i18n::tr_key(
         "gui.runtime.direct_install_placeholder",
@@ -749,7 +988,7 @@ pub fn env_center_view(
     .align_y(Alignment::Center);
 
     let muted = gui_theme::to_color(tokens.colors.text_muted);
-    let mut col = column![header, node_settings_block, filter_row]
+    let mut col = column![header, runtime_settings_block, filter_row]
         .spacing(sp.sm as f32)
         .width(Length::Fill);
     if busy {
@@ -793,6 +1032,14 @@ fn parse_major_from_ver(ver: &str) -> Option<String> {
     semver_parts(ver).map(|(ma, _mi, _patch)| ma.to_string())
 }
 
+fn parse_node_major_key(ver: &str) -> Option<String> {
+    parse_major_from_ver(ver)
+}
+
+fn parse_python_major_minor_key(ver: &str) -> Option<String> {
+    semver_parts(ver).map(|(ma, mi, _patch)| format!("{ma}.{mi}"))
+}
+
 fn parse_major_only(s: &str) -> Option<String> {
     let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
     if t.is_empty() {
@@ -803,6 +1050,30 @@ fn parse_major_only(s: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn parse_python_major_minor_only(s: &str) -> Option<String> {
+    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
+    if t.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = t.split('.').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    if parts[0].chars().all(|c| c.is_ascii_digit()) && parts[1].chars().all(|c| c.is_ascii_digit())
+    {
+        Some(format!("{}.{}", parts[0], parts[1]))
+    } else {
+        None
+    }
+}
+
+fn parse_python_key_sort(k: &str) -> (u64, u64) {
+    let mut it = k.split('.');
+    let a = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let b = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    (a, b)
 }
 
 fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Message> {

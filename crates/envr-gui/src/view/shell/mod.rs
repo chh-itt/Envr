@@ -148,6 +148,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 matches!(state.env_center.kind, RuntimeKind::Node).then_some(
                     &state.settings.cache.snapshot().runtime.node,
                 ),
+                matches!(state.env_center.kind, RuntimeKind::Python).then_some(
+                    &state.settings.cache.snapshot().runtime.python,
+                ),
                 tokens,
             ));
         }

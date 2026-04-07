@@ -6,6 +6,7 @@ use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::time::Instant;
 
 use crate::app::Message;
 use crate::runtime_exec::runtime;
@@ -51,6 +52,7 @@ pub fn load_remote_latest_disk_snapshot(kind: RuntimeKind) -> Task<Message> {
             .await;
 
         Message::EnvCenter(EnvCenterMsg::RemoteLatestDiskSnapshot(
+            kind,
             res.unwrap_or_default(),
         ))
     })
@@ -61,9 +63,6 @@ pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<Vec<RuntimeVersion>, String> {
-                if kind != RuntimeKind::Node {
-                    return Ok(Vec::new());
-                }
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
                 svc.list_remote_latest_per_major(kind)
                     .map_err(|e: EnvrError| e.to_string())
@@ -71,9 +70,9 @@ pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
             .await;
 
         let msg = match res {
-            Ok(Ok(list)) => EnvCenterMsg::RemoteLatestRefreshed(Ok(list)),
-            Ok(Err(e)) => EnvCenterMsg::RemoteLatestRefreshed(Err(e)),
-            Err(e) => EnvCenterMsg::RemoteLatestRefreshed(Err(e.to_string())),
+            Ok(Ok(list)) => EnvCenterMsg::RemoteLatestRefreshed(kind, Ok(list)),
+            Ok(Err(e)) => EnvCenterMsg::RemoteLatestRefreshed(kind, Err(e)),
+            Err(e) => EnvCenterMsg::RemoteLatestRefreshed(kind, Err(e.to_string())),
         };
         Message::EnvCenter(msg)
     })
@@ -256,15 +255,28 @@ pub fn use_version(kind: RuntimeKind, version_label: String) -> Task<Message> {
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<(), String> {
+                let t_total = Instant::now();
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                let spec = VersionSpec(version_label);
-                let resolved = svc
-                    .resolve(kind, &spec)
+                // "Use/Switch" always passes an installed exact version label from GUI state;
+                // avoid `resolve()` (can hit remote index/network and add multi-second latency).
+                let target = RuntimeVersion(version_label);
+                let t_set = Instant::now();
+                svc.set_current(kind, &target)
                     .map_err(|e: EnvrError| e.to_string())?;
-                svc.set_current(kind, &resolved.version)
-                    .map_err(|e: EnvrError| e.to_string())?;
+                let set_ms = t_set.elapsed().as_millis();
 
+                let t_shim = Instant::now();
                 ensure_core_shims_for_kind(kind).map_err(|e| e.to_string())?;
+                let shim_ms = t_shim.elapsed().as_millis();
+                let total_ms = t_total.elapsed().as_millis();
+                tracing::info!(
+                    kind = ?kind,
+                    version = %target.0,
+                    set_current_ms = set_ms,
+                    ensure_shims_ms = shim_ms,
+                    total_ms = total_ms,
+                    "gui use_version timing"
+                );
                 Ok(())
             })
             .await;
@@ -451,6 +463,7 @@ fn find_envr_shim_executable() -> EnvrResult<std::path::PathBuf> {
 }
 
 fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
+    let t_total = Instant::now();
     let runtime_root = envr_config::settings::resolve_runtime_root()?;
     let shim_exe = find_envr_shim_executable()?;
 
@@ -463,50 +476,71 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
     roots.dedup();
 
     // 1) Ensure core shims in all PATH-visible shim dirs.
+    let t_core = Instant::now();
     for root in &roots {
         let svc = ShimService::new(root.clone(), shim_exe.clone());
         svc.ensure_shims(kind)?;
     }
+    let core_ms = t_core.elapsed().as_millis();
 
-    // 2) For Node: sync global package forwards from the active runtime_root,
+    // 2) For Node/Python: sync global package forwards from the active runtime_root,
     // then copy non-core forward stubs into other PATH-visible shim dirs.
-    if kind == RuntimeKind::Node {
+    if matches!(kind, RuntimeKind::Node | RuntimeKind::Python) {
         let runtime_svc = ShimService::new(runtime_root.clone(), shim_exe.clone());
-        let _ = runtime_svc.sync_all_global_package_shims();
+        let t_sync = Instant::now();
+        if kind == RuntimeKind::Python {
+            let _ = runtime_svc.sync_python_global_package_shims_fast();
+        } else {
+            let _ = runtime_svc.sync_all_global_package_shims();
+        }
+        let sync_ms = t_sync.elapsed().as_millis();
+        tracing::info!(kind = ?kind, sync_globals_ms = sync_ms, "shim global sync timing");
 
-        let from_dir = runtime_root.join("shims");
-        let to_core_stems = [
-            "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
-            "bunx",
-        ];
+        if kind == RuntimeKind::Node {
+            let t_copy = Instant::now();
+            let from_dir = runtime_root.join("shims");
+            let to_core_stems = [
+                "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
+                "bunx",
+            ];
 
-        for to_root in roots {
-            if to_root == runtime_root {
-                continue;
-            }
-            let to_dir = to_root.join("shims");
-            let _ = std::fs::create_dir_all(&to_dir);
-            let Ok(entries) = std::fs::read_dir(&from_dir) else {
-                continue;
-            };
-            for e in entries.flatten() {
-                let path = e.path();
-                if !path.is_file() {
+            for to_root in roots {
+                if to_root == runtime_root {
                     continue;
                 }
-                let stem = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_ascii_lowercase();
-                if to_core_stems.contains(&stem.as_str()) {
+                let to_dir = to_root.join("shims");
+                let _ = std::fs::create_dir_all(&to_dir);
+                let Ok(entries) = std::fs::read_dir(&from_dir) else {
                     continue;
+                };
+                for e in entries.flatten() {
+                    let path = e.path();
+                    if !path.is_file() {
+                        continue;
+                    }
+                    let stem = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    if to_core_stems.contains(&stem.as_str()) {
+                        continue;
+                    }
+                    let dst = to_dir.join(path.file_name().unwrap_or_default());
+                    let _ = std::fs::copy(&path, &dst);
                 }
-                let dst = to_dir.join(path.file_name().unwrap_or_default());
-                let _ = std::fs::copy(&path, &dst);
             }
+            let copy_ms = t_copy.elapsed().as_millis();
+            tracing::info!(copy_non_core_ms = copy_ms, "shim non-core copy timing");
         }
     }
+
+    tracing::info!(
+        kind = ?kind,
+        ensure_core_ms = core_ms,
+        total_ms = t_total.elapsed().as_millis(),
+        "ensure_core_shims_for_kind timing"
+    );
 
     Ok(())
 }

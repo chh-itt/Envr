@@ -4,6 +4,10 @@ use crate::index::{
     PythonIndex, blocking_http_client, load_python_index, pick_install_artifact,
     release_id_for_version_label, resolve_python_version,
 };
+use envr_config::settings::{
+    pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
+    settings_path_from_platform,
+};
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
@@ -11,11 +15,15 @@ use envr_platform::links::{LinkType, ensure_link};
 use std::{
     ffi::OsStr,
     fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+    time::Duration,
 };
-
-const GET_PIP_URL: &str = "https://bootstrap.pypa.io/get-pip.py";
 
 #[derive(Debug, Clone)]
 pub struct PythonPaths {
@@ -48,7 +56,14 @@ impl PythonPaths {
     }
 }
 
-fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) -> EnvrResult<()> {
+fn download_to_path(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
     let mut response = client
         .get(url)
         .send()
@@ -64,9 +79,30 @@ fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) 
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
     let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    response
-        .copy_to(&mut f)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    if let Some(total) = progress_total {
+        total.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
+    }
+    if let Some(downloaded) = progress_downloaded {
+        downloaded.store(0, Ordering::Relaxed);
+    }
+    let mut buf = vec![0_u8; 64 * 1024];
+    let mut wrote = 0_u64;
+    loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Runtime("download cancelled".into()));
+        }
+        let n = response
+            .read(&mut buf)
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+        wrote = wrote.saturating_add(n as u64);
+        if let Some(downloaded) = progress_downloaded {
+            downloaded.store(wrote, Ordering::Relaxed);
+        }
+    }
     Ok(())
 }
 
@@ -105,7 +141,11 @@ fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
         let p = e.path();
         if p.extension() == Some(OsStr::new("_pth")) && p.is_file() {
             let mut s = fs::read_to_string(&p).map_err(EnvrError::from)?;
-            if !s.contains("import site") {
+            let has_active_import_site = s.lines().any(|line| {
+                let t = line.trim();
+                !t.starts_with('#') && t == "import site"
+            });
+            if !has_active_import_site {
                 if !s.ends_with('\n') {
                     s.push('\n');
                 }
@@ -117,20 +157,182 @@ fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
     Ok(())
 }
 
-fn bootstrap_pip_windows(client: &reqwest::blocking::Client, home: &Path) -> EnvrResult<()> {
+fn load_settings_snapshot() -> Option<envr_config::settings::Settings> {
+    (|| {
+        let platform = envr_platform::paths::current_platform_paths().ok()?;
+        let path = settings_path_from_platform(&platform);
+        envr_config::settings::Settings::load_or_default_from(&path).ok()
+    })()
+}
+
+fn remove_path_if_exists(path: &Path) {
+    if fs::symlink_metadata(path).is_err() {
+        return;
+    }
+    if fs::remove_file(path).is_ok() {
+        return;
+    }
+    if fs::remove_dir(path).is_ok() {
+        return;
+    }
+    let _ = fs::remove_dir_all(path);
+}
+
+fn load_python_bootstrap_from_settings() -> (Vec<String>, Vec<String>) {
+    if let Some(st) = load_settings_snapshot() {
+        let primary = python_get_pip_url(&st).to_string();
+        let mut urls = vec![primary.clone()];
+        // Always keep official as fallback: domestic mirrors can lag behind and break on new Python versions.
+        let official = envr_config::settings::GET_PIP_URL_OFFICIAL.to_string();
+        if primary != official {
+            urls.push(official);
+        }
+        (
+            urls,
+            pip_registry_urls_for_bootstrap(&st)
+                .into_iter()
+                .map(ToString::to_string)
+                .collect(),
+        )
+    } else {
+        (
+            vec![envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+            vec![envr_config::settings::PIP_INDEX_OFFICIAL.to_string()],
+        )
+    }
+}
+
+fn download_with_fallbacks(
+    client: &reqwest::blocking::Client,
+    urls: &[String],
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    let mut last_err: Option<EnvrError> = None;
+    for url in urls {
+        match download_to_path(
+            client,
+            url,
+            path,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        ) {
+            Ok(()) => return Ok(()),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| EnvrError::Download("no download urls available".into())))
+}
+
+fn ensure_cached_get_pip(
+    client: &reqwest::blocking::Client,
+    paths: &PythonPaths,
+    source_urls: &[String],
+) -> EnvrResult<PathBuf> {
+    let cache_file = paths.cache_dir().join("bootstrap").join("get-pip.py");
+    let stale = fs::metadata(&cache_file)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.elapsed().ok())
+        .is_none_or(|age| age > Duration::from_secs(24 * 3600));
+    if cache_file.is_file() && !stale {
+        return Ok(cache_file);
+    }
+    if let Some(parent) = cache_file.parent() {
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
+    }
+    let pid = std::process::id();
+    let tmp = cache_file.with_extension(format!("tmp.{pid}"));
+    download_with_fallbacks(client, source_urls, &tmp, None, None, None)?;
+    // Best-effort atomic replacement. Parallel writers may race; winner keeps a valid script.
+    if cache_file.exists() {
+        let _ = fs::remove_file(&cache_file);
+    }
+    fs::rename(&tmp, &cache_file).map_err(EnvrError::from)?;
+    Ok(cache_file)
+}
+
+fn run_get_pip(
+    py: &Path,
+    script: &Path,
+    home: &Path,
+    pip_index_url: Option<&str>,
+) -> EnvrResult<std::process::Output> {
+    Command::new(py)
+        .arg(script)
+        .args(["--no-warn-script-location", "--disable-pip-version-check"])
+        .args(
+            pip_index_url
+                .map(|u| ["--index-url", u])
+                .unwrap_or(["", ""])
+                .into_iter()
+                .filter(|s| !s.is_empty()),
+        )
+        .current_dir(home)
+        .output()
+        .map_err(|e| EnvrError::Runtime(format!("get-pip: {e}")))
+}
+
+fn bootstrap_pip_windows(
+    client: &reqwest::blocking::Client,
+    paths: &PythonPaths,
+    home: &Path,
+) -> EnvrResult<()> {
     let py = python_executable(home)
         .ok_or_else(|| EnvrError::Runtime("python.exe missing after embeddable install".into()))?;
-    let tmp = home.join(".envr-get-pip.py");
-    download_to_path(client, GET_PIP_URL, &tmp)?;
-    let st = Command::new(&py)
-        .arg(&tmp)
-        .args(["--no-warn-script-location"])
-        .current_dir(home)
-        .status()
-        .map_err(|e| EnvrError::Runtime(format!("get-pip: {e}")))?;
-    let _ = fs::remove_file(&tmp);
-    if !st.success() {
-        return Err(EnvrError::Runtime("get-pip.py failed".into()));
+    let (get_pip_urls, pip_index_urls) = load_python_bootstrap_from_settings();
+    let script = ensure_cached_get_pip(client, paths, &get_pip_urls)?;
+    let mut used_index = pip_index_urls.first().map(String::as_str);
+    let mut out = run_get_pip(&py, &script, home, used_index)?;
+    if !out.status.success() {
+        let stderr_lc = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
+        if stderr_lc.contains("no module named 'distutils'")
+            || stderr_lc.contains("no module named distutils")
+        {
+            // Cached mirror script can be stale for newer Python (e.g. 3.14+). Retry once with fresh official script.
+            let _ = fs::remove_file(&script);
+            let script = ensure_cached_get_pip(
+                client,
+                paths,
+                &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+            )?;
+            out = run_get_pip(&py, &script, home, used_index)?;
+        }
+    }
+    if !out.status.success() {
+        // Retry with pip index fallbacks first (domestic -> fallback domestic -> official).
+        for idx in pip_index_urls.iter().skip(1) {
+            used_index = Some(idx.as_str());
+            out = run_get_pip(&py, &script, home, used_index)?;
+            if out.status.success() {
+                break;
+            }
+        }
+    }
+    if !out.status.success() {
+        if used_index != Some(envr_config::settings::PIP_INDEX_OFFICIAL) {
+            // Last resort: force fresh official get-pip + official index.
+            let _ = fs::remove_file(&script);
+            let script = ensure_cached_get_pip(
+                client,
+                paths,
+                &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+            )?;
+            out = run_get_pip(&py, &script, home, Some(envr_config::settings::PIP_INDEX_OFFICIAL))?;
+        }
+    }
+    if !out.status.success() {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(EnvrError::Runtime(format!(
+            "get-pip.py failed (exit={}); stdout={}; stderr={}",
+            out.status,
+            stdout.trim(),
+            stderr.trim()
+        )));
     }
     Ok(())
 }
@@ -180,19 +382,49 @@ fn build_cpython_unix(src_root: &Path, install_prefix: &Path) -> EnvrResult<()> 
 }
 
 fn verify_python_and_pip(home: &Path) -> EnvrResult<()> {
+    #[cfg(windows)]
+    {
+        // Re-ensure embeddable _pth enables site-packages before probing pip.
+        fix_windows_embed_pth(home)?;
+    }
     let py = python_executable(home).ok_or_else(|| {
         EnvrError::Runtime("installation layout missing python executable".into())
     })?;
-    let st = Command::new(&py)
+    let first = Command::new(&py)
         .args(["-m", "pip", "--version"])
-        .status()
+        .output()
         .map_err(|e| EnvrError::Runtime(format!("pip check: {e}")))?;
-    if !st.success() {
-        return Err(EnvrError::Runtime(
-            "`python -m pip --version` failed after install".into(),
-        ));
+    if first.status.success() {
+        return Ok(());
     }
-    Ok(())
+
+    // Some Python layouts can still recover pip via stdlib ensurepip.
+    let ensure = Command::new(&py)
+        .args(["-m", "ensurepip", "--upgrade"])
+        .output()
+        .map_err(|e| EnvrError::Runtime(format!("ensurepip check: {e}")))?;
+    if ensure.status.success() {
+        let second = Command::new(&py)
+            .args(["-m", "pip", "--version"])
+            .output()
+            .map_err(|e| EnvrError::Runtime(format!("pip re-check: {e}")))?;
+        if second.status.success() {
+            return Ok(());
+        }
+    }
+
+    let first_out = String::from_utf8_lossy(&first.stdout);
+    let first_err = String::from_utf8_lossy(&first.stderr);
+    let ensure_out = String::from_utf8_lossy(&ensure.stdout);
+    let ensure_err = String::from_utf8_lossy(&ensure.stderr);
+    Err(EnvrError::Runtime(format!(
+        "`python -m pip --version` failed after install; pip_stdout={}; pip_stderr={}; ensurepip_exit={}; ensurepip_stdout={}; ensurepip_stderr={}",
+        first_out.trim(),
+        first_err.trim(),
+        ensure.status,
+        ensure_out.trim(),
+        ensure_err.trim(),
+    )))
 }
 
 pub fn python_executable(home: &Path) -> Option<PathBuf> {
@@ -292,18 +524,33 @@ impl PythonManager {
         load_python_index(&self.client, &self.releases_url, &self.files_url)
     }
 
-    pub fn install_from_spec(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
+    pub fn install_from_spec(
+        &self,
+        spec: &VersionSpec,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion> {
         let index = self.load_index()?;
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
         let label = resolve_python_version(&index, os, arch, &spec.0)?;
-        self.install_resolved_version(&index, &RuntimeVersion(label))
+        self.install_resolved_version(
+            &index,
+            &RuntimeVersion(label),
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )
     }
 
     pub fn install_resolved_version(
         &self,
         index: &PythonIndex,
         version: &RuntimeVersion,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
@@ -318,7 +565,19 @@ impl PythonManager {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let fname = artifact.url.rsplit('/').next().unwrap_or("download.bin");
         let cache_file = self.paths.cache_dir().join(&version.0).join(fname);
-        download_to_path(&self.client, &artifact.url, &cache_file)?;
+        let download_urls = if let Some(st) = load_settings_snapshot() {
+            python_download_url_candidates(&st, &artifact.url)
+        } else {
+            vec![artifact.url.clone()]
+        };
+        download_with_fallbacks(
+            &self.client,
+            &download_urls,
+            &cache_file,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )?;
         verify_sha256_if_present(&cache_file, &artifact.sha256_sum)?;
 
         let final_dir = self.paths.version_dir(&version.0);
@@ -330,7 +589,7 @@ impl PythonManager {
             fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
             extract::extract_archive(&cache_file, &final_dir)?;
             fix_windows_embed_pth(&final_dir)?;
-            bootstrap_pip_windows(&self.client, &final_dir)?;
+            bootstrap_pip_windows(&self.client, &self.paths, &final_dir)?;
         } else {
             fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
             let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
@@ -374,7 +633,7 @@ impl PythonManager {
             fs::remove_dir_all(&dir).map_err(EnvrError::from)?;
         }
         if read_current(&self.paths)?.is_some_and(|c| c.0 == version.0) {
-            let _ = fs::remove_file(self.paths.current_link());
+            remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
     }

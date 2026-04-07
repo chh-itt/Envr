@@ -6,7 +6,7 @@ pub use index::{
     PythonIndex, blocking_http_client, fetch_json, list_remote_versions, load_python_index,
     normalize_python_version_label, parse_release_file_list, parse_release_list,
     pick_install_artifact, release_has_platform_assets, release_id_for_version_label,
-    resolve_python_version,
+    resolve_python_version, list_latest_patch_per_major,
 };
 pub use manager::{
     PythonManager, PythonPaths, list_installed_versions, python_executable,
@@ -18,7 +18,7 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::EnvrResult;
-use envr_platform::paths::current_platform_paths;
+use envr_config::settings::resolve_runtime_root;
 
 pub struct PythonRuntimeProvider {
     releases_url: String,
@@ -51,7 +51,7 @@ impl PythonRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => resolve_runtime_root()?,
         })
     }
 
@@ -66,6 +66,41 @@ impl PythonRuntimeProvider {
     fn load_index(&self) -> EnvrResult<PythonIndex> {
         let client = index::blocking_http_client()?;
         index::load_python_index(&client, &self.releases_url, &self.files_url)
+    }
+
+    fn remote_cache_ttl_secs() -> u64 {
+        const DEFAULT: u64 = 24 * 60 * 60;
+        std::env::var("ENVR_PYTHON_REMOTE_CACHE_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT)
+    }
+
+    fn file_is_within_ttl(path: &std::path::Path, ttl_secs: u64) -> bool {
+        if ttl_secs == 0 {
+            return false;
+        }
+        let Ok(meta) = std::fs::metadata(path) else {
+            return false;
+        };
+        let Ok(mtime) = meta.modified() else {
+            return false;
+        };
+        let Ok(age) = std::time::SystemTime::now().duration_since(mtime) else {
+            return false;
+        };
+        age.as_secs() <= ttl_secs
+    }
+
+    fn remote_latest_per_major_cache_file(
+        &self,
+        os: &str,
+        arch: &str,
+    ) -> EnvrResult<std::path::PathBuf> {
+        let paths = PythonPaths::new(self.runtime_root()?);
+        Ok(paths
+            .cache_dir()
+            .join(format!("remote_latest_per_major_{os}_{arch}.json")))
     }
 }
 
@@ -99,6 +134,57 @@ impl RuntimeProvider for PythonRuntimeProvider {
         list_remote_versions(&idx, std::env::consts::OS, std::env::consts::ARCH, filter)
     }
 
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let Ok(cache_file) = self.remote_latest_per_major_cache_file(os, arch) else {
+            return Vec::new();
+        };
+        let Ok(s) = std::fs::read_to_string(&cache_file) else {
+            return Vec::new();
+        };
+        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+            return Vec::new();
+        };
+        list.into_iter().map(RuntimeVersion).collect()
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let ttl_secs = Self::remote_cache_ttl_secs();
+        let cache_file = self.remote_latest_per_major_cache_file(os, arch)?;
+
+        if Self::file_is_within_ttl(&cache_file, ttl_secs) {
+            if let Ok(s) = std::fs::read_to_string(&cache_file) {
+                if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
+                    // Heuristic: an unexpectedly tiny list usually indicates a legacy cache
+                    // generated with a different grouping strategy (e.g. major-only). Refresh it.
+                    if list.len() >= 6 {
+                        return Ok(list.into_iter().map(RuntimeVersion).collect());
+                    }
+                    let _ = std::fs::remove_file(&cache_file);
+                }
+            }
+        }
+
+        let idx = self.load_index()?;
+        let list = index::list_latest_patch_per_major(&idx, os, arch)?;
+
+        // Best-effort cache write (don't fail the whole operation).
+        let _ = (|| -> EnvrResult<()> {
+            let paths = PythonPaths::new(self.runtime_root()?);
+            std::fs::create_dir_all(paths.cache_dir())?;
+            let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
+            let s = serde_json::to_string(&strings)
+                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            std::fs::write(&cache_file, s)?;
+            Ok(())
+        })();
+
+        Ok(list)
+    }
+
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
         let idx = self.load_index()?;
         let v =
@@ -109,7 +195,12 @@ impl RuntimeProvider for PythonRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(&request.spec)
+        self.manager()?.install_from_spec(
+            &request.spec,
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

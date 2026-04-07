@@ -794,6 +794,215 @@ fn apply_npm_registry_cli(url: &str) -> Result<(), String> {
     }
 }
 
+fn pip_user_config_paths() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(appdata) = std::env::var("APPDATA")
+        && !appdata.trim().is_empty()
+    {
+        out.push(PathBuf::from(appdata).join("pip").join("pip.ini"));
+    }
+    if let Ok(home) = std::env::var("USERPROFILE")
+        && !home.trim().is_empty()
+    {
+        out.push(PathBuf::from(home).join("pip").join("pip.ini"));
+    }
+    out
+}
+
+fn write_pip_user_ini(
+    path: &std::path::Path,
+    index_url: &str,
+    trusted_host: &str,
+    extra_index_url: Option<&str>,
+) -> Result<(), String> {
+    fn append_missing_global_keys(
+        buf: &mut Vec<String>,
+        index_url: &str,
+        trusted_host: &str,
+        extra_index_url: Option<&str>,
+        want_extra: bool,
+        wrote_index: &mut bool,
+        wrote_host: &mut bool,
+        wrote_timeout: &mut bool,
+        wrote_extra: &mut bool,
+    ) {
+        if !*wrote_index {
+            buf.push(format!("index-url = {index_url}"));
+            *wrote_index = true;
+        }
+        if !*wrote_host {
+            buf.push(format!("trusted-host = {trusted_host}"));
+            *wrote_host = true;
+        }
+        if !*wrote_timeout {
+            buf.push("timeout = 120".to_string());
+            *wrote_timeout = true;
+        }
+        if want_extra && !*wrote_extra {
+            if let Some(extra) = extra_index_url
+                && !extra.trim().is_empty()
+            {
+                buf.push(format!("extra-index-url = {extra}"));
+            }
+            *wrote_extra = true;
+        }
+    }
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let existing = std::fs::read_to_string(path).unwrap_or_default();
+    let mut out: Vec<String> = Vec::new();
+    let mut in_global = false;
+    let mut skipping_duplicate_global = false;
+    let mut saw_global = false;
+    let mut wrote_index = false;
+    let mut wrote_host = false;
+    let mut wrote_timeout = false;
+    let mut wrote_extra = false;
+    let want_extra = extra_index_url.is_some_and(|s| !s.trim().is_empty());
+
+    for raw in existing.lines() {
+        let line = raw.to_string();
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_global {
+                append_missing_global_keys(
+                    &mut out,
+                    index_url,
+                    trusted_host,
+                    extra_index_url,
+                    want_extra,
+                    &mut wrote_index,
+                    &mut wrote_host,
+                    &mut wrote_timeout,
+                    &mut wrote_extra,
+                );
+            }
+            let is_global = trimmed.eq_ignore_ascii_case("[global]");
+            if is_global && saw_global {
+                // Self-heal invalid INI: keep the first [global], drop duplicate sections.
+                in_global = false;
+                skipping_duplicate_global = true;
+                continue;
+            }
+            skipping_duplicate_global = false;
+            in_global = is_global;
+            if is_global {
+                saw_global = true;
+            }
+            out.push(line);
+            continue;
+        }
+        if skipping_duplicate_global {
+            continue;
+        }
+        if in_global && !trimmed.starts_with('#') && !trimmed.starts_with(';') {
+            if let Some((k, _v)) = line.split_once('=') {
+                let key = k.trim().to_ascii_lowercase();
+                if key == "index-url" {
+                    if !wrote_index {
+                        out.push(format!("index-url = {index_url}"));
+                        wrote_index = true;
+                    }
+                    continue;
+                }
+                if key == "trusted-host" {
+                    if !wrote_host {
+                        out.push(format!("trusted-host = {trusted_host}"));
+                        wrote_host = true;
+                    }
+                    continue;
+                }
+                if key == "timeout" {
+                    if !wrote_timeout {
+                        out.push("timeout = 120".to_string());
+                        wrote_timeout = true;
+                    }
+                    continue;
+                }
+                if key == "extra-index-url" {
+                    if !wrote_extra {
+                        if let Some(extra) = extra_index_url
+                            && !extra.trim().is_empty()
+                        {
+                            out.push(format!("extra-index-url = {extra}"));
+                        }
+                        wrote_extra = true;
+                    }
+                    continue;
+                }
+            }
+        }
+        out.push(line);
+    }
+    if in_global {
+        append_missing_global_keys(
+            &mut out,
+            index_url,
+            trusted_host,
+            extra_index_url,
+            want_extra,
+            &mut wrote_index,
+            &mut wrote_host,
+            &mut wrote_timeout,
+            &mut wrote_extra,
+        );
+    }
+
+    if !saw_global {
+        if !out.is_empty() && !out.last().is_some_and(|s| s.trim().is_empty()) {
+            out.push(String::new());
+        }
+        out.push("[global]".to_string());
+        out.push(format!("index-url = {index_url}"));
+        out.push(format!("trusted-host = {trusted_host}"));
+        out.push("timeout = 120".to_string());
+        if let Some(extra) = extra_index_url
+            && !extra.trim().is_empty()
+        {
+            out.push(format!("extra-index-url = {extra}"));
+        }
+    }
+
+    let body = format!("{}\n", out.join("\n"));
+    std::fs::write(path, body).map_err(|e| e.to_string())
+}
+
+fn apply_pip_registry_config(settings: &Settings) -> Result<(), String> {
+    if matches!(
+        settings.runtime.python.pip_registry_mode,
+        envr_config::settings::PipRegistryMode::Restore
+    ) {
+        return Ok(());
+    }
+    let index_urls = envr_config::settings::pip_registry_urls_for_bootstrap(settings);
+    let Some(index_url) = index_urls.first().copied() else {
+        return Ok(());
+    };
+    let extra = if index_urls.len() > 1 {
+        Some(index_urls.iter().skip(1).copied().collect::<Vec<_>>().join(" "))
+    } else {
+        None
+    };
+    let host = reqwest::Url::parse(index_url)
+        .ok()
+        .and_then(|u| u.host_str().map(|s| s.to_string()))
+        .ok_or_else(|| format!("invalid pip index url: {index_url}"))?;
+
+    let candidates = pip_user_config_paths();
+    let existing: Vec<PathBuf> = candidates.iter().filter(|p| p.exists()).cloned().collect();
+    let targets: Vec<PathBuf> = if existing.is_empty() {
+        candidates.into_iter().take(1).collect()
+    } else {
+        existing
+    };
+    for p in targets {
+        write_pip_user_ini(&p, index_url, &host, extra.as_deref())?;
+    }
+    Ok(())
+}
+
 /// Save a full [`Settings`] snapshot (e.g. runtime.node edits from the env center) and mirror [`SettingsMsg::DiskSaved`].
 fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
     let path = settings_path();
@@ -806,21 +1015,33 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
                     tracing::warn!(%e, "npm config set registry skipped after settings save");
                 }
             }
+            if let Err(e) = apply_pip_registry_config(&settings) {
+                tracing::warn!(%e, "pip user config update skipped after settings save");
+            }
             Ok(settings)
         },
         |res| Message::Settings(SettingsMsg::DiskSaved(res)),
     )
 }
 
-fn node_path_proxy_blocks_use(state: &AppState) -> bool {
-    state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-        && !state
+fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
+    match state.env_center.kind {
+        envr_domain::runtime::RuntimeKind::Node => !state
             .settings
             .cache
             .snapshot()
             .runtime
             .node
-            .path_proxy_enabled
+            .path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Python => !state
+            .settings
+            .cache
+            .snapshot()
+            .runtime
+            .python
+            .path_proxy_enabled,
+        _ => false,
+    }
 }
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
@@ -844,10 +1065,14 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         && state.env_center.node_remote_refreshing
         && state.env_center.node_remote_latest.is_empty()
         && state.env_center.installed.is_empty();
+    let waiting_python_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Python
+        && state.env_center.python_remote_refreshing
+        && state.env_center.python_remote_latest.is_empty()
+        && state.env_center.installed.is_empty();
     if !state.reduce_motion
         && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
-        && (waiting_installed_list || waiting_node_remote)
+        && (waiting_installed_list || waiting_node_remote || waiting_python_remote)
     {
         state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
     }
@@ -1151,16 +1376,30 @@ fn runtime_install_task_label(
 
 fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
     let kind = state.env_center.kind;
-    if kind == envr_domain::runtime::RuntimeKind::Node {
-        state.env_center.node_remote_refreshing = true;
-        Task::batch([
-            gui_ops::refresh_runtimes(kind),
-            gui_ops::load_remote_latest_disk_snapshot(kind),
-            gui_ops::refresh_remote_latest_per_major(kind),
-        ])
-    } else {
-        state.env_center.node_remote_refreshing = false;
-        gui_ops::refresh_runtimes(kind)
+    match kind {
+        envr_domain::runtime::RuntimeKind::Node => {
+            state.env_center.node_remote_refreshing = true;
+            state.env_center.python_remote_refreshing = false;
+            Task::batch([
+                gui_ops::refresh_runtimes(kind),
+                gui_ops::load_remote_latest_disk_snapshot(kind),
+                gui_ops::refresh_remote_latest_per_major(kind),
+            ])
+        }
+        envr_domain::runtime::RuntimeKind::Python => {
+            state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_refreshing = true;
+            Task::batch([
+                gui_ops::refresh_runtimes(kind),
+                gui_ops::load_remote_latest_disk_snapshot(kind),
+                gui_ops::refresh_remote_latest_per_major(kind),
+            ])
+        }
+        _ => {
+            state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_refreshing = false;
+            gui_ops::refresh_runtimes(kind)
+        }
     }
 }
 
@@ -1174,11 +1413,20 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.remote_error = None;
             state.env_center.node_remote_latest.clear();
             state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_latest.clear();
+            state.env_center.python_remote_refreshing = false;
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
-            state.env_center.node_settings_expanded = false;
+            state.env_center.runtime_settings_expanded = false;
             if k == envr_domain::runtime::RuntimeKind::Node {
                 state.env_center.node_remote_refreshing = true;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Python {
+                state.env_center.python_remote_refreshing = true;
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1189,7 +1437,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
         }
         EnvCenterMsg::InstallInput(s) => {
-            state.env_center.install_input = s;
+            state.env_center.install_input = sanitize_runtime_filter_input(state.env_center.kind, &s);
             Task::none()
         }
         EnvCenterMsg::DirectInstallInput(s) => {
@@ -1207,23 +1455,53 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             Task::none()
         }
-        EnvCenterMsg::RemoteLatestDiskSnapshot(rows) => {
-            if state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-                && state.env_center.node_remote_latest.is_empty()
-            {
-                state.env_center.node_remote_latest = rows;
+        EnvCenterMsg::RemoteLatestDiskSnapshot(kind, rows) => {
+            match kind {
+                envr_domain::runtime::RuntimeKind::Node => {
+                    if state.env_center.node_remote_latest.is_empty()
+                        || rows.len() > state.env_center.node_remote_latest.len()
+                    {
+                        state.env_center.node_remote_latest = rows;
+                    }
+                }
+                envr_domain::runtime::RuntimeKind::Python => {
+                    if state.env_center.python_remote_latest.is_empty()
+                        || rows.len() > state.env_center.python_remote_latest.len()
+                    {
+                        state.env_center.python_remote_latest = rows;
+                    }
+                }
+                _ => {}
             }
             Task::none()
         }
-        EnvCenterMsg::RemoteLatestRefreshed(res) => {
-            state.env_center.node_remote_refreshing = false;
+        EnvCenterMsg::RemoteLatestRefreshed(kind, res) => {
             match res {
                 Ok(rows) => {
                     state.env_center.remote_error = None;
-                    state.env_center.node_remote_latest = rows;
+                    match kind {
+                        envr_domain::runtime::RuntimeKind::Node => {
+                            state.env_center.node_remote_refreshing = false;
+                            state.env_center.node_remote_latest = rows;
+                        }
+                        envr_domain::runtime::RuntimeKind::Python => {
+                            state.env_center.python_remote_refreshing = false;
+                            state.env_center.python_remote_latest = rows;
+                        }
+                        _ => {}
+                    }
                 }
                 Err(e) => {
                     state.env_center.remote_error = Some(e);
+                    match kind {
+                        envr_domain::runtime::RuntimeKind::Node => {
+                            state.env_center.node_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Python => {
+                            state.env_center.python_remote_refreshing = false;
+                        }
+                        _ => {}
+                    }
                 }
             }
             Task::none()
@@ -1252,7 +1530,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             )
         }
         EnvCenterMsg::SubmitDirectInstallAndUse => {
-            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+            if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
                 return Task::none();
             }
             let spec = state.env_center.direct_install_input.trim().to_string();
@@ -1291,7 +1569,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             gui_ops::install_version(state.env_center.kind, spec, downloaded, total, cancel)
         }
         EnvCenterMsg::SubmitInstallAndUse(spec) => {
-            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+            if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
                 return Task::none();
             }
             if spec.trim().is_empty() {
@@ -1338,7 +1616,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
         EnvCenterMsg::SubmitUse(v) => {
-            if state.env_center.busy || node_path_proxy_blocks_use(state) {
+            if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
                 return Task::none();
             }
             state.env_center.busy = true;
@@ -1367,8 +1645,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
-        EnvCenterMsg::ToggleNodeSettings => {
-            state.env_center.node_settings_expanded = !state.env_center.node_settings_expanded;
+        EnvCenterMsg::ToggleRuntimeSettings => {
+            state.env_center.runtime_settings_expanded = !state.env_center.runtime_settings_expanded;
             Task::none()
         }
         EnvCenterMsg::SetNodeDownloadSource(src) => {
@@ -1398,6 +1676,33 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             persist_settings_clone_task(st)
         }
+        EnvCenterMsg::SetPythonDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.python.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetPipRegistryMode(mode) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.python.pip_registry_mode = mode;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetPythonPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.python.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
     }
 }
 
@@ -1410,6 +1715,36 @@ fn direct_install_spec_ok(spec: &str) -> bool {
         return false;
     }
     true
+}
+
+fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &str) -> String {
+    let t = raw.trim();
+    match kind {
+        // Node filter supports major only.
+        envr_domain::runtime::RuntimeKind::Node => t
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .take(4)
+            .collect(),
+        // Python filter supports major.minor.
+        envr_domain::runtime::RuntimeKind::Python => {
+            let mut out = String::new();
+            let mut dot_seen = false;
+            for ch in t.chars() {
+                if ch.is_ascii_digit() {
+                    out.push(ch);
+                } else if ch == '.' && !dot_seen {
+                    out.push(ch);
+                    dot_seen = true;
+                }
+                if out.len() >= 8 {
+                    break;
+                }
+            }
+            out
+        }
+        _ => t.chars().take(32).collect(),
+    }
 }
 
 fn view(state: &AppState) -> Element<'_, Message> {

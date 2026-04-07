@@ -106,6 +106,19 @@ pub fn read_current(paths: &JavaPaths) -> EnvrResult<Option<RuntimeVersion>> {
     Ok(Some(RuntimeVersion(name)))
 }
 
+fn remove_path_if_exists(path: &Path) {
+    if fs::symlink_metadata(path).is_err() {
+        return;
+    }
+    if fs::remove_file(path).is_ok() {
+        return;
+    }
+    if fs::remove_dir(path).is_ok() {
+        return;
+    }
+    let _ = fs::remove_dir_all(path);
+}
+
 /// Writes [`JavaPaths::java_home_export_file`] from the canonical `current` link target, or removes it.
 pub fn sync_java_home_export(paths: &JavaPaths) -> EnvrResult<()> {
     let marker = paths.java_home_export_file();
@@ -377,7 +390,7 @@ impl JavaManager {
             fs::remove_dir_all(&dir).map_err(EnvrError::from)?;
         }
         if read_current(&self.paths)?.is_some_and(|c| c.0 == version.0) {
-            let _ = fs::remove_file(self.paths.current_link());
+            remove_path_if_exists(&self.paths.current_link());
             sync_java_home_export(&self.paths)?;
         }
         Ok(())

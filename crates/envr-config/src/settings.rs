@@ -242,6 +242,28 @@ pub enum NpmRegistryMode {
     Restore,
 }
 
+/// Python bootstrap source choice for `get-pip.py` retrieval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PythonDownloadSource {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
+/// How `pip` bootstrap should resolve package index during `get-pip.py`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PipRegistryMode {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+    /// Do not force `--index-url` during bootstrap.
+    Restore,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeRuntimeSettings {
     #[serde(default)]
@@ -263,6 +285,27 @@ impl Default for NodeRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PythonRuntimeSettings {
+    #[serde(default)]
+    pub download_source: PythonDownloadSource,
+    #[serde(default)]
+    pub pip_registry_mode: PipRegistryMode,
+    /// When false, python/pip shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::python_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for PythonRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: PythonDownloadSource::default(),
+            pip_registry_mode: PipRegistryMode::default(),
+            path_proxy_enabled: defaults::python_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -270,11 +313,20 @@ pub const NODE_INDEX_JSON_DOMESTIC: &str = "https://npmmirror.com/mirrors/node/i
 
 pub const NPM_REGISTRY_OFFICIAL: &str = "https://registry.npmjs.org/";
 pub const NPM_REGISTRY_DOMESTIC: &str = "https://registry.npmmirror.com/";
+pub const PYTHON_FTP_OFFICIAL: &str = "https://www.python.org/ftp/python/";
+pub const PYTHON_FTP_DOMESTIC: &str = "https://mirrors.tuna.tsinghua.edu.cn/python/";
+pub const GET_PIP_URL_OFFICIAL: &str = "https://bootstrap.pypa.io/get-pip.py";
+pub const GET_PIP_URL_DOMESTIC: &str = "https://mirrors.aliyun.com/pypi/get-pip.py";
+pub const PIP_INDEX_OFFICIAL: &str = "https://pypi.org/simple";
+pub const PIP_INDEX_DOMESTIC: &str = "https://mirrors.aliyun.com/pypi/simple";
+pub const PIP_INDEX_DOMESTIC_FALLBACK: &str = "https://pypi.tuna.tsinghua.edu.cn/simple";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RuntimeSettings {
     #[serde(default)]
     pub node: NodeRuntimeSettings,
+    #[serde(default)]
+    pub python: PythonRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -622,6 +674,71 @@ pub fn npm_registry_url_to_apply(settings: &Settings) -> Option<&'static str> {
     }
 }
 
+pub fn python_get_pip_url(settings: &Settings) -> &'static str {
+    match settings.runtime.python.download_source {
+        PythonDownloadSource::Official => GET_PIP_URL_OFFICIAL,
+        PythonDownloadSource::Domestic => GET_PIP_URL_DOMESTIC,
+        PythonDownloadSource::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                GET_PIP_URL_DOMESTIC
+            } else {
+                GET_PIP_URL_OFFICIAL
+            }
+        }
+    }
+}
+
+/// Candidate download URLs for Python artifacts (first is preferred, later entries are fallbacks).
+///
+/// `original_url` usually comes from python.org release APIs. In `auto` / `domestic`, when the URL
+/// is under official Python FTP, a TUNA mirror URL is prepended and official is kept as fallback.
+pub fn python_download_url_candidates(settings: &Settings, original_url: &str) -> Vec<String> {
+    let prefer_domestic = match settings.runtime.python.download_source {
+        PythonDownloadSource::Official => false,
+        PythonDownloadSource::Domestic => true,
+        PythonDownloadSource::Auto => prefer_china_mirror_locale(settings),
+    };
+    if !prefer_domestic {
+        return vec![original_url.to_string()];
+    }
+    if let Some(rest) = original_url.strip_prefix(PYTHON_FTP_OFFICIAL) {
+        return vec![
+            format!("{PYTHON_FTP_DOMESTIC}{rest}"),
+            original_url.to_string(),
+        ];
+    }
+    vec![original_url.to_string()]
+}
+
+/// Resolved `pip` index URL for bootstrap `get-pip.py`, or `None` to keep interpreter defaults.
+pub fn pip_registry_url_for_bootstrap(settings: &Settings) -> Option<&'static str> {
+    pip_registry_urls_for_bootstrap(settings).into_iter().next()
+}
+
+/// Candidate `pip` index URLs (ordered) for bootstrap and runtime-managed pip config.
+pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str> {
+    match settings.runtime.python.pip_registry_mode {
+        PipRegistryMode::Restore => vec![],
+        PipRegistryMode::Official => vec![PIP_INDEX_OFFICIAL],
+        PipRegistryMode::Domestic => vec![
+            PIP_INDEX_DOMESTIC,
+            PIP_INDEX_DOMESTIC_FALLBACK,
+            PIP_INDEX_OFFICIAL,
+        ],
+        PipRegistryMode::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                vec![
+                    PIP_INDEX_DOMESTIC,
+                    PIP_INDEX_DOMESTIC_FALLBACK,
+                    PIP_INDEX_OFFICIAL,
+                ]
+            } else {
+                vec![PIP_INDEX_OFFICIAL]
+            }
+        }
+    }
+}
+
 /// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn node_path_proxy_enabled_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -630,6 +747,17 @@ pub fn node_path_proxy_enabled_from_disk() -> bool {
     let path = settings_path_from_platform(&platform);
     Settings::load_or_default_from(&path)
         .map(|s| s.runtime.node.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
+/// Read [`PythonRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn python_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.python.path_proxy_enabled)
         .unwrap_or(true)
 }
 
@@ -715,6 +843,10 @@ mod defaults {
     pub fn node_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn python_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -776,6 +908,7 @@ mod tests {
             },
             runtime: RuntimeSettings {
                 node: NodeRuntimeSettings::default(),
+                python: PythonRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                 },

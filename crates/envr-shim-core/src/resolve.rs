@@ -1,5 +1,7 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
-use envr_config::settings::{node_path_proxy_enabled_from_disk, resolve_runtime_root};
+use envr_config::settings::{
+    node_path_proxy_enabled_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
+};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
@@ -452,6 +454,23 @@ fn resolve_node_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
     })
 }
 
+fn resolve_python_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Python => "python",
+        CoreCommand::Pip => "pip",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports python tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     if matches!(
@@ -460,6 +479,10 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     ) && !node_path_proxy_enabled_from_disk()
     {
         return resolve_node_tool_bypass_envr(cmd);
+    }
+    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !python_path_proxy_enabled_from_disk()
+    {
+        return resolve_python_tool_bypass_envr(cmd);
     }
 
     let cfg =

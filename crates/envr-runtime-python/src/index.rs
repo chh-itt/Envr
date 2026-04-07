@@ -7,7 +7,7 @@ use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::HashMap, sync::OnceLock, time::Duration};
+use std::{collections::{HashMap, HashSet}, sync::OnceLock, time::Duration};
 
 fn python_triple_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -101,15 +101,43 @@ pub fn fetch_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
 }
 
 pub fn parse_release_list(json: &str) -> EnvrResult<Vec<PyRelease>> {
-    let list: ApiList<PyRelease> =
+    // python.org may return either:
+    // 1) root array: `[ { ...release... }, ... ]`
+    // 2) object with `value`: `{ "value": [ ... ] }`
+    let v: serde_json::Value =
         serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
-    Ok(list.value)
+    if v.is_array() {
+        serde_json::from_value::<Vec<PyRelease>>(v)
+            .map_err(|e| EnvrError::Validation(e.to_string()))
+    } else if v.get("value").is_some() {
+        let list: ApiList<PyRelease> = serde_json::from_value(v)
+            .map_err(|e| EnvrError::Validation(e.to_string()))?;
+        Ok(list.value)
+    } else {
+        Err(EnvrError::Validation(
+            "python release api: unexpected json shape".into(),
+        ))
+    }
 }
 
 pub fn parse_release_file_list(json: &str) -> EnvrResult<Vec<PyReleaseFile>> {
-    let list: ApiList<PyReleaseFile> =
+    // python.org may return either:
+    // 1) root array
+    // 2) object with `value`
+    let v: serde_json::Value =
         serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
-    Ok(list.value)
+    if v.is_array() {
+        serde_json::from_value::<Vec<PyReleaseFile>>(v)
+            .map_err(|e| EnvrError::Validation(e.to_string()))
+    } else if v.get("value").is_some() {
+        let list: ApiList<PyReleaseFile> = serde_json::from_value(v)
+            .map_err(|e| EnvrError::Validation(e.to_string()))?;
+        Ok(list.value)
+    } else {
+        Err(EnvrError::Validation(
+            "python release_file api: unexpected json shape".into(),
+        ))
+    }
 }
 
 fn index_files_by_release(files: &[PyReleaseFile]) -> HashMap<u32, Vec<PyReleaseFile>> {
@@ -232,6 +260,27 @@ pub fn list_remote_versions(
         let p = prefix.trim().to_ascii_lowercase();
         if !p.is_empty() {
             out.retain(|rv| rv.0.to_ascii_lowercase().starts_with(&p));
+        }
+    }
+    Ok(out)
+}
+
+/// Latest patch version per Python major.minor line for GUI list rows.
+///
+/// For Python labels like `3.14.3`, the "major line" here is `3.14` (install spec may be `3.14`).
+pub fn list_latest_patch_per_major(
+    index: &PythonIndex,
+    os: &str,
+    arch: &str,
+) -> EnvrResult<Vec<RuntimeVersion>> {
+    // `candidate_releases` is already sorted by semantic version descending,
+    // so the first occurrence for each (major, minor) is the latest patch for that line.
+    let rows = candidate_releases(index, os, arch);
+    let mut seen: HashSet<(u64, u64)> = HashSet::new();
+    let mut out: Vec<RuntimeVersion> = Vec::new();
+    for (sem, ver, _rid) in rows {
+        if seen.insert((sem.0, sem.1)) {
+            out.push(RuntimeVersion(ver));
         }
     }
     Ok(out)

@@ -18,18 +18,14 @@ pub fn ensure_link(
     let src = src.as_ref();
     let dst = dst.as_ref();
 
-    if dst.exists() {
+    if std::fs::symlink_metadata(dst).is_ok() {
         // Best-effort idempotency: if dst already points to src, keep it; otherwise replace.
         if let Ok(target) = read_link_target(dst)
             && target == src
         {
             return Ok(());
         }
-        if dst.is_dir() {
-            fs::remove_dir_all(dst).map_err(EnvrError::from)?;
-        } else {
-            fs::remove_file(dst).map_err(EnvrError::from)?;
-        }
+        remove_path_best_effort(dst)?;
     }
 
     if let Some(parent) = dst.parent() {
@@ -40,6 +36,25 @@ pub fn ensure_link(
         LinkType::Hard => fs::hard_link(src, dst).map_err(EnvrError::from),
         LinkType::Soft => create_symlink(src, dst),
     }
+}
+
+fn remove_path_best_effort(path: &Path) -> EnvrResult<()> {
+    // Windows reparse points (junction/symlink) are tricky: remove_file/remove_dir
+    // usually removes the link node itself, while remove_dir_all may recurse target.
+    // Try lightweight removals first, then fallback to recursive delete.
+    if fs::remove_file(path).is_ok() {
+        return Ok(());
+    }
+    if fs::remove_dir(path).is_ok() {
+        return Ok(());
+    }
+    if fs::remove_dir_all(path).is_ok() {
+        return Ok(());
+    }
+    Err(EnvrError::Io(std::io::Error::other(format!(
+        "failed to remove existing path: {}",
+        path.display()
+    ))))
 }
 
 fn read_link_target(path: &Path) -> EnvrResult<PathBuf> {
@@ -85,16 +100,35 @@ fn create_symlink(src: &Path, dst: &Path) -> EnvrResult<()> {
 fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
     use std::process::Command;
 
+    fn normalize_for_cmd(p: &Path) -> String {
+        let s = p.to_string_lossy().to_string();
+        s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+    }
+
+    let src_s = normalize_for_cmd(src);
+    let dst_s = normalize_for_cmd(dst);
+
     // `mklink /J <dst> <src>` creates a junction.
     // We intentionally run through `cmd /C` to let Windows handle quoting.
-    let cmdline = format!("mklink /J \"{}\" \"{}\"", dst.display(), src.display());
+    let cmdline = format!("mklink /J \"{}\" \"{}\"", dst_s, src_s);
     let status = Command::new("cmd")
         .args(["/C", &cmdline])
         .status();
 
     match status {
         Ok(st) if st.success() => Ok(true),
-        _ => Ok(false),
+        _ => {
+            // Second fallback for environments where `mklink` is restricted by shell policy.
+            let ps = format!(
+                "New-Item -ItemType Junction -Path '{}' -Target '{}' | Out-Null",
+                dst_s.replace('\'', "''"),
+                src_s.replace('\'', "''"),
+            );
+            let status2 = Command::new("powershell")
+                .args(["-NoProfile", "-Command", &ps])
+                .status();
+            Ok(matches!(status2, Ok(st) if st.success()))
+        }
     }
 }
 
