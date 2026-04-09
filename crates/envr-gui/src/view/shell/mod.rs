@@ -156,6 +156,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 matches!(state.env_center.kind, RuntimeKind::Go).then_some(
                     &state.settings.cache.snapshot().runtime.go,
                 ),
+                matches!(state.env_center.kind, RuntimeKind::Rust).then_some(
+                    &state.settings.cache.snapshot().runtime.rust,
+                ),
                 tokens,
             ));
         }

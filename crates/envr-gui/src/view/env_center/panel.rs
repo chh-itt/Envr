@@ -3,7 +3,7 @@
 use envr_config::settings::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro, JavaDownloadSource,
     JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings,
+    PythonDownloadSource, PythonRuntimeSettings, RustDownloadSource, RustRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
@@ -55,7 +55,38 @@ pub enum EnvCenterMsg {
     SetGoProxyCustomDraft(String),
     SetGoPrivatePatternsDraft(String),
     ApplyGoNetworkSettings,
+    SetRustDownloadSource(RustDownloadSource),
+
+    // Rust page (specialized).
+    RustRefresh,
+    RustStatusLoaded(Result<RustStatus, String>),
+    RustSelectTab(RustTab),
+    RustChannelInstallOrSwitch(String),
+    RustUpdateCurrent,
+    RustManagedInstallStable,
+    RustManagedUninstall,
+    RustComponentsLoaded(Result<Vec<(String, bool)>, String>),
+    RustTargetsLoaded(Result<Vec<(String, bool)>, String>),
+    RustComponentToggle(String, bool),
+    RustTargetToggle(String, bool),
+    RustOpFinished(Result<(), String>),
     SyncShimsFinished(Result<(), String>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RustTab {
+    Components,
+    Targets,
+}
+
+#[derive(Debug, Clone)]
+pub struct RustStatus {
+    /// "system" | "managed" | "none"
+    pub mode: String,
+    pub active_toolchain: Option<String>,
+    pub rustc_version: Option<String>,
+    pub managed_install_available: bool,
+    pub managed_installed: bool,
 }
 
 #[derive(Debug)]
@@ -95,6 +126,12 @@ pub struct EnvCenterState {
     pub go_proxy_custom_draft: String,
     /// Draft for `runtime.go.private_patterns`.
     pub go_private_patterns_draft: String,
+
+    // Rust page state.
+    pub rust_status: Option<RustStatus>,
+    pub rust_tab: RustTab,
+    pub rust_components: Vec<(String, bool)>,
+    pub rust_targets: Vec<(String, bool)>,
 }
 
 impl Default for EnvCenterState {
@@ -120,6 +157,11 @@ impl Default for EnvCenterState {
             op_job_id: None,
             go_proxy_custom_draft: String::new(),
             go_private_patterns_draft: String::new(),
+
+            rust_status: None,
+            rust_tab: RustTab::Components,
+            rust_components: Vec::new(),
+            rust_targets: Vec::new(),
         }
     }
 }
@@ -794,12 +836,17 @@ pub fn env_center_view(
     python_runtime: Option<&PythonRuntimeSettings>,
     java_runtime: Option<&JavaRuntimeSettings>,
     go_runtime: Option<&GoRuntimeSettings>,
+    rust_runtime: Option<&RustRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let busy = state.busy;
     let card_s = card_container_style(tokens, 1);
+
+    if state.kind == RuntimeKind::Rust {
+        return rust_env_center_view(state, rust_runtime, tokens);
+    }
 
     let path_proxy_on = match state.kind {
         RuntimeKind::Node => node_runtime.map(|n| n.path_proxy_enabled).unwrap_or(true),
@@ -1472,6 +1519,301 @@ pub fn env_center_view(
         );
     }
     col.push(list_col).into()
+}
+
+fn rust_env_center_view(
+    state: &EnvCenterState,
+    rust_runtime: Option<&RustRuntimeSettings>,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let header = container(
+        row![
+            text(envr_core::i18n::tr_key("gui.runtime.rust.title", "Rust 设置", "Rust"))
+                .size(ty.section),
+            container(space()).width(Length::Fill),
+            button(button_content_centered(
+                row![
+                    Lucide::RefreshCw.view(14.0, txt),
+                    text(envr_core::i18n::tr_key("gui.action.refresh", "刷新", "Refresh")),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(EnvCenterMsg::RustRefresh))
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .style(button_style(tokens, ButtonVariant::Secondary)),
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1));
+
+    let status = state.rust_status.as_ref();
+    let mode = status.map(|s| s.mode.as_str()).unwrap_or("none");
+    let mode_label = match mode {
+        "system" => envr_core::i18n::tr_key("gui.runtime.rust.mode.system", "系统 rustup", "System rustup"),
+        "managed" => envr_core::i18n::tr_key("gui.runtime.rust.mode.managed", "托管 rustup", "Managed rustup"),
+        _ => envr_core::i18n::tr_key("gui.runtime.rust.mode.none", "未安装 rustup", "rustup not installed"),
+    };
+    let active = status
+        .and_then(|s| s.active_toolchain.clone())
+        .unwrap_or_else(|| envr_core::i18n::tr_key("gui.runtime.rust.none", "(无)", "(none)"));
+    let rustc = status
+        .and_then(|s| s.rustc_version.clone())
+        .unwrap_or_else(|| envr_core::i18n::tr_key("gui.runtime.rust.unknown", "未知", "unknown"));
+
+    let status_card = container(
+        column![
+            text(mode_label).size(ty.body_small),
+            text(format!("{} {}", envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"), active))
+                .size(ty.caption)
+                .color(muted),
+            text(format!("rustc {rustc}")).size(ty.caption).color(muted),
+        ]
+        .spacing(sp.xs as f32),
+    )
+    .padding(sp.md)
+    .style(card_container_style(tokens, 1));
+
+    let ds = rust_runtime.map(|r| r.download_source).unwrap_or_default();
+    let mut ds_row = row![text(envr_core::i18n::tr_key(
+        "gui.runtime.rust.download_source",
+        "Rust 下载源",
+        "Rust download source"
+    ))
+    .size(ty.body)]
+    .spacing(sp.sm as f32);
+    for src in [RustDownloadSource::Auto, RustDownloadSource::Domestic, RustDownloadSource::Official]
+    {
+        let lab = match src {
+            RustDownloadSource::Auto => envr_core::i18n::tr_key("gui.runtime.rust.ds.auto", "自动（随区域语言）", "Auto (locale)"),
+            RustDownloadSource::Domestic => envr_core::i18n::tr_key("gui.runtime.rust.ds.domestic", "国内镜像", "China mirror"),
+            RustDownloadSource::Official => envr_core::i18n::tr_key("gui.runtime.rust.ds.official", "官方", "Official"),
+        };
+        let variant = if src == ds { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+        ds_row = ds_row.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetRustDownloadSource(src)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+    let settings_card = container(ds_row)
+        .padding(sp.md)
+        .style(card_container_style(tokens, 1));
+
+    let managed_install_btn = if status.is_some_and(|s| s.managed_install_available) {
+        Some(
+            button(button_content_centered(
+                row![
+                    Lucide::Download.view(14.0, txt),
+                    text(envr_core::i18n::tr_key("gui.runtime.rust.install", "安装 stable", "Install stable")),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(EnvCenterMsg::RustManagedInstallStable))
+            .style(button_style(tokens, ButtonVariant::Primary)),
+        )
+    } else {
+        None
+    };
+
+    let managed_uninstall_btn = if status.is_some_and(|s| s.managed_installed) && mode == "managed" {
+        Some(
+            button(button_content_centered(
+                row![
+                    Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                    text(envr_core::i18n::tr_key("gui.action.uninstall", "卸载", "Uninstall")),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(EnvCenterMsg::RustManagedUninstall))
+            .style(button_style(tokens, ButtonVariant::Danger)),
+        )
+    } else {
+        None
+    };
+
+    let channel_row = row![
+        rust_channel_btn(tokens, "stable"),
+        rust_channel_btn(tokens, "beta"),
+        rust_channel_btn(tokens, "nightly"),
+        button(button_content_centered(
+            row![
+                Lucide::RefreshCw.view(14.0, txt),
+                text(envr_core::i18n::tr_key("gui.runtime.rust.update", "更新", "Update")),
+            ]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
+        ))
+        .on_press(Message::EnvCenter(EnvCenterMsg::RustUpdateCurrent))
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
+    let mut ops_row = row![channel_row].spacing(sp.sm as f32).align_y(Alignment::Center);
+    if let Some(b) = managed_install_btn {
+        ops_row = ops_row.push(b);
+    }
+    if let Some(b) = managed_uninstall_btn {
+        ops_row = ops_row.push(b);
+    }
+    let ops_card = container(ops_row)
+        .padding(sp.md)
+        .style(card_container_style(tokens, 1));
+
+    let tab_row = row![
+        rust_tab_btn(tokens, RustTab::Components, state.rust_tab),
+        rust_tab_btn(tokens, RustTab::Targets, state.rust_tab),
+    ]
+    .spacing(sp.sm as f32);
+
+    let list = if state.rust_tab == RustTab::Components {
+        rust_kv_list(tokens, &state.rust_components, true)
+    } else {
+        rust_kv_list(tokens, &state.rust_targets, false)
+    };
+
+    column![header, status_card, settings_card, ops_card, tab_row, list]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill)
+        .into()
+}
+
+fn rust_channel_btn(tokens: ThemeTokens, channel: &'static str) -> Element<'static, Message> {
+    let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
+    button(button_content_centered(
+        row![
+            Lucide::RefreshCw.view(14.0, txt),
+            text(channel),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
+    .on_press(Message::EnvCenter(EnvCenterMsg::RustChannelInstallOrSwitch(
+        channel.to_string(),
+    )))
+    .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+    .padding([sp.sm as f32, sp.sm as f32])
+    .style(button_style(tokens, ButtonVariant::Secondary))
+    .into()
+}
+
+fn rust_tab_btn(tokens: ThemeTokens, tab: RustTab, active: RustTab) -> Element<'static, Message> {
+    let sp = tokens.space();
+    let label = match tab {
+        RustTab::Components => envr_core::i18n::tr_key("gui.runtime.rust.components", "组件", "Components"),
+        RustTab::Targets => envr_core::i18n::tr_key("gui.runtime.rust.targets", "目标", "Targets"),
+    };
+    let variant = if tab == active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+    button(button_content_centered(text(label).into()))
+        .on_press(Message::EnvCenter(EnvCenterMsg::RustSelectTab(tab)))
+        .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, variant))
+        .into()
+}
+
+fn rust_kv_list(
+    tokens: ThemeTokens,
+    items: &[(String, bool)],
+    is_component: bool,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let txt = gui_theme::to_color(tokens.colors.text);
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    if items.is_empty() {
+        return container(
+            illustrative_block_compact(
+                tokens,
+                EmptyTone::Neutral,
+                Lucide::Package,
+                36.0,
+                envr_core::i18n::tr_key("gui.empty.title.no_data", "暂无数据", "No data"),
+                envr_core::i18n::tr_key("gui.empty.body.no_data", "点击刷新或检查 rustup 是否可用。", "Refresh or check rustup availability."),
+                None,
+            ),
+        )
+        .width(Length::Fill)
+        .into();
+    }
+
+    let owned: Vec<(String, bool)> = items.to_vec();
+    let mut col = column![].spacing(0).width(Length::Fill);
+    for (name, installed) in owned.into_iter() {
+        let action = if installed {
+            button(button_content_centered(
+                row![
+                    Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                    text(envr_core::i18n::tr_key("gui.action.uninstall", "卸载", "Uninstall")),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(if is_component {
+                EnvCenterMsg::RustComponentToggle(name.clone(), false)
+            } else {
+                EnvCenterMsg::RustTargetToggle(name.clone(), false)
+            }))
+            .style(button_style(tokens, ButtonVariant::Danger))
+        } else {
+            button(button_content_centered(
+                row![
+                    Lucide::Download.view(14.0, txt),
+                    text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(if is_component {
+                EnvCenterMsg::RustComponentToggle(name.clone(), true)
+            } else {
+                EnvCenterMsg::RustTargetToggle(name.clone(), true)
+            }))
+            .style(button_style(tokens, ButtonVariant::Primary))
+        };
+        let row_el = row![
+            column![
+                text(name).size(ty.body_small),
+                text(if installed { "(installed)" } else { "" })
+                    .size(ty.micro)
+                    .color(muted),
+            ]
+            .spacing(0)
+            .width(Length::Fill),
+            action,
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center);
+        col = col.push(
+            container(row_el)
+                .padding([sp.sm as f32, sp.md as f32])
+                .style(card_container_style(tokens, 1)),
+        );
+        col = col.push(rule::horizontal(1.0));
+    }
+    col.into()
 }
 
 fn semver_parts(s: &str) -> Option<(u64, u64, u64)> {

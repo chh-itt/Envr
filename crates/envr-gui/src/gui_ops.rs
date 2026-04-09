@@ -15,6 +15,10 @@ use crate::view::dashboard::DashboardMsg;
 use crate::view::env_center::EnvCenterMsg;
 use iced::Task;
 
+use envr_config::settings::resolve_runtime_root;
+use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_managed};
+use crate::view::env_center::RustStatus;
+
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
@@ -36,6 +40,246 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
             Err(e) => EnvCenterMsg::DataLoaded(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
+    })
+}
+
+pub fn rust_refresh() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<RustStatus, String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+
+                let system = RustManager::system_rustup_available();
+                let managed = mgr.managed_rustup_installed();
+                let mode = if system {
+                    "system".to_string()
+                } else if managed {
+                    "managed".to_string()
+                } else {
+                    "none".to_string()
+                };
+
+                let active_toolchain = mgr
+                    .active_toolchain()
+                    .ok()
+                    .flatten()
+                    .map(|v| v.0);
+
+                let rustc_version = (|| -> Option<String> {
+                    // Prefer managed rustc when we own the install; otherwise fall back to PATH.
+                    if managed {
+                        let paths = envr_runtime_rust::RustPaths::new(resolve_runtime_root().ok()?);
+                        let rustc = paths.managed_rustc_exe();
+                        let o = std::process::Command::new(rustc).arg("-V").output().ok()?;
+                        if o.status.success() {
+                            let s = String::from_utf8_lossy(&o.stdout);
+                            return Some(s.split_whitespace().nth(1).unwrap_or("").trim().to_string());
+                        }
+                    }
+                    let o = std::process::Command::new("rustc").arg("-V").output().ok()?;
+                    if !o.status.success() {
+                        return None;
+                    }
+                    let s = String::from_utf8_lossy(&o.stdout);
+                    Some(s.split_whitespace().nth(1).unwrap_or("").trim().to_string())
+                })();
+
+                Ok(RustStatus {
+                    mode,
+                    active_toolchain,
+                    rustc_version,
+                    managed_install_available: !system && !managed,
+                    managed_installed: managed,
+                })
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustStatusLoaded(match res {
+            Ok(Ok(v)) => Ok(v),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_load_components() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<(String, bool)>, String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Ok(vec![]);
+                }
+                mgr.list_components(None).map_err(|e| e.to_string())
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustComponentsLoaded(match res {
+            Ok(Ok(v)) => Ok(v),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_load_targets() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<(String, bool)>, String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Ok(vec![]);
+                }
+                mgr.list_targets(None).map_err(|e| e.to_string())
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustTargetsLoaded(match res {
+            Ok(Ok(v)) => Ok(v),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_channel_install_or_switch(channel: String) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Err("rustup not installed".into());
+                }
+                // Ensure toolchain exists (idempotent), then set default.
+                let _ = mgr
+                    .install_toolchain(&envr_domain::runtime::VersionSpec(channel.clone()))
+                    .map_err(|e| e.to_string())?;
+                mgr.set_default(&RuntimeVersion(channel)).map_err(|e| e.to_string())
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_update_current() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Err("rustup not installed".into());
+                }
+                if let Some(tc) = mgr.active_toolchain().map_err(|e| e.to_string())? {
+                    mgr.update_toolchain(&tc).map_err(|e| e.to_string())
+                } else {
+                    mgr.update_all().map_err(|e| e.to_string())
+                }
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_managed_install_stable() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                install_rustup_managed(root, RustChannel::Stable).map_err(|e| e.to_string())
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_managed_uninstall() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if mgr.mode() != RustupMode::Managed {
+                    return Err("not using managed rustup".into());
+                }
+                mgr.managed_uninstall().map_err(|e| e.to_string())
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_component_toggle(name: String, install: bool) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Err("rustup not installed".into());
+                }
+                if install {
+                    mgr.component_add(&name, None).map_err(|e| e.to_string())
+                } else {
+                    mgr.component_remove(&name, None).map_err(|e| e.to_string())
+                }
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
+pub fn rust_target_toggle(name: String, install: bool) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let root = resolve_runtime_root().map_err(|e| e.to_string())?;
+                let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
+                if !mgr.rustup_available() {
+                    return Err("rustup not installed".into());
+                }
+                if install {
+                    mgr.target_add(&name, None).map_err(|e| e.to_string())
+                } else {
+                    mgr.target_remove(&name, None).map_err(|e| e.to_string())
+                }
+            })
+            .await;
+        Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
     })
 }
 

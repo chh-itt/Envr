@@ -43,6 +43,23 @@ pub struct ProjectProfile {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeConfig {
     pub version: Option<String>,
+    /// Rust-only: required release channel (`stable`/`beta`/`nightly`) for this project.
+    #[serde(default)]
+    pub channel: Option<String>,
+    /// Rust-only: required `rustc` version prefix (e.g. `1.78`).
+    #[serde(default)]
+    pub version_prefix: Option<String>,
+    /// Rust-only: enforcement mode. Defaults to `warn` when any rust constraint is set.
+    #[serde(default)]
+    pub enforce: Option<RustEnforceMode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RustEnforceMode {
+    #[default]
+    Warn,
+    Error,
 }
 
 impl ProjectConfig {
@@ -392,7 +409,7 @@ B = "${A}"
                 env: base_env.clone(),
                 runtimes: base_rt
                     .iter()
-                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()) }))
+                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()), ..Default::default() }))
                     .collect(),
                 ..Default::default()
             };
@@ -401,7 +418,7 @@ B = "${A}"
                 env: local_env.clone(),
                 runtimes: local_rt
                     .iter()
-                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()) }))
+                    .map(|(k, v)| (k.clone(), RuntimeConfig { version: Some(v.clone()), ..Default::default() }))
                     .collect(),
                 ..Default::default()
             };

@@ -865,6 +865,7 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "envr-runtime-rust",
  "envr-ui",
  "iced",
  "reqwest",
@@ -1014,9 +1015,13 @@ dependencies = [
 name = "envr-runtime-rust"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
+ "envr-download",
  "envr-error",
  "envr-platform",
+ "reqwest",
+ "tempfile",
 ]
 
 [[package]]

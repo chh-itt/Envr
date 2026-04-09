@@ -1,6 +1,8 @@
 mod manager;
+mod installer;
 
-pub use manager::{RustManager, RustPaths};
+pub use installer::{RustChannel, install_rustup_managed};
+pub use manager::{RustManager, RustPaths, RustupMode};
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,

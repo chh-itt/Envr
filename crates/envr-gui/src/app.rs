@@ -1503,6 +1503,14 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
                 gui_ops::refresh_remote_latest_per_major(kind),
             ])
         }
+        envr_domain::runtime::RuntimeKind::Rust => {
+            state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_refreshing = false;
+            state.env_center.go_remote_refreshing = false;
+            state.env_center.busy = true;
+            Task::batch([gui_ops::rust_refresh(), gui_ops::rust_load_components(), gui_ops::rust_load_targets()])
+        }
         _ => {
             state.env_center.node_remote_refreshing = false;
             state.env_center.python_remote_refreshing = false;
@@ -1549,6 +1557,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.java_remote_refreshing = false;
             state.env_center.go_remote_latest.clear();
             state.env_center.go_remote_refreshing = false;
+            state.env_center.rust_status = None;
+            state.env_center.rust_components.clear();
+            state.env_center.rust_targets.clear();
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
             state.env_center.runtime_settings_expanded = false;
@@ -1590,7 +1601,16 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     gui_ops::refresh_remote_latest_per_major(k),
                 ])
             } else {
-                Task::batch([gui_ops::refresh_runtimes(k)])
+                if k == envr_domain::runtime::RuntimeKind::Rust {
+                    state.env_center.busy = true;
+                    Task::batch([
+                        gui_ops::rust_refresh(),
+                        gui_ops::rust_load_components(),
+                        gui_ops::rust_load_targets(),
+                    ])
+                } else {
+                    Task::batch([gui_ops::refresh_runtimes(k)])
+                }
             }
         }
         EnvCenterMsg::InstallInput(s) => {
@@ -2027,6 +2047,115 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetRustDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.rust.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::RustRefresh => {
+            state.env_center.busy = true;
+            state.env_center.remote_error = None;
+            state.env_center.rust_status = None;
+            state.env_center.rust_components.clear();
+            state.env_center.rust_targets.clear();
+            Task::batch([
+                gui_ops::rust_refresh(),
+                gui_ops::rust_load_components(),
+                gui_ops::rust_load_targets(),
+            ])
+        }
+        EnvCenterMsg::RustStatusLoaded(res) => {
+            state.env_center.busy = false;
+            match res {
+                Ok(s) => {
+                    state.env_center.remote_error = None;
+                    state.env_center.rust_status = Some(s);
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e);
+                }
+            }
+            Task::none()
+        }
+        EnvCenterMsg::RustSelectTab(tab) => {
+            state.env_center.rust_tab = tab;
+            Task::none()
+        }
+        EnvCenterMsg::RustComponentsLoaded(res) => {
+            if let Ok(list) = res {
+                state.env_center.rust_components = list;
+            }
+            Task::none()
+        }
+        EnvCenterMsg::RustTargetsLoaded(res) => {
+            if let Ok(list) = res {
+                state.env_center.rust_targets = list;
+            }
+            Task::none()
+        }
+        EnvCenterMsg::RustChannelInstallOrSwitch(channel) => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_channel_install_or_switch(channel)
+        }
+        EnvCenterMsg::RustUpdateCurrent => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_update_current()
+        }
+        EnvCenterMsg::RustManagedInstallStable => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_managed_install_stable()
+        }
+        EnvCenterMsg::RustManagedUninstall => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_managed_uninstall()
+        }
+        EnvCenterMsg::RustComponentToggle(name, install) => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_component_toggle(name, install)
+        }
+        EnvCenterMsg::RustTargetToggle(name, install) => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.error = None;
+            gui_ops::rust_target_toggle(name, install)
+        }
+        EnvCenterMsg::RustOpFinished(res) => {
+            state.env_center.busy = false;
+            if let Err(e) = res {
+                state.error = Some(e);
+            }
+            Task::batch([
+                gui_ops::rust_refresh(),
+                gui_ops::rust_load_components(),
+                gui_ops::rust_load_targets(),
+            ])
         }
         EnvCenterMsg::SyncShimsFinished(res) => {
             if let Err(e) = res {

@@ -274,6 +274,17 @@ pub enum GoDownloadSource {
     Official,
 }
 
+/// Rust toolchain download source preference for `rustup` (`RUSTUP_DIST_SERVER` / `RUSTUP_UPDATE_ROOT`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RustDownloadSource {
+    /// Prefer domestic mirror when UI locale suggests China; otherwise official.
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
 /// How `GOPROXY` should be injected in `envr env`/`run`/`exec` when Go is in scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -430,7 +441,24 @@ pub struct RuntimeSettings {
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
+    pub rust: RustRuntimeSettings,
+    #[serde(default)]
     pub bun: BunRuntimeSettings,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RustRuntimeSettings {
+    /// Rust toolchain download source choice (used for `rustup` env injection).
+    #[serde(default)]
+    pub download_source: RustDownloadSource,
+}
+
+impl Default for RustRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: RustDownloadSource::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -664,6 +692,44 @@ impl Settings {
         fs::write(&tmp_path, content).map_err(EnvrError::from)?;
         replace_file(&tmp_path, path)?;
         Ok(())
+    }
+}
+
+/// Returns `RUSTUP_DIST_SERVER` when a non-official mirror is selected, otherwise `None`.
+pub fn rustup_dist_server_from_settings(s: &Settings) -> Option<String> {
+    let src = match s.runtime.rust.download_source {
+        RustDownloadSource::Auto => {
+            if prefer_china_mirror_locale(s) {
+                RustDownloadSource::Domestic
+            } else {
+                RustDownloadSource::Official
+            }
+        }
+        other => other,
+    };
+    match src {
+        RustDownloadSource::Domestic => Some("https://mirrors.ustc.edu.cn/rust-static".to_string()),
+        RustDownloadSource::Official | RustDownloadSource::Auto => None,
+    }
+}
+
+/// Returns `RUSTUP_UPDATE_ROOT` when a non-official mirror is selected, otherwise `None`.
+pub fn rustup_update_root_from_settings(s: &Settings) -> Option<String> {
+    let src = match s.runtime.rust.download_source {
+        RustDownloadSource::Auto => {
+            if prefer_china_mirror_locale(s) {
+                RustDownloadSource::Domestic
+            } else {
+                RustDownloadSource::Official
+            }
+        }
+        other => other,
+    };
+    match src {
+        RustDownloadSource::Domestic => {
+            Some("https://mirrors.ustc.edu.cn/rust-static/rustup".to_string())
+        }
+        RustDownloadSource::Official | RustDownloadSource::Auto => None,
     }
 }
 
@@ -1102,6 +1168,7 @@ mod tests {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                     ..Default::default()
                 },
+                rust: RustRuntimeSettings::default(),
                 bun: BunRuntimeSettings {
                     global_bin_dir: Some("/tmp/.bun/bin".to_string()),
                 },
