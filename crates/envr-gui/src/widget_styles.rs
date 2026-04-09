@@ -157,9 +157,7 @@ pub fn button_label_for_variant<Message: 'static>(
 pub fn button_content_centered<Message: Clone + 'static>(
     content: Element<'static, Message>,
 ) -> Element<'static, Message> {
-    container(content)
-        .center_y(Length::Fill)
-        .into()
+    container(content).center_y(Length::Fill).into()
 }
 
 /// Grouped surface for settings / runtime pages (title + body with card chrome).
@@ -174,12 +172,9 @@ pub fn section_card<Message: 'static>(
     let inset = Padding::from([pad + 4.0, pad + 4.0]);
     let card_s = card_container_style(tokens, 1);
     container(
-        column![
-            text(title).size(ty.section),
-            body,
-        ]
-        .spacing(sp.md as f32)
-        .width(Length::Fill),
+        column![text(title).size(ty.section), body,]
+            .spacing(sp.md as f32)
+            .width(Length::Fill),
     )
     .padding(inset)
     .width(Length::Fill)

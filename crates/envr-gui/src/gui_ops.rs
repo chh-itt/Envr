@@ -1,7 +1,7 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
-use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_core::shim_service::ShimService;
+use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
 use std::sync::Arc;
@@ -15,9 +15,9 @@ use crate::view::dashboard::DashboardMsg;
 use crate::view::env_center::EnvCenterMsg;
 use iced::Task;
 
+use crate::view::env_center::RustStatus;
 use envr_config::settings::resolve_runtime_root;
 use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_managed};
-use crate::view::env_center::RustStatus;
 
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
@@ -61,11 +61,7 @@ pub fn rust_refresh() -> Task<Message> {
                     "none".to_string()
                 };
 
-                let active_toolchain = mgr
-                    .active_toolchain()
-                    .ok()
-                    .flatten()
-                    .map(|v| v.0);
+                let active_toolchain = mgr.active_toolchain().ok().flatten().map(|v| v.0);
 
                 let rustc_version = (|| -> Option<String> {
                     // Prefer managed rustc when we own the install; otherwise fall back to PATH.
@@ -75,10 +71,15 @@ pub fn rust_refresh() -> Task<Message> {
                         let o = std::process::Command::new(rustc).arg("-V").output().ok()?;
                         if o.status.success() {
                             let s = String::from_utf8_lossy(&o.stdout);
-                            return Some(s.split_whitespace().nth(1).unwrap_or("").trim().to_string());
+                            return Some(
+                                s.split_whitespace().nth(1).unwrap_or("").trim().to_string(),
+                            );
                         }
                     }
-                    let o = std::process::Command::new("rustc").arg("-V").output().ok()?;
+                    let o = std::process::Command::new("rustc")
+                        .arg("-V")
+                        .output()
+                        .ok()?;
                     if !o.status.success() {
                         return None;
                     }
@@ -159,7 +160,8 @@ pub fn rust_channel_install_or_switch(channel: String) -> Task<Message> {
                 let _ = mgr
                     .install_toolchain(&envr_domain::runtime::VersionSpec(channel.clone()))
                     .map_err(|e| e.to_string())?;
-                mgr.set_default(&RuntimeVersion(channel)).map_err(|e| e.to_string())
+                mgr.set_default(&RuntimeVersion(channel))
+                    .map_err(|e| e.to_string())
             })
             .await;
         Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
@@ -746,7 +748,10 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
 
     // 2) For Node/Python/Java: sync global package forwards from the active runtime_root,
     // then copy non-core forward stubs into other PATH-visible shim dirs.
-    if matches!(kind, RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java) {
+    if matches!(
+        kind,
+        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java
+    ) {
         let runtime_svc = ShimService::new(runtime_root.clone(), shim_exe.clone());
         let t_sync = Instant::now();
         if kind == RuntimeKind::Python {

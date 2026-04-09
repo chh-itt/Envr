@@ -57,9 +57,7 @@ impl JavaVendor {
             "" | "temurin" | "eclipse" | "eclipse-temurin" | "adoptium" => {
                 Ok(JavaVendor::EclipseTemurin)
             }
-            "oracle-openjdk" | "oracle_openjdk" | "openjdk-oracle" => {
-                Ok(JavaVendor::OracleOpenJdk)
-            }
+            "oracle-openjdk" | "oracle_openjdk" | "openjdk-oracle" => Ok(JavaVendor::OracleOpenJdk),
             "corretto" | "amazon-corretto" | "amazon_corretto" => Ok(JavaVendor::AmazonCorretto),
             "microsoft" | "ms-openjdk" | "microsoft-openjdk" => Ok(JavaVendor::Microsoft),
             "oracle-jdk" | "oracle_jdk" | "oraclejdk" => Ok(JavaVendor::OracleJdk),

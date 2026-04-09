@@ -14,15 +14,16 @@ pub use manager::{
 };
 pub use vendor::JavaVendor;
 
+use envr_config::settings::{
+    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirror_locale,
+    settings_path_from_platform,
+};
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
-use envr_config::settings::{
-    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirror_locale, settings_path_from_platform,
-};
 
 /// JDK runtime provider (Adoptium Temurin: index, download, `current`, `JAVA_HOME` marker file).
 pub struct JavaRuntimeProvider {
@@ -151,9 +152,9 @@ impl JavaRuntimeProvider {
     ) -> EnvrResult<std::path::PathBuf> {
         let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
         let distro = self.resolved_vendor()?.dir_name();
-        Ok(paths.cache_dir().join(format!(
-            "remote_latest_per_major_{distro}_{os}_{arch}.json"
-        )))
+        Ok(paths
+            .cache_dir()
+            .join(format!("remote_latest_per_major_{distro}_{os}_{arch}.json")))
     }
 
     fn major_from_label(label: &str) -> Option<u32> {

@@ -2,24 +2,23 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_GO_DL_JSON_URL, GoRelease, blocking_http_client, fetch_go_index,
-    go_dl_arch_for_rust, go_dl_os_for_rust, go_release_has_installable_archive,
-    list_latest_stable_per_minor_line, list_remote_versions, normalize_go_version, parse_go_index,
-    resolve_go_version,
+    DEFAULT_GO_DL_JSON_URL, GoRelease, blocking_http_client, fetch_go_index, go_dl_arch_for_rust,
+    go_dl_os_for_rust, go_release_has_installable_archive, list_latest_stable_per_minor_line,
+    list_remote_versions, normalize_go_version, parse_go_index, resolve_go_version,
 };
 pub use manager::{
     GoManager, GoPaths, go_installation_valid, list_installed_versions, read_current,
 };
 
+use envr_config::settings::{
+    GoDownloadSource, Settings, prefer_china_mirror_locale, settings_path_from_platform,
+};
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
-use envr_config::settings::{
-    GoDownloadSource, Settings, prefer_china_mirror_locale, settings_path_from_platform,
-};
 use std::path::{Path, PathBuf};
 
 pub struct GoRuntimeProvider {

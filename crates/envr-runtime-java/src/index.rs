@@ -148,7 +148,12 @@ fn zulu_latest_package_download_url(
 }
 
 #[allow(dead_code)]
-fn vendor_latest_binary_url(vendor: JavaVendor, major: u32, os: &str, arch: &str) -> Option<String> {
+fn vendor_latest_binary_url(
+    vendor: JavaVendor,
+    major: u32,
+    os: &str,
+    arch: &str,
+) -> Option<String> {
     match vendor {
         JavaVendor::EclipseTemurin | JavaVendor::OpenJdk => Some(format!(
             "{}/v3/binary/latest/{major}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
@@ -260,10 +265,7 @@ pub fn fetch_release_versions(
     os: &str,
     arch: &str,
 ) -> EnvrResult<Vec<JavaVersionEntry>> {
-    if matches!(
-        vendor,
-        JavaVendor::AzulZulu | JavaVendor::AlibabaDragonwell
-    ) {
+    if matches!(vendor, JavaVendor::AzulZulu | JavaVendor::AlibabaDragonwell) {
         return Err(EnvrError::Validation(format!(
             "Java vendor {vendor:?} is not indexed via api.adoptium.net release_versions"
         )));

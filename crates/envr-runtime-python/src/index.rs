@@ -7,7 +7,11 @@ use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::{HashMap, HashSet}, sync::OnceLock, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::OnceLock,
+    time::Duration,
+};
 
 fn python_triple_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -110,8 +114,8 @@ pub fn parse_release_list(json: &str) -> EnvrResult<Vec<PyRelease>> {
         serde_json::from_value::<Vec<PyRelease>>(v)
             .map_err(|e| EnvrError::Validation(e.to_string()))
     } else if v.get("value").is_some() {
-        let list: ApiList<PyRelease> = serde_json::from_value(v)
-            .map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let list: ApiList<PyRelease> =
+            serde_json::from_value(v).map_err(|e| EnvrError::Validation(e.to_string()))?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(
@@ -130,8 +134,8 @@ pub fn parse_release_file_list(json: &str) -> EnvrResult<Vec<PyReleaseFile>> {
         serde_json::from_value::<Vec<PyReleaseFile>>(v)
             .map_err(|e| EnvrError::Validation(e.to_string()))
     } else if v.get("value").is_some() {
-        let list: ApiList<PyReleaseFile> = serde_json::from_value(v)
-            .map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let list: ApiList<PyReleaseFile> =
+            serde_json::from_value(v).map_err(|e| EnvrError::Validation(e.to_string()))?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(

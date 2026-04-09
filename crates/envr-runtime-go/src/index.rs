@@ -1,7 +1,7 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use std::collections::HashMap;
 use envr_error::{EnvrError, EnvrResult};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::time::Duration;
 
 pub const DEFAULT_GO_DL_JSON_URL: &str = "https://go.dev/dl/?mode=json&include=all";
@@ -100,7 +100,11 @@ pub fn go_dl_arch_for_rust(arch: &str) -> &str {
 pub fn go_release_has_installable_archive(release: &GoRelease, os: &str, arch: &str) -> bool {
     let go_os = go_dl_os_for_rust(os);
     let go_arch = go_dl_arch_for_rust(arch);
-    let want_ext = if go_os == "windows" { ".zip" } else { ".tar.gz" };
+    let want_ext = if go_os == "windows" {
+        ".zip"
+    } else {
+        ".tar.gz"
+    };
     release.files.iter().any(|f| {
         f.os == go_os
             && f.arch == go_arch
@@ -145,10 +149,7 @@ pub fn list_latest_stable_per_minor_line(
     }
     let mut items: Vec<(SemKey, String)> = best.into_values().collect();
     items.sort_by(|a, b| b.0.cmp(&a.0));
-    Ok(items
-        .into_iter()
-        .map(|(_, s)| RuntimeVersion(s))
-        .collect())
+    Ok(items.into_iter().map(|(_, s)| RuntimeVersion(s)).collect())
 }
 
 pub fn list_remote_versions(

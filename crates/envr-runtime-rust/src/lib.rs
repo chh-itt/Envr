@@ -1,5 +1,5 @@
-mod manager;
 mod installer;
+mod manager;
 
 pub use installer::{RustChannel, install_rustup_managed};
 pub use manager::{RustManager, RustPaths, RustupMode};

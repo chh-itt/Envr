@@ -22,8 +22,7 @@ impl ShimContext {
     /// `working_dir` is [`std::env::current_dir`].
     pub fn from_process_env() -> EnvrResult<Self> {
         let envs = EnvSnapshot::capture_current()?;
-        let runtime_root = if let Some(r) =
-            envs.get("ENVR_RUNTIME_ROOT").filter(|s| !s.is_empty())
+        let runtime_root = if let Some(r) = envs.get("ENVR_RUNTIME_ROOT").filter(|s| !s.is_empty())
         {
             PathBuf::from(r)
         } else {
@@ -366,11 +365,12 @@ fn bun_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 fn go_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
-        CoreCommand::Go => Ok(first_existing(&[bin.join("go.exe"), bin.join("go")]).ok_or_else(
-            || EnvrError::Runtime(format!("go missing under {}", home.display())),
-        )?),
+        CoreCommand::Go => Ok(first_existing(&[bin.join("go.exe"), bin.join("go")])
+            .ok_or_else(|| EnvrError::Runtime(format!("go missing under {}", home.display())))?),
         CoreCommand::Gofmt => Ok(first_existing(&[bin.join("gofmt.exe"), bin.join("gofmt")])
-            .ok_or_else(|| EnvrError::Runtime(format!("gofmt missing under {}", home.display())))?),
+            .ok_or_else(|| {
+                EnvrError::Runtime(format!("gofmt missing under {}", home.display()))
+            })?),
         _ => Err(EnvrError::Runtime("internal: not a go tool".into())),
     }
 }
@@ -526,14 +526,13 @@ fn resolve_go_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
 
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
-    if matches!(
-        cmd,
-        CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx
-    ) && !node_path_proxy_enabled_from_disk()
+    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
+        && !node_path_proxy_enabled_from_disk()
     {
         return resolve_node_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !python_path_proxy_enabled_from_disk()
+    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip)
+        && !python_path_proxy_enabled_from_disk()
     {
         return resolve_python_tool_bypass_envr(cmd);
     }

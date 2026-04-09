@@ -101,8 +101,7 @@ pub fn list_latest_patch_per_major(
         let key = semver_key(&r.version)?;
         let v = normalize_node_version(&r.version);
         let major = key.0.to_string();
-        best
-            .entry(major)
+        best.entry(major)
             .and_modify(|e| {
                 if key > e.0 {
                     *e = (key, v.clone());
@@ -116,10 +115,7 @@ pub fn list_latest_patch_per_major(
         .filter_map(|(m, (_k, ver))| m.parse::<u64>().ok().map(|n| (n, ver)))
         .collect();
     pairs.sort_by(|a, b| b.0.cmp(&a.0));
-    Ok(pairs
-        .into_iter()
-        .map(|(_, v)| RuntimeVersion(v))
-        .collect())
+    Ok(pairs.into_iter().map(|(_, v)| RuntimeVersion(v)).collect())
 }
 
 pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {

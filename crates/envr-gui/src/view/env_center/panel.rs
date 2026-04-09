@@ -18,7 +18,7 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
 use crate::widget_styles::{
-    card_container_style, ButtonVariant, button_content_centered, button_style, text_input_style,
+    ButtonVariant, button_content_centered, button_style, card_container_style, text_input_style,
 };
 
 #[derive(Debug, Clone)]
@@ -222,11 +222,9 @@ fn node_runtime_settings_section(
                 "自动（随区域语言）",
                 "Auto (locale)",
             ),
-            NodeDownloadSource::Domestic => envr_core::i18n::tr_key(
-                "gui.runtime.node.ds.domestic",
-                "国内镜像",
-                "China mirror",
-            ),
+            NodeDownloadSource::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.node.ds.domestic", "国内镜像", "China mirror")
+            }
             NodeDownloadSource::Official => {
                 envr_core::i18n::tr_key("gui.runtime.node.ds.official", "官方", "Official")
             }
@@ -270,11 +268,9 @@ fn node_runtime_settings_section(
                 "自动（随区域语言）",
                 "Auto (locale)",
             ),
-            NpmRegistryMode::Domestic => envr_core::i18n::tr_key(
-                "gui.runtime.node.npm.domestic",
-                "国内镜像",
-                "China mirror",
-            ),
+            NpmRegistryMode::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.node.npm.domestic", "国内镜像", "China mirror")
+            }
             NpmRegistryMode::Official => {
                 envr_core::i18n::tr_key("gui.runtime.node.npm.official", "官方", "Official")
             }
@@ -331,13 +327,9 @@ fn node_runtime_settings_section(
         .width(Length::Fill);
 
     container(
-        column![
-            dl_row,
-            npm_row,
-            proxy_block,
-        ]
-        .spacing(sp.sm as f32)
-        .width(Length::Fill),
+        column![dl_row, npm_row, proxy_block,]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
     )
     .padding(Padding::from([sp.md as f32, sp.md as f32]))
     .style(card_container_style(tokens, 1))
@@ -391,7 +383,9 @@ fn python_runtime_settings_section(
         };
         dl_row = dl_row.push(
             button(button_content_centered(text(lab).into()))
-                .on_press(Message::EnvCenter(EnvCenterMsg::SetPythonDownloadSource(src)))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPythonDownloadSource(
+                    src,
+                )))
                 .width(Length::FillPortion(1))
                 .height(Length::Fixed(h))
                 .padding([sp.sm as f32, sp.sm as f32])
@@ -477,15 +471,9 @@ fn python_runtime_settings_section(
     .color(muted);
 
     container(
-        column![
-            dl_row,
-            pip_row,
-            proxy_toggle,
-            proxy_note,
-            cache_note,
-        ]
-        .spacing(sp.sm as f32)
-        .width(Length::Fill),
+        column![dl_row, pip_row, proxy_toggle, proxy_note, cache_note,]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
     )
     .padding(Padding::from([sp.md as f32, sp.md as f32]))
     .style(card_container_style(tokens, 1))
@@ -587,9 +575,11 @@ fn go_runtime_settings_section(
                 "国内（golang.google.cn）",
                 "China (golang.google.cn)",
             ),
-            GoDownloadSource::Official => {
-                envr_core::i18n::tr_key("gui.runtime.go.ds.official", "官方（go.dev）", "Official (go.dev)")
-            }
+            GoDownloadSource::Official => envr_core::i18n::tr_key(
+                "gui.runtime.go.ds.official",
+                "官方（go.dev）",
+                "Official (go.dev)",
+            ),
         };
         let variant = if src == go.download_source {
             ButtonVariant::Primary
@@ -626,25 +616,19 @@ fn go_runtime_settings_section(
         GoProxyMode::Custom,
     ] {
         let lab = match mode {
-            GoProxyMode::Auto => envr_core::i18n::tr_key(
-                "gui.runtime.go.gp.auto",
-                "自动",
-                "Auto",
-            ),
-            GoProxyMode::Domestic => envr_core::i18n::tr_key(
-                "gui.runtime.go.gp.domestic",
-                "国内",
-                "China",
-            ),
+            GoProxyMode::Auto => envr_core::i18n::tr_key("gui.runtime.go.gp.auto", "自动", "Auto"),
+            GoProxyMode::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.go.gp.domestic", "国内", "China")
+            }
             GoProxyMode::Official => {
                 envr_core::i18n::tr_key("gui.runtime.go.gp.official", "官方", "Official")
             }
-            GoProxyMode::Direct => envr_core::i18n::tr_key(
-                "gui.runtime.go.gp.direct",
-                "直连",
-                "Direct",
-            ),
-            GoProxyMode::Custom => envr_core::i18n::tr_key("gui.runtime.go.gp.custom", "自定义", "Custom"),
+            GoProxyMode::Direct => {
+                envr_core::i18n::tr_key("gui.runtime.go.gp.direct", "直连", "Direct")
+            }
+            GoProxyMode::Custom => {
+                envr_core::i18n::tr_key("gui.runtime.go.gp.custom", "自定义", "Custom")
+            }
         };
         let variant = if mode == go.proxy_mode {
             ButtonVariant::Primary
@@ -679,7 +663,12 @@ fn go_runtime_settings_section(
             .height(Length::Fixed(tokens.control_height_secondary))
             .align_y(iced::alignment::Vertical::Center),
             button(button_content_centered(
-                text(envr_core::i18n::tr_key("gui.runtime.go.apply_network", "应用", "Apply")).into(),
+                text(envr_core::i18n::tr_key(
+                    "gui.runtime.go.apply_network",
+                    "应用",
+                    "Apply"
+                ))
+                .into(),
             ))
             .on_press(Message::EnvCenter(EnvCenterMsg::ApplyGoNetworkSettings))
             .width(Length::FillPortion(1))
@@ -780,7 +769,11 @@ fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Mes
             Lucide::CircleAlert.view(16.0, warn),
             text(format!(
                 "{}: {}",
-                envr_core::i18n::tr_key("gui.runtime.remote_error", "远程列表不可用", "Remote list unavailable"),
+                envr_core::i18n::tr_key(
+                    "gui.runtime.remote_error",
+                    "远程列表不可用",
+                    "Remote list unavailable"
+                ),
                 error
             ))
             .size(ty.caption)
@@ -803,10 +796,7 @@ fn node_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runti
         .cloned()
 }
 
-fn python_remote_latest_for_key(
-    state: &EnvCenterState,
-    key: &str,
-) -> Option<RuntimeVersion> {
+fn python_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
     state
         .python_remote_latest
         .iter()
@@ -880,17 +870,15 @@ pub fn env_center_view(
         envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
     };
 
-    let toggle_btn = button(
-        button_content_centered(
-            row![
-                Lucide::ChevronsUpDown.view(16.0, gui_theme::to_color(tokens.colors.text)),
-                text(toggle_lbl),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into()
-        ),
-    )
+    let toggle_btn = button(button_content_centered(
+        row![
+            Lucide::ChevronsUpDown.view(16.0, gui_theme::to_color(tokens.colors.text)),
+            text(toggle_lbl),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
     .on_press_maybe(
         show_runtime_fold.then_some(Message::EnvCenter(EnvCenterMsg::ToggleRuntimeSettings)),
     )
@@ -902,14 +890,10 @@ pub fn env_center_view(
         .color(gui_theme::to_color(tokens.colors.text_muted));
 
     let header_content = if show_runtime_fold {
-        row![
-            text(header_title).size(ty.section),
-            cur_el,
-            toggle_btn,
-        ]
-        .spacing(sp.sm as f32)
-        .align_y(Alignment::Center)
-        .width(Length::Fill)
+        row![text(header_title).size(ty.section), cur_el, toggle_btn,]
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
     } else {
         row![text(header_title).size(ty.section), cur_el]
             .spacing(sp.sm as f32)
@@ -942,7 +926,10 @@ pub fn env_center_view(
             .map(|g| {
                 go_runtime_settings_section(
                     g,
-                    (&state.go_proxy_custom_draft, &state.go_private_patterns_draft),
+                    (
+                        &state.go_proxy_custom_draft,
+                        &state.go_private_patterns_draft,
+                    ),
                     tokens,
                 )
             })
@@ -1008,7 +995,11 @@ pub fn env_center_view(
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
     if state.kind == RuntimeKind::Python {
-        keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+        keys.sort_by(|a, b| {
+            parse_python_key_sort(a)
+                .cmp(&parse_python_key_sort(b))
+                .reverse()
+        });
     } else if state.kind == RuntimeKind::Java {
         // Rows follow the curated per-distro matrix (not a global 8/11/17/21/25 list).
         let distro = java_runtime
@@ -1080,10 +1071,7 @@ pub fn env_center_view(
     } else {
         let needle = query_key.as_deref().unwrap_or(query_norm);
         match state.kind {
-            RuntimeKind::Node => keys
-                .into_iter()
-                .filter(|k| k.contains(needle))
-                .collect(),
+            RuntimeKind::Node => keys.into_iter().filter(|k| k.contains(needle)).collect(),
             RuntimeKind::Python => {
                 if needle.contains('.') {
                     keys.into_iter().filter(|k| k.starts_with(needle)).collect()
@@ -1116,7 +1104,11 @@ pub fn env_center_view(
         }
     };
     if state.kind == RuntimeKind::Python {
-        show_keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+        show_keys.sort_by(|a, b| {
+            parse_python_key_sort(a)
+                .cmp(&parse_python_key_sort(b))
+                .reverse()
+        });
     } else if state.kind == RuntimeKind::Go {
         show_keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
     } else {
@@ -1156,10 +1148,7 @@ pub fn env_center_view(
         list_col = list_col.push(matches_empty_hint());
     } else {
         for key in show_keys.iter() {
-            let installed_versions = installed_by_key
-                .get(key)
-                .cloned()
-                .unwrap_or_default();
+            let installed_versions = installed_by_key.get(key).cloned().unwrap_or_default();
             let current_key = state.current.as_ref().and_then(|v| match state.kind {
                 RuntimeKind::Python => parse_python_major_minor_key(&v.0),
                 RuntimeKind::Node => parse_node_major_key(&v.0),
@@ -1191,11 +1180,7 @@ pub fn env_center_view(
                 format!(
                     "{} {}",
                     label_base,
-                    envr_core::i18n::tr_key(
-                        "gui.runtime.current_tag",
-                        "(当前)",
-                        "(current)",
-                    )
+                    envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)",)
                 )
             } else {
                 label_base
@@ -1226,17 +1211,15 @@ pub fn env_center_view(
             let action_btn: Element<'static, Message> = if show_as_active {
                 container(space()).into()
             } else if let Some(highest) = highest_installed {
-                let use_btn = button(
-                    button_content_centered(
-                        row![
-                            Lucide::Package.view(14.0, txt),
-                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ),
-                )
+                let use_btn = button(button_content_centered(
+                    row![
+                        Lucide::Package.view(14.0, txt),
+                        text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
                 .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
                     EnvCenterMsg::SubmitUse(highest.0.clone()),
                 )))
@@ -1248,21 +1231,19 @@ pub fn env_center_view(
                 .padding([sp.sm as f32, sp.sm as f32])
                 .style(button_style(tokens, ButtonVariant::Secondary));
 
-                let uninstall_btn = button(
-                    button_content_centered(
-                        row![
-                            Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                            text(envr_core::i18n::tr_key(
-                                "gui.action.uninstall",
-                                "卸载",
-                                "Uninstall",
-                            )),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ),
-                )
+                let uninstall_btn = button(button_content_centered(
+                    row![
+                        Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                        text(envr_core::i18n::tr_key(
+                            "gui.action.uninstall",
+                            "卸载",
+                            "Uninstall",
+                        )),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
                 .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
                     highest.0.clone(),
                 ))))
@@ -1282,40 +1263,41 @@ pub fn env_center_view(
                 .into()
             } else {
                 let spec = install_spec();
-                let install_btn = button(
-                    button_content_centered(
-                        row![
-                            Lucide::Download.view(14.0, txt),
-                            text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ),
-                )
+                let install_btn = button(button_content_centered(
+                    row![
+                        Lucide::Download.view(14.0, txt),
+                        text(envr_core::i18n::tr_key(
+                            "gui.action.install",
+                            "安装",
+                            "Install"
+                        )),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
                 .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
                     spec.clone(),
                 ))))
                 .style(button_style(tokens, ButtonVariant::Primary));
 
-                let install_and_use_btn = button(
-                    button_content_centered(
-                        row![
-                            Lucide::RefreshCw.view(14.0, txt),
-                            text(envr_core::i18n::tr_key(
-                                "gui.action.install_use",
-                                "安装并切换",
-                                "Install & Use"
-                            )),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ),
+                let install_and_use_btn = button(button_content_centered(
+                    row![
+                        Lucide::RefreshCw.view(14.0, txt),
+                        text(envr_core::i18n::tr_key(
+                            "gui.action.install_use",
+                            "安装并切换",
+                            "Install & Use"
+                        )),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
+                .on_press_maybe(
+                    path_proxy_on
+                        .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(spec))),
                 )
-                .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
-                    EnvCenterMsg::SubmitInstallAndUse(spec),
-                )))
                 .style(button_style(tokens, ButtonVariant::Secondary));
 
                 container(
@@ -1328,13 +1310,10 @@ pub fn env_center_view(
 
             list_col = list_col.push(
                 container(
-                    row![
-                        text(left_text).width(Length::Fill),
-                        action_btn,
-                    ]
-                    .spacing(sp.sm as f32)
-                    .align_y(Alignment::Center)
-                    .height(Length::Fixed(tokens.list_row_height())),
+                    row![text(left_text).width(Length::Fill), action_btn,]
+                        .spacing(sp.sm as f32)
+                        .align_y(Alignment::Center)
+                        .height(Length::Fixed(tokens.list_row_height())),
                 )
                 .style(card_container_style(tokens, 1)),
             );
@@ -1390,43 +1369,42 @@ pub fn env_center_view(
     .into();
 
     let direct_spec_nonempty = !state.direct_install_input.trim().is_empty();
-    let direct_install_btn = button(
-        button_content_centered(
-            row![
-                Lucide::Download.view(14.0, txt),
-                text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ),
+    let direct_install_btn = button(button_content_centered(
+        row![
+            Lucide::Download.view(14.0, txt),
+            text(envr_core::i18n::tr_key(
+                "gui.action.install",
+                "安装",
+                "Install"
+            )),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
+    .on_press_maybe(
+        direct_spec_nonempty.then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
     )
-    .on_press_maybe(direct_spec_nonempty.then_some(Message::EnvCenter(
-        EnvCenterMsg::SubmitDirectInstall,
-    )))
     .height(Length::Fixed(ctrl_h))
     .padding([sp.sm as f32, sp.md as f32])
     .style(button_style(tokens, ButtonVariant::Primary));
 
-    let direct_install_use_btn = button(
-        button_content_centered(
-            row![
-                Lucide::RefreshCw.view(14.0, txt),
-                text(envr_core::i18n::tr_key(
-                    "gui.action.install_use",
-                    "安装并切换",
-                    "Install & Use",
-                )),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ),
-    )
+    let direct_install_use_btn = button(button_content_centered(
+        row![
+            Lucide::RefreshCw.view(14.0, txt),
+            text(envr_core::i18n::tr_key(
+                "gui.action.install_use",
+                "安装并切换",
+                "Install & Use",
+            )),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
     .on_press_maybe(
-        (direct_spec_nonempty && path_proxy_on).then_some(Message::EnvCenter(
-            EnvCenterMsg::SubmitDirectInstallAndUse,
-        )),
+        (direct_spec_nonempty && path_proxy_on)
+            .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstallAndUse)),
     )
     .height(Length::Fixed(ctrl_h))
     .padding([sp.sm as f32, sp.md as f32])
@@ -1533,13 +1511,21 @@ fn rust_env_center_view(
 
     let header = container(
         row![
-            text(envr_core::i18n::tr_key("gui.runtime.rust.title", "Rust 设置", "Rust"))
-                .size(ty.section),
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.rust.title",
+                "Rust 设置",
+                "Rust"
+            ))
+            .size(ty.section),
             container(space()).width(Length::Fill),
             button(button_content_centered(
                 row![
                     Lucide::RefreshCw.view(14.0, txt),
-                    text(envr_core::i18n::tr_key("gui.action.refresh", "刷新", "Refresh")),
+                    text(envr_core::i18n::tr_key(
+                        "gui.action.refresh",
+                        "刷新",
+                        "Refresh"
+                    )),
                 ]
                 .spacing(sp.xs as f32)
                 .align_y(Alignment::Center)
@@ -1558,9 +1544,21 @@ fn rust_env_center_view(
     let status = state.rust_status.as_ref();
     let mode = status.map(|s| s.mode.as_str()).unwrap_or("none");
     let mode_label = match mode {
-        "system" => envr_core::i18n::tr_key("gui.runtime.rust.mode.system", "系统 rustup", "System rustup"),
-        "managed" => envr_core::i18n::tr_key("gui.runtime.rust.mode.managed", "托管 rustup", "Managed rustup"),
-        _ => envr_core::i18n::tr_key("gui.runtime.rust.mode.none", "未安装 rustup", "rustup not installed"),
+        "system" => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode.system",
+            "系统 rustup",
+            "System rustup",
+        ),
+        "managed" => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode.managed",
+            "托管 rustup",
+            "Managed rustup",
+        ),
+        _ => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode.none",
+            "未安装 rustup",
+            "rustup not installed",
+        ),
     };
     let active = status
         .and_then(|s| s.active_toolchain.clone())
@@ -1572,9 +1570,13 @@ fn rust_env_center_view(
     let status_card = container(
         column![
             text(mode_label).size(ty.body_small),
-            text(format!("{} {}", envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"), active))
-                .size(ty.caption)
-                .color(muted),
+            text(format!(
+                "{} {}",
+                envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
+                active
+            ))
+            .size(ty.caption)
+            .color(muted),
             text(format!("rustc {rustc}")).size(ty.caption).color(muted),
         ]
         .spacing(sp.xs as f32),
@@ -1583,26 +1585,47 @@ fn rust_env_center_view(
     .style(card_container_style(tokens, 1));
 
     let ds = rust_runtime.map(|r| r.download_source).unwrap_or_default();
-    let mut ds_row = row![text(envr_core::i18n::tr_key(
-        "gui.runtime.rust.download_source",
-        "Rust 下载源",
-        "Rust download source"
-    ))
-    .size(ty.body)]
+    let mut ds_row = row![
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.rust.download_source",
+            "Rust 下载源",
+            "Rust download source"
+        ))
+        .size(ty.body)
+    ]
     .spacing(sp.sm as f32);
-    for src in [RustDownloadSource::Auto, RustDownloadSource::Domestic, RustDownloadSource::Official]
-    {
+    for src in [
+        RustDownloadSource::Auto,
+        RustDownloadSource::Domestic,
+        RustDownloadSource::Official,
+    ] {
         let lab = match src {
-            RustDownloadSource::Auto => envr_core::i18n::tr_key("gui.runtime.rust.ds.auto", "自动（随区域语言）", "Auto (locale)"),
-            RustDownloadSource::Domestic => envr_core::i18n::tr_key("gui.runtime.rust.ds.domestic", "国内镜像", "China mirror"),
-            RustDownloadSource::Official => envr_core::i18n::tr_key("gui.runtime.rust.ds.official", "官方", "Official"),
+            RustDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.rust.ds.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            RustDownloadSource::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.rust.ds.domestic", "国内镜像", "China mirror")
+            }
+            RustDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.rust.ds.official", "官方", "Official")
+            }
         };
-        let variant = if src == ds { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+        let variant = if src == ds {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
         ds_row = ds_row.push(
             button(button_content_centered(text(lab).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetRustDownloadSource(src)))
                 .width(Length::FillPortion(1))
-                .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
                 .padding([sp.sm as f32, sp.sm as f32])
                 .style(button_style(tokens, variant)),
         );
@@ -1616,7 +1639,11 @@ fn rust_env_center_view(
             button(button_content_centered(
                 row![
                     Lucide::Download.view(14.0, txt),
-                    text(envr_core::i18n::tr_key("gui.runtime.rust.install", "安装 stable", "Install stable")),
+                    text(envr_core::i18n::tr_key(
+                        "gui.runtime.rust.install",
+                        "安装 stable",
+                        "Install stable"
+                    )),
                 ]
                 .spacing(sp.xs as f32)
                 .align_y(Alignment::Center)
@@ -1629,12 +1656,17 @@ fn rust_env_center_view(
         None
     };
 
-    let managed_uninstall_btn = if status.is_some_and(|s| s.managed_installed) && mode == "managed" {
+    let managed_uninstall_btn = if status.is_some_and(|s| s.managed_installed) && mode == "managed"
+    {
         Some(
             button(button_content_centered(
                 row![
                     Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                    text(envr_core::i18n::tr_key("gui.action.uninstall", "卸载", "Uninstall")),
+                    text(envr_core::i18n::tr_key(
+                        "gui.action.uninstall",
+                        "卸载",
+                        "Uninstall"
+                    )),
                 ]
                 .spacing(sp.xs as f32)
                 .align_y(Alignment::Center)
@@ -1654,7 +1686,11 @@ fn rust_env_center_view(
         button(button_content_centered(
             row![
                 Lucide::RefreshCw.view(14.0, txt),
-                text(envr_core::i18n::tr_key("gui.runtime.rust.update", "更新", "Update")),
+                text(envr_core::i18n::tr_key(
+                    "gui.runtime.rust.update",
+                    "更新",
+                    "Update"
+                )),
             ]
             .spacing(sp.xs as f32)
             .align_y(Alignment::Center)
@@ -1666,7 +1702,9 @@ fn rust_env_center_view(
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
 
-    let mut ops_row = row![channel_row].spacing(sp.sm as f32).align_y(Alignment::Center);
+    let mut ops_row = row![channel_row]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center);
     if let Some(b) = managed_install_btn {
         ops_row = ops_row.push(b);
     }
@@ -1699,18 +1737,19 @@ fn rust_channel_btn(tokens: ThemeTokens, channel: &'static str) -> Element<'stat
     let sp = tokens.space();
     let txt = gui_theme::to_color(tokens.colors.text);
     button(button_content_centered(
-        row![
-            Lucide::RefreshCw.view(14.0, txt),
-            text(channel),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
-        .into(),
+        row![Lucide::RefreshCw.view(14.0, txt), text(channel),]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
     ))
-    .on_press(Message::EnvCenter(EnvCenterMsg::RustChannelInstallOrSwitch(
-        channel.to_string(),
-    )))
-    .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+    .on_press(Message::EnvCenter(
+        EnvCenterMsg::RustChannelInstallOrSwitch(channel.to_string()),
+    ))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
     .padding([sp.sm as f32, sp.sm as f32])
     .style(button_style(tokens, ButtonVariant::Secondary))
     .into()
@@ -1719,13 +1758,23 @@ fn rust_channel_btn(tokens: ThemeTokens, channel: &'static str) -> Element<'stat
 fn rust_tab_btn(tokens: ThemeTokens, tab: RustTab, active: RustTab) -> Element<'static, Message> {
     let sp = tokens.space();
     let label = match tab {
-        RustTab::Components => envr_core::i18n::tr_key("gui.runtime.rust.components", "组件", "Components"),
+        RustTab::Components => {
+            envr_core::i18n::tr_key("gui.runtime.rust.components", "组件", "Components")
+        }
         RustTab::Targets => envr_core::i18n::tr_key("gui.runtime.rust.targets", "目标", "Targets"),
     };
-    let variant = if tab == active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+    let variant = if tab == active {
+        ButtonVariant::Primary
+    } else {
+        ButtonVariant::Secondary
+    };
     button(button_content_centered(text(label).into()))
         .on_press(Message::EnvCenter(EnvCenterMsg::RustSelectTab(tab)))
-        .height(Length::Fixed(tokens.control_height_secondary.max(tokens.min_click_target_px())))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
         .padding([sp.sm as f32, sp.sm as f32])
         .style(button_style(tokens, variant))
         .into()
@@ -1742,17 +1791,19 @@ fn rust_kv_list(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
     if items.is_empty() {
-        return container(
-            illustrative_block_compact(
-                tokens,
-                EmptyTone::Neutral,
-                Lucide::Package,
-                36.0,
-                envr_core::i18n::tr_key("gui.empty.title.no_data", "暂无数据", "No data"),
-                envr_core::i18n::tr_key("gui.empty.body.no_data", "点击刷新或检查 rustup 是否可用。", "Refresh or check rustup availability."),
-                None,
+        return container(illustrative_block_compact(
+            tokens,
+            EmptyTone::Neutral,
+            Lucide::Package,
+            36.0,
+            envr_core::i18n::tr_key("gui.empty.title.no_data", "暂无数据", "No data"),
+            envr_core::i18n::tr_key(
+                "gui.empty.body.no_data",
+                "点击刷新或检查 rustup 是否可用。",
+                "Refresh or check rustup availability.",
             ),
-        )
+            None,
+        ))
         .width(Length::Fill)
         .into();
     }
@@ -1764,7 +1815,11 @@ fn rust_kv_list(
             button(button_content_centered(
                 row![
                     Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                    text(envr_core::i18n::tr_key("gui.action.uninstall", "卸载", "Uninstall")),
+                    text(envr_core::i18n::tr_key(
+                        "gui.action.uninstall",
+                        "卸载",
+                        "Uninstall"
+                    )),
                 ]
                 .spacing(sp.xs as f32)
                 .align_y(Alignment::Center)
@@ -1780,7 +1835,11 @@ fn rust_kv_list(
             button(button_content_centered(
                 row![
                     Lucide::Download.view(14.0, txt),
-                    text(envr_core::i18n::tr_key("gui.action.install", "安装", "Install")),
+                    text(envr_core::i18n::tr_key(
+                        "gui.action.install",
+                        "安装",
+                        "Install"
+                    )),
                 ]
                 .spacing(sp.xs as f32)
                 .align_y(Alignment::Center)
@@ -1932,18 +1991,14 @@ fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Me
     let mut col = column![].spacing(0);
     for i in 0..n {
         col = col.push(
-            container(
-                space()
-                    .width(Length::Fill)
-                    .height(Length::Fixed(bar_h)),
-            )
-            .width(Length::Fill)
-            .height(Length::Fixed(row_h))
-            .align_y(iced::alignment::Vertical::Center)
-            .padding([0, tokens.space().md as u16])
-            .style(move |_theme: &Theme| {
-                iced::widget::container::Style::default().background(Background::Color(fill))
-            }),
+            container(space().width(Length::Fill).height(Length::Fixed(bar_h)))
+                .width(Length::Fill)
+                .height(Length::Fixed(row_h))
+                .align_y(iced::alignment::Vertical::Center)
+                .padding([0, tokens.space().md as u16])
+                .style(move |_theme: &Theme| {
+                    iced::widget::container::Style::default().background(Background::Color(fill))
+                }),
         );
         if i + 1 < n {
             col = col.push(rule::horizontal(1.0));

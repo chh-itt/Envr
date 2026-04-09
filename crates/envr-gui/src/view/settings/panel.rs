@@ -92,9 +92,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             ))
             .into(),
         ))
-        .on_press_maybe(
-            (!env_lock).then_some(Message::Settings(SettingsMsg::BrowseRuntimeRoot)),
-        )
+        .on_press_maybe((!env_lock).then_some(Message::Settings(SettingsMsg::BrowseRuntimeRoot)),)
         .height(Length::Fixed(browse_h))
         .padding([pad_v, sp.md as f32])
         .style(button_style(tokens, ButtonVariant::Secondary)),
@@ -218,12 +216,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(
-                envr_core::i18n::tr_key(key, zh, en),
-                tokens,
-                variant,
-            )
-            .into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
         ))
         .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
         .width(Length::FillPortion(1))
@@ -327,12 +320,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(
-                envr_core::i18n::tr_key(key, zh, en),
-                tokens,
-                variant,
-            )
-            .into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
         ))
         .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
         .width(Length::FillPortion(1))
@@ -492,12 +480,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(
-                envr_core::i18n::tr_key(key, zh, en),
-                tokens,
-                variant,
-            )
-            .into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
         ))
         .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
         .width(Length::FillPortion(1))
@@ -514,15 +497,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "存储路径与镜像",
             "Storage & mirrors",
         ),
-        column![
-            env_note,
-            rr_row,
-            mirror_row,
-            manual,
-            cleanup,
-        ]
-        .spacing(sp.md as f32)
-        .into(),
+        column![env_note, rr_row, mirror_row, manual, cleanup,]
+            .spacing(sp.md as f32)
+            .into(),
     );
 
     let look_card = section_card(
@@ -545,21 +522,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
 
     let dl_card = section_card(
         tokens,
-        envr_core::i18n::tr_key(
-            "gui.settings.downloads_section",
-            "下载",
-            "Downloads",
-        ),
+        envr_core::i18n::tr_key("gui.settings.downloads_section", "下载", "Downloads"),
         column![dl_row].spacing(sp.sm as f32).into(),
     );
 
-    column![
-        paths_card,
-        look_card,
-        dl_card,
-        actions,
-        status,
-    ]
-    .spacing(sp.lg as f32)
-    .into()
+    column![paths_card, look_card, dl_card, actions, status,]
+        .spacing(sp.lg as f32)
+        .into()
 }

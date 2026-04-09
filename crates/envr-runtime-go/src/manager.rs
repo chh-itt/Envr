@@ -110,7 +110,11 @@ pub struct GoManager {
 }
 
 impl GoManager {
-    pub fn try_new(runtime_root: PathBuf, dl_json_url: String, dl_base_url: String) -> EnvrResult<Self> {
+    pub fn try_new(
+        runtime_root: PathBuf,
+        dl_json_url: String,
+        dl_base_url: String,
+    ) -> EnvrResult<Self> {
         let paths = GoPaths::new(runtime_root);
         fs::create_dir_all(paths.versions_dir()).map_err(EnvrError::from)?;
         Ok(Self {

@@ -10,7 +10,7 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::runtime_settings::state::RuntimeSettingsState;
 use crate::widget_styles::{
-    card_container_style, ButtonVariant, button_content_centered, button_style, text_input_style,
+    ButtonVariant, button_content_centered, button_style, card_container_style, text_input_style,
 };
 
 #[derive(Debug, Clone)]

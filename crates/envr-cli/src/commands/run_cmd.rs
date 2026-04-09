@@ -15,7 +15,12 @@ fn parse_rust_channel_from_toolchain(toolchain: &str) -> Option<String> {
         return None;
     }
     let first = t.split_whitespace().next().unwrap_or("").trim();
-    let chan = first.split('-').next().unwrap_or("").trim().to_ascii_lowercase();
+    let chan = first
+        .split('-')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
     match chan.as_str() {
         "stable" | "beta" | "nightly" => Some(chan),
         _ => None,
@@ -42,7 +47,11 @@ fn enforce_rust_constraints(
     let Some(r) = cfg.runtimes.get("rust") else {
         return Ok(());
     };
-    let want_channel = r.channel.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let want_channel = r
+        .channel
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     let want_prefix = r
         .version_prefix
         .as_deref()
@@ -93,7 +102,10 @@ fn enforce_rust_constraints(
         }
     }
     if let Some(pref) = want_prefix {
-        if !current_rustc.as_deref().is_some_and(|v| v.starts_with(pref)) {
+        if !current_rustc
+            .as_deref()
+            .is_some_and(|v| v.starts_with(pref))
+        {
             problems.push(format!(
                 "rustc version mismatch: want prefix {pref}, got {}",
                 current_rustc.as_deref().unwrap_or("(unknown)")

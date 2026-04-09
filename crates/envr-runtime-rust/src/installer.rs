@@ -1,10 +1,10 @@
 use crate::manager::{RustManager, RustPaths, RustupMode};
 use envr_config::settings::{Settings, settings_path_from_platform};
+use envr_domain::runtime::VersionSpec;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::path::{Path, PathBuf};
-use envr_domain::runtime::VersionSpec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RustChannel {
@@ -97,7 +97,10 @@ fn download_rustup_init_to(url: &str, dest: &Path) -> EnvrResult<()> {
         .send()
         .map_err(|e| EnvrError::Download(e.to_string()))?;
     if !resp.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", resp.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            resp.status()
+        )));
     }
     if let Some(p) = dest.parent() {
         fs::create_dir_all(p).map_err(EnvrError::from)?;
@@ -127,7 +130,10 @@ fn rustup_env_from_settings(st: &Settings) -> Vec<(String, String)> {
     out
 }
 
-pub fn install_rustup_managed(runtime_root: PathBuf, default_channel: RustChannel) -> EnvrResult<()> {
+pub fn install_rustup_managed(
+    runtime_root: PathBuf,
+    default_channel: RustChannel,
+) -> EnvrResult<()> {
     // Rule B: if system rustup exists, do not install a managed one.
     if RustManager::system_rustup_available() {
         return Err(EnvrError::Validation(
@@ -148,7 +154,9 @@ pub fn install_rustup_managed(runtime_root: PathBuf, default_channel: RustChanne
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perm = fs::metadata(&installer).map_err(EnvrError::from)?.permissions();
+        let mut perm = fs::metadata(&installer)
+            .map_err(EnvrError::from)?
+            .permissions();
         perm.set_mode(0o755);
         let _ = fs::set_permissions(&installer, perm);
     }
@@ -185,4 +193,3 @@ pub fn install_rustup_managed(runtime_root: PathBuf, default_channel: RustChanne
     let _ = mgr.install_toolchain(&VersionSpec(default_channel.as_str().to_string()));
     Ok(())
 }
-

@@ -77,7 +77,10 @@ impl RuntimeService {
         self.provider(kind)?.list_remote_majors()
     }
 
-    pub fn list_remote_latest_per_major(&self, kind: RuntimeKind) -> EnvrResult<Vec<RuntimeVersion>> {
+    pub fn list_remote_latest_per_major(
+        &self,
+        kind: RuntimeKind,
+    ) -> EnvrResult<Vec<RuntimeVersion>> {
         self.provider(kind)?.list_remote_latest_per_major()
     }
 

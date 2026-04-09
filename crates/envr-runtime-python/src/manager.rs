@@ -321,7 +321,12 @@ fn bootstrap_pip_windows(
                 paths,
                 &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
             )?;
-            out = run_get_pip(&py, &script, home, Some(envr_config::settings::PIP_INDEX_OFFICIAL))?;
+            out = run_get_pip(
+                &py,
+                &script,
+                home,
+                Some(envr_config::settings::PIP_INDEX_OFFICIAL),
+            )?;
         }
     }
     if !out.status.success() {

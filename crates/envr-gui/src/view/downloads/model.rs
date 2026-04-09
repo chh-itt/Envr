@@ -39,12 +39,16 @@ impl DownloadJob {
 
     /// Resolve / connect / wait for first byte — before `Content-Length` or any chunk.
     pub fn is_install_warmup_phase(&self) -> bool {
-        self.state == JobState::Running && self.is_runtime_install_row() && self.has_no_transfer_stats()
+        self.state == JobState::Running
+            && self.is_runtime_install_row()
+            && self.has_no_transfer_stats()
     }
 
     /// Done install that never reported transfer (edge case); show a short status line.
     pub fn is_local_install_done_minimal(&self) -> bool {
-        self.state == JobState::Done && self.is_runtime_install_row() && self.has_no_transfer_stats()
+        self.state == JobState::Done
+            && self.is_runtime_install_row()
+            && self.has_no_transfer_stats()
     }
 
     pub fn progress_ratio(&self) -> f32 {

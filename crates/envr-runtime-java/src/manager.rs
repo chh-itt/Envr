@@ -169,7 +169,8 @@ fn zulu_download_url_matching_label(
     let major = parse_java_major_from_label(label)?;
     let mut rows = zulu_fetch_packages_json(client, major, os, arch, 100)?;
     rows.retain(zulu_headless_jdk_row);
-    let Some((want_maj, want_min, want_sec, want_build)) = java_label_triplet_and_build(label) else {
+    let Some((want_maj, want_min, want_sec, want_build)) = java_label_triplet_and_build(label)
+    else {
         return zulu_preferred_download_url(client, major, os, arch);
     };
     let mut filtered: Vec<&ZuluPkgRow> = rows
@@ -566,9 +567,7 @@ fn download_to_path(
     if let Some(r) = referer {
         req = req.header("Referer", r);
     }
-    let mut response = req
-        .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -694,7 +693,8 @@ impl JavaManager {
 
     fn fetch_temurin_mirror_candidates(&self, major: u32, arch: &str) -> Vec<String> {
         let mut out = Vec::new();
-        let tuna_dir = format!("https://mirrors.tuna.tsinghua.edu.cn/Adoptium/{major}/jdk/{arch}/windows/");
+        let tuna_dir =
+            format!("https://mirrors.tuna.tsinghua.edu.cn/Adoptium/{major}/jdk/{arch}/windows/");
         if let Ok(r) = self.client.get(&tuna_dir).send()
             && r.status().is_success()
             && let Ok(body) = r.text()
@@ -976,7 +976,12 @@ impl JavaManager {
         if is_major_only_java_label(label) {
             let major = parse_java_major_from_label(label)?;
             if Self::supported_lts_majors(self.vendor).contains(&major) {
-                return self.install_latest_major(major, progress_downloaded, progress_total, cancel);
+                return self.install_latest_major(
+                    major,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                );
             }
         }
 
@@ -1023,7 +1028,12 @@ impl JavaManager {
                         "Alibaba Dragonwell: unsupported Java major {major}"
                     )));
                 }
-                return self.install_latest_major(major, progress_downloaded, progress_total, cancel);
+                return self.install_latest_major(
+                    major,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                );
             }
             JavaVendor::AzulZulu => {
                 return self.install_zulu_resolved_label(

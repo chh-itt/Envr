@@ -88,7 +88,11 @@ fn read_settings_rustup_env() -> HashMap<String, String> {
     out
 }
 
-fn run_rustup(mode: RustupMode, paths: &RustPaths, args: &[&str]) -> EnvrResult<(i32, String, String)> {
+fn run_rustup(
+    mode: RustupMode,
+    paths: &RustPaths,
+    args: &[&str],
+) -> EnvrResult<(i32, String, String)> {
     let rustup_program = match mode {
         RustupMode::System => "rustup".into(),
         RustupMode::Managed => paths.managed_rustup_exe(),
@@ -102,7 +106,9 @@ fn run_rustup(mode: RustupMode, paths: &RustPaths, args: &[&str]) -> EnvrResult<
     for (k, v) in read_settings_rustup_env() {
         cmd.env(k, v);
     }
-    let out = cmd.output().map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
+    let out = cmd
+        .output()
+        .map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
     let code = out.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
@@ -177,11 +183,12 @@ impl RustManager {
     }
 
     pub fn list_installed_toolchains(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        let (code, stdout, stderr) = match run_rustup(self.mode, &self.paths, &["toolchain", "list"]) {
-            Ok(v) => v,
-            // In CI / fresh machines, `rustup` might not be installed; keep CLI `doctor/list/current` usable.
-            Err(_) => return Ok(vec![]),
-        };
+        let (code, stdout, stderr) =
+            match run_rustup(self.mode, &self.paths, &["toolchain", "list"]) {
+                Ok(v) => v,
+                // In CI / fresh machines, `rustup` might not be installed; keep CLI `doctor/list/current` usable.
+                Err(_) => return Ok(vec![]),
+            };
         if code != 0 {
             return Err(EnvrError::Runtime(format!(
                 "rustup toolchain list failed: {stderr}"
@@ -207,9 +214,9 @@ impl RustManager {
     pub fn active_toolchain(&self) -> EnvrResult<Option<RuntimeVersion>> {
         let (code, stdout, stderr) =
             match run_rustup(self.mode, &self.paths, &["show", "active-toolchain"]) {
-            Ok(v) => v,
-            Err(_) => return Ok(None),
-        };
+                Ok(v) => v,
+                Err(_) => return Ok(None),
+            };
         if code != 0 {
             // When nothing is installed, rustup returns non-zero; treat as none.
             if stderr.to_ascii_lowercase().contains("no active toolchain") {
@@ -258,8 +265,11 @@ impl RustManager {
     }
 
     pub fn uninstall_toolchain(&self, toolchain: &RuntimeVersion) -> EnvrResult<()> {
-        let (code, _stdout, stderr) =
-            run_rustup(self.mode, &self.paths, &["toolchain", "uninstall", &toolchain.0])?;
+        let (code, _stdout, stderr) = run_rustup(
+            self.mode,
+            &self.paths,
+            &["toolchain", "uninstall", &toolchain.0],
+        )?;
         if code != 0 {
             return Err(EnvrError::Runtime(format!(
                 "rustup toolchain uninstall failed: {stderr}"
@@ -271,7 +281,9 @@ impl RustManager {
     pub fn update_all(&self) -> EnvrResult<()> {
         let (code, _stdout, stderr) = run_rustup(self.mode, &self.paths, &["update"])?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup update failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup update failed: {stderr}"
+            )));
         }
         Ok(())
     }
@@ -280,12 +292,17 @@ impl RustManager {
         let (code, _stdout, stderr) =
             run_rustup(self.mode, &self.paths, &["update", &toolchain.0])?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup update failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup update failed: {stderr}"
+            )));
         }
         Ok(())
     }
 
-    pub fn list_components(&self, toolchain: Option<&RuntimeVersion>) -> EnvrResult<Vec<(String, bool)>> {
+    pub fn list_components(
+        &self,
+        toolchain: Option<&RuntimeVersion>,
+    ) -> EnvrResult<Vec<(String, bool)>> {
         let mut args: Vec<String> = vec!["component".into(), "list".into()];
         if let Some(tc) = toolchain {
             args.push("--toolchain".into());
@@ -294,7 +311,9 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup component list failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup component list failed: {stderr}"
+            )));
         }
         let mut out = Vec::new();
         for line in stdout.lines() {
@@ -326,12 +345,18 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, _stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup component add failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup component add failed: {stderr}"
+            )));
         }
         Ok(())
     }
 
-    pub fn component_remove(&self, name: &str, toolchain: Option<&RuntimeVersion>) -> EnvrResult<()> {
+    pub fn component_remove(
+        &self,
+        name: &str,
+        toolchain: Option<&RuntimeVersion>,
+    ) -> EnvrResult<()> {
         let mut args: Vec<String> = vec!["component".into(), "remove".into(), name.into()];
         if let Some(tc) = toolchain {
             args.push("--toolchain".into());
@@ -340,12 +365,17 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, _stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup component remove failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup component remove failed: {stderr}"
+            )));
         }
         Ok(())
     }
 
-    pub fn list_targets(&self, toolchain: Option<&RuntimeVersion>) -> EnvrResult<Vec<(String, bool)>> {
+    pub fn list_targets(
+        &self,
+        toolchain: Option<&RuntimeVersion>,
+    ) -> EnvrResult<Vec<(String, bool)>> {
         let mut args: Vec<String> = vec!["target".into(), "list".into()];
         if let Some(tc) = toolchain {
             args.push("--toolchain".into());
@@ -354,7 +384,9 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup target list failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup target list failed: {stderr}"
+            )));
         }
         let mut out = Vec::new();
         for line in stdout.lines() {
@@ -386,7 +418,9 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, _stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup target add failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup target add failed: {stderr}"
+            )));
         }
         Ok(())
     }
@@ -400,7 +434,9 @@ impl RustManager {
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let (code, _stdout, stderr) = run_rustup(self.mode, &self.paths, &refs)?;
         if code != 0 {
-            return Err(EnvrError::Runtime(format!("rustup target remove failed: {stderr}")));
+            return Err(EnvrError::Runtime(format!(
+                "rustup target remove failed: {stderr}"
+            )));
         }
         Ok(())
     }

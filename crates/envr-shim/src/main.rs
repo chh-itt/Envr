@@ -4,12 +4,14 @@ use envr_error::EnvrError;
 use envr_shim_core::{
     CoreCommand, ResolvedShim, ShimContext, parse_shim_invocation, resolve_core_shim_command,
 };
-use std::fs;
 use std::ffi::OsString;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-fn prepare(args: &[OsString]) -> Result<(CoreCommand, ShimContext, ResolvedShim, Vec<OsString>), EnvrError> {
+fn prepare(
+    args: &[OsString],
+) -> Result<(CoreCommand, ShimContext, ResolvedShim, Vec<OsString>), EnvrError> {
     let ctx = ShimContext::from_process_env()?;
     let (cmd, forward) = parse_shim_invocation(args)?;
     let resolved = resolve_core_shim_command(cmd, &ctx)?;

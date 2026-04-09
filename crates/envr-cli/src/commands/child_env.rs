@@ -70,7 +70,9 @@ fn maybe_inject_go_settings(env: &mut HashMap<String, String>) -> EnvrResult<()>
             }
         }
         envr_config::settings::GoProxyMode::Domestic => "https://goproxy.cn,direct".to_string(),
-        envr_config::settings::GoProxyMode::Official => "https://proxy.golang.org,direct".to_string(),
+        envr_config::settings::GoProxyMode::Official => {
+            "https://proxy.golang.org,direct".to_string()
+        }
         envr_config::settings::GoProxyMode::Direct => "direct".to_string(),
         envr_config::settings::GoProxyMode::Custom => {
             if !custom.is_empty() {

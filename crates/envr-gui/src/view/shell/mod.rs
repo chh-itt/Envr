@@ -1,8 +1,8 @@
 use iced::widget::{container, rule, scrollable, space, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
-use envr_ui::theme::{ThemeTokens, UiFlavor};
 use envr_domain::runtime::RuntimeKind;
+use envr_ui::theme::{ThemeTokens, UiFlavor};
 
 use crate::app::{AppState, Message, Route};
 use crate::icons::Lucide;
@@ -145,20 +145,16 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
             }
             col = col.push(env_center_view(
                 &state.env_center,
-                matches!(state.env_center.kind, RuntimeKind::Node).then_some(
-                    &state.settings.cache.snapshot().runtime.node,
-                ),
-                matches!(state.env_center.kind, RuntimeKind::Python).then_some(
-                    &state.settings.cache.snapshot().runtime.python,
-                ),
+                matches!(state.env_center.kind, RuntimeKind::Node)
+                    .then_some(&state.settings.cache.snapshot().runtime.node),
+                matches!(state.env_center.kind, RuntimeKind::Python)
+                    .then_some(&state.settings.cache.snapshot().runtime.python),
                 matches!(state.env_center.kind, RuntimeKind::Java)
                     .then_some(&state.settings.cache.snapshot().runtime.java),
-                matches!(state.env_center.kind, RuntimeKind::Go).then_some(
-                    &state.settings.cache.snapshot().runtime.go,
-                ),
-                matches!(state.env_center.kind, RuntimeKind::Rust).then_some(
-                    &state.settings.cache.snapshot().runtime.rust,
-                ),
+                matches!(state.env_center.kind, RuntimeKind::Go)
+                    .then_some(&state.settings.cache.snapshot().runtime.go),
+                matches!(state.env_center.kind, RuntimeKind::Rust)
+                    .then_some(&state.settings.cache.snapshot().runtime.rust),
                 tokens,
             ));
         }

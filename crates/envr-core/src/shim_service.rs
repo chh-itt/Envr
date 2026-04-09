@@ -363,12 +363,7 @@ impl ShimService {
                     if rel.is_empty() {
                         continue;
                     }
-                    self.try_write_pkg_bin(
-                        &pkg_dir.join(rel),
-                        &stem,
-                        node_exe,
-                        seen,
-                    )?;
+                    self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, node_exe, seen)?;
                 }
             }
             _ => {}
@@ -519,11 +514,7 @@ impl ShimService {
                 (Some(node_exe), Some(ext)) if JS_BIN_EXTS.contains(&ext) => {
                     let node_s = normalize_windows_path_for_cmd(node_exe);
                     let target_s = normalize_windows_path_for_cmd(target);
-                    format!(
-                        "@echo off\r\n\"{}\" \"{}\" %*\r\n",
-                        node_s,
-                        target_s
-                    )
+                    format!("@echo off\r\n\"{}\" \"{}\" %*\r\n", node_s, target_s)
                 }
                 _ => {
                     let target_s = normalize_windows_path_for_cmd(target);

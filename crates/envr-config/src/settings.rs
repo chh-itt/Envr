@@ -328,16 +328,12 @@ impl JavaDistro {
     /// Kept in sync with install-time checks in `envr-runtime-java`.
     pub fn supported_lts_major_strs(self) -> &'static [&'static str] {
         match self {
-            JavaDistro::Temurin | JavaDistro::OpenJdk => {
-                &["25", "21", "17", "11", "8"]
-            }
+            JavaDistro::Temurin | JavaDistro::OpenJdk => &["25", "21", "17", "11", "8"],
             JavaDistro::OracleOpenJdk => &["25", "21", "17"],
             JavaDistro::AmazonCorretto => &["21", "17", "11", "8"],
             JavaDistro::Microsoft => &["25", "21", "17", "11"],
             JavaDistro::OracleJdk => &["25", "21"],
-            JavaDistro::AzulZulu | JavaDistro::AlibabaDragonwell => {
-                &["25", "21", "17", "11", "8"]
-            }
+            JavaDistro::AzulZulu | JavaDistro::AlibabaDragonwell => &["25", "21", "17", "11", "8"],
         }
     }
 }
@@ -604,8 +600,18 @@ impl Settings {
             ));
         }
         if self.runtime.go.proxy_mode == GoProxyMode::Custom
-            && self.runtime.go.proxy_custom.as_deref().is_none_or(|s| s.trim().is_empty())
-            && self.runtime.go.goproxy.as_deref().is_none_or(|s| s.trim().is_empty())
+            && self
+                .runtime
+                .go
+                .proxy_custom
+                .as_deref()
+                .is_none_or(|s| s.trim().is_empty())
+            && self
+                .runtime
+                .go
+                .goproxy
+                .as_deref()
+                .is_none_or(|s| s.trim().is_empty())
         {
             return Err(EnvrError::Validation(
                 "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom"

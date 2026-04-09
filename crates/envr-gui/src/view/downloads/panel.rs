@@ -44,11 +44,7 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
                 })
                 .unwrap_or_default();
             let sz = if t > 0 {
-                format!(
-                    "{} / {}",
-                    format_transfer_size(d),
-                    format_transfer_size(t)
-                )
+                format!("{} / {}", format_transfer_size(d), format_transfer_size(t))
             } else {
                 format_transfer_size(d)
             };
@@ -66,7 +62,7 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
                 envr_core::i18n::tr_key("gui.job.done", "完成", "Done"),
                 format_transfer_size(job.downloaded_display()),
             )
-        },
+        }
         JobState::Failed => {
             let detail = job.last_error.clone().unwrap_or_else(|| {
                 envr_core::i18n::tr_key("gui.downloads.unknown_error", "未知错误", "unknown error")

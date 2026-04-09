@@ -3,22 +3,22 @@ mod manager;
 
 pub use index::{
     DEFAULT_PYTHON_RELEASE_FILES_URL, DEFAULT_PYTHON_RELEASES_URL, PyRelease, PyReleaseFile,
-    PythonIndex, blocking_http_client, fetch_json, list_remote_versions, load_python_index,
-    normalize_python_version_label, parse_release_file_list, parse_release_list,
-    pick_install_artifact, release_has_platform_assets, release_id_for_version_label,
-    resolve_python_version, list_latest_patch_per_major,
+    PythonIndex, blocking_http_client, fetch_json, list_latest_patch_per_major,
+    list_remote_versions, load_python_index, normalize_python_version_label,
+    parse_release_file_list, parse_release_list, pick_install_artifact,
+    release_has_platform_assets, release_id_for_version_label, resolve_python_version,
 };
 pub use manager::{
     PythonManager, PythonPaths, list_installed_versions, python_executable,
     python_installation_valid, read_current,
 };
 
+use envr_config::settings::resolve_runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::EnvrResult;
-use envr_config::settings::resolve_runtime_root;
 
 pub struct PythonRuntimeProvider {
     releases_url: String,

@@ -225,68 +225,67 @@ pub fn run() -> iced::Result {
     .title("Envr")
     .default_font(configured_default_font(&startup))
     .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
-        .subscription(|state| {
-            let runtime_skeleton = matches!(state.route(), Route::Runtime)
-                && state.env_center.installed.is_empty()
-                && (state.env_center.busy
-                    || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-                        && state.env_center.node_remote_refreshing
-                        && state.env_center.node_remote_latest.is_empty())
-                    || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
-                        && state.env_center.go_remote_refreshing
-                        && state.env_center.go_remote_latest.is_empty()));
-            let need_motion = state.downloads.needs_motion_tick()
-                || state.downloads.title_drag_armed_since.is_some()
-                || runtime_skeleton;
-            let maybe_motion = need_motion
-                .then(|| iced::time::every(Duration::from_millis(32)))
-                .map(|s| s.map(|_| Message::MotionTick));
+    .subscription(|state| {
+        let runtime_skeleton = matches!(state.route(), Route::Runtime)
+            && state.env_center.installed.is_empty()
+            && (state.env_center.busy
+                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
+                    && state.env_center.node_remote_refreshing
+                    && state.env_center.node_remote_latest.is_empty())
+                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
+                    && state.env_center.go_remote_refreshing
+                    && state.env_center.go_remote_latest.is_empty()));
+        let need_motion = state.downloads.needs_motion_tick()
+            || state.downloads.title_drag_armed_since.is_some()
+            || runtime_skeleton;
+        let maybe_motion = need_motion
+            .then(|| iced::time::every(Duration::from_millis(32)))
+            .map(|s| s.map(|_| Message::MotionTick));
 
-            let progress_only = state.downloads.needs_tick() && !need_motion;
-            let maybe_tick = progress_only
-                .then(|| iced::time::every(Duration::from_millis(400)))
-                .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
+        let progress_only = state.downloads.needs_tick() && !need_motion;
+        let maybe_tick = progress_only
+            .then(|| iced::time::every(Duration::from_millis(400)))
+            .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
 
-            let need_pointer_events =
-                state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
-            let maybe_events = need_pointer_events
-                .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
+        let need_pointer_events =
+            state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
+        let maybe_events = need_pointer_events
+            .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
 
-            let theme_poll = (state.settings.draft.appearance.theme_mode
-                == ThemeMode::FollowSystem)
-                .then(|| iced::time::every(Duration::from_secs(1)))
-                .map(|s| s.map(|_| Message::ThemePollTick));
+        let theme_poll = (state.settings.draft.appearance.theme_mode == ThemeMode::FollowSystem)
+            .then(|| iced::time::every(Duration::from_secs(1)))
+            .map(|s| s.map(|_| Message::ThemePollTick));
 
-            let mut subs = Vec::new();
-            if let Some(t) = maybe_motion {
-                subs.push(t);
-            }
-            if let Some(t) = maybe_tick {
-                subs.push(t);
-            }
-            if let Some(e) = maybe_events {
-                subs.push(e);
-            }
-            if let Some(t) = theme_poll {
-                subs.push(t);
-            }
-            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
-            subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
-            Subscription::batch(subs)
-        })
-        .window(iced::window::Settings {
-            size: Size::new(
-                layout_shell::WINDOW_DEFAULT_W,
-                layout_shell::WINDOW_DEFAULT_H,
-            ),
-            min_size: Some(Size::new(
-                layout_shell::WINDOW_MIN_W,
-                layout_shell::WINDOW_MIN_H,
-            )),
-            position: iced::window::Position::Centered,
-            ..iced::window::Settings::default()
-        })
-        .run()
+        let mut subs = Vec::new();
+        if let Some(t) = maybe_motion {
+            subs.push(t);
+        }
+        if let Some(t) = maybe_tick {
+            subs.push(t);
+        }
+        if let Some(e) = maybe_events {
+            subs.push(e);
+        }
+        if let Some(t) = theme_poll {
+            subs.push(t);
+        }
+        subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
+        subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
+        Subscription::batch(subs)
+    })
+    .window(iced::window::Settings {
+        size: Size::new(
+            layout_shell::WINDOW_DEFAULT_W,
+            layout_shell::WINDOW_DEFAULT_H,
+        ),
+        min_size: Some(Size::new(
+            layout_shell::WINDOW_MIN_W,
+            layout_shell::WINDOW_MIN_H,
+        )),
+        position: iced::window::Position::Centered,
+        ..iced::window::Settings::default()
+    })
+    .run()
 }
 
 static STARTUP_SETTINGS: OnceLock<Settings> = OnceLock::new();
@@ -518,7 +517,9 @@ fn handle_dashboard(state: &mut AppState, msg: DashboardMsg) -> Task<Message> {
     }
 }
 
-async fn browse_runtime_root_folder(start: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+async fn browse_runtime_root_folder(
+    start: Option<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
     tokio::task::spawn_blocking(move || {
         let mut dlg = rfd::FileDialog::new();
         if let Some(p) = start {
@@ -545,10 +546,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                     p.is_dir().then_some(p)
                 }
             };
-            Task::perform(
-                browse_runtime_root_folder(start),
-                |r| Message::Settings(SettingsMsg::RuntimeRootBrowseResult(r)),
-            )
+            Task::perform(browse_runtime_root_folder(start), |r| {
+                Message::Settings(SettingsMsg::RuntimeRootBrowseResult(r))
+            })
         }
         SettingsMsg::RuntimeRootBrowseResult(pb) => {
             if let Some(pb) = pb {
@@ -741,7 +741,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             envr_domain::runtime::RuntimeKind::Node => {
                                 state.env_center.node_remote_refreshing = true;
                                 return Task::batch([
-                                    gui_ops::refresh_runtimes(envr_domain::runtime::RuntimeKind::Node),
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Node,
+                                    ),
                                     gui_ops::load_remote_latest_disk_snapshot(
                                         envr_domain::runtime::RuntimeKind::Node,
                                     ),
@@ -767,7 +769,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             envr_domain::runtime::RuntimeKind::Java => {
                                 state.env_center.java_remote_refreshing = true;
                                 return Task::batch([
-                                    gui_ops::refresh_runtimes(envr_domain::runtime::RuntimeKind::Java),
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Java,
+                                    ),
                                     gui_ops::load_remote_latest_disk_snapshot(
                                         envr_domain::runtime::RuntimeKind::Java,
                                     ),
@@ -779,7 +783,9 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             envr_domain::runtime::RuntimeKind::Go => {
                                 state.env_center.go_remote_refreshing = true;
                                 return Task::batch([
-                                    gui_ops::refresh_runtimes(envr_domain::runtime::RuntimeKind::Go),
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Go,
+                                    ),
                                     gui_ops::load_remote_latest_disk_snapshot(
                                         envr_domain::runtime::RuntimeKind::Go,
                                     ),
@@ -1027,7 +1033,14 @@ fn apply_pip_registry_config(settings: &Settings) -> Result<(), String> {
         return Ok(());
     };
     let extra = if index_urls.len() > 1 {
-        Some(index_urls.iter().skip(1).copied().collect::<Vec<_>>().join(" "))
+        Some(
+            index_urls
+                .iter()
+                .skip(1)
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
     } else {
         None
     };
@@ -1072,34 +1085,42 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
 
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
     match state.env_center.kind {
-        envr_domain::runtime::RuntimeKind::Node => !state
-            .settings
-            .cache
-            .snapshot()
-            .runtime
-            .node
-            .path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Python => !state
-            .settings
-            .cache
-            .snapshot()
-            .runtime
-            .python
-            .path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Java => !state
-            .settings
-            .cache
-            .snapshot()
-            .runtime
-            .java
-            .path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Go => !state
-            .settings
-            .cache
-            .snapshot()
-            .runtime
-            .go
-            .path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Node => {
+            !state
+                .settings
+                .cache
+                .snapshot()
+                .runtime
+                .node
+                .path_proxy_enabled
+        }
+        envr_domain::runtime::RuntimeKind::Python => {
+            !state
+                .settings
+                .cache
+                .snapshot()
+                .runtime
+                .python
+                .path_proxy_enabled
+        }
+        envr_domain::runtime::RuntimeKind::Java => {
+            !state
+                .settings
+                .cache
+                .snapshot()
+                .runtime
+                .java
+                .path_proxy_enabled
+        }
+        envr_domain::runtime::RuntimeKind::Go => {
+            !state
+                .settings
+                .cache
+                .snapshot()
+                .runtime
+                .go
+                .path_proxy_enabled
+        }
         _ => false,
     }
 }
@@ -1119,8 +1140,7 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         let _ = persist_download_panel_settings(state);
     }
     state.downloads.maybe_progress_tick_on_motion_frame();
-    let waiting_installed_list =
-        state.env_center.busy && state.env_center.installed.is_empty();
+    let waiting_installed_list = state.env_center.busy && state.env_center.installed.is_empty();
     let waiting_node_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
         && state.env_center.node_remote_refreshing
         && state.env_center.node_remote_latest.is_empty()
@@ -1436,9 +1456,7 @@ fn enqueue_runtime_install_job(
 
 fn looks_like_user_cancelled(err: &str) -> bool {
     let l = err.to_ascii_lowercase();
-    l.contains("cancelled")
-        || l.contains("canceled")
-        || l.contains("download cancel")
+    l.contains("cancelled") || l.contains("canceled") || l.contains("download cancel")
 }
 
 fn runtime_install_task_label(
@@ -1509,7 +1527,11 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
             state.env_center.java_remote_refreshing = false;
             state.env_center.go_remote_refreshing = false;
             state.env_center.busy = true;
-            Task::batch([gui_ops::rust_refresh(), gui_ops::rust_load_components(), gui_ops::rust_load_targets()])
+            Task::batch([
+                gui_ops::rust_refresh(),
+                gui_ops::rust_load_components(),
+                gui_ops::rust_load_targets(),
+            ])
         }
         _ => {
             state.env_center.node_remote_refreshing = false;
@@ -1614,7 +1636,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
         }
         EnvCenterMsg::InstallInput(s) => {
-            state.env_center.install_input = sanitize_runtime_filter_input(state.env_center.kind, &s);
+            state.env_center.install_input =
+                sanitize_runtime_filter_input(state.env_center.kind, &s);
             Task::none()
         }
         EnvCenterMsg::DirectInstallInput(s) => {
@@ -1860,7 +1883,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             gui_ops::refresh_runtimes(state.env_center.kind)
         }
         EnvCenterMsg::ToggleRuntimeSettings => {
-            state.env_center.runtime_settings_expanded = !state.env_center.runtime_settings_expanded;
+            state.env_center.runtime_settings_expanded =
+                !state.env_center.runtime_settings_expanded;
             Task::none()
         }
         EnvCenterMsg::SetNodeDownloadSource(src) => {
@@ -2181,11 +2205,9 @@ fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &
     let t = raw.trim();
     match kind {
         // Node filter supports major only.
-        envr_domain::runtime::RuntimeKind::Node => t
-            .chars()
-            .filter(|c| c.is_ascii_digit())
-            .take(4)
-            .collect(),
+        envr_domain::runtime::RuntimeKind::Node => {
+            t.chars().filter(|c| c.is_ascii_digit()).take(4).collect()
+        }
         // Python filter supports major.minor.
         envr_domain::runtime::RuntimeKind::Python => {
             let mut out = String::new();
@@ -2203,11 +2225,9 @@ fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &
             }
             out
         }
-        envr_domain::runtime::RuntimeKind::Java => t
-            .chars()
-            .filter(|c| c.is_ascii_digit())
-            .take(3)
-            .collect(),
+        envr_domain::runtime::RuntimeKind::Java => {
+            t.chars().filter(|c| c.is_ascii_digit()).take(3).collect()
+        }
         envr_domain::runtime::RuntimeKind::Go => {
             let mut out = String::new();
             let mut dot_seen = false;
