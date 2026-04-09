@@ -9,6 +9,26 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::process::Command;
 
+fn go_tool_executable(home: &std::path::Path, tool: &str) -> Option<std::path::PathBuf> {
+    let bin = home.join("bin");
+    #[cfg(windows)]
+    {
+        match tool {
+            "go" => Some(bin.join("go.exe")),
+            "gofmt" => Some(bin.join("gofmt.exe")),
+            _ => None,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        match tool {
+            "go" => Some(bin.join("go")),
+            "gofmt" => Some(bin.join("gofmt")),
+            _ => None,
+        }
+    }
+}
+
 pub fn run(
     g: &GlobalArgs,
     lang: String,
@@ -37,7 +57,19 @@ pub fn run(
         Err(e) => return common::print_envr_error(g, e),
     };
 
-    let mut child = Command::new(&command);
+    // On Windows, executable lookup may happen before applying the child's environment block
+    // (including PATH). Prefer an absolute core tool path when we can derive it from the runtime home.
+    let mut resolved_cmd = command.clone();
+    if lang == "go" && (command == "go" || command == "gofmt") {
+        if let Ok(home) = child_env::resolve_exec_home_for_lang(&ctx, &lang, spec.as_deref()) {
+            let home = std::fs::canonicalize(&home).unwrap_or(home);
+            if let Some(p) = go_tool_executable(&home, &command) {
+                resolved_cmd = p.display().to_string();
+            }
+        }
+    }
+
+    let mut child = Command::new(&resolved_cmd);
     child.args(&args);
     child.env_clear();
     for (k, v) in &env_map {

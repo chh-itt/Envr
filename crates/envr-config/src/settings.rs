@@ -264,6 +264,30 @@ pub enum PipRegistryMode {
     Restore,
 }
 
+/// Go toolchain download source preference (go.dev vs China mirror).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GoDownloadSource {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
+/// How `GOPROXY` should be injected in `envr env`/`run`/`exec` when Go is in scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GoProxyMode {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+    /// Disable module proxy (`GOPROXY=direct`).
+    Direct,
+    /// Use user-provided `runtime.go.proxy_custom`.
+    Custom,
+}
+
 /// Java distribution choice for runtime installation and listing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -409,11 +433,45 @@ pub struct RuntimeSettings {
     pub bun: BunRuntimeSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoRuntimeSettings {
-    /// Optional `GOPROXY` value to inject into `envr env`/`run`/`exec` when Go is in scope.
+    /// Go toolchain download source choice.
+    #[serde(default)]
+    pub download_source: GoDownloadSource,
+    /// `GOPROXY` injection mode.
+    #[serde(default)]
+    pub proxy_mode: GoProxyMode,
+    /// Custom `GOPROXY` value (only when `proxy_mode = custom`).
+    #[serde(default)]
+    pub proxy_custom: Option<String>,
+    /// Optional private module patterns (comma-separated). When set, envr injects:
+    /// - `GOPRIVATE`
+    /// - `GONOSUMDB`
+    /// - `GONOPROXY`
+    #[serde(default)]
+    pub private_patterns: Option<String>,
+    /// When false, go/gofmt shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::go_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+    /// Backward compatibility: older settings used a direct `goproxy` value.
+    ///
+    /// When `proxy_mode` is `auto` and this is set, it takes precedence.
+    /// When `proxy_mode` is `custom` and `proxy_custom` is empty, this is used as fallback.
     #[serde(default)]
     pub goproxy: Option<String>,
+}
+
+impl Default for GoRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: GoDownloadSource::default(),
+            proxy_mode: GoProxyMode::default(),
+            proxy_custom: None,
+            private_patterns: None,
+            path_proxy_enabled: defaults::go_path_proxy_enabled(),
+            goproxy: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -507,6 +565,30 @@ impl Settings {
         {
             return Err(EnvrError::Validation(
                 "runtime.go.goproxy must not be whitespace-only".to_string(),
+            ));
+        }
+
+        if let Some(ref v) = self.runtime.go.proxy_custom
+            && v.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.go.proxy_custom must not be whitespace-only".to_string(),
+            ));
+        }
+        if self.runtime.go.proxy_mode == GoProxyMode::Custom
+            && self.runtime.go.proxy_custom.as_deref().is_none_or(|s| s.trim().is_empty())
+            && self.runtime.go.goproxy.as_deref().is_none_or(|s| s.trim().is_empty())
+        {
+            return Err(EnvrError::Validation(
+                "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom"
+                    .to_string(),
+            ));
+        }
+        if let Some(ref v) = self.runtime.go.private_patterns
+            && v.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.go.private_patterns must not be whitespace-only".to_string(),
             ));
         }
 
@@ -848,6 +930,17 @@ pub fn java_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`GoRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn go_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.go.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
     let meta = fs::metadata(path).map_err(EnvrError::from)?;
     meta.modified()
@@ -938,6 +1031,10 @@ mod defaults {
     pub fn java_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn go_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1003,6 +1100,7 @@ mod tests {
                 java: JavaRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
+                    ..Default::default()
                 },
                 bun: BunRuntimeSettings {
                     global_bin_dir: Some("/tmp/.bun/bin".to_string()),

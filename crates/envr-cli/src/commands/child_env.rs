@@ -55,10 +55,43 @@ fn load_settings() -> EnvrResult<Settings> {
 
 fn maybe_inject_go_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
     let st = load_settings()?;
-    if let Some(ref gp) = st.runtime.go.goproxy
-        && !gp.trim().is_empty()
-    {
-        env.insert("GOPROXY".into(), gp.trim().to_string());
+
+    // GOPROXY injection.
+    let legacy = st.runtime.go.goproxy.as_deref().unwrap_or("").trim();
+    let custom = st.runtime.go.proxy_custom.as_deref().unwrap_or("").trim();
+    let gp = match st.runtime.go.proxy_mode {
+        envr_config::settings::GoProxyMode::Auto => {
+            if !legacy.is_empty() {
+                legacy.to_string()
+            } else if envr_config::settings::prefer_china_mirror_locale(&st) {
+                "https://goproxy.cn,direct".to_string()
+            } else {
+                "https://proxy.golang.org,direct".to_string()
+            }
+        }
+        envr_config::settings::GoProxyMode::Domestic => "https://goproxy.cn,direct".to_string(),
+        envr_config::settings::GoProxyMode::Official => "https://proxy.golang.org,direct".to_string(),
+        envr_config::settings::GoProxyMode::Direct => "direct".to_string(),
+        envr_config::settings::GoProxyMode::Custom => {
+            if !custom.is_empty() {
+                custom.to_string()
+            } else {
+                legacy.to_string()
+            }
+        }
+    };
+    if !gp.trim().is_empty() {
+        env.insert("GOPROXY".into(), gp);
+    }
+
+    // Private module patterns: keep these in sync for common corporate setups.
+    if let Some(p) = st.runtime.go.private_patterns.as_deref() {
+        let v = p.trim();
+        if !v.is_empty() {
+            env.insert("GOPRIVATE".into(), v.to_string());
+            env.insert("GONOSUMDB".into(), v.to_string());
+            env.insert("GONOPROXY".into(), v.to_string());
+        }
     }
     Ok(())
 }
@@ -239,6 +272,30 @@ fn resolve_bun_home(
     }
 }
 
+/// Resolve the runtime home directory for `exec` (same pin/current rules as `collect_exec_env`).
+///
+/// Note: On Windows, process spawning may resolve the executable before applying the child's
+/// environment block, so callers may prefer using the returned home to build an absolute tool path.
+pub fn resolve_exec_home_for_lang(
+    ctx: &ShimContext,
+    lang: &str,
+    spec_override: Option<&str>,
+) -> EnvrResult<PathBuf> {
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
+    if lang == "bun" {
+        resolve_bun_home(ctx, cfg.as_ref(), spec_override)
+    } else if lang == "deno" {
+        resolve_deno_home(ctx, cfg.as_ref(), spec_override)
+    } else if lang == "php" {
+        resolve_php_home(ctx, cfg.as_ref(), spec_override)
+    } else if lang == "go" {
+        resolve_go_home(ctx, cfg.as_ref(), spec_override)
+    } else {
+        resolve_runtime_home_for_lang(ctx, lang, spec_override)
+    }
+}
+
 /// Single-language resolution: prepend that runtime's bin dirs to `PATH`, set `JAVA_HOME` for Java.
 pub fn collect_exec_env(
     ctx: &ShimContext,
@@ -278,6 +335,7 @@ pub fn collect_exec_env(
         env.insert("JAVA_HOME".into(), home.display().to_string());
     }
     if lang == "go" {
+        env.insert("GOROOT".into(), home.display().to_string());
         maybe_inject_go_settings(&mut env)?;
     }
     Ok(env)
@@ -295,6 +353,7 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
     }
     let mut path_entries: Vec<PathBuf> = Vec::new();
     let mut java_home: Option<PathBuf> = None;
+    let mut go_home: Option<PathBuf> = None;
     for lang in ["node", "python", "java", "go", "rust", "php", "deno", "bun"] {
         if lang == "rust" {
             path_entries.extend(resolve_rust_bins(ctx));
@@ -342,6 +401,9 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
         if lang == "java" {
             java_home = Some(home.clone());
         }
+        if lang == "go" {
+            go_home = Some(home.clone());
+        }
         path_entries.extend(runtime_bin_dirs(&home, lang));
     }
     path_entries = dedup_paths(path_entries);
@@ -349,6 +411,9 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
     env.insert("PATH".into(), prepend_path(&path_entries, old_path));
     if let Some(jh) = java_home {
         env.insert("JAVA_HOME".into(), jh.display().to_string());
+    }
+    if let Some(gh) = go_home {
+        env.insert("GOROOT".into(), gh.display().to_string());
     }
     maybe_inject_go_settings(&mut env)?;
     Ok(env)

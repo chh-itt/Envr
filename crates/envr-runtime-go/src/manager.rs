@@ -10,8 +10,8 @@ use std::{
 };
 
 use crate::index::{
-    GoDistFile, GoRelease, blocking_http_client, fetch_go_index, normalize_go_version,
-    parse_go_index, resolve_go_version,
+    GoDistFile, GoRelease, blocking_http_client, fetch_go_index, go_dl_arch_for_rust,
+    go_dl_os_for_rust, normalize_go_version, parse_go_index, resolve_go_version,
 };
 
 #[derive(Debug, Clone)]
@@ -105,16 +105,18 @@ pub fn read_current(paths: &GoPaths) -> EnvrResult<Option<RuntimeVersion>> {
 pub struct GoManager {
     paths: GoPaths,
     dl_json_url: String,
+    dl_base_url: String,
     client: Client,
 }
 
 impl GoManager {
-    pub fn try_new(runtime_root: PathBuf, dl_json_url: String) -> EnvrResult<Self> {
+    pub fn try_new(runtime_root: PathBuf, dl_json_url: String, dl_base_url: String) -> EnvrResult<Self> {
         let paths = GoPaths::new(runtime_root);
         fs::create_dir_all(paths.versions_dir()).map_err(EnvrError::from)?;
         Ok(Self {
             paths,
             dl_json_url,
+            dl_base_url,
             client: blocking_http_client()?,
         })
     }
@@ -125,8 +127,8 @@ impl GoManager {
     }
 
     fn pick_dist_file<'a>(&self, release: &'a GoRelease) -> EnvrResult<&'a GoDistFile> {
-        let os = std::env::consts::OS;
-        let arch = std::env::consts::ARCH;
+        let os = go_dl_os_for_rust(std::env::consts::OS);
+        let arch = go_dl_arch_for_rust(std::env::consts::ARCH);
         let want_ext = if os == "windows" { ".zip" } else { ".tar.gz" };
         release
             .files
@@ -189,7 +191,8 @@ impl GoManager {
             .cache_dir()
             .join(normalize_go_version(&version.0))
             .join(&dist.filename);
-        let url = format!("https://go.dev/dl/{}", dist.filename);
+        let base = self.dl_base_url.trim_end_matches('/');
+        let url = format!("{base}/dl/{}", dist.filename);
         self.download_to_path(&url, &cache_file)?;
         if !dist.sha256.trim().is_empty() {
             checksum::verify_sha256_hex(&cache_file, dist.sha256.trim())?;

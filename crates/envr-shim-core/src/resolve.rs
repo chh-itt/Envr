@@ -1,7 +1,7 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
-    java_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
-    python_path_proxy_enabled_from_disk, resolve_runtime_root,
+    go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
+    node_path_proxy_enabled_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
@@ -54,6 +54,8 @@ pub enum CoreCommand {
     Pip,
     Java,
     Javac,
+    Go,
+    Gofmt,
     Bun,
     Bunx,
 }
@@ -64,6 +66,7 @@ impl CoreCommand {
             CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => "node",
             CoreCommand::Python | CoreCommand::Pip => "python",
             CoreCommand::Java | CoreCommand::Javac => "java",
+            CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
         }
     }
@@ -93,6 +96,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "pip" | "pip3" => Some(CoreCommand::Pip),
         "java" => Some(CoreCommand::Java),
         "javac" => Some(CoreCommand::Javac),
+        "go" => Some(CoreCommand::Go),
+        "gofmt" => Some(CoreCommand::Gofmt),
         "bun" => Some(CoreCommand::Bun),
         "bunx" => Some(CoreCommand::Bunx),
         _ => None,
@@ -358,12 +363,25 @@ fn bun_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn go_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Go => Ok(first_existing(&[bin.join("go.exe"), bin.join("go")]).ok_or_else(
+            || EnvrError::Runtime(format!("go missing under {}", home.display())),
+        )?),
+        CoreCommand::Gofmt => Ok(first_existing(&[bin.join("gofmt.exe"), bin.join("gofmt")])
+            .ok_or_else(|| EnvrError::Runtime(format!("gofmt missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a go tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(home, cmd),
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
+        CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
     }
 }
@@ -489,6 +507,23 @@ fn resolve_java_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
     })
 }
 
+fn resolve_go_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Go => "go",
+        CoreCommand::Gofmt => "gofmt",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports go tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     if matches!(
@@ -506,6 +541,9 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     {
         return resolve_java_tool_bypass_envr(cmd);
     }
+    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
+        return resolve_go_tool_bypass_envr(cmd);
+    }
 
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
@@ -522,6 +560,11 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
         CoreCommand::Java | CoreCommand::Javac => {
             extra_env.push(("JAVA_HOME".into(), home.display().to_string()));
             java_tool_path(&home, cmd)?
+        }
+        CoreCommand::Go | CoreCommand::Gofmt => {
+            // Override stale GOROOT from the parent environment (e.g. old tests or manual exports).
+            extra_env.push(("GOROOT".into(), home.display().to_string()));
+            go_tool_path(&home, cmd)?
         }
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(&home, cmd)?,
     };
@@ -587,6 +630,8 @@ mod tests {
         assert_eq!(parse_core_command("python3"), Some(CoreCommand::Python));
         assert_eq!(parse_core_command("pip3"), Some(CoreCommand::Pip));
         assert_eq!(parse_core_command("bunx"), Some(CoreCommand::Bunx));
+        assert_eq!(parse_core_command("go"), Some(CoreCommand::Go));
+        assert_eq!(parse_core_command("gofmt"), Some(CoreCommand::Gofmt));
         assert_eq!(parse_core_command("unknown"), None);
     }
 

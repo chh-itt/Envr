@@ -136,7 +136,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
             ));
             // Only show the extra per-runtime settings panel when there are
             // actually runtime-specific options to configure.
-            if matches!(state.env_center.kind, RuntimeKind::Go | RuntimeKind::Bun) {
+            if matches!(state.env_center.kind, RuntimeKind::Bun) {
                 col = col.push(runtime_settings_view(
                     &state.runtime_settings,
                     state.env_center.kind,
@@ -153,6 +153,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 ),
                 matches!(state.env_center.kind, RuntimeKind::Java)
                     .then_some(&state.settings.cache.snapshot().runtime.java),
+                matches!(state.env_center.kind, RuntimeKind::Go).then_some(
+                    &state.settings.cache.snapshot().runtime.go,
+                ),
                 tokens,
             ));
         }

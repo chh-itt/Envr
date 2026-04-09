@@ -1,8 +1,9 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
-    NpmRegistryMode, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
+    GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro, JavaDownloadSource,
+    JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode, PipRegistryMode,
+    PythonDownloadSource, PythonRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
@@ -48,6 +49,12 @@ pub enum EnvCenterMsg {
     SetJavaDistro(JavaDistro),
     SetJavaDownloadSource(JavaDownloadSource),
     SetJavaPathProxy(bool),
+    SetGoDownloadSource(GoDownloadSource),
+    SetGoProxyMode(GoProxyMode),
+    SetGoPathProxy(bool),
+    SetGoProxyCustomDraft(String),
+    SetGoPrivatePatternsDraft(String),
+    ApplyGoNetworkSettings,
     SyncShimsFinished(Result<(), String>),
 }
 
@@ -72,6 +79,10 @@ pub struct EnvCenterState {
     pub java_remote_latest: Vec<RuntimeVersion>,
     /// Java: background refresh is in flight.
     pub java_remote_refreshing: bool,
+    /// Go: latest stable patch per minor line (`1.xx`) from cache/network.
+    pub go_remote_latest: Vec<RuntimeVersion>,
+    /// Go: background refresh of `go_remote_latest` is in flight.
+    pub go_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -80,6 +91,10 @@ pub struct EnvCenterState {
     pub runtime_settings_expanded: bool,
     /// Synthetic job shown in downloads panel for current env-center operation.
     pub op_job_id: Option<u64>,
+    /// Draft for `runtime.go.proxy_custom` (applied via [`EnvCenterMsg::ApplyGoNetworkSettings`]).
+    pub go_proxy_custom_draft: String,
+    /// Draft for `runtime.go.private_patterns`.
+    pub go_private_patterns_draft: String,
 }
 
 impl Default for EnvCenterState {
@@ -97,10 +112,14 @@ impl Default for EnvCenterState {
             python_remote_refreshing: false,
             java_remote_latest: Vec::new(),
             java_remote_refreshing: false,
+            go_remote_latest: Vec::new(),
+            go_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
             op_job_id: None,
+            go_proxy_custom_draft: String::new(),
+            go_private_patterns_draft: String::new(),
         }
     }
 }
@@ -493,6 +512,222 @@ fn java_runtime_settings_section(
     .into()
 }
 
+fn go_runtime_settings_section(
+    go: &GoRuntimeSettings,
+    drafts: (&str, &str),
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let (proxy_draft, private_draft) = drafts;
+
+    let dl_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.go.download_source",
+        "Go 下载源",
+        "Go download source",
+    ))
+    .size(ty.body);
+    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    for src in [
+        GoDownloadSource::Auto,
+        GoDownloadSource::Domestic,
+        GoDownloadSource::Official,
+    ] {
+        let lab = match src {
+            GoDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.go.ds.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            GoDownloadSource::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.go.ds.domestic",
+                "国内（golang.google.cn）",
+                "China (golang.google.cn)",
+            ),
+            GoDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.go.ds.official", "官方（go.dev）", "Official (go.dev)")
+            }
+        };
+        let variant = if src == go.download_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if src == go.download_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        dl_row = dl_row.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetGoDownloadSource(src)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+
+    let gp_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.go.goproxy_mode",
+        "GOPROXY（模块代理）",
+        "GOPROXY (module proxy)",
+    ))
+    .size(ty.body);
+    let mut gp_row = row![gp_title].spacing(sp.sm as f32);
+    for mode in [
+        GoProxyMode::Auto,
+        GoProxyMode::Domestic,
+        GoProxyMode::Official,
+        GoProxyMode::Direct,
+        GoProxyMode::Custom,
+    ] {
+        let lab = match mode {
+            GoProxyMode::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.go.gp.auto",
+                "自动",
+                "Auto",
+            ),
+            GoProxyMode::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.go.gp.domestic",
+                "国内",
+                "China",
+            ),
+            GoProxyMode::Official => {
+                envr_core::i18n::tr_key("gui.runtime.go.gp.official", "官方", "Official")
+            }
+            GoProxyMode::Direct => envr_core::i18n::tr_key(
+                "gui.runtime.go.gp.direct",
+                "直连",
+                "Direct",
+            ),
+            GoProxyMode::Custom => envr_core::i18n::tr_key("gui.runtime.go.gp.custom", "自定义", "Custom"),
+        };
+        let variant = if mode == go.proxy_mode {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == go.proxy_mode {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        gp_row = gp_row.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetGoProxyMode(mode)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+
+    let custom_block: Element<'static, Message> = if go.proxy_mode == GoProxyMode::Custom {
+        row![
+            container(
+                text_input("https://goproxy.cn,direct", proxy_draft)
+                    .on_input(|s| Message::EnvCenter(EnvCenterMsg::SetGoProxyCustomDraft(s)))
+                    .padding(sp.sm)
+                    .width(Length::FillPortion(3))
+                    .style(text_input_style(tokens)),
+            )
+            .width(Length::FillPortion(3))
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .align_y(iced::alignment::Vertical::Center),
+            button(button_content_centered(
+                text(envr_core::i18n::tr_key("gui.runtime.go.apply_network", "应用", "Apply")).into(),
+            ))
+            .on_press(Message::EnvCenter(EnvCenterMsg::ApplyGoNetworkSettings))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(tokens.control_height_secondary))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, ButtonVariant::Secondary)),
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center)
+        .into()
+    } else {
+        column![].into()
+    };
+
+    let private_row = row![
+        container(
+            text_input("e.g. *.corp.example.com,github.com/myorg", private_draft)
+                .on_input(|s| Message::EnvCenter(EnvCenterMsg::SetGoPrivatePatternsDraft(s)))
+                .padding(sp.sm)
+                .width(Length::FillPortion(3))
+                .style(text_input_style(tokens)),
+        )
+        .width(Length::FillPortion(3))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .align_y(iced::alignment::Vertical::Center),
+        button(button_content_centered(
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.go.apply_private",
+                "应用私有规则",
+                "Apply private",
+            ))
+            .into(),
+        ))
+        .on_press(Message::EnvCenter(EnvCenterMsg::ApplyGoNetworkSettings))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([sp.sm as f32, sp.sm as f32])
+        .style(button_style(tokens, ButtonVariant::Secondary)),
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
+    let private_hint = text(envr_core::i18n::tr_key(
+        "gui.runtime.go.private.hint",
+        "非空时注入 GOPRIVATE / GONOSUMDB / GONOPROXY（逗号分隔域名/通配）。GOSUMDB 仍遵循 Go 默认或你本机环境。",
+        "When non-empty, sets GOPRIVATE/GONOSUMDB/GONOPROXY (comma-separated). GOSUMDB stays Go default unless set in your environment.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    let proxy_toggle = toggler(go.path_proxy_enabled)
+        .label(envr_core::i18n::tr_key(
+            "gui.runtime.go.path_proxy.hint",
+            "开启时由 envr 接管 go/gofmt；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages go/gofmt; when off, shims delegate to your system PATH.",
+        ))
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetGoPathProxy(v)));
+
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.go.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "While off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![
+            dl_row,
+            gp_row,
+            custom_block,
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.go.private_title",
+                "私有模块（可选）",
+                "Private modules (optional)",
+            ))
+            .size(ty.body),
+            private_row,
+            private_hint,
+            proxy_toggle,
+            proxy_note,
+        ]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
     let ty = tokens.typography();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -545,11 +780,20 @@ fn java_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runti
         .cloned()
 }
 
+fn go_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .go_remote_latest
+        .iter()
+        .find(|v| parse_go_minor_line_key(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
     python_runtime: Option<&PythonRuntimeSettings>,
     java_runtime: Option<&JavaRuntimeSettings>,
+    go_runtime: Option<&GoRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -561,6 +805,7 @@ pub fn env_center_view(
         RuntimeKind::Node => node_runtime.map(|n| n.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
@@ -580,7 +825,7 @@ pub fn env_center_view(
     let header_title = format!("{}设置", kind_label(state.kind));
     let show_runtime_fold = matches!(
         state.kind,
-        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java
+        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java | RuntimeKind::Go
     );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -645,6 +890,16 @@ pub fn env_center_view(
         java_runtime
             .map(|j| java_runtime_settings_section(j, tokens))
             .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Go {
+        go_runtime
+            .map(|g| {
+                go_runtime_settings_section(
+                    g,
+                    (&state.go_proxy_custom_draft, &state.go_private_patterns_draft),
+                    tokens,
+                )
+            })
+            .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
     };
@@ -655,6 +910,7 @@ pub fn env_center_view(
     let query_key = match state.kind {
         RuntimeKind::Python => parse_python_major_minor_only(query_norm),
         RuntimeKind::Java => parse_major_only(query_norm),
+        RuntimeKind::Go => parse_go_minor_line_only(query_norm),
         _ => parse_major_only(query_norm),
     };
 
@@ -665,6 +921,7 @@ pub fn env_center_view(
             RuntimeKind::Python => parse_python_major_minor_key(&v.0),
             RuntimeKind::Node => parse_node_major_key(&v.0),
             RuntimeKind::Java => parse_java_major_key(&v.0),
+            RuntimeKind::Go => parse_go_minor_line_key(&v.0),
             _ => parse_major_from_ver(&v.0),
         };
         if let Some(k) = key {
@@ -695,6 +952,12 @@ pub fn env_center_view(
                 keys_set.insert(k);
             }
         }
+    } else if state.kind == RuntimeKind::Go {
+        for v in &state.go_remote_latest {
+            if let Some(k) = parse_go_minor_line_key(&v.0) {
+                keys_set.insert(k);
+            }
+        }
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
     if state.kind == RuntimeKind::Python {
@@ -709,6 +972,8 @@ pub fn env_center_view(
             .iter()
             .map(|s| (*s).to_string())
             .collect();
+    } else if state.kind == RuntimeKind::Go {
+        keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
     } else {
         keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
     }
@@ -786,11 +1051,27 @@ pub fn env_center_view(
                         .collect()
                 }
             }
+            RuntimeKind::Go => {
+                if needle.contains('.') {
+                    keys.into_iter().filter(|k| k.starts_with(needle)).collect()
+                } else {
+                    keys.into_iter()
+                        .filter(|k| {
+                            let mut it = k.split('.');
+                            let major = it.next().unwrap_or("");
+                            let minor = it.next().unwrap_or("");
+                            major == needle || minor == needle
+                        })
+                        .collect()
+                }
+            }
             _ => keys.into_iter().filter(|k| k.starts_with(needle)).collect(),
         }
     };
     if state.kind == RuntimeKind::Python {
         show_keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+    } else if state.kind == RuntimeKind::Go {
+        show_keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
     } else {
         show_keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
     }
@@ -804,9 +1085,15 @@ pub fn env_center_view(
     let java_waiting_remote = state.kind == RuntimeKind::Java
         && state.java_remote_latest.is_empty()
         && state.java_remote_refreshing;
+    let go_waiting_remote = state.kind == RuntimeKind::Go
+        && state.go_remote_latest.is_empty()
+        && state.go_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref() {
-        if matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java) {
+        if matches!(
+            state.kind,
+            RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java | RuntimeKind::Go
+        ) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
     }
@@ -815,6 +1102,7 @@ pub fn env_center_view(
         || (node_waiting_remote && show_keys.is_empty())
         || (python_waiting_remote && show_keys.is_empty())
         || (java_waiting_remote && show_keys.is_empty())
+        || (go_waiting_remote && show_keys.is_empty())
     {
         list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
     } else if show_keys.is_empty() {
@@ -829,6 +1117,7 @@ pub fn env_center_view(
                 RuntimeKind::Python => parse_python_major_minor_key(&v.0),
                 RuntimeKind::Node => parse_node_major_key(&v.0),
                 RuntimeKind::Java => parse_java_major_key(&v.0),
+                RuntimeKind::Go => parse_go_minor_line_key(&v.0),
                 _ => parse_major_from_ver(&v.0),
             });
             let is_active = current_key.as_deref() == Some(key.as_str());
@@ -844,6 +1133,8 @@ pub fn env_center_view(
                     format!("{} {}", kind_label(state.kind), key)
                 }
             } else if state.kind == RuntimeKind::Python {
+                format!("{} {}", kind_label(state.kind), key)
+            } else if state.kind == RuntimeKind::Go {
                 format!("{} {}", kind_label(state.kind), key)
             } else {
                 format!("{} {}", kind_label(state.kind), key)
@@ -874,6 +1165,10 @@ pub fn env_center_view(
                         .unwrap_or_else(|| key.clone())
                 } else if state.kind == RuntimeKind::Java {
                     java_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Go {
+                    go_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
                 } else {
@@ -1257,6 +1552,31 @@ fn parse_python_key_sort(k: &str) -> (u64, u64) {
     let a = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let b = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     (a, b)
+}
+
+fn parse_go_minor_line_key(ver: &str) -> Option<String> {
+    semver_parts(ver).map(|(ma, mi, _patch)| format!("{ma}.{mi}"))
+}
+
+fn parse_go_minor_line_only(s: &str) -> Option<String> {
+    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
+    if t.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = t.split('.').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    if parts[0].chars().all(|c| c.is_ascii_digit()) && parts[1].chars().all(|c| c.is_ascii_digit())
+    {
+        Some(format!("{}.{}", parts[0], parts[1]))
+    } else {
+        None
+    }
+}
+
+fn parse_go_key_sort(k: &str) -> (u64, u64) {
+    parse_python_key_sort(k)
 }
 
 fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Message> {
