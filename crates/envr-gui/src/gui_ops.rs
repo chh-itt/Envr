@@ -308,6 +308,23 @@ pub fn uninstall_version(kind: RuntimeKind, version_label: String) -> Task<Messa
     })
 }
 
+pub fn sync_shims_for_kind(kind: RuntimeKind) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                ensure_core_shims_for_kind(kind).map_err(|e| e.to_string())
+            })
+            .await;
+        let msg = match res {
+            Ok(Ok(())) => EnvCenterMsg::SyncShimsFinished(Ok(())),
+            Ok(Err(e)) => EnvCenterMsg::SyncShimsFinished(Err(e)),
+            Err(e) => EnvCenterMsg::SyncShimsFinished(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
 pub fn refresh_dashboard() -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
@@ -483,13 +500,15 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
     }
     let core_ms = t_core.elapsed().as_millis();
 
-    // 2) For Node/Python: sync global package forwards from the active runtime_root,
+    // 2) For Node/Python/Java: sync global package forwards from the active runtime_root,
     // then copy non-core forward stubs into other PATH-visible shim dirs.
-    if matches!(kind, RuntimeKind::Node | RuntimeKind::Python) {
+    if matches!(kind, RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java) {
         let runtime_svc = ShimService::new(runtime_root.clone(), shim_exe.clone());
         let t_sync = Instant::now();
         if kind == RuntimeKind::Python {
             let _ = runtime_svc.sync_python_global_package_shims_fast();
+        } else if kind == RuntimeKind::Java {
+            let _ = runtime_svc.sync_java_global_package_shims_fast();
         } else {
             let _ = runtime_svc.sync_all_global_package_shims();
         }

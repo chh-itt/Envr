@@ -26,6 +26,20 @@ struct ReleaseVersionsBody {
     versions: Vec<JavaVersionEntry>,
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct LatestAssetsVersionData {
+    openjdk_version: String,
+    #[serde(default)]
+    semver: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct LatestAssetsRelease {
+    version_data: LatestAssetsVersionData,
+}
+
 #[derive(Debug, Deserialize)]
 struct AvailableReleasesBody {
     #[serde(default)]
@@ -65,9 +79,20 @@ pub fn adoptium_arch(host_arch: &str) -> EnvrResult<&'static str> {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
+    // JDK zips are large (often 150–300MB+). Keep a generous total timeout so slow links
+    // do not abort mid-body (otherwise surfaces like a "bad mirror").
+    //
+    // Some domestic mirrors and middleboxes behave poorly with HTTP/2 + rustls; HTTP/1.1 only
+    // avoids a class of fast failures. A browser-like User-Agent reduces odd 403/connection drops.
+    let ua = format!(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 envr-runtime-java/{}",
+        env!("CARGO_PKG_VERSION")
+    );
     reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(90))
-        .user_agent(concat!("envr-runtime-java/", env!("CARGO_PKG_VERSION")))
+        .http1_only()
+        .connect_timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(900))
+        .user_agent(ua)
         .build()
         .map_err(|e| EnvrError::Download(e.to_string()))
 }
@@ -81,6 +106,137 @@ fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<Strin
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
     r.text().map_err(|e| EnvrError::Download(e.to_string()))
+}
+
+#[allow(dead_code)]
+fn url_exists(client: &reqwest::blocking::Client, url: &str) -> bool {
+    match client.head(url).send() {
+        Ok(r) => r.status().is_success(),
+        Err(_) => false,
+    }
+}
+
+#[allow(dead_code)]
+fn zulu_latest_package_download_url(
+    client: &reqwest::blocking::Client,
+    major: u32,
+    os: &str,
+    arch: &str,
+) -> Option<String> {
+    #[derive(Deserialize)]
+    struct ZuluPkg {
+        download_url: String,
+    }
+    let azul_os = match os {
+        "windows" => "windows",
+        "linux" => "linux",
+        "mac" => "macos",
+        _ => return None,
+    };
+    let azul_arch = match arch {
+        "x64" => "x86-64",
+        "aarch64" => "arm64",
+        "x32" => "x86",
+        _ => return None,
+    };
+    let url = format!(
+        "https://api.azul.com/metadata/v1/zulu/packages/?java_version={major}&os={azul_os}&arch={azul_arch}&archive_type=zip&java_package_type=jdk&release_status=ga&availability_types=ca&page=1&page_size=1"
+    );
+    let body = fetch_text(client, &url).ok()?;
+    let parsed: Vec<ZuluPkg> = serde_json::from_str(&body).ok()?;
+    parsed.first().map(|p| p.download_url.clone())
+}
+
+#[allow(dead_code)]
+fn vendor_latest_binary_url(vendor: JavaVendor, major: u32, os: &str, arch: &str) -> Option<String> {
+    match vendor {
+        JavaVendor::EclipseTemurin | JavaVendor::OpenJdk => Some(format!(
+            "{}/v3/binary/latest/{major}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
+            DEFAULT_ADOPTIUM_API_BASE
+        )),
+        JavaVendor::OracleOpenJdk => {
+            if os != "windows" {
+                return None;
+            }
+            Some(format!(
+                "https://download.java.net/java/GA/jdk{major}/latest/GPL/openjdk-{major}_windows-{arch}_bin.zip"
+            ))
+        }
+        JavaVendor::AmazonCorretto => {
+            if os != "windows" {
+                return None;
+            }
+            Some(format!(
+                "https://corretto.aws/downloads/latest/amazon-corretto-{major}-{arch}-windows-jdk.zip"
+            ))
+        }
+        JavaVendor::Microsoft => {
+            if os != "windows" {
+                return None;
+            }
+            Some(format!(
+                "https://aka.ms/download-jdk/microsoft-jdk-{major}-windows-{arch}.zip"
+            ))
+        }
+        JavaVendor::OracleJdk => {
+            if os != "windows" {
+                return None;
+            }
+            Some(format!(
+                "https://download.oracle.com/java/{major}/latest/jdk-{major}_windows-{arch}_bin.zip"
+            ))
+        }
+        JavaVendor::AzulZulu | JavaVendor::AlibabaDragonwell => None,
+    }
+}
+
+#[allow(dead_code)]
+fn synthetic_lts_entries_via_binary_latest(
+    client: &reqwest::blocking::Client,
+    vendor: JavaVendor,
+    os: &str,
+    arch: &str,
+    lts_majors: &[u32],
+) -> Vec<JavaVersionEntry> {
+    fn supported(vendor: JavaVendor, major: u32) -> bool {
+        static_lts_majors_for_vendor(vendor).contains(&major)
+    }
+    let mut out = Vec::new();
+    for m in lts_majors {
+        if !supported(vendor, *m) {
+            continue;
+        }
+        let url = match vendor {
+            _ => vendor_latest_binary_url(vendor, *m, os, arch),
+        };
+        let Some(url) = url else {
+            continue;
+        };
+        if !url_exists(client, &url) {
+            continue;
+        }
+        out.push(JavaVersionEntry {
+            build: 0,
+            major: *m,
+            minor: 0,
+            security: 0,
+            openjdk_version: m.to_string(),
+            semver: m.to_string(),
+            optional: Some("LTS".to_string()),
+        });
+    }
+    out
+}
+
+fn static_lts_majors_for_vendor(vendor: JavaVendor) -> &'static [u32] {
+    match vendor {
+        JavaVendor::EclipseTemurin | JavaVendor::OpenJdk => &[8, 11, 17, 21, 25],
+        JavaVendor::OracleOpenJdk => &[17, 21, 25],
+        JavaVendor::AmazonCorretto => &[8, 11, 17, 21],
+        JavaVendor::Microsoft => &[11, 17, 21, 25],
+        JavaVendor::OracleJdk => &[21, 25],
+        JavaVendor::AzulZulu | JavaVendor::AlibabaDragonwell => &[8, 11, 17, 21, 25],
+    }
 }
 
 pub fn fetch_available_lts_majors(
@@ -104,16 +260,95 @@ pub fn fetch_release_versions(
     os: &str,
     arch: &str,
 ) -> EnvrResult<Vec<JavaVersionEntry>> {
+    if matches!(
+        vendor,
+        JavaVendor::AzulZulu | JavaVendor::AlibabaDragonwell
+    ) {
+        return Err(EnvrError::Validation(format!(
+            "Java vendor {vendor:?} is not indexed via api.adoptium.net release_versions"
+        )));
+    }
     let base = api_base.trim_end_matches('/');
     let v = vendor.adoptium_vendor_param();
     let url = format!(
         "{base}/v3/info/release_versions?release_type=ga&vendor={v}\
-         &heap_size=normal&image_type=jdk&jvm_impl=hotspot&os={os}&architecture={arch}"
+         &heap_size=normal&image_type=jdk&jvm_impl=hotspot&os={os}&architecture={arch}\
+         &page_size=1000"
     );
     let body = fetch_text(client, &url)?;
     let parsed: ReleaseVersionsBody =
         serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
     Ok(parsed.versions)
+}
+
+#[allow(dead_code)]
+fn parse_openjdk_triplet(label: &str) -> Option<(u32, u32, u32)> {
+    let t = label.trim().strip_suffix("-LTS").unwrap_or(label.trim());
+    let core = t.split('+').next().unwrap_or(t);
+    let mut it = core.split('.');
+    let major = it.next()?.parse::<u32>().ok()?;
+    let minor = it.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let sec = it.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    Some((major, minor, sec))
+}
+
+#[allow(dead_code)]
+fn fetch_latest_lts_versions_via_assets_latest(
+    client: &reqwest::blocking::Client,
+    api_base: &str,
+    vendor: JavaVendor,
+    os: &str,
+    arch: &str,
+    lts_majors: &[u32],
+) -> EnvrResult<Vec<JavaVersionEntry>> {
+    let base = api_base.trim_end_matches('/');
+    let v = vendor.adoptium_vendor_param();
+    let mut out = Vec::new();
+    let mut last_err: Option<EnvrError> = None;
+    for m in lts_majors {
+        let url = format!(
+            "{base}/v3/assets/latest/{m}/hotspot?vendor={v}&heap_size=normal&image_type=jdk&os={os}&architecture={arch}"
+        );
+        let body = match fetch_text(client, &url) {
+            Ok(b) => b,
+            Err(e) => {
+                last_err = Some(e);
+                continue;
+            }
+        };
+        let parsed: Vec<LatestAssetsRelease> =
+            match serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string())) {
+                Ok(p) => p,
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+            };
+        let Some(first) = parsed.first() else {
+            continue;
+        };
+        let label = first.version_data.openjdk_version.clone();
+        let Some((major, minor, security)) = parse_openjdk_triplet(&label) else {
+            continue;
+        };
+        out.push(JavaVersionEntry {
+            build: 0,
+            major,
+            minor,
+            security,
+            openjdk_version: label.clone(),
+            semver: first.version_data.semver.clone().unwrap_or(label),
+            optional: Some("LTS".to_string()),
+        });
+    }
+    if out.is_empty() {
+        return Err(last_err.unwrap_or_else(|| {
+            EnvrError::Validation(
+                "no LTS releases available for selected Java distribution on this platform".into(),
+            )
+        }));
+    }
+    Ok(out)
 }
 
 pub fn load_java_index(
@@ -123,10 +358,26 @@ pub fn load_java_index(
     host_os: &str,
     host_arch: &str,
 ) -> EnvrResult<JavaIndex> {
-    let os = adoptium_os(host_os)?;
-    let arch = adoptium_arch(host_arch)?;
-    let lts_majors = fetch_available_lts_majors(client, api_base)?;
-    let mut versions = fetch_release_versions(client, api_base, vendor, os, arch)?;
+    let _ = client;
+    let _ = api_base;
+    let _ = host_os;
+    let _ = host_arch;
+
+    // Fast path: Java remote rows are rendered from a curated support matrix,
+    // avoiding network on each page enter/tab switch.
+    let lts_majors = static_lts_majors_for_vendor(vendor).to_vec();
+    let mut versions = lts_majors
+        .iter()
+        .map(|m| JavaVersionEntry {
+            build: 0,
+            major: *m,
+            minor: 0,
+            security: 0,
+            openjdk_version: m.to_string(),
+            semver: m.to_string(),
+            optional: Some("LTS".to_string()),
+        })
+        .collect::<Vec<_>>();
     versions.sort_by_key(|b| Reverse(version_sort_key(b)));
     Ok(JavaIndex {
         versions,

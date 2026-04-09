@@ -264,6 +264,59 @@ pub enum PipRegistryMode {
     Restore,
 }
 
+/// Java distribution choice for runtime installation and listing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum JavaDistro {
+    #[default]
+    Temurin,
+    OracleOpenJdk,
+    AmazonCorretto,
+    Microsoft,
+    OracleJdk,
+    /// Azul Zulu builds.
+    #[serde(alias = "zulu")]
+    #[serde(alias = "azul_zulu")]
+    AzulZulu,
+    /// Alibaba Dragonwell builds.
+    #[serde(alias = "dragonwell")]
+    #[serde(alias = "alibaba_dragonwell")]
+    AlibabaDragonwell,
+    /// Backward compatibility for older settings values (maps to Temurin in runtime).
+    #[serde(alias = "open_jdk")]
+    OpenJdk,
+}
+
+impl JavaDistro {
+    /// LTS majors offered in the GUI for this distribution (newest first).
+    ///
+    /// Kept in sync with install-time checks in `envr-runtime-java`.
+    pub fn supported_lts_major_strs(self) -> &'static [&'static str] {
+        match self {
+            JavaDistro::Temurin | JavaDistro::OpenJdk => {
+                &["25", "21", "17", "11", "8"]
+            }
+            JavaDistro::OracleOpenJdk => &["25", "21", "17"],
+            JavaDistro::AmazonCorretto => &["21", "17", "11", "8"],
+            JavaDistro::Microsoft => &["25", "21", "17", "11"],
+            JavaDistro::OracleJdk => &["25", "21"],
+            JavaDistro::AzulZulu | JavaDistro::AlibabaDragonwell => {
+                &["25", "21", "17", "11", "8"]
+            }
+        }
+    }
+}
+
+/// Java artifact source preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum JavaDownloadSource {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeRuntimeSettings {
     #[serde(default)]
@@ -306,6 +359,27 @@ impl Default for PythonRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JavaRuntimeSettings {
+    #[serde(default)]
+    pub current_distro: JavaDistro,
+    #[serde(default)]
+    pub download_source: JavaDownloadSource,
+    /// When false, java/javac shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::java_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for JavaRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            current_distro: JavaDistro::default(),
+            download_source: JavaDownloadSource::default(),
+            path_proxy_enabled: defaults::java_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -327,6 +401,8 @@ pub struct RuntimeSettings {
     pub node: NodeRuntimeSettings,
     #[serde(default)]
     pub python: PythonRuntimeSettings,
+    #[serde(default)]
+    pub java: JavaRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -761,6 +837,17 @@ pub fn python_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`JavaRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn java_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.java.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
     let meta = fs::metadata(path).map_err(EnvrError::from)?;
     meta.modified()
@@ -847,6 +934,10 @@ mod defaults {
     pub fn python_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn java_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -909,6 +1000,7 @@ mod tests {
             runtime: RuntimeSettings {
                 node: NodeRuntimeSettings::default(),
                 python: PythonRuntimeSettings::default(),
+                java: JavaRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                 },

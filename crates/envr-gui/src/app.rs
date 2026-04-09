@@ -1,7 +1,7 @@
 //! Main-window shell: left navigation, routed content, global error banner.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use envr_config::settings::{FontMode, Settings, ThemeMode};
@@ -732,18 +732,48 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             "Saved.",
                         ));
                     }
-                    let refresh_node_remote = matches!(state.route(), Route::Runtime)
-                        && state.env_center.kind == envr_domain::runtime::RuntimeKind::Node;
-                    if refresh_node_remote {
-                        state.env_center.node_remote_refreshing = true;
-                        return Task::batch([
-                            gui_ops::load_remote_latest_disk_snapshot(
-                                envr_domain::runtime::RuntimeKind::Node,
-                            ),
-                            gui_ops::refresh_remote_latest_per_major(
-                                envr_domain::runtime::RuntimeKind::Node,
-                            ),
-                        ]);
+                    if matches!(state.route(), Route::Runtime) {
+                        match state.env_center.kind {
+                            envr_domain::runtime::RuntimeKind::Node => {
+                                state.env_center.node_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(envr_domain::runtime::RuntimeKind::Node),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Node,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Node,
+                                    ),
+                                ]);
+                            }
+                            envr_domain::runtime::RuntimeKind::Python => {
+                                state.env_center.python_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Python,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Python,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Python,
+                                    ),
+                                ]);
+                            }
+                            envr_domain::runtime::RuntimeKind::Java => {
+                                state.env_center.java_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(envr_domain::runtime::RuntimeKind::Java),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Java,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Java,
+                                    ),
+                                ]);
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 Err(e) => {
@@ -1040,6 +1070,13 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
             .runtime
             .python
             .path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Java => !state
+            .settings
+            .cache
+            .snapshot()
+            .runtime
+            .java
+            .path_proxy_enabled,
         _ => false,
     }
 }
@@ -1069,10 +1106,17 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         && state.env_center.python_remote_refreshing
         && state.env_center.python_remote_latest.is_empty()
         && state.env_center.installed.is_empty();
+    let waiting_java_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Java
+        && state.env_center.java_remote_refreshing
+        && state.env_center.java_remote_latest.is_empty()
+        && state.env_center.installed.is_empty();
     if !state.reduce_motion
         && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
-        && (waiting_installed_list || waiting_node_remote || waiting_python_remote)
+        && (waiting_installed_list
+            || waiting_node_remote
+            || waiting_python_remote
+            || waiting_java_remote)
     {
         state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
     }
@@ -1152,7 +1196,15 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
         DownloadMsg::Finished { id, result } => {
             if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
                 match &result {
-                    Ok(_) => j.state = JobState::Done,
+                    Ok(_) => {
+                        j.state = JobState::Done;
+                        let d = j.downloaded.load(Ordering::Relaxed);
+                        let t = j.total.load(Ordering::Relaxed);
+                        if t == 0 || d < t {
+                            j.total.store(d.max(t), Ordering::Relaxed);
+                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                        }
+                    }
                     Err(e) => {
                         if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
@@ -1380,6 +1432,7 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
         envr_domain::runtime::RuntimeKind::Node => {
             state.env_center.node_remote_refreshing = true;
             state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_refreshing = false;
             Task::batch([
                 gui_ops::refresh_runtimes(kind),
                 gui_ops::load_remote_latest_disk_snapshot(kind),
@@ -1389,6 +1442,19 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
         envr_domain::runtime::RuntimeKind::Python => {
             state.env_center.node_remote_refreshing = false;
             state.env_center.python_remote_refreshing = true;
+            state.env_center.java_remote_refreshing = false;
+            Task::batch([
+                gui_ops::refresh_runtimes(kind),
+                gui_ops::load_remote_latest_disk_snapshot(kind),
+                gui_ops::refresh_remote_latest_per_major(kind),
+            ])
+        }
+        envr_domain::runtime::RuntimeKind::Java => {
+            let distro = state.settings.cache.snapshot().runtime.java.current_distro;
+            state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
+            state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_refreshing = true;
             Task::batch([
                 gui_ops::refresh_runtimes(kind),
                 gui_ops::load_remote_latest_disk_snapshot(kind),
@@ -1398,9 +1464,20 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
         _ => {
             state.env_center.node_remote_refreshing = false;
             state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_refreshing = false;
             gui_ops::refresh_runtimes(kind)
         }
     }
+}
+
+fn java_static_latest_for_distro(
+    distro: envr_config::settings::JavaDistro,
+) -> Vec<envr_domain::runtime::RuntimeVersion> {
+    distro
+        .supported_lts_major_strs()
+        .iter()
+        .map(|m| envr_domain::runtime::RuntimeVersion((*m).to_string()))
+        .collect()
 }
 
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
@@ -1415,6 +1492,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.node_remote_refreshing = false;
             state.env_center.python_remote_latest.clear();
             state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_latest.clear();
+            state.env_center.java_remote_refreshing = false;
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
             state.env_center.runtime_settings_expanded = false;
@@ -1427,6 +1506,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 ])
             } else if k == envr_domain::runtime::RuntimeKind::Python {
                 state.env_center.python_remote_refreshing = true;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Java {
+                let distro = state.settings.cache.snapshot().runtime.java.current_distro;
+                state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
+                state.env_center.java_remote_refreshing = true;
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1471,6 +1559,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         state.env_center.python_remote_latest = rows;
                     }
                 }
+                envr_domain::runtime::RuntimeKind::Java => {
+                    if state.env_center.java_remote_latest.is_empty()
+                        || rows.len() > state.env_center.java_remote_latest.len()
+                    {
+                        state.env_center.java_remote_latest = rows;
+                    }
+                }
                 _ => {}
             }
             Task::none()
@@ -1488,6 +1583,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                             state.env_center.python_remote_refreshing = false;
                             state.env_center.python_remote_latest = rows;
                         }
+                        envr_domain::runtime::RuntimeKind::Java => {
+                            state.env_center.java_remote_refreshing = false;
+                            state.env_center.java_remote_latest = rows;
+                        }
                         _ => {}
                     }
                 }
@@ -1499,6 +1598,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         }
                         envr_domain::runtime::RuntimeKind::Python => {
                             state.env_center.python_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Java => {
+                            state.env_center.java_remote_refreshing = false;
+                            // Keep already shown static rows to avoid visual blanking on transient refresh failure.
                         }
                         _ => {}
                     }
@@ -1590,7 +1693,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
             {
                 match &res {
-                    Ok(_) => j.state = JobState::Done,
+                    Ok(_) => {
+                        j.state = JobState::Done;
+                        let d = j.downloaded.load(Ordering::Relaxed);
+                        let t = j.total.load(Ordering::Relaxed);
+                        if t == 0 || d < t {
+                            j.total.store(d.max(t), Ordering::Relaxed);
+                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                        }
+                    }
                     Err(e) => {
                         if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
@@ -1674,7 +1785,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.error = Some(e.to_string());
                 return Task::none();
             }
-            persist_settings_clone_task(st)
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Node),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
         }
         EnvCenterMsg::SetPythonDownloadSource(src) => {
             let mut st = state.settings.cache.snapshot().clone();
@@ -1701,7 +1819,57 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.error = Some(e.to_string());
                 return Task::none();
             }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Python),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SetJavaDistro(distro) => {
+            state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
+            state.env_center.java_remote_refreshing = true;
+            state.env_center.remote_error = None;
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.java.current_distro = distro;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
             persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetJavaDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.java.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetJavaPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.java.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Java),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SyncShimsFinished(res) => {
+            if let Err(e) = res {
+                state.error = Some(e);
+            }
+            Task::none()
         }
     }
 }
@@ -1743,6 +1911,11 @@ fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &
             }
             out
         }
+        envr_domain::runtime::RuntimeKind::Java => t
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .take(3)
+            .collect(),
         _ => t.chars().take(32).collect(),
     }
 }

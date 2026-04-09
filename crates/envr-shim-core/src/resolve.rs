@@ -1,6 +1,7 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
-    node_path_proxy_enabled_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
+    java_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
+    python_path_proxy_enabled_from_disk, resolve_runtime_root,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
@@ -471,6 +472,23 @@ fn resolve_python_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim>
     })
 }
 
+fn resolve_java_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Java => "java",
+        CoreCommand::Javac => "javac",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports java tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     if matches!(
@@ -483,6 +501,10 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !python_path_proxy_enabled_from_disk()
     {
         return resolve_python_tool_bypass_envr(cmd);
+    }
+    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk()
+    {
+        return resolve_java_tool_bypass_envr(cmd);
     }
 
     let cfg =

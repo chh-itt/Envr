@@ -1,8 +1,8 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings,
+    JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    NpmRegistryMode, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
@@ -45,6 +45,10 @@ pub enum EnvCenterMsg {
     SetPythonDownloadSource(PythonDownloadSource),
     SetPipRegistryMode(PipRegistryMode),
     SetPythonPathProxy(bool),
+    SetJavaDistro(JavaDistro),
+    SetJavaDownloadSource(JavaDownloadSource),
+    SetJavaPathProxy(bool),
+    SyncShimsFinished(Result<(), String>),
 }
 
 #[derive(Debug)]
@@ -64,6 +68,10 @@ pub struct EnvCenterState {
     pub python_remote_latest: Vec<RuntimeVersion>,
     /// Python: background refresh of `python_remote_latest` (TTL / index) is in flight.
     pub python_remote_refreshing: bool,
+    /// Java: latest patch per LTS major from cache/network.
+    pub java_remote_latest: Vec<RuntimeVersion>,
+    /// Java: background refresh is in flight.
+    pub java_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -87,6 +95,8 @@ impl Default for EnvCenterState {
             node_remote_refreshing: false,
             python_remote_latest: Vec::new(),
             python_remote_refreshing: false,
+            java_remote_latest: Vec::new(),
+            java_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -421,6 +431,68 @@ fn python_runtime_settings_section(
     .into()
 }
 
+fn java_runtime_settings_section(
+    java: &JavaRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let mut dl_row = row![text("Java 下载源").size(ty.body)].spacing(sp.sm as f32);
+    for src in [
+        JavaDownloadSource::Auto,
+        JavaDownloadSource::Domestic,
+        JavaDownloadSource::Official,
+    ] {
+        let label = match src {
+            JavaDownloadSource::Auto => "自动（随区域语言）",
+            JavaDownloadSource::Domestic => "国内优先（可回退）",
+            JavaDownloadSource::Official => "官方",
+        };
+        let variant = if src == java.download_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        dl_row = dl_row.push(
+            button(button_content_centered(text(label).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetJavaDownloadSource(src)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(tokens.control_height_secondary))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, variant)),
+        );
+    }
+
+    let proxy_row = row![
+        text("PATH 代理").size(ty.body),
+        toggler(java.path_proxy_enabled)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetJavaPathProxy(v)))
+            .size(20.0)
+            .spacing(sp.sm as f32),
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
+    container(
+        column![
+            dl_row,
+            proxy_row,
+            text("仅支持 LTS（8/11/17/21/25）；JAVA_HOME 仅写入用户环境变量。")
+                .size(ty.micro)
+                .color(muted),
+            text("镜像仅对 Temurin 与 Oracle OpenJDK 提供；其他发行版固定使用官方源。")
+                .size(ty.micro)
+                .color(muted),
+        ]
+        .spacing(sp.sm as f32),
+    )
+    .padding(Padding::from([sp.sm as f32, sp.sm as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
     let ty = tokens.typography();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -465,10 +537,19 @@ fn python_remote_latest_for_key(
         .cloned()
 }
 
+fn java_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .java_remote_latest
+        .iter()
+        .find(|v| parse_java_major_key(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
     python_runtime: Option<&PythonRuntimeSettings>,
+    java_runtime: Option<&JavaRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -479,6 +560,7 @@ pub fn env_center_view(
     let path_proxy_on = match state.kind {
         RuntimeKind::Node => node_runtime.map(|n| n.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
@@ -496,7 +578,10 @@ pub fn env_center_view(
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let show_runtime_fold = matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python);
+    let show_runtime_fold = matches!(
+        state.kind,
+        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java
+    );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
     } else {
@@ -556,6 +641,10 @@ pub fn env_center_view(
         python_runtime
             .map(|p| python_runtime_settings_section(p, tokens))
             .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Java {
+        java_runtime
+            .map(|j| java_runtime_settings_section(j, tokens))
+            .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
     };
@@ -565,6 +654,7 @@ pub fn env_center_view(
     let query_norm = query.strip_prefix('v').unwrap_or(query);
     let query_key = match state.kind {
         RuntimeKind::Python => parse_python_major_minor_only(query_norm),
+        RuntimeKind::Java => parse_major_only(query_norm),
         _ => parse_major_only(query_norm),
     };
 
@@ -574,6 +664,7 @@ pub fn env_center_view(
         let key = match state.kind {
             RuntimeKind::Python => parse_python_major_minor_key(&v.0),
             RuntimeKind::Node => parse_node_major_key(&v.0),
+            RuntimeKind::Java => parse_java_major_key(&v.0),
             _ => parse_major_from_ver(&v.0),
         };
         if let Some(k) = key {
@@ -598,10 +689,26 @@ pub fn env_center_view(
                 keys_set.insert(k);
             }
         }
+    } else if state.kind == RuntimeKind::Java {
+        for v in &state.java_remote_latest {
+            if let Some(k) = parse_java_major_key(&v.0) {
+                keys_set.insert(k);
+            }
+        }
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
     if state.kind == RuntimeKind::Python {
         keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+    } else if state.kind == RuntimeKind::Java {
+        // Rows follow the curated per-distro matrix (not a global 8/11/17/21/25 list).
+        let distro = java_runtime
+            .map(|j| j.current_distro)
+            .unwrap_or(JavaDistro::Temurin);
+        keys = distro
+            .supported_lts_major_strs()
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
     } else {
         keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
     }
@@ -694,9 +801,12 @@ pub fn env_center_view(
     let python_waiting_remote = state.kind == RuntimeKind::Python
         && state.python_remote_latest.is_empty()
         && state.python_remote_refreshing;
+    let java_waiting_remote = state.kind == RuntimeKind::Java
+        && state.java_remote_latest.is_empty()
+        && state.java_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref() {
-        if matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python) {
+        if matches!(state.kind, RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
     }
@@ -704,6 +814,7 @@ pub fn env_center_view(
     if (busy && show_keys.is_empty())
         || (node_waiting_remote && show_keys.is_empty())
         || (python_waiting_remote && show_keys.is_empty())
+        || (java_waiting_remote && show_keys.is_empty())
     {
         list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
     } else if show_keys.is_empty() {
@@ -717,6 +828,7 @@ pub fn env_center_view(
             let current_key = state.current.as_ref().and_then(|v| match state.kind {
                 RuntimeKind::Python => parse_python_major_minor_key(&v.0),
                 RuntimeKind::Node => parse_node_major_key(&v.0),
+                RuntimeKind::Java => parse_java_major_key(&v.0),
                 _ => parse_major_from_ver(&v.0),
             });
             let is_active = current_key.as_deref() == Some(key.as_str());
@@ -758,6 +870,10 @@ pub fn env_center_view(
                         .unwrap_or_else(|| key.clone())
                 } else if state.kind == RuntimeKind::Python {
                     python_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Java {
+                    java_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
                 } else {
@@ -987,10 +1103,68 @@ pub fn env_center_view(
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
 
+    let java_distro_row = if state.kind == RuntimeKind::Java {
+        let current_distro = java_runtime
+            .map(|j| j.current_distro)
+            .map(|d| {
+                if d == JavaDistro::OpenJdk {
+                    JavaDistro::Temurin
+                } else {
+                    d
+                }
+            })
+            .unwrap_or(JavaDistro::Temurin);
+        let mut r = row![text("Java 发行版").size(ty.body)].spacing(sp.sm as f32);
+        for d in [
+            JavaDistro::Temurin,
+            JavaDistro::AzulZulu,
+            JavaDistro::AlibabaDragonwell,
+            JavaDistro::OracleOpenJdk,
+            JavaDistro::AmazonCorretto,
+            JavaDistro::Microsoft,
+            JavaDistro::OracleJdk,
+        ] {
+            let label = match d {
+                JavaDistro::Temurin => "Temurin",
+                JavaDistro::AzulZulu => "Zulu",
+                JavaDistro::AlibabaDragonwell => "Dragonwell",
+                JavaDistro::OracleOpenJdk => "Oracle OpenJDK",
+                JavaDistro::AmazonCorretto => "Corretto",
+                JavaDistro::Microsoft => "Microsoft",
+                JavaDistro::OracleJdk => "Oracle JDK",
+                JavaDistro::OpenJdk => "OpenJDK",
+            };
+            let variant = if d == current_distro {
+                ButtonVariant::Primary
+            } else {
+                ButtonVariant::Secondary
+            };
+            r = r.push(
+                button(button_content_centered(text(label).into()))
+                    .on_press(Message::EnvCenter(EnvCenterMsg::SetJavaDistro(d)))
+                    .width(Length::FillPortion(1))
+                    .height(Length::Fixed(ctrl_h))
+                    .padding([sp.sm as f32, sp.sm as f32])
+                    .style(button_style(tokens, variant)),
+            );
+        }
+        Some(r)
+    } else {
+        None
+    };
+
     let muted = gui_theme::to_color(tokens.colors.text_muted);
-    let mut col = column![header, runtime_settings_block, filter_row]
-        .spacing(sp.sm as f32)
-        .width(Length::Fill);
+    let mut col = if state.kind == RuntimeKind::Java {
+        if let Some(distro_row) = java_distro_row {
+            column![header, runtime_settings_block, distro_row]
+        } else {
+            column![header, runtime_settings_block]
+        }
+    } else {
+        column![header, runtime_settings_block, filter_row]
+    }
+    .spacing(sp.sm as f32)
+    .width(Length::Fill);
     if busy {
         col = col.push(
             text(envr_core::i18n::tr_key(
@@ -1034,6 +1208,15 @@ fn parse_major_from_ver(ver: &str) -> Option<String> {
 
 fn parse_node_major_key(ver: &str) -> Option<String> {
     parse_major_from_ver(ver)
+}
+
+fn parse_java_major_key(ver: &str) -> Option<String> {
+    let t = ver.trim().strip_prefix('v').unwrap_or(ver.trim());
+    let major = t.split(['.', '+', '-']).next().unwrap_or("").trim();
+    if major.is_empty() || !major.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(major.to_string())
 }
 
 fn parse_python_major_minor_key(ver: &str) -> Option<String> {

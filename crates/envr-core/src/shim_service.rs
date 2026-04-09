@@ -111,6 +111,7 @@ impl ShimService {
     ///
     /// - For Node: scans `npm bin -g` (or package.json fallback)
     /// - For Python: scans `Scripts` / `bin`
+    /// - For Java: scans `java/current/bin`
     /// - For Bun: scans `bun pm bin -g`
     ///
     /// Removes stale forwards across all supported global-bin sources to avoid deleting
@@ -121,18 +122,19 @@ impl ShimService {
         _version_label: &str,
     ) -> EnvrResult<()> {
         match kind {
-            RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Bun => {
+            RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java | RuntimeKind::Bun => {
                 self.sync_all_global_package_shims()
             }
             _ => Ok(()),
         }
     }
 
-    /// Sync global executable forwards for Node + Python + Bun, then drop stale non-core stubs.
+    /// Sync global executable forwards for Node + Python + Java + Bun, then drop stale non-core stubs.
     pub fn sync_all_global_package_shims(&self) -> EnvrResult<()> {
         let mut seen = HashSet::<String>::new();
         seen.extend(self.scan_node_global_bins()?);
         seen.extend(self.scan_python_global_bins()?);
+        seen.extend(self.scan_java_global_bins()?);
         seen.extend(self.scan_bun_global_bins()?);
         self.remove_stale_non_core_shims(&seen)?;
         Ok(())
@@ -165,6 +167,14 @@ impl ShimService {
 
     fn try_current_python_home(&self) -> Option<PathBuf> {
         let link = self.runtime_root.join("runtimes/python/current");
+        if !link.exists() {
+            return None;
+        }
+        fs::canonicalize(&link).ok()
+    }
+
+    fn try_current_java_home(&self) -> Option<PathBuf> {
+        let link = self.runtime_root.join("runtimes/java/current");
         if !link.exists() {
             return None;
         }
@@ -441,6 +451,18 @@ impl ShimService {
     pub fn sync_python_global_package_shims_fast(&self) -> EnvrResult<()> {
         let _ = self.scan_python_global_bins()?;
         Ok(())
+    }
+
+    pub fn sync_java_global_package_shims_fast(&self) -> EnvrResult<()> {
+        let _ = self.scan_java_global_bins()?;
+        Ok(())
+    }
+
+    fn scan_java_global_bins(&self) -> EnvrResult<HashSet<String>> {
+        let Some(java_home) = self.try_current_java_home() else {
+            return Ok(HashSet::new());
+        };
+        self.scan_bin_dir(&java_home.join("bin"))
     }
 
     fn bun_global_bin_dir_from_settings(&self) -> Option<PathBuf> {

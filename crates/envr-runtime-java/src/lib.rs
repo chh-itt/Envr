@@ -20,6 +20,9 @@ use envr_domain::runtime::{
 };
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
+use envr_config::settings::{
+    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirror_locale, settings_path_from_platform,
+};
 
 /// JDK runtime provider (Adoptium Temurin: index, download, `current`, `JAVA_HOME` marker file).
 pub struct JavaRuntimeProvider {
@@ -60,7 +63,13 @@ impl JavaRuntimeProvider {
     }
 
     fn manager(&self) -> EnvrResult<JavaManager> {
-        JavaManager::try_new(self.runtime_root()?, self.api_base.clone(), self.vendor)
+        let source = self.resolved_download_source()?;
+        JavaManager::try_new(
+            self.runtime_root()?,
+            self.api_base.clone(),
+            self.resolved_vendor()?,
+            source,
+        )
     }
 
     fn load_index(&self) -> EnvrResult<JavaIndex> {
@@ -68,10 +77,91 @@ impl JavaRuntimeProvider {
         load_java_index(
             &client,
             &self.api_base,
-            self.vendor,
+            self.resolved_vendor()?,
             std::env::consts::OS,
             std::env::consts::ARCH,
         )
+    }
+
+    fn resolved_vendor(&self) -> EnvrResult<JavaVendor> {
+        let platform = current_platform_paths()?;
+        let path = settings_path_from_platform(&platform);
+        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        Ok(match s.runtime.java.current_distro {
+            JavaDistro::Temurin => JavaVendor::EclipseTemurin,
+            JavaDistro::OracleOpenJdk => JavaVendor::OracleOpenJdk,
+            JavaDistro::AmazonCorretto => JavaVendor::AmazonCorretto,
+            JavaDistro::Microsoft => JavaVendor::Microsoft,
+            JavaDistro::OracleJdk => JavaVendor::OracleJdk,
+            JavaDistro::AzulZulu => JavaVendor::AzulZulu,
+            JavaDistro::AlibabaDragonwell => JavaVendor::AlibabaDragonwell,
+            JavaDistro::OpenJdk => JavaVendor::EclipseTemurin,
+        })
+    }
+
+    fn allowed_lts_majors() -> &'static [u32] {
+        &[8, 11, 17, 21, 25]
+    }
+
+    fn resolved_download_source(&self) -> EnvrResult<JavaDownloadSource> {
+        let platform = current_platform_paths()?;
+        let path = settings_path_from_platform(&platform);
+        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        let src = match s.runtime.java.download_source {
+            JavaDownloadSource::Auto => {
+                if prefer_china_mirror_locale(&s) {
+                    JavaDownloadSource::Domestic
+                } else {
+                    JavaDownloadSource::Official
+                }
+            }
+            other => other,
+        };
+        Ok(src)
+    }
+
+    fn remote_cache_ttl_secs() -> u64 {
+        const DEFAULT: u64 = 24 * 60 * 60;
+        std::env::var("ENVR_JAVA_REMOTE_CACHE_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT)
+    }
+
+    fn file_is_within_ttl(path: &std::path::Path, ttl_secs: u64) -> bool {
+        if ttl_secs == 0 {
+            return false;
+        }
+        let Ok(meta) = std::fs::metadata(path) else {
+            return false;
+        };
+        let Ok(mtime) = meta.modified() else {
+            return false;
+        };
+        let Ok(age) = std::time::SystemTime::now().duration_since(mtime) else {
+            return false;
+        };
+        age.as_secs() <= ttl_secs
+    }
+
+    fn remote_latest_per_major_cache_file(
+        &self,
+        os: &str,
+        arch: &str,
+    ) -> EnvrResult<std::path::PathBuf> {
+        let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
+        let distro = self.resolved_vendor()?.dir_name();
+        Ok(paths.cache_dir().join(format!(
+            "remote_latest_per_major_{distro}_{os}_{arch}.json"
+        )))
+    }
+
+    fn major_from_label(label: &str) -> Option<u32> {
+        label
+            .trim()
+            .split(['.', '+', '-'])
+            .next()
+            .and_then(|s| s.parse::<u32>().ok())
     }
 }
 
@@ -87,12 +177,12 @@ impl RuntimeProvider for JavaRuntimeProvider {
     }
 
     fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        let paths = JavaPaths::new(self.runtime_root()?);
+        let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
         list_installed_versions(&paths)
     }
 
     fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
-        let paths = JavaPaths::new(self.runtime_root()?);
+        let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
         read_current(&paths)
     }
 
@@ -102,19 +192,89 @@ impl RuntimeProvider for JavaRuntimeProvider {
 
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
         let index = self.load_index()?;
-        list_remote_versions(&index, filter)
+        let mut out = list_remote_versions(&index, filter)?;
+        out.retain(|v| {
+            let major = v.0.split('.').next().and_then(|s| s.parse::<u32>().ok());
+            major.is_some_and(|m| Self::allowed_lts_majors().contains(&m))
+        });
+        Ok(out)
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let ttl_secs = Self::remote_cache_ttl_secs();
+        let cache_file = self.remote_latest_per_major_cache_file(os, arch)?;
+        if Self::file_is_within_ttl(&cache_file, ttl_secs)
+            && let Ok(s) = std::fs::read_to_string(&cache_file)
+            && let Ok(list) = serde_json::from_str::<Vec<String>>(&s)
+        {
+            if !list.is_empty() {
+                return Ok(list.into_iter().map(RuntimeVersion).collect());
+            }
+            // Legacy/bad empty cache: force rebuild now instead of waiting TTL.
+            let _ = std::fs::remove_file(&cache_file);
+        }
+
+        let index = self.load_index()?;
+        let out: Vec<RuntimeVersion> = index
+            .versions
+            .iter()
+            .map(|v| RuntimeVersion(v.openjdk_version.clone()))
+            .collect();
+
+        let _ = (|| -> EnvrResult<()> {
+            let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
+            std::fs::create_dir_all(paths.cache_dir())?;
+            let strings: Vec<String> = out.iter().map(|v| v.0.clone()).collect();
+            let s = serde_json::to_string(&strings)
+                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            std::fs::write(&cache_file, s)?;
+            Ok(())
+        })();
+        Ok(out)
+    }
+
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let Ok(cache_file) = self.remote_latest_per_major_cache_file(os, arch) else {
+            return Vec::new();
+        };
+        let Ok(s) = std::fs::read_to_string(&cache_file) else {
+            return Vec::new();
+        };
+        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+            return Vec::new();
+        };
+        list.into_iter().map(RuntimeVersion).collect()
     }
 
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
         let index = self.load_index()?;
         let v = resolve_java_version(&index, &spec.0)?;
+        let Some(major) = Self::major_from_label(&v) else {
+            return Err(envr_error::EnvrError::Validation(format!(
+                "invalid java version label: {v}"
+            )));
+        };
+        if !Self::allowed_lts_majors().contains(&major) {
+            return Err(envr_error::EnvrError::Validation(format!(
+                "only LTS majors are supported in GUI path: 8/11/17/21/25 (got {v})"
+            )));
+        }
         Ok(ResolvedVersion {
             version: RuntimeVersion(v),
         })
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(&request.spec)
+        self.manager()?.install_from_spec(
+            &request.spec,
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
