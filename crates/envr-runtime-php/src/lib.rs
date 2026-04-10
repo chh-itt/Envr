@@ -1,5 +1,7 @@
 mod index;
 mod manager;
+#[cfg(not(windows))]
+mod unix;
 
 pub use index::{
     PhpReleasesIndex, ReleaseLine, blocking_http_client, fetch_php_windows_releases_json,
@@ -7,8 +9,9 @@ pub use index::{
     resolve_php_version,
 };
 pub use manager::{
-    PhpManager, PhpPaths, list_installed_versions, php_installation_valid, read_current,
-    read_current_global_want_ts, resolve_global_php_current_target,
+    PhpManager, PhpPaths, list_installed_versions, list_installed_versions_unfiltered,
+    php_installation_valid, read_current, read_current_global_want_ts,
+    resolve_global_php_current_target,
 };
 
 use envr_config::settings::{
@@ -115,8 +118,16 @@ impl RuntimeProvider for PhpRuntimeProvider {
 
     fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let paths = PhpPaths::new(self.runtime_root()?);
-        let (_, want_ts) = self.resolved_remote_settings()?;
-        list_installed_versions(&paths, want_ts)
+        #[cfg(windows)]
+        {
+            let (_, want_ts) = self.resolved_remote_settings()?;
+            list_installed_versions(&paths, want_ts)
+        }
+        #[cfg(not(windows))]
+        {
+            unix::sync_registered_versions(&paths)?;
+            list_installed_versions_unfiltered(&paths)
+        }
     }
 
     fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
@@ -125,20 +136,31 @@ impl RuntimeProvider for PhpRuntimeProvider {
     }
 
     fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.manager()?.set_current(version)
+        #[cfg(windows)]
+        {
+            self.manager()?.set_current(version)
+        }
+        #[cfg(not(windows))]
+        {
+            let paths = PhpPaths::new(self.runtime_root()?);
+            unix::sync_registered_versions(&paths)?;
+            unix::set_global_current(&paths, version)
+        }
     }
 
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
         if !cfg!(windows) {
-            return Err(EnvrError::Platform(
-                "php remote listing is currently supported on Windows only".into(),
-            ));
+            let _ = filter;
+            return Ok(Vec::new());
         }
         let idx = self.load_index()?;
         list_remote_versions(&idx, filter)
     }
 
     fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        if !cfg!(windows) {
+            return Vec::new();
+        }
         let Ok(path) = self.remote_latest_per_major_cache_path() else {
             return Vec::new();
         };
@@ -152,6 +174,9 @@ impl RuntimeProvider for PhpRuntimeProvider {
     }
 
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        if !cfg!(windows) {
+            return Ok(Vec::new());
+        }
         let ttl_secs = Self::remote_cache_ttl_secs();
         let cache_file = self.remote_latest_per_major_cache_path()?;
         if Self::file_is_within_ttl(&cache_file, ttl_secs)
@@ -192,10 +217,29 @@ impl RuntimeProvider for PhpRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(request)
+        #[cfg(windows)]
+        {
+            self.manager()?.install_from_spec(request)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = request;
+            Err(EnvrError::Platform(
+                "php install from envr is not supported on this platform; install PHP with your system package manager or Homebrew, then refresh"
+                    .into(),
+            ))
+        }
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.manager()?.uninstall(version)
+        #[cfg(windows)]
+        {
+            self.manager()?.uninstall(version)
+        }
+        #[cfg(not(windows))]
+        {
+            let paths = PhpPaths::new(self.runtime_root()?);
+            unix::uninstall_registration(&paths, version)
+        }
     }
 }

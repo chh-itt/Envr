@@ -857,7 +857,17 @@ fn php_runtime_settings_section(
         }
     };
 
-    container(
+    let unix_blurb = text(
+        envr_core::i18n::tr_key(
+            "gui.runtime.php.unix_settings_blurb",
+            "Unix：通过本机已安装的 PHP（如 Homebrew / 发行版包）发现并注册到 envr；此处不下载安装包，亦无 NTS/TS 构建切换。",
+            "Unix: envr discovers existing PHP installs (e.g. Homebrew or distro packages) and registers them; there is no zip download or NTS/TS toggle here.",
+        ),
+    )
+    .size(ty.micro)
+    .color(muted);
+
+    let main_col = if cfg!(windows) {
         column![
             ds_row,
             build_row,
@@ -867,12 +877,20 @@ fn php_runtime_settings_section(
                 .size(ty.micro)
                 .color(muted),
         ]
-        .spacing(sp.sm as f32)
-        .width(Length::Fill),
-    )
-    .padding(Padding::from([sp.md as f32, sp.md as f32]))
-    .style(card_container_style(tokens, 1))
-    .into()
+    } else {
+        column![
+            unix_blurb,
+            proxy_toggle,
+            text("关闭时无法使用「切换」「安装并切换」。")
+                .size(ty.micro)
+                .color(muted),
+        ]
+    };
+
+    container(main_col.spacing(sp.sm as f32).width(Length::Fill))
+        .padding(Padding::from([sp.md as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
 }
 
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
@@ -1335,13 +1353,18 @@ pub fn env_center_view(
                 RuntimeKind::Go => parse_go_minor_line_key(&v.0),
                 _ => parse_major_from_ver(&v.0),
             });
-            let tab_want_ts =
-                php_runtime.is_some_and(|p| matches!(p.windows_build, PhpWindowsBuildFlavor::Ts));
             let is_active = current_key.as_deref() == Some(key.as_str());
-            let flavor_matches_global = if state.kind == RuntimeKind::Php {
-                state.php_global_current_want_ts == Some(tab_want_ts)
-            } else {
+            let flavor_matches_global = if state.kind != RuntimeKind::Php {
                 true
+            } else {
+                match state.php_global_current_want_ts {
+                    None => true,
+                    Some(g) => {
+                        let tab_want_ts = php_runtime
+                            .is_some_and(|p| matches!(p.windows_build, PhpWindowsBuildFlavor::Ts));
+                        g == tab_want_ts
+                    }
+                }
             };
             let show_as_active = is_active && path_proxy_on && flavor_matches_global;
 
@@ -1355,13 +1378,17 @@ pub fn env_center_view(
                     format!("{} {}", kind_label(state.kind), key)
                 }
             } else if state.kind == RuntimeKind::Php {
-                let tag = php_runtime
-                    .map(|p| match p.windows_build {
-                        PhpWindowsBuildFlavor::Nts => "NTS",
-                        PhpWindowsBuildFlavor::Ts => "TS",
-                    })
-                    .unwrap_or("?");
-                format!("{} {} · {}", kind_label(state.kind), key, tag)
+                if cfg!(windows) {
+                    let tag = php_runtime
+                        .map(|p| match p.windows_build {
+                            PhpWindowsBuildFlavor::Nts => "NTS",
+                            PhpWindowsBuildFlavor::Ts => "TS",
+                        })
+                        .unwrap_or("?");
+                    format!("{} {} · {}", kind_label(state.kind), key, tag)
+                } else {
+                    format!("{} {}", kind_label(state.kind), key)
+                }
             } else if state.kind == RuntimeKind::Python {
                 format!("{} {}", kind_label(state.kind), key)
             } else if state.kind == RuntimeKind::Go {

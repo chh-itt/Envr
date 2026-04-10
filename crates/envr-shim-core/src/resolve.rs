@@ -166,67 +166,75 @@ pub fn pick_php_version_home(
     spec: &str,
     want_ts: bool,
 ) -> EnvrResult<PathBuf> {
-    let spec = spec.trim();
-    if spec.is_empty() {
-        return Err(EnvrError::Validation(
-            "empty runtime version spec in project config".into(),
-        ));
+    #[cfg(not(windows))]
+    {
+        let _ = want_ts;
+        return pick_version_home(versions_dir, spec);
     }
-    if !versions_dir.is_dir() {
-        return Err(EnvrError::Runtime(format!(
-            "no versions directory at {}",
-            versions_dir.display()
-        )));
-    }
+    #[cfg(windows)]
+    {
+        let spec = spec.trim();
+        if spec.is_empty() {
+            return Err(EnvrError::Validation(
+                "empty runtime version spec in project config".into(),
+            ));
+        }
+        if !versions_dir.is_dir() {
+            return Err(EnvrError::Runtime(format!(
+                "no versions directory at {}",
+                versions_dir.display()
+            )));
+        }
 
-    let flavored = versions_dir.join(envr_config::php_layout::version_dir_name(spec, want_ts));
-    if flavored.is_dir() {
-        return Ok(flavored);
-    }
+        let flavored = versions_dir.join(envr_config::php_layout::version_dir_name(spec, want_ts));
+        if flavored.is_dir() {
+            return Ok(flavored);
+        }
 
-    let direct = versions_dir.join(spec);
-    if direct.is_dir() {
-        if let Some(name) = direct.file_name().and_then(|n| n.to_str()) {
-            if envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
-                return Ok(direct);
+        let direct = versions_dir.join(spec);
+        if direct.is_dir() {
+            if let Some(name) = direct.file_name().and_then(|n| n.to_str()) {
+                if envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
+                    return Ok(direct);
+                }
             }
         }
-    }
 
-    let dirs: Vec<PathBuf> = std::fs::read_dir(versions_dir)
-        .map_err(EnvrError::from)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.path())
-        .collect();
+        let dirs: Vec<PathBuf> = std::fs::read_dir(versions_dir)
+            .map_err(EnvrError::from)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.path())
+            .collect();
 
-    let constraint = SpecConstraint::parse(spec)?;
+        let constraint = SpecConstraint::parse(spec)?;
 
-    let mut best: Option<((u32, u32, u32), PathBuf)> = None;
-    for d in dirs {
-        let Some(name) = d.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
-            continue;
+        let mut best: Option<((u32, u32, u32), PathBuf)> = None;
+        for d in dirs {
+            let Some(name) = d.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
+                continue;
+            }
+            let Some(triple) = parse_dir_version_triplet(name) else {
+                continue;
+            };
+            if constraint.matches(triple) && best.as_ref().is_none_or(|(v, _)| triple > *v) {
+                best = Some((triple, d));
+            }
         }
-        let Some(triple) = parse_dir_version_triplet(name) else {
-            continue;
+
+        let Some((_, path)) = best else {
+            return Err(EnvrError::Runtime(format!(
+                "no installed php matches project pin {spec:?} ({}) under {}",
+                if want_ts { "TS" } else { "NTS" },
+                versions_dir.display()
+            )));
         };
-        if constraint.matches(triple) && best.as_ref().is_none_or(|(v, _)| triple > *v) {
-            best = Some((triple, d));
-        }
+
+        Ok(path)
     }
-
-    let Some((_, path)) = best else {
-        return Err(EnvrError::Runtime(format!(
-            "no installed php matches project pin {spec:?} ({}) under {}",
-            if want_ts { "TS" } else { "NTS" },
-            versions_dir.display()
-        )));
-    };
-
-    Ok(path)
 }
 
 #[derive(Debug, Clone, Copy)]

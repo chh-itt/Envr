@@ -86,6 +86,58 @@ pub fn list_installed_versions(paths: &PhpPaths, want_ts: bool) -> EnvrResult<Ve
     Ok(out)
 }
 
+/// All registered installs under `versions/` (no Windows NTS/TS directory filter). Uses [`Path::is_dir`] so symlinks to prefixes count.
+pub fn list_installed_versions_unfiltered(paths: &PhpPaths) -> EnvrResult<Vec<RuntimeVersion>> {
+    let dir = paths.versions_dir();
+    if !dir.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+    for e in fs::read_dir(&dir).map_err(EnvrError::from)? {
+        let e = e.map_err(EnvrError::from)?;
+        let p = e.path();
+        if !p.is_dir() {
+            continue;
+        }
+        if !php_installation_valid(&p) {
+            continue;
+        }
+        let Some(fname) = p.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let label = php_layout::display_version_label_from_dir_name(fname);
+        if seen.insert(label.clone()) {
+            out.push(RuntimeVersion(label));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
+fn version_label_from_registered_versions_dir(
+    paths: &PhpPaths,
+    home_canon: &Path,
+) -> Option<String> {
+    let vd = paths.versions_dir();
+    let rd = fs::read_dir(&vd).ok()?;
+    for e in rd.flatten() {
+        let p = e.path();
+        if !p.is_dir() {
+            continue;
+        }
+        if !php_installation_valid(&p) {
+            continue;
+        }
+        let c = fs::canonicalize(&p).ok()?;
+        if c == *home_canon {
+            let fname = p.file_name()?.to_str()?;
+            return Some(php_layout::display_version_label_from_dir_name(fname));
+        }
+    }
+    None
+}
+
 /// Migration: older builds used `current-ts` / `current-nts` separately; resolve in a fixed order.
 fn php_global_current_link_candidates(paths: &PhpPaths) -> [PathBuf; 3] {
     let h = paths.php_home();
@@ -135,32 +187,44 @@ pub fn read_current(paths: &PhpPaths) -> EnvrResult<Option<RuntimeVersion>> {
     let Some(resolved) = resolve_global_php_current_target(paths)? else {
         return Ok(None);
     };
-    let Some(name) = resolved.file_name().and_then(|s| s.to_str()) else {
-        return Ok(None);
+    let home_canon = fs::canonicalize(&resolved).unwrap_or(resolved);
+    let label = if let Some(l) = version_label_from_registered_versions_dir(paths, &home_canon) {
+        l
+    } else {
+        let Some(name) = home_canon.file_name().and_then(|s| s.to_str()) else {
+            return Ok(None);
+        };
+        if name.is_empty() {
+            return Ok(None);
+        }
+        php_layout::display_version_label_from_dir_name(name)
     };
-    if name.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(RuntimeVersion(
-        php_layout::display_version_label_from_dir_name(name),
-    )))
+    Ok(Some(RuntimeVersion(label)))
 }
 
 /// Whether the global active PHP is a TS build (`None` = no global current).
 pub fn read_current_global_want_ts(paths: &PhpPaths) -> EnvrResult<Option<bool>> {
-    let Some(resolved) = resolve_global_php_current_target(paths)? else {
-        return Ok(None);
-    };
-    let Some(name) = resolved.file_name().and_then(|s| s.to_str()) else {
-        return Ok(None);
-    };
-    if name.is_empty() {
+    #[cfg(not(windows))]
+    {
+        let _ = paths;
         return Ok(None);
     }
-    Ok(Some(php_layout::dir_flavor_is_ts(name)))
+    #[cfg(windows)]
+    {
+        let Some(resolved) = resolve_global_php_current_target(paths)? else {
+            return Ok(None);
+        };
+        let Some(name) = resolved.file_name().and_then(|s| s.to_str()) else {
+            return Ok(None);
+        };
+        if name.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(php_layout::dir_flavor_is_ts(name)))
+    }
 }
 
-fn remove_stale_split_current_files(paths: &PhpPaths) {
+pub(crate) fn remove_stale_split_current_files(paths: &PhpPaths) {
     let h = paths.php_home();
     let _ = fs::remove_file(h.join("current-ts"));
     let _ = fs::remove_file(h.join("current-nts"));
