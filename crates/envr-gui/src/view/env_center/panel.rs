@@ -1758,59 +1758,80 @@ pub fn env_center_view(
                 }
             };
 
-            let action_btn: Element<'static, Message> = if show_as_active {
-                container(space()).into()
-            } else if let Some(highest) = highest_installed {
-                let use_btn = button(button_content_centered(
-                    row![
-                        Lucide::Package.view(14.0, txt),
-                        text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                    ]
-                    .spacing(sp.xs as f32)
-                    .align_y(Alignment::Center)
-                    .into(),
-                ))
-                .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
-                    EnvCenterMsg::SubmitUse(highest.0.clone()),
-                )))
-                .height(Length::Fixed(
-                    tokens
-                        .control_height_secondary
-                        .max(tokens.min_click_target_px()),
-                ))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, ButtonVariant::Secondary));
+            let action_btn: Element<'static, Message> = if let Some(_highest) = highest_installed {
+                let mut rows = column![].spacing(sp.xs as f32).width(Length::Fill);
+                for installed in &installed_versions {
+                    let is_current_exact = state
+                        .current
+                        .as_ref()
+                        .is_some_and(|c| c.0 == installed.0)
+                        && path_proxy_on;
 
-                let uninstall_btn = button(button_content_centered(
-                    row![
-                        Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                        text(envr_core::i18n::tr_key(
-                            "gui.action.uninstall",
-                            "卸载",
-                            "Uninstall",
-                        )),
-                    ]
-                    .spacing(sp.xs as f32)
-                    .align_y(Alignment::Center)
-                    .into(),
-                ))
-                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
-                    highest.0.clone(),
-                ))))
-                .height(Length::Fixed(
-                    tokens
-                        .control_height_secondary
-                        .max(tokens.min_click_target_px()),
-                ))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, ButtonVariant::Danger));
+                    let ver_text = if is_current_exact {
+                        format!(
+                            "{} {}",
+                            installed.0,
+                            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)")
+                        )
+                    } else {
+                        installed.0.clone()
+                    };
 
-                container(
-                    row![use_btn, uninstall_btn]
+                    let use_btn = button(button_content_centered(
+                        row![
+                            Lucide::Package.view(14.0, txt),
+                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ))
+                    .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
+                        Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
+                    ))
+                    .height(Length::Fixed(
+                        tokens
+                            .control_height_secondary
+                            .max(tokens.min_click_target_px()),
+                    ))
+                    .padding([sp.sm as f32, sp.sm as f32])
+                    .style(button_style(tokens, ButtonVariant::Secondary));
+
+                    let uninstall_btn = button(button_content_centered(
+                        row![
+                            Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                            text(envr_core::i18n::tr_key(
+                                "gui.action.uninstall",
+                                "卸载",
+                                "Uninstall",
+                            )),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ))
+                    .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+                        installed.0.clone(),
+                    ))))
+                    .height(Length::Fixed(
+                        tokens
+                            .control_height_secondary
+                            .max(tokens.min_click_target_px()),
+                    ))
+                    .padding([sp.sm as f32, sp.sm as f32])
+                    .style(button_style(tokens, ButtonVariant::Danger));
+
+                    rows = rows.push(
+                        row![
+                            text(ver_text).width(Length::Fill),
+                            use_btn,
+                            uninstall_btn
+                        ]
                         .spacing(sp.sm as f32)
                         .align_y(Alignment::Center),
-                )
-                .into()
+                    );
+                }
+                container(rows).width(Length::Fill).into()
             } else {
                 let spec = install_spec();
                 let install_btn = button(button_content_centered(
@@ -1829,6 +1850,12 @@ pub fn env_center_view(
                 .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
                     spec.clone(),
                 ))))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
                 .style(button_style(tokens, ButtonVariant::Primary));
 
                 let install_and_use_btn = button(button_content_centered(
@@ -1848,6 +1875,12 @@ pub fn env_center_view(
                     path_proxy_on
                         .then_some(Message::EnvCenter(EnvCenterMsg::SubmitInstallAndUse(spec))),
                 )
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
                 .style(button_style(tokens, ButtonVariant::Secondary));
 
                 container(
@@ -1862,8 +1895,7 @@ pub fn env_center_view(
                 container(
                     row![text(left_text).width(Length::Fill), action_btn,]
                         .spacing(sp.sm as f32)
-                        .align_y(Alignment::Center)
-                        .height(Length::Fixed(tokens.list_row_height())),
+                        .align_y(Alignment::Center),
                 )
                 .style(card_container_style(tokens, 1)),
             );
