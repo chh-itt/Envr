@@ -2,7 +2,8 @@
 
 use envr_config::settings::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro, JavaDownloadSource,
-    JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode, PipRegistryMode,
+    JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode,
+    PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RustDownloadSource, RustRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
@@ -26,7 +27,7 @@ pub enum EnvCenterMsg {
     PickKind(RuntimeKind),
     InstallInput(String),
     DirectInstallInput(String),
-    DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>), String>),
+    DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>), String>),
     RemoteLatestDiskSnapshot(RuntimeKind, Vec<RuntimeVersion>),
     RemoteLatestRefreshed(RuntimeKind, Result<Vec<RuntimeVersion>, String>),
     SubmitInstall(String),
@@ -56,6 +57,9 @@ pub enum EnvCenterMsg {
     SetGoPrivatePatternsDraft(String),
     ApplyGoNetworkSettings,
     SetRustDownloadSource(RustDownloadSource),
+    SetPhpDownloadSource(PhpDownloadSource),
+    SetPhpWindowsBuild(PhpWindowsBuildFlavor),
+    SetPhpPathProxy(bool),
 
     // Rust page (specialized).
     RustRefresh,
@@ -95,6 +99,8 @@ pub struct EnvCenterState {
     pub install_input: String,
     pub installed: Vec<RuntimeVersion>,
     pub current: Option<RuntimeVersion>,
+    /// Global PHP build for `current` (`true` = TS). Only used when [`Self::kind`] is PHP.
+    pub php_global_current_want_ts: Option<bool>,
     pub busy: bool,
     /// Non-fatal remote fetch/parse error shown inline (keeps global UI usable).
     pub remote_error: Option<String>,
@@ -114,6 +120,9 @@ pub struct EnvCenterState {
     pub go_remote_latest: Vec<RuntimeVersion>,
     /// Go: background refresh of `go_remote_latest` is in flight.
     pub go_remote_refreshing: bool,
+    /// PHP: latest stable patch per minor line for **current NTS/TS** (see `list_remote_latest_per_major`).
+    pub php_remote_latest: Vec<RuntimeVersion>,
+    pub php_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -141,6 +150,7 @@ impl Default for EnvCenterState {
             install_input: String::new(),
             installed: Vec::new(),
             current: None,
+            php_global_current_want_ts: None,
             busy: false,
             remote_error: None,
             node_remote_latest: Vec::new(),
@@ -151,6 +161,8 @@ impl Default for EnvCenterState {
             java_remote_refreshing: false,
             go_remote_latest: Vec::new(),
             go_remote_refreshing: false,
+            php_remote_latest: Vec::new(),
+            php_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -759,6 +771,110 @@ fn go_runtime_settings_section(
     .into()
 }
 
+fn php_runtime_settings_section(
+    php: &PhpRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let mut ds_row = row![text("PHP 下载源").size(ty.body)].spacing(sp.sm as f32);
+    for src in [
+        PhpDownloadSource::Auto,
+        PhpDownloadSource::Domestic,
+        PhpDownloadSource::Official,
+    ] {
+        let (label, active) = (
+            match src {
+                PhpDownloadSource::Auto => "自动（随区域语言）",
+                PhpDownloadSource::Domestic => "国内镜像",
+                PhpDownloadSource::Official => "官方",
+            },
+            src == php.download_source,
+        );
+        ds_row = ds_row.push(
+            button(button_content_centered(text(label).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpDownloadSource(src)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(if active {
+                    tokens.control_height_primary
+                } else {
+                    tokens.control_height_secondary
+                }))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(
+                    tokens,
+                    if active {
+                        ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Secondary
+                    },
+                )),
+        );
+    }
+
+    let mut build_row = row![text("Windows 构建").size(ty.body)].spacing(sp.sm as f32);
+    for flavor in [PhpWindowsBuildFlavor::Nts, PhpWindowsBuildFlavor::Ts] {
+        let (label, active) = (
+            match flavor {
+                PhpWindowsBuildFlavor::Nts => "NTS",
+                PhpWindowsBuildFlavor::Ts => "TS",
+            },
+            flavor == php.windows_build,
+        );
+        build_row = build_row.push(
+            button(button_content_centered(text(label).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
+                .width(Length::FillPortion(1))
+                .height(Length::Fixed(if active {
+                    tokens.control_height_primary
+                } else {
+                    tokens.control_height_secondary
+                }))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(
+                    tokens,
+                    if active {
+                        ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Secondary
+                    },
+                )),
+        );
+    }
+
+    let proxy_toggle = toggler(php.path_proxy_enabled)
+        .label("开启时由 envr 接管 php；关闭时 shim 透传到系统 PATH。")
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPhpPathProxy(v)));
+
+    let build_scope = match php.windows_build {
+        PhpWindowsBuildFlavor::Nts => {
+            "左侧版本列表与安装包均为 NTS（与 TS 列表独立，切换后列表会刷新）。"
+        }
+        PhpWindowsBuildFlavor::Ts => {
+            "左侧版本列表与安装包均为 TS（与 NTS 列表独立，切换后列表会刷新）。"
+        }
+    };
+
+    container(
+        column![
+            ds_row,
+            build_row,
+            text(build_scope).size(ty.micro).color(muted),
+            proxy_toggle,
+            text("关闭时无法使用「切换」「安装并切换」。")
+                .size(ty.micro)
+                .color(muted),
+        ]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
     let ty = tokens.typography();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -820,6 +936,14 @@ fn go_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runtime
         .cloned()
 }
 
+fn php_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .php_remote_latest
+        .iter()
+        .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
@@ -827,6 +951,7 @@ pub fn env_center_view(
     java_runtime: Option<&JavaRuntimeSettings>,
     go_runtime: Option<&GoRuntimeSettings>,
     rust_runtime: Option<&RustRuntimeSettings>,
+    php_runtime: Option<&PhpRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -843,15 +968,24 @@ pub fn env_center_view(
         RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
     let cur_line = match &state.current {
-        Some(v) => format!(
-            "{} {}",
-            envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
-            v.0
-        ),
+        Some(v) => {
+            let mut s = format!(
+                "{} {}",
+                envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
+                v.0
+            );
+            if state.kind == RuntimeKind::Php {
+                if let Some(ts) = state.php_global_current_want_ts {
+                    s.push_str(if ts { " · TS" } else { " · NTS" });
+                }
+            }
+            s
+        }
         None => envr_core::i18n::tr_key(
             "gui.runtime.current_none",
             "当前：(未设置)",
@@ -862,7 +996,11 @@ pub fn env_center_view(
     let header_title = format!("{}设置", kind_label(state.kind));
     let show_runtime_fold = matches!(
         state.kind,
-        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java | RuntimeKind::Go
+        RuntimeKind::Node
+            | RuntimeKind::Python
+            | RuntimeKind::Java
+            | RuntimeKind::Go
+            | RuntimeKind::Php
     );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -934,6 +1072,10 @@ pub fn env_center_view(
                 )
             })
             .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Php {
+        php_runtime
+            .map(|p| php_runtime_settings_section(p, tokens))
+            .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
     };
@@ -943,6 +1085,7 @@ pub fn env_center_view(
     let query_norm = query.strip_prefix('v').unwrap_or(query);
     let query_key = match state.kind {
         RuntimeKind::Python => parse_python_major_minor_only(query_norm),
+        RuntimeKind::Php => parse_python_major_minor_only(query_norm),
         RuntimeKind::Java => parse_major_only(query_norm),
         RuntimeKind::Go => parse_go_minor_line_only(query_norm),
         _ => parse_major_only(query_norm),
@@ -953,6 +1096,7 @@ pub fn env_center_view(
     for v in &state.installed {
         let key = match state.kind {
             RuntimeKind::Python => parse_python_major_minor_key(&v.0),
+            RuntimeKind::Php => parse_python_major_minor_key(&v.0),
             RuntimeKind::Node => parse_node_major_key(&v.0),
             RuntimeKind::Java => parse_java_major_key(&v.0),
             RuntimeKind::Go => parse_go_minor_line_key(&v.0),
@@ -992,6 +1136,12 @@ pub fn env_center_view(
                 keys_set.insert(k);
             }
         }
+    } else if state.kind == RuntimeKind::Php {
+        for v in &state.php_remote_latest {
+            if let Some(k) = parse_python_major_minor_key(&v.0) {
+                keys_set.insert(k);
+            }
+        }
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
     if state.kind == RuntimeKind::Python {
@@ -1012,6 +1162,12 @@ pub fn env_center_view(
             .collect();
     } else if state.kind == RuntimeKind::Go {
         keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
+    } else if state.kind == RuntimeKind::Php {
+        keys.sort_by(|a, b| {
+            parse_python_key_sort(a)
+                .cmp(&parse_python_key_sort(b))
+                .reverse()
+        });
     } else {
         keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
     }
@@ -1100,10 +1256,24 @@ pub fn env_center_view(
                         .collect()
                 }
             }
+            RuntimeKind::Php => {
+                if needle.contains('.') {
+                    keys.into_iter().filter(|k| k.starts_with(needle)).collect()
+                } else {
+                    keys.into_iter()
+                        .filter(|k| {
+                            let mut it = k.split('.');
+                            let major = it.next().unwrap_or("");
+                            let minor = it.next().unwrap_or("");
+                            major == needle || minor == needle
+                        })
+                        .collect()
+                }
+            }
             _ => keys.into_iter().filter(|k| k.starts_with(needle)).collect(),
         }
     };
-    if state.kind == RuntimeKind::Python {
+    if state.kind == RuntimeKind::Python || state.kind == RuntimeKind::Php {
         show_keys.sort_by(|a, b| {
             parse_python_key_sort(a)
                 .cmp(&parse_python_key_sort(b))
@@ -1127,11 +1297,18 @@ pub fn env_center_view(
     let go_waiting_remote = state.kind == RuntimeKind::Go
         && state.go_remote_latest.is_empty()
         && state.go_remote_refreshing;
+    let php_waiting_remote = state.kind == RuntimeKind::Php
+        && state.php_remote_latest.is_empty()
+        && state.php_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref() {
         if matches!(
             state.kind,
-            RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Java | RuntimeKind::Go
+            RuntimeKind::Node
+                | RuntimeKind::Python
+                | RuntimeKind::Java
+                | RuntimeKind::Go
+                | RuntimeKind::Php
         ) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
@@ -1142,6 +1319,7 @@ pub fn env_center_view(
         || (python_waiting_remote && show_keys.is_empty())
         || (java_waiting_remote && show_keys.is_empty())
         || (go_waiting_remote && show_keys.is_empty())
+        || (php_waiting_remote && show_keys.is_empty())
     {
         list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
     } else if show_keys.is_empty() {
@@ -1151,13 +1329,21 @@ pub fn env_center_view(
             let installed_versions = installed_by_key.get(key).cloned().unwrap_or_default();
             let current_key = state.current.as_ref().and_then(|v| match state.kind {
                 RuntimeKind::Python => parse_python_major_minor_key(&v.0),
+                RuntimeKind::Php => parse_python_major_minor_key(&v.0),
                 RuntimeKind::Node => parse_node_major_key(&v.0),
                 RuntimeKind::Java => parse_java_major_key(&v.0),
                 RuntimeKind::Go => parse_go_minor_line_key(&v.0),
                 _ => parse_major_from_ver(&v.0),
             });
+            let tab_want_ts =
+                php_runtime.is_some_and(|p| matches!(p.windows_build, PhpWindowsBuildFlavor::Ts));
             let is_active = current_key.as_deref() == Some(key.as_str());
-            let show_as_active = is_active && path_proxy_on;
+            let flavor_matches_global = if state.kind == RuntimeKind::Php {
+                state.php_global_current_want_ts == Some(tab_want_ts)
+            } else {
+                true
+            };
+            let show_as_active = is_active && path_proxy_on && flavor_matches_global;
 
             let highest_installed = installed_versions.first().cloned();
 
@@ -1168,6 +1354,14 @@ pub fn env_center_view(
                 } else {
                     format!("{} {}", kind_label(state.kind), key)
                 }
+            } else if state.kind == RuntimeKind::Php {
+                let tag = php_runtime
+                    .map(|p| match p.windows_build {
+                        PhpWindowsBuildFlavor::Nts => "NTS",
+                        PhpWindowsBuildFlavor::Ts => "TS",
+                    })
+                    .unwrap_or("?");
+                format!("{} {} · {}", kind_label(state.kind), key, tag)
             } else if state.kind == RuntimeKind::Python {
                 format!("{} {}", kind_label(state.kind), key)
             } else if state.kind == RuntimeKind::Go {
@@ -1201,6 +1395,10 @@ pub fn env_center_view(
                         .unwrap_or_else(|| key.clone())
                 } else if state.kind == RuntimeKind::Go {
                     go_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Php {
+                    php_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
                 } else {

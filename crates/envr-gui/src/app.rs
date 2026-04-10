@@ -794,6 +794,20 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                                     ),
                                 ]);
                             }
+                            envr_domain::runtime::RuntimeKind::Php => {
+                                state.env_center.php_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Php,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Php,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Php,
+                                    ),
+                                ]);
+                            }
                             _ => {}
                         }
                     }
@@ -1526,6 +1540,7 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
             state.env_center.python_remote_refreshing = false;
             state.env_center.java_remote_refreshing = false;
             state.env_center.go_remote_refreshing = false;
+            state.env_center.php_remote_refreshing = false;
             state.env_center.busy = true;
             Task::batch([
                 gui_ops::rust_refresh(),
@@ -1538,6 +1553,7 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
             state.env_center.python_remote_refreshing = false;
             state.env_center.java_remote_refreshing = false;
             state.env_center.go_remote_refreshing = false;
+            state.env_center.php_remote_refreshing = false;
             gui_ops::refresh_runtimes(kind)
         }
     }
@@ -1579,6 +1595,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.java_remote_refreshing = false;
             state.env_center.go_remote_latest.clear();
             state.env_center.go_remote_refreshing = false;
+            state.env_center.php_remote_latest.clear();
+            state.env_center.php_remote_refreshing = false;
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
             state.env_center.rust_targets.clear();
@@ -1617,6 +1635,18 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.node_remote_refreshing = false;
                 state.env_center.python_remote_refreshing = false;
                 state.env_center.java_remote_refreshing = false;
+                state.env_center.php_remote_refreshing = false;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Php {
+                state.env_center.php_remote_refreshing = true;
+                state.env_center.node_remote_refreshing = false;
+                state.env_center.python_remote_refreshing = false;
+                state.env_center.java_remote_refreshing = false;
+                state.env_center.go_remote_refreshing = false;
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1647,9 +1677,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         EnvCenterMsg::DataLoaded(res) => {
             state.env_center.busy = false;
             match res {
-                Ok((list, cur)) => {
+                Ok((list, cur, php_global_ts)) => {
                     state.env_center.installed = list;
                     state.env_center.current = cur;
+                    state.env_center.php_global_current_want_ts = php_global_ts;
                 }
                 Err(e) => state.error = Some(e),
             }
@@ -1685,6 +1716,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         state.env_center.go_remote_latest = rows;
                     }
                 }
+                envr_domain::runtime::RuntimeKind::Php => {
+                    if state.env_center.php_remote_latest.is_empty()
+                        || rows.len() > state.env_center.php_remote_latest.len()
+                    {
+                        state.env_center.php_remote_latest = rows;
+                    }
+                }
                 _ => {}
             }
             Task::none()
@@ -1710,6 +1748,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                             state.env_center.go_remote_refreshing = false;
                             state.env_center.go_remote_latest = rows;
                         }
+                        envr_domain::runtime::RuntimeKind::Php => {
+                            state.env_center.php_remote_refreshing = false;
+                            state.env_center.php_remote_latest = rows;
+                        }
                         _ => {}
                     }
                 }
@@ -1728,6 +1770,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         }
                         envr_domain::runtime::RuntimeKind::Go => {
                             state.env_center.go_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Php => {
+                            state.env_center.php_remote_refreshing = false;
                         }
                         _ => {}
                     }
@@ -2080,6 +2125,44 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetPhpDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.php.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            state.env_center.php_remote_latest.clear();
+            state.env_center.php_remote_refreshing = true;
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetPhpWindowsBuild(flavor) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.php.windows_build = flavor;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            state.env_center.php_remote_latest.clear();
+            state.env_center.php_remote_refreshing = true;
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetPhpPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.php.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Php),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
         }
         EnvCenterMsg::RustRefresh => {
             state.env_center.busy = true;

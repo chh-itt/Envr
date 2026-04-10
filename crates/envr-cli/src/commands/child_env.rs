@@ -168,38 +168,10 @@ fn resolve_rust_bins(ctx: &ShimContext) -> Vec<PathBuf> {
 
 fn resolve_php_home(
     ctx: &ShimContext,
-    cfg: Option<&ProjectConfig>,
+    _cfg: Option<&ProjectConfig>,
     spec_override: Option<&str>,
 ) -> EnvrResult<PathBuf> {
-    let versions_dir = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("php")
-        .join("versions");
-    let current_link = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("php")
-        .join("current");
-
-    let pinned = spec_override
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            cfg.and_then(|c| c.runtimes.get("php"))
-                .and_then(|r| r.version.as_deref())
-        });
-
-    if let Some(spec) = pinned {
-        pick_version_home(&versions_dir, spec)
-    } else if !current_link.exists() {
-        Err(EnvrError::Runtime(format!(
-            "no global current for php at {}; install and select a version",
-            current_link.display()
-        )))
-    } else {
-        std::fs::canonicalize(&current_link).map_err(EnvrError::from)
-    }
+    resolve_runtime_home_for_lang(ctx, "php", spec_override)
 }
 
 fn resolve_deno_home(

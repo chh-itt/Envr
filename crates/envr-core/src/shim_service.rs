@@ -44,7 +44,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Java => &[(CoreCommand::Java, "java"), (CoreCommand::Javac, "javac")],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
-        RuntimeKind::Php => &[],
+        RuntimeKind::Php => &[(CoreCommand::Php, "php")],
         RuntimeKind::Deno => &[],
         RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
     }
@@ -593,6 +593,7 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "pip3"
             | "java"
             | "javac"
+            | "php"
             | "bun"
             | "bunx"
     )
@@ -713,7 +714,8 @@ mod tests {
     fn core_stems_set_contains_expected_core_commands() {
         let s = core_stems_set();
         for k in [
-            "node", "npm", "npx", "python", "pip", "java", "javac", "go", "gofmt", "bun", "bunx",
+            "node", "npm", "npx", "python", "pip", "java", "javac", "go", "gofmt", "php", "bun",
+            "bunx",
         ] {
             assert!(s.contains(k), "missing {k}");
         }

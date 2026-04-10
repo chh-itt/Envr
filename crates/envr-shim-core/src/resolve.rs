@@ -1,7 +1,8 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
-    node_path_proxy_enabled_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
+    node_path_proxy_enabled_from_disk, php_path_proxy_enabled_from_disk,
+    php_windows_build_want_ts_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
@@ -55,6 +56,7 @@ pub enum CoreCommand {
     Javac,
     Go,
     Gofmt,
+    Php,
     Bun,
     Bunx,
 }
@@ -66,6 +68,7 @@ impl CoreCommand {
             CoreCommand::Python | CoreCommand::Pip => "python",
             CoreCommand::Java | CoreCommand::Javac => "java",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
+            CoreCommand::Php => "php",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
         }
     }
@@ -97,6 +100,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "javac" => Some(CoreCommand::Javac),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
+        "php" => Some(CoreCommand::Php),
         "bun" => Some(CoreCommand::Bun),
         "bunx" => Some(CoreCommand::Bunx),
         _ => None,
@@ -149,6 +153,75 @@ pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf>
     let Some((_, path)) = best else {
         return Err(EnvrError::Runtime(format!(
             "no installed version matches project pin {spec:?} under {}",
+            versions_dir.display()
+        )));
+    };
+
+    Ok(path)
+}
+
+/// Like [`pick_version_home`] but respects PHP Windows NTS vs TS install directories (`*-nts` / `*-ts`).
+pub fn pick_php_version_home(
+    versions_dir: &Path,
+    spec: &str,
+    want_ts: bool,
+) -> EnvrResult<PathBuf> {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        return Err(EnvrError::Validation(
+            "empty runtime version spec in project config".into(),
+        ));
+    }
+    if !versions_dir.is_dir() {
+        return Err(EnvrError::Runtime(format!(
+            "no versions directory at {}",
+            versions_dir.display()
+        )));
+    }
+
+    let flavored = versions_dir.join(envr_config::php_layout::version_dir_name(spec, want_ts));
+    if flavored.is_dir() {
+        return Ok(flavored);
+    }
+
+    let direct = versions_dir.join(spec);
+    if direct.is_dir() {
+        if let Some(name) = direct.file_name().and_then(|n| n.to_str()) {
+            if envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
+                return Ok(direct);
+            }
+        }
+    }
+
+    let dirs: Vec<PathBuf> = std::fs::read_dir(versions_dir)
+        .map_err(EnvrError::from)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.path())
+        .collect();
+
+    let constraint = SpecConstraint::parse(spec)?;
+
+    let mut best: Option<((u32, u32, u32), PathBuf)> = None;
+    for d in dirs {
+        let Some(name) = d.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
+            continue;
+        }
+        let Some(triple) = parse_dir_version_triplet(name) else {
+            continue;
+        };
+        if constraint.matches(triple) && best.as_ref().is_none_or(|(v, _)| triple > *v) {
+            best = Some((triple, d));
+        }
+    }
+
+    let Some((_, path)) = best else {
+        return Err(EnvrError::Runtime(format!(
+            "no installed php matches project pin {spec:?} ({}) under {}",
+            if want_ts { "TS" } else { "NTS" },
             versions_dir.display()
         )));
     };
@@ -227,12 +300,81 @@ fn parse_dir_version_triplet(dirname: &str) -> Option<VersionTriple> {
     Some((a, b, c))
 }
 
+fn resolve_current_link_to_home(current_link: &Path) -> EnvrResult<PathBuf> {
+    if !current_link.exists() {
+        return Err(EnvrError::Runtime(format!(
+            "no global current at {}",
+            current_link.display()
+        )));
+    }
+    // `current` is usually a symlink/junction, but on Windows some environments
+    // forbid creating links. In that case we may fall back to a pointer file:
+    // `current` contains the absolute target dir.
+    if current_link.is_file() {
+        let s = std::fs::read_to_string(current_link).map_err(EnvrError::from)?;
+        let t = s.trim();
+        let target = std::path::PathBuf::from(t);
+        return std::fs::canonicalize(&target).map_err(EnvrError::from);
+    }
+    if let Ok(t) = std::fs::read_link(current_link) {
+        let resolved = if t.is_relative() {
+            current_link.parent().map(|p| p.join(&t)).unwrap_or(t)
+        } else {
+            t
+        };
+        return std::fs::canonicalize(&resolved).map_err(EnvrError::from);
+    }
+    std::fs::canonicalize(current_link).map_err(EnvrError::from)
+}
+
+fn runtime_home_for_php(
+    ctx: &ShimContext,
+    config: Option<&ProjectConfig>,
+    spec_override: Option<&str>,
+) -> EnvrResult<PathBuf> {
+    let want_ts = php_windows_build_want_ts_from_disk();
+    let versions_dir = ctx
+        .runtime_root
+        .join("runtimes")
+        .join("php")
+        .join("versions");
+    let php_home = ctx.runtime_root.join("runtimes").join("php");
+
+    let pinned = spec_override
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            config
+                .and_then(|c| c.runtimes.get("php"))
+                .and_then(|r| r.version.as_deref())
+        });
+
+    if let Some(spec) = pinned {
+        pick_php_version_home(&versions_dir, spec, want_ts)
+    } else {
+        for name in ["current", "current-ts", "current-nts"] {
+            let link = php_home.join(name);
+            if link.exists() {
+                return resolve_current_link_to_home(&link);
+            }
+        }
+        Err(EnvrError::Runtime(format!(
+            "no global current for php under {}; install and select a version",
+            php_home.display()
+        )))
+    }
+}
+
 fn runtime_home_for_key(
     ctx: &ShimContext,
     key: &str,
     config: Option<&ProjectConfig>,
     spec_override: Option<&str>,
 ) -> EnvrResult<PathBuf> {
+    if key == "php" {
+        return runtime_home_for_php(ctx, config, spec_override);
+    }
+
     let versions_dir = ctx.runtime_root.join("runtimes").join(key).join("versions");
     let current_link = ctx.runtime_root.join("runtimes").join(key).join("current");
 
@@ -253,17 +395,7 @@ fn runtime_home_for_key(
             current_link.display()
         )))
     } else {
-        // `current` is usually a symlink/junction, but on Windows some environments
-        // forbid creating links. In that case we may fall back to a pointer file:
-        // `current` contains the absolute target dir.
-        if current_link.is_file() {
-            let s = std::fs::read_to_string(&current_link).map_err(EnvrError::from)?;
-            let t = s.trim();
-            let target = std::path::PathBuf::from(t);
-            std::fs::canonicalize(&target).map_err(EnvrError::from)
-        } else {
-            std::fs::canonicalize(&current_link).map_err(EnvrError::from)
-        }
+        resolve_current_link_to_home(&current_link)
     }
 }
 
@@ -375,6 +507,18 @@ fn go_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn php_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Php => Ok(first_existing(&[
+            home.join("php.exe"),
+            home.join("bin").join("php"),
+            home.join("php"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("php missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a php tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -382,6 +526,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
+        CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
     }
 }
@@ -524,6 +669,22 @@ fn resolve_go_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
     })
 }
 
+fn resolve_php_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Php => "php",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports php tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
@@ -542,6 +703,9 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     }
     if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
         return resolve_go_tool_bypass_envr(cmd);
+    }
+    if matches!(cmd, CoreCommand::Php) && !php_path_proxy_enabled_from_disk() {
+        return resolve_php_tool_bypass_envr(cmd);
     }
 
     let cfg =
@@ -565,6 +729,7 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
             extra_env.push(("GOROOT".into(), home.display().to_string()));
             go_tool_path(&home, cmd)?
         }
+        CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(&home, cmd)?,
     };
 
@@ -631,6 +796,7 @@ mod tests {
         assert_eq!(parse_core_command("bunx"), Some(CoreCommand::Bunx));
         assert_eq!(parse_core_command("go"), Some(CoreCommand::Go));
         assert_eq!(parse_core_command("gofmt"), Some(CoreCommand::Gofmt));
+        assert_eq!(parse_core_command("php"), Some(CoreCommand::Php));
         assert_eq!(parse_core_command("unknown"), None);
     }
 

@@ -285,6 +285,25 @@ pub enum RustDownloadSource {
     Official,
 }
 
+/// PHP download source preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PhpDownloadSource {
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
+/// Windows PHP build flavor preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PhpWindowsBuildFlavor {
+    #[default]
+    Nts,
+    Ts,
+}
+
 /// How `GOPROXY` should be injected in `envr env`/`run`/`exec` when Go is in scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -425,6 +444,11 @@ pub const GET_PIP_URL_DOMESTIC: &str = "https://mirrors.aliyun.com/pypi/get-pip.
 pub const PIP_INDEX_OFFICIAL: &str = "https://pypi.org/simple";
 pub const PIP_INDEX_DOMESTIC: &str = "https://mirrors.aliyun.com/pypi/simple";
 pub const PIP_INDEX_DOMESTIC_FALLBACK: &str = "https://pypi.tuna.tsinghua.edu.cn/simple";
+pub const PHP_WINDOWS_RELEASES_JSON_OFFICIAL: &str =
+    "https://downloads.php.net/~windows/releases/releases.json";
+// Placeholder mirror URL for MVP; can be updated after mirror validation.
+pub const PHP_WINDOWS_RELEASES_JSON_DOMESTIC: &str =
+    "https://downloads.php.net/~windows/releases/releases.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RuntimeSettings {
@@ -438,6 +462,8 @@ pub struct RuntimeSettings {
     pub go: GoRuntimeSettings,
     #[serde(default)]
     pub rust: RustRuntimeSettings,
+    #[serde(default)]
+    pub php: PhpRuntimeSettings,
     #[serde(default)]
     pub bun: BunRuntimeSettings,
 }
@@ -453,6 +479,27 @@ impl Default for RustRuntimeSettings {
     fn default() -> Self {
         Self {
             download_source: RustDownloadSource::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhpRuntimeSettings {
+    #[serde(default)]
+    pub download_source: PhpDownloadSource,
+    #[serde(default)]
+    pub windows_build: PhpWindowsBuildFlavor,
+    /// When false, php shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::php_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for PhpRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: PhpDownloadSource::default(),
+            windows_build: PhpWindowsBuildFlavor::default(),
+            path_proxy_enabled: defaults::php_path_proxy_enabled(),
         }
     }
 }
@@ -969,6 +1016,20 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
     }
 }
 
+pub fn php_windows_releases_json_url(settings: &Settings) -> &'static str {
+    match settings.runtime.php.download_source {
+        PhpDownloadSource::Official => PHP_WINDOWS_RELEASES_JSON_OFFICIAL,
+        PhpDownloadSource::Domestic => PHP_WINDOWS_RELEASES_JSON_DOMESTIC,
+        PhpDownloadSource::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                PHP_WINDOWS_RELEASES_JSON_DOMESTIC
+            } else {
+                PHP_WINDOWS_RELEASES_JSON_OFFICIAL
+            }
+        }
+    }
+}
+
 /// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn node_path_proxy_enabled_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1011,6 +1072,28 @@ pub fn go_path_proxy_enabled_from_disk() -> bool {
     Settings::load_or_default_from(&path)
         .map(|s| s.runtime.go.path_proxy_enabled)
         .unwrap_or(true)
+}
+
+/// Read [`PhpRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn php_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.php.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
+/// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
+pub fn php_windows_build_want_ts_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return false;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| matches!(s.runtime.php.windows_build, PhpWindowsBuildFlavor::Ts))
+        .unwrap_or(false)
 }
 
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
@@ -1107,6 +1190,10 @@ mod defaults {
     pub fn go_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn php_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1178,6 +1265,7 @@ mod tests {
                 bun: BunRuntimeSettings {
                     global_bin_dir: Some("/tmp/.bun/bin".to_string()),
                 },
+                php: PhpRuntimeSettings::default(),
             },
         };
 

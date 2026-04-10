@@ -24,13 +24,26 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     Task::future(async move {
         let res = handle
             .spawn_blocking(
-                move || -> Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>), String> {
+                move || -> Result<
+                    (
+                        Vec<RuntimeVersion>,
+                        Option<RuntimeVersion>,
+                        Option<bool>,
+                    ),
+                    String,
+                > {
                     let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
                     let installed = svc
                         .list_installed(kind)
                         .map_err(|e: EnvrError| e.to_string())?;
                     let current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
-                    Ok((installed, current))
+                    let php_global_ts = if matches!(kind, RuntimeKind::Php) {
+                        svc.php_global_current_want_ts()
+                            .map_err(|e: EnvrError| e.to_string())?
+                    } else {
+                        None
+                    };
+                    Ok((installed, current, php_global_ts))
                 },
             )
             .await;

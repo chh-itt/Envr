@@ -114,6 +114,13 @@ impl RuntimeService {
         self.provider(kind)?.current()
     }
 
+    /// `Some(true)` = global active PHP is TS, `Some(false)` = NTS/legacy; `None` = no global current.
+    pub fn php_global_current_want_ts(&self) -> EnvrResult<Option<bool>> {
+        let root = envr_config::settings::resolve_runtime_root()?;
+        let paths = envr_runtime_php::PhpPaths::new(root);
+        envr_runtime_php::read_current_global_want_ts(&paths)
+    }
+
     pub fn set_current(&self, kind: RuntimeKind, version: &RuntimeVersion) -> EnvrResult<()> {
         self.provider(kind)?.set_current(version)
     }

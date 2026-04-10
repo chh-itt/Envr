@@ -81,7 +81,9 @@ impl DownloadJob {
     pub fn eta_secs(&self) -> Option<u64> {
         let d = self.downloaded_display();
         let t = self.total_display();
-        if t <= d || self.speed_bps < 256.0 {
+        // Need a known total and a non-zero speed estimate (tick updates ~4 Hz).
+        // Avoid a high floor (e.g. 256 B/s) so slow links and runtime installs still show ETA.
+        if t == 0 || d >= t || self.speed_bps <= 0.0 {
             return None;
         }
         let remain = (t - d) as f64;
