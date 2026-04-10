@@ -1,6 +1,7 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::time::Duration;
 
 pub const DEFAULT_DENO_TAGS_API: &str =
@@ -36,6 +37,71 @@ pub fn fetch_tags(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
         .map_err(|e| EnvrError::Download(e.to_string()))
 }
 
+fn parse_github_next_link(link: Option<&reqwest::header::HeaderValue>) -> Option<String> {
+    let raw = link?.to_str().ok()?;
+    for part in raw.split(',') {
+        let part = part.trim();
+        if !part.contains("rel=\"next\"") && !part.contains("rel=next") {
+            continue;
+        }
+        let start = part.find('<')? + 1;
+        let end = part.find('>')?;
+        return Some(part[start..end].to_string());
+    }
+    None
+}
+
+fn max_tag_pages() -> usize {
+    const DEFAULT: usize = 2;
+    std::env::var("ENVR_DENO_TAGS_MAX_PAGES")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT)
+}
+
+/// Fetches **all** tags from GitHub (follows `Link: ... rel="next"` until exhausted).
+pub fn fetch_all_tags(client: &reqwest::blocking::Client, start_url: &str) -> EnvrResult<Vec<Tag>> {
+    let mut all = Vec::new();
+    let mut next = Some(start_url.to_string());
+    let mut pages = 0usize;
+    let max_pages = max_tag_pages();
+    while let Some(url) = next.take() {
+        if pages >= max_pages {
+            break;
+        }
+        pages += 1;
+        let response = match client.get(&url).send() {
+            Ok(r) => r,
+            Err(e) => {
+                if !all.is_empty() {
+                    break;
+                }
+                return Err(EnvrError::Download(e.to_string()));
+            }
+        };
+        if !response.status().is_success() {
+            // GitHub may rate-limit paginated tag requests on later pages.
+            // If we already have some pages, degrade gracefully instead of failing all installs.
+            if response.status() == reqwest::StatusCode::FORBIDDEN && !all.is_empty() {
+                break;
+            }
+            return Err(EnvrError::Download(format!(
+                "GET {url} -> {}",
+                response.status()
+            )));
+        }
+        let headers = response.headers().clone();
+        let body = response
+            .text()
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        let mut page = parse_tags(&body)?;
+        all.append(&mut page);
+        next = parse_github_next_link(headers.get("link"));
+    }
+    Ok(all)
+}
+
 pub fn parse_tags(json: &str) -> EnvrResult<Vec<Tag>> {
     serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))
 }
@@ -66,6 +132,30 @@ pub fn normalize_deno_version(tag: &str) -> Option<String> {
     Some(rest.to_string())
 }
 
+/// Latest patch version per **major** line (e.g. one row per `1.x`, `2.x`), newest majors first.
+pub fn list_latest_patch_per_major_from_tags(tags: &[Tag]) -> Vec<String> {
+    let mut best: HashMap<u64, (SemKey, String)> = HashMap::new();
+    for t in tags {
+        let Some(v) = normalize_deno_version(&t.name) else {
+            continue;
+        };
+        let Some(k) = semver_key(&v) else {
+            continue;
+        };
+        let major = k.0;
+        let entry = best.entry(major).or_insert((k, v.clone()));
+        if k > entry.0 {
+            *entry = (k, v);
+        }
+    }
+    let mut majors: Vec<u64> = best.keys().cloned().collect();
+    majors.sort_by(|a, b| b.cmp(a));
+    majors
+        .into_iter()
+        .filter_map(|m| best.remove(&m).map(|(_, s)| s))
+        .collect()
+}
+
 pub fn list_remote_versions(
     tags: &[Tag],
     filter: &RemoteFilter,
@@ -75,6 +165,7 @@ pub fn list_remote_versions(
         .filter_map(|t| {
             normalize_deno_version(&t.name).and_then(|v| semver_key(&v).map(|k| (k, v)))
         })
+        .filter(|(k, _)| k.0 >= 1)
         .collect();
     items.sort_by(|a, b| b.0.cmp(&a.0));
     let mut out: Vec<RuntimeVersion> = items.into_iter().map(|(_, v)| RuntimeVersion(v)).collect();
@@ -92,11 +183,17 @@ pub fn resolve_deno_version(tags: &[Tag], spec: &str) -> EnvrResult<String> {
     if s.is_empty() {
         return Err(EnvrError::Validation("empty deno version spec".into()));
     }
+    if s.starts_with("0.") {
+        return Err(EnvrError::Validation(format!(
+            "deno 0.x is not supported for managed install (spec {spec:?})"
+        )));
+    }
     let mut items: Vec<(SemKey, String)> = tags
         .iter()
         .filter_map(|t| {
             normalize_deno_version(&t.name).and_then(|v| semver_key(&v).map(|k| (k, v)))
         })
+        .filter(|(k, _)| k.0 >= 1)
         .collect();
     if items.is_empty() {
         return Err(EnvrError::Validation("no deno versions in index".into()));

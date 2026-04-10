@@ -925,6 +925,7 @@ dependencies = [
 name = "envr-runtime-deno"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",

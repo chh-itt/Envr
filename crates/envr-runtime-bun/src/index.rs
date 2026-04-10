@@ -1,6 +1,7 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::time::Duration;
 
 pub const DEFAULT_BUN_TAGS_API: &str = "https://api.github.com/repos/oven-sh/bun/tags?per_page=100";
@@ -33,6 +34,71 @@ pub fn fetch_tags(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
     response
         .text()
         .map_err(|e| EnvrError::Download(e.to_string()))
+}
+
+fn parse_github_next_link(link: Option<&reqwest::header::HeaderValue>) -> Option<String> {
+    let raw = link?.to_str().ok()?;
+    for part in raw.split(',') {
+        let part = part.trim();
+        if !part.contains("rel=\"next\"") && !part.contains("rel=next") {
+            continue;
+        }
+        let start = part.find('<')? + 1;
+        let end = part.find('>')?;
+        return Some(part[start..end].to_string());
+    }
+    None
+}
+
+fn max_tag_pages() -> usize {
+    const DEFAULT: usize = 2;
+    std::env::var("ENVR_BUN_TAGS_MAX_PAGES")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT)
+}
+
+/// Fetches all Bun tags via GitHub pagination (`Link: rel="next"`).
+pub fn fetch_all_tags(client: &reqwest::blocking::Client, start_url: &str) -> EnvrResult<Vec<Tag>> {
+    let mut all = Vec::new();
+    let mut next = Some(start_url.to_string());
+    let mut pages = 0usize;
+    let max_pages = max_tag_pages();
+    while let Some(url) = next.take() {
+        if pages >= max_pages {
+            break;
+        }
+        pages += 1;
+        let response = match client.get(&url).send() {
+            Ok(r) => r,
+            Err(e) => {
+                if !all.is_empty() {
+                    break;
+                }
+                return Err(EnvrError::Download(e.to_string()));
+            }
+        };
+        if !response.status().is_success() {
+            // GitHub may deny deep pagination (403) under stricter limits.
+            // Keep already-fetched tags usable instead of failing all operations.
+            if response.status() == reqwest::StatusCode::FORBIDDEN && !all.is_empty() {
+                break;
+            }
+            return Err(EnvrError::Download(format!(
+                "GET {url} -> {}",
+                response.status()
+            )));
+        }
+        let headers = response.headers().clone();
+        let body = response
+            .text()
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        let mut page = parse_tags(&body)?;
+        all.append(&mut page);
+        next = parse_github_next_link(headers.get("link"));
+    }
+    Ok(all)
 }
 
 pub fn parse_tags(json: &str) -> EnvrResult<Vec<Tag>> {
@@ -69,6 +135,30 @@ pub fn normalize_bun_version(tag: &str) -> Option<String> {
     Some(rest.to_string())
 }
 
+/// Latest patch version per major line, newest majors first.
+pub fn list_latest_patch_per_major_from_tags(tags: &[Tag]) -> Vec<String> {
+    let mut best: HashMap<u64, (SemKey, String)> = HashMap::new();
+    for t in tags {
+        let Some(v) = normalize_bun_version(&t.name) else {
+            continue;
+        };
+        let Some(k) = semver_key(&v) else {
+            continue;
+        };
+        let major = k.0;
+        let entry = best.entry(major).or_insert((k, v.clone()));
+        if k > entry.0 {
+            *entry = (k, v);
+        }
+    }
+    let mut majors: Vec<u64> = best.keys().cloned().collect();
+    majors.sort_by(|a, b| b.cmp(a));
+    majors
+        .into_iter()
+        .filter_map(|m| best.remove(&m).map(|(_, s)| s))
+        .collect()
+}
+
 pub fn list_remote_versions(
     tags: &[Tag],
     filter: &RemoteFilter,
@@ -76,6 +166,10 @@ pub fn list_remote_versions(
     let mut items: Vec<(SemKey, String)> = tags
         .iter()
         .filter_map(|t| normalize_bun_version(&t.name).and_then(|v| semver_key(&v).map(|k| (k, v))))
+        // Historical 0.x tags often don't publish installable release assets for envr's
+        // current download path (`releases/download/bun-v*/bun-*.zip`), causing 404 on install.
+        // Hide them from remote list and resolver to keep install UX consistent.
+        .filter(|(k, _)| k.0 >= 1)
         .collect();
     items.sort_by(|a, b| b.0.cmp(&a.0));
     let mut out: Vec<RuntimeVersion> = items.into_iter().map(|(_, v)| RuntimeVersion(v)).collect();
@@ -93,9 +187,22 @@ pub fn resolve_bun_version(tags: &[Tag], spec: &str) -> EnvrResult<String> {
     if s.is_empty() {
         return Err(EnvrError::Validation("empty bun version spec".into()));
     }
+    if s.starts_with("0.") {
+        let msg = if cfg!(windows) {
+            format!(
+                "bun 0.x has no official Windows release assets; use bun >= 1.0 (spec {spec:?})"
+            )
+        } else {
+            format!(
+                "bun 0.x is not supported for managed install in envr; use bun >= 1.0 (spec {spec:?})"
+            )
+        };
+        return Err(EnvrError::Validation(msg));
+    }
     let mut items: Vec<(SemKey, String)> = tags
         .iter()
         .filter_map(|t| normalize_bun_version(&t.name).and_then(|v| semver_key(&v).map(|k| (k, v))))
+        .filter(|(k, _)| k.0 >= 1)
         .collect();
     if items.is_empty() {
         return Err(EnvrError::Validation("no bun versions in index".into()));

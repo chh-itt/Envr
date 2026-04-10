@@ -2,8 +2,8 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_DENO_TAGS_API, Tag, blocking_http_client, fetch_tags, list_remote_versions, parse_tags,
-    resolve_deno_version,
+    DEFAULT_DENO_TAGS_API, Tag, blocking_http_client, fetch_all_tags, fetch_tags,
+    list_latest_patch_per_major_from_tags, list_remote_versions, parse_tags, resolve_deno_version,
 };
 pub use manager::{
     DenoManager, DenoPaths, deno_installation_valid, list_installed_versions, read_current,
@@ -15,6 +15,7 @@ use envr_domain::runtime::{
 };
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
+use std::path::{Path, PathBuf};
 
 pub struct DenoRuntimeProvider {
     tags_api: String,
@@ -52,8 +53,55 @@ impl DenoRuntimeProvider {
 
     fn load_tags(&self) -> EnvrResult<Vec<Tag>> {
         let client = blocking_http_client()?;
-        let body = fetch_tags(&client, &self.tags_api)?;
-        parse_tags(&body)
+        fetch_all_tags(&client, &self.tags_api)
+    }
+
+    fn remote_cache_ttl_secs() -> u64 {
+        const DEFAULT: u64 = 24 * 60 * 60;
+        std::env::var("ENVR_DENO_REMOTE_CACHE_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT)
+    }
+
+    fn file_is_within_ttl(path: &Path, ttl_secs: u64) -> bool {
+        if ttl_secs == 0 {
+            return false;
+        }
+        let Ok(meta) = std::fs::metadata(path) else {
+            return false;
+        };
+        let Ok(mtime) = meta.modified() else {
+            return false;
+        };
+        let Ok(age) = std::time::SystemTime::now().duration_since(mtime) else {
+            return false;
+        };
+        age.as_secs() <= ttl_secs
+    }
+
+    fn remote_latest_per_major_cache_path(&self) -> EnvrResult<PathBuf> {
+        let paths = DenoPaths::new(self.runtime_root()?);
+        Ok(paths.cache_dir().join("remote_latest_per_major.json"))
+    }
+
+    fn exact_semver_spec(spec: &str) -> Option<String> {
+        let s = spec.trim().trim_start_matches('v');
+        let mut it = s.split('.');
+        let a = it.next()?;
+        let b = it.next()?;
+        let c = it.next()?;
+        if it.next().is_some() {
+            return None;
+        }
+        if [a, b, c]
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|ch| ch.is_ascii_digit()))
+            && a.parse::<u64>().ok()? >= 1
+        {
+            return Some(format!("{a}.{b}.{c}"));
+        }
+        None
     }
 }
 
@@ -87,7 +135,55 @@ impl RuntimeProvider for DenoRuntimeProvider {
         list_remote_versions(&tags, filter)
     }
 
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        let Ok(path) = self.remote_latest_per_major_cache_path() else {
+            return Vec::new();
+        };
+        let Ok(s) = std::fs::read_to_string(&path) else {
+            return Vec::new();
+        };
+        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+            return Vec::new();
+        };
+        list.into_iter().map(RuntimeVersion).collect()
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let ttl_secs = Self::remote_cache_ttl_secs();
+        let cache_file = self.remote_latest_per_major_cache_path()?;
+
+        if Self::file_is_within_ttl(&cache_file, ttl_secs) {
+            if let Ok(s) = std::fs::read_to_string(&cache_file) {
+                if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
+                    if !list.is_empty() {
+                        return Ok(list.into_iter().map(RuntimeVersion).collect());
+                    }
+                    let _ = std::fs::remove_file(&cache_file);
+                }
+            }
+        }
+
+        let tags = self.load_tags()?;
+        let list = list_latest_patch_per_major_from_tags(&tags);
+
+        let _ = (|| -> EnvrResult<()> {
+            let paths = DenoPaths::new(self.runtime_root()?);
+            std::fs::create_dir_all(paths.cache_dir())?;
+            let s = serde_json::to_string(&list)
+                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            std::fs::write(&cache_file, s)?;
+            Ok(())
+        })();
+
+        Ok(list.into_iter().map(RuntimeVersion).collect())
+    }
+
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
+        if let Some(v) = Self::exact_semver_spec(&spec.0) {
+            return Ok(ResolvedVersion {
+                version: RuntimeVersion(v),
+            });
+        }
         let tags = self.load_tags()?;
         let v = resolve_deno_version(&tags, &spec.0)?;
         Ok(ResolvedVersion {
@@ -96,7 +192,7 @@ impl RuntimeProvider for DenoRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(&request.spec)
+        self.manager()?.install_from_spec(request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

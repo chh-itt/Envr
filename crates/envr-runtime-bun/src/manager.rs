@@ -1,13 +1,47 @@
 use crate::index::{
-    DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_tags, parse_tags, resolve_bun_version,
+    DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_all_tags, resolve_bun_version,
 };
 use crate::mirror::{load_settings, maybe_mirror_url};
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::{LinkType, ensure_link};
+use std::error::Error;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+fn error_chain_message(err: &dyn Error) -> String {
+    let mut s = err.to_string();
+    let mut cur = err.source();
+    while let Some(x) = cur {
+        s.push_str(": ");
+        s.push_str(&x.to_string());
+        cur = x.source();
+    }
+    s
+}
+
+fn exact_semver_spec(spec: &str) -> Option<String> {
+    let s = spec.trim().trim_start_matches('v');
+    let mut it = s.split('.');
+    let a = it.next()?;
+    let b = it.next()?;
+    let c = it.next()?;
+    if it.next().is_some() {
+        return None;
+    }
+    if [a, b, c].iter().all(|p| !p.is_empty() && p.chars().all(|ch| ch.is_ascii_digit())) {
+        if a.parse::<u64>().ok()? >= 1 {
+            return Some(format!("{a}.{b}.{c}"));
+        }
+    }
+    None
+}
 
 #[derive(Debug, Clone)]
 pub struct BunPaths {
@@ -40,15 +74,19 @@ impl BunPaths {
     }
 }
 
-pub fn bun_installation_valid(home: &Path) -> bool {
+fn bun_binary_candidates(home: &Path) -> [PathBuf; 2] {
     #[cfg(windows)]
     {
-        home.join("bun.exe").is_file()
+        [home.join("bun.exe"), home.join("bin").join("bun.exe")]
     }
     #[cfg(not(windows))]
     {
-        home.join("bun").is_file()
+        [home.join("bun"), home.join("bin").join("bun")]
     }
+}
+
+pub fn bun_installation_valid(home: &Path) -> bool {
+    bun_binary_candidates(home).iter().any(|p| p.is_file())
 }
 
 pub fn list_installed_versions(paths: &BunPaths) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -76,15 +114,27 @@ pub fn read_current(paths: &BunPaths) -> EnvrResult<Option<RuntimeVersion>> {
     if !cur.exists() {
         return Ok(None);
     }
-    let target = match fs::read_link(&cur) {
-        Ok(t) => t,
-        Err(_) => return Ok(None),
-    };
-    let resolved = if target.is_relative() {
-        cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+    let resolved = if cur.is_file() {
+        let Ok(s) = fs::read_to_string(&cur) else {
+            return Ok(None);
+        };
+        let t = s.trim();
+        if t.is_empty() {
+            return Ok(None);
+        }
+        PathBuf::from(t)
     } else {
-        target
+        let target = match fs::read_link(&cur) {
+            Ok(t) => t,
+            Err(_) => return Ok(None),
+        };
+        if target.is_relative() {
+            cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+        } else {
+            target
+        }
     };
+    let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
     let name = resolved
         .file_name()
         .and_then(|s| s.to_str())
@@ -109,11 +159,21 @@ fn remove_path_if_exists(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
-fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) -> EnvrResult<()> {
+fn download_to_path_once(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+        return Err(EnvrError::Download("download cancelled".to_string()));
+    }
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::Download(error_chain_message(&e)))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -124,11 +184,148 @@ fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
+    if let Some(t) = progress_total {
+        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
+    }
+    if let Some(d) = progress_downloaded {
+        d.store(0, Ordering::Relaxed);
+    }
     let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    response
-        .copy_to(&mut f)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
+        let n = response
+            .read(&mut buf)
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+        if let Some(d) = progress_downloaded {
+            d.fetch_add(n as u64, Ordering::Relaxed);
+        }
+    }
     Ok(())
+}
+
+fn should_retry_download_error(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("timed out")
+        || m.contains("timeout")
+        || m.contains("connection reset")
+        || m.contains("connection refused")
+        || m.contains("connection aborted")
+        || m.contains("error 10054")
+        || m.contains("error 10060")
+}
+
+fn download_to_path_with_retries(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    const MAX_ATTEMPTS: usize = 3;
+    let mut last_err: Option<EnvrError> = None;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match download_to_path_once(
+            client,
+            url,
+            path,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        ) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let msg = e.to_string();
+                last_err = Some(e);
+                if attempt >= MAX_ATTEMPTS || !should_retry_download_error(&msg) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(300 * attempt as u64));
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| EnvrError::Download("download failed".into())))
+}
+
+/// If `fallback_url` differs from `url`, retries the download from `fallback_url` when the first attempt fails.
+fn download_to_path(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+    fallback_url: Option<&str>,
+) -> EnvrResult<()> {
+    let primary = download_to_path_with_retries(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    );
+    let Some(fb) = fallback_url.filter(|fb| *fb != url) else {
+        return primary;
+    };
+    primary.or_else(|e| {
+        download_to_path_with_retries(
+            client,
+            fb,
+            path,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )
+        .map_err(|e2| {
+            EnvrError::Download(format!(
+                "{e} (retried official URL {fb}: {e2})"
+            ))
+        })
+    })
+}
+
+fn get_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
+    let response = client
+        .get(url)
+        .send()
+        .map_err(|e| EnvrError::Download(error_chain_message(&e)))?;
+    if !response.status().is_success() {
+        return Err(EnvrError::Download(format!(
+            "GET {} -> {}",
+            url,
+            response.status()
+        )));
+    }
+    response
+        .text()
+        .map_err(|e| EnvrError::Download(e.to_string()))
+}
+
+/// Tries `primary` first; if it differs from `official`, retries `official` on failure (broken mirror / proxy).
+fn get_text_with_official_fallback(
+    client: &reqwest::blocking::Client,
+    primary: &str,
+    official: &str,
+) -> EnvrResult<String> {
+    let first = get_text(client, primary);
+    if primary == official {
+        return first;
+    }
+    first.or_else(|e| {
+        get_text(client, official).map_err(|e2| {
+            EnvrError::Download(format!(
+                "{e} (retried official URL {official}: {e2})"
+            ))
+        })
+    })
 }
 
 fn parse_shasums256(text: &str) -> EnvrResult<Vec<(String, String)>> {
@@ -162,12 +359,27 @@ fn pick_bun_asset(os: &str, arch: &str) -> EnvrResult<&'static str> {
     }
 }
 
+fn source_dir_for_promotion(staging: &Path) -> EnvrResult<PathBuf> {
+    let mut entries = Vec::new();
+    for e in fs::read_dir(staging).map_err(EnvrError::from)? {
+        entries.push(e.map_err(EnvrError::from)?);
+    }
+    if entries.len() == 1 {
+        let only = entries.remove(0).path();
+        if only.is_dir() && bun_binary_candidates(&only).iter().any(|p| p.is_file()) {
+            return Ok(only);
+        }
+    }
+    Ok(staging.to_path_buf())
+}
+
 fn promote_archive(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     if final_dir.exists() {
         fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
     }
     fs::create_dir_all(final_dir).map_err(EnvrError::from)?;
-    for e in fs::read_dir(staging).map_err(EnvrError::from)? {
+    let source_dir = source_dir_for_promotion(staging)?;
+    for e in fs::read_dir(&source_dir).map_err(EnvrError::from)? {
         let e = e.map_err(EnvrError::from)?;
         let from = e.path();
         let to = final_dir.join(e.file_name());
@@ -194,17 +406,38 @@ impl BunManager {
     fn load_tags(&self) -> EnvrResult<Vec<Tag>> {
         let settings = load_settings()?;
         let url = maybe_mirror_url(&settings, &self.tags_api)?;
-        let body = fetch_tags(&self.client, &url)?;
-        parse_tags(&body)
+        fetch_all_tags(&self.client, &url)
     }
 
-    pub fn install_from_spec(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
+    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        if let Some(v) = exact_semver_spec(&request.spec.0) {
+            return self.install_resolved_version(
+                &RuntimeVersion(v),
+                request.progress_downloaded.as_ref(),
+                request.progress_total.as_ref(),
+                request.cancel.as_ref(),
+            );
+        }
         let tags = self.load_tags()?;
-        let v = resolve_bun_version(&tags, &spec.0)?;
-        self.install_resolved_version(&RuntimeVersion(v))
+        let v = resolve_bun_version(&tags, &request.spec.0)?;
+        self.install_resolved_version(
+            &RuntimeVersion(v),
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
-    pub fn install_resolved_version(&self, version: &RuntimeVersion) -> EnvrResult<RuntimeVersion> {
+    pub fn install_resolved_version(
+        &self,
+        version: &RuntimeVersion,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion> {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
         let asset = pick_bun_asset(os, arch)?;
@@ -212,28 +445,34 @@ impl BunManager {
 
         let base = format!("https://github.com/oven-sh/bun/releases/download/{tag}");
         let settings = load_settings()?;
-        let shasums_url = maybe_mirror_url(&settings, &format!("{base}/SHASUMS256.txt"))?;
-        let shasums_text = self
-            .client
-            .get(&shasums_url)
-            .send()
-            .map_err(|e| EnvrError::Download(e.to_string()))?
-            .text()
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
-        let entries = parse_shasums256(&shasums_text)?;
-        let (sha, _name) = entries
-            .iter()
-            .find(|(_, n)| n == asset)
-            .cloned()
-            .ok_or_else(|| {
-                EnvrError::Validation(format!("missing {asset} in bun SHASUMS256 for {tag}"))
-            })?;
+        let direct_shasums = format!("{base}/SHASUMS256.txt");
+        let shasums_url = maybe_mirror_url(&settings, &direct_shasums)?;
+        let expected_sha = get_text_with_official_fallback(&self.client, &shasums_url, &direct_shasums)
+            .ok()
+            .and_then(|text| parse_shasums256(&text).ok())
+            .and_then(|entries| {
+                entries
+                    .into_iter()
+                    .find(|(_, n)| n == asset)
+                    .map(|(sha, _)| sha)
+            });
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(asset);
-        let url = maybe_mirror_url(&settings, &format!("{base}/{asset}"))?;
-        download_to_path(&self.client, &url, &cache_file)?;
-        checksum::verify_sha256_hex(&cache_file, &sha)?;
+        let direct_zip = format!("{base}/{asset}");
+        let zip_url = maybe_mirror_url(&settings, &direct_zip)?;
+        download_to_path(
+            &self.client,
+            &zip_url,
+            &cache_file,
+            progress_downloaded,
+            progress_total,
+            cancel,
+            Some(direct_zip.as_str()),
+        )?;
+        if let Some(sha) = expected_sha.as_deref() {
+            checksum::verify_sha256_hex(&cache_file, sha)?;
+        }
 
         let staging_parent = self.paths.cache_dir().join(&version.0);
         fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
@@ -259,7 +498,22 @@ impl BunManager {
                 version.0
             )));
         }
-        ensure_link(LinkType::Soft, &dir, self.paths.current_link())?;
+        let target = fs::canonicalize(&dir).unwrap_or(dir.clone());
+        let link = self.paths.current_link();
+        if let Err(_e) = ensure_link(LinkType::Soft, &target, &link) {
+            #[cfg(windows)]
+            {
+                if let Some(parent) = link.parent() {
+                    fs::create_dir_all(parent).map_err(EnvrError::from)?;
+                }
+                fs::write(&link, target.display().to_string()).map_err(EnvrError::from)?;
+                return Ok(());
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(_e);
+            }
+        }
         Ok(())
     }
 

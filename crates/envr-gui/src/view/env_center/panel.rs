@@ -1,10 +1,11 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro, JavaDownloadSource,
-    JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings, NpmRegistryMode,
-    PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings, RustDownloadSource, RustRuntimeSettings,
+    BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, GoDownloadSource, GoProxyMode,
+    GoRuntimeSettings, JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource,
+    NodeRuntimeSettings, NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings,
+    PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
+    RustDownloadSource, RustRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
@@ -60,6 +61,11 @@ pub enum EnvCenterMsg {
     SetPhpDownloadSource(PhpDownloadSource),
     SetPhpWindowsBuild(PhpWindowsBuildFlavor),
     SetPhpPathProxy(bool),
+    SetDenoDownloadSource(DenoDownloadSource),
+    SetDenoPackageSource(NpmRegistryMode),
+    SetDenoPathProxy(bool),
+    SetBunPackageSource(NpmRegistryMode),
+    SetBunPathProxy(bool),
 
     // Rust page (specialized).
     RustRefresh,
@@ -123,6 +129,12 @@ pub struct EnvCenterState {
     /// PHP: latest stable patch per minor line for **current NTS/TS** (see `list_remote_latest_per_major`).
     pub php_remote_latest: Vec<RuntimeVersion>,
     pub php_remote_refreshing: bool,
+    /// Deno: latest patch per major from tags cache/network.
+    pub deno_remote_latest: Vec<RuntimeVersion>,
+    pub deno_remote_refreshing: bool,
+    /// Bun: latest patch per major from tags cache/network.
+    pub bun_remote_latest: Vec<RuntimeVersion>,
+    pub bun_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -163,6 +175,10 @@ impl Default for EnvCenterState {
             go_remote_refreshing: false,
             php_remote_latest: Vec::new(),
             php_remote_refreshing: false,
+            deno_remote_latest: Vec::new(),
+            deno_remote_refreshing: false,
+            bun_remote_latest: Vec::new(),
+            bun_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -893,6 +909,247 @@ fn php_runtime_settings_section(
         .into()
 }
 
+fn deno_runtime_settings_section(
+    deno: &DenoRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let dl_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.deno.download_source",
+        "Deno 下载源",
+        "Deno download source",
+    ))
+    .size(ty.body);
+    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    for src in [
+        DenoDownloadSource::Auto,
+        DenoDownloadSource::Domestic,
+        DenoDownloadSource::Official,
+    ] {
+        let lab = match src {
+            DenoDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.deno.ds.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            DenoDownloadSource::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.deno.ds.domestic", "国内镜像", "China mirror")
+            }
+            DenoDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.deno.ds.official", "官方", "Official")
+            }
+        };
+        let variant = if src == deno.download_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if src == deno.download_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(text(lab).into()))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoDownloadSource(src)))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(h))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, variant));
+        dl_row = dl_row.push(b);
+    }
+
+    let pkg_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.deno.package_source",
+        "包源（npm + JSR）",
+        "Package source (npm + JSR)",
+    ))
+    .size(ty.body);
+    let mut pkg_row = row![pkg_title].spacing(sp.sm as f32);
+    for mode in [
+        NpmRegistryMode::Auto,
+        NpmRegistryMode::Domestic,
+        NpmRegistryMode::Official,
+        NpmRegistryMode::Restore,
+    ] {
+        let lab = match mode {
+            NpmRegistryMode::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.deno.pkg.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            NpmRegistryMode::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.deno.pkg.domestic", "国内镜像", "China mirror")
+            }
+            NpmRegistryMode::Official => {
+                envr_core::i18n::tr_key("gui.runtime.deno.pkg.official", "官方", "Official")
+            }
+            NpmRegistryMode::Restore => envr_core::i18n::tr_key(
+                "gui.runtime.deno.pkg.restore",
+                "还原（不注入）",
+                "Restore (leave as-is)",
+            ),
+        };
+        let variant = if mode == deno.package_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == deno.package_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(text(lab).into()))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoPackageSource(mode)))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(h))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, variant));
+        pkg_row = pkg_row.push(b);
+    }
+
+    let proxy_toggle = toggler(deno.path_proxy_enabled)
+        .label(envr_core::i18n::tr_key(
+            "gui.runtime.deno.path_proxy.label",
+            "开启时由 envr 接管 deno；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages deno; when off, shims passthrough to system PATH.",
+        ))
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetDenoPathProxy(v)));
+
+    let main_col = column![
+        dl_row,
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.deno.download_source_hint",
+            "控制二进制 zip 来源（dl.deno.land / npmmirror）。",
+            "Controls where the release zip is downloaded from (dl.deno.land / npmmirror).",
+        ))
+        .size(ty.micro)
+        .color(muted),
+        pkg_row,
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.deno.package_source_hint",
+            "同时设置 NPM_CONFIG_REGISTRY 与 JSR_URL。",
+            "Sets both NPM_CONFIG_REGISTRY and JSR_URL.",
+        ))
+        .size(ty.micro)
+        .color(muted),
+        proxy_toggle,
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.deno.path_proxy.off_hint",
+            "关闭时无法使用「切换」「安装并切换」。",
+            "When off, you can't Use / Install & Use.",
+        ))
+        .size(ty.micro)
+        .color(muted),
+    ];
+
+    container(main_col.spacing(sp.sm as f32).width(Length::Fill))
+        .padding(Padding::from([sp.md as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
+}
+
+fn bun_runtime_settings_section(
+    bun: &BunRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let pkg_title = text(envr_core::i18n::tr_key(
+        "gui.runtime.bun.package_source",
+        "包源（npm）",
+        "Package source (npm)",
+    ))
+    .size(ty.body);
+    let mut pkg_row = row![pkg_title].spacing(sp.sm as f32);
+    for mode in [
+        NpmRegistryMode::Auto,
+        NpmRegistryMode::Domestic,
+        NpmRegistryMode::Official,
+        NpmRegistryMode::Restore,
+    ] {
+        let lab = match mode {
+            NpmRegistryMode::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.bun.pkg.auto",
+                "自动（随区域语言）",
+                "Auto (locale)",
+            ),
+            NpmRegistryMode::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.bun.pkg.domestic", "国内镜像", "China mirror")
+            }
+            NpmRegistryMode::Official => {
+                envr_core::i18n::tr_key("gui.runtime.bun.pkg.official", "官方", "Official")
+            }
+            NpmRegistryMode::Restore => envr_core::i18n::tr_key(
+                "gui.runtime.bun.pkg.restore",
+                "还原（不注入）",
+                "Restore (leave as-is)",
+            ),
+        };
+        let variant = if mode == bun.package_source {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let h = if mode == bun.package_source {
+            tokens.control_height_primary
+        } else {
+            tokens.control_height_secondary
+        };
+        let b = button(button_content_centered(text(lab).into()))
+            .on_press(Message::EnvCenter(EnvCenterMsg::SetBunPackageSource(mode)))
+            .width(Length::FillPortion(1))
+            .height(Length::Fixed(h))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, variant));
+        pkg_row = pkg_row.push(b);
+    }
+
+    let proxy_toggle = toggler(bun.path_proxy_enabled)
+        .label(envr_core::i18n::tr_key(
+            "gui.runtime.bun.path_proxy.label",
+            "开启时由 envr 接管 bun/bunx；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages bun/bunx; when off, shims passthrough to system PATH.",
+        ))
+        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetBunPathProxy(v)));
+
+    let main_col = column![
+        pkg_row,
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.bun.package_source_hint",
+            "设置 NPM_CONFIG_REGISTRY（restore 时不注入）。",
+            "Sets NPM_CONFIG_REGISTRY (no injection on restore).",
+        ))
+        .size(ty.micro)
+        .color(muted),
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.bun.win_support_note",
+            "Windows 仅支持 Bun 1.x+（0.x 无官方 Windows 发布资产，已在列表中隐藏）。",
+            "Windows supports Bun 1.x+ only (0.x has no official Windows release assets and is hidden).",
+        ))
+        .size(ty.micro)
+        .color(muted),
+        proxy_toggle,
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.bun.path_proxy.off_hint",
+            "关闭时无法使用「切换」「安装并切换」。",
+            "When off, you can't Use / Install & Use.",
+        ))
+        .size(ty.micro)
+        .color(muted),
+    ];
+
+    container(main_col.spacing(sp.sm as f32).width(Length::Fill))
+        .padding(Padding::from([sp.md as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
+}
+
 fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Message> {
     let ty = tokens.typography();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -962,6 +1219,25 @@ fn php_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runtim
         .cloned()
 }
 
+fn deno_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .deno_remote_latest
+        .iter()
+        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
+fn bun_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    if !bun_major_supported_on_host(key) {
+        return None;
+    }
+    state
+        .bun_remote_latest
+        .iter()
+        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
@@ -970,6 +1246,8 @@ pub fn env_center_view(
     go_runtime: Option<&GoRuntimeSettings>,
     rust_runtime: Option<&RustRuntimeSettings>,
     php_runtime: Option<&PhpRuntimeSettings>,
+    deno_runtime: Option<&DenoRuntimeSettings>,
+    bun_runtime: Option<&BunRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -987,6 +1265,8 @@ pub fn env_center_view(
         RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
@@ -1019,6 +1299,8 @@ pub fn env_center_view(
             | RuntimeKind::Java
             | RuntimeKind::Go
             | RuntimeKind::Php
+            | RuntimeKind::Deno
+            | RuntimeKind::Bun
     );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -1094,6 +1376,14 @@ pub fn env_center_view(
         php_runtime
             .map(|p| php_runtime_settings_section(p, tokens))
             .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Deno {
+        deno_runtime
+            .map(|d| deno_runtime_settings_section(d, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Bun {
+        bun_runtime
+            .map(|b| bun_runtime_settings_section(b, tokens))
+            .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
     };
@@ -1160,6 +1450,20 @@ pub fn env_center_view(
                 keys_set.insert(k);
             }
         }
+    } else if state.kind == RuntimeKind::Deno {
+        for v in &state.deno_remote_latest {
+            if let Some(k) = parse_major_from_ver(&v.0) {
+                keys_set.insert(k);
+            }
+        }
+    } else if state.kind == RuntimeKind::Bun {
+        for v in &state.bun_remote_latest {
+            if let Some(k) = parse_major_from_ver(&v.0) {
+                if bun_major_supported_on_host(&k) {
+                    keys_set.insert(k);
+                }
+            }
+        }
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
     if state.kind == RuntimeKind::Python {
@@ -1188,6 +1492,9 @@ pub fn env_center_view(
         });
     } else {
         keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
+    }
+    if state.kind == RuntimeKind::Bun {
+        keys.retain(|k| bun_major_supported_on_host(k));
     }
 
     let matches_empty_hint = || -> Element<'static, Message> {
@@ -1318,6 +1625,12 @@ pub fn env_center_view(
     let php_waiting_remote = state.kind == RuntimeKind::Php
         && state.php_remote_latest.is_empty()
         && state.php_remote_refreshing;
+    let deno_waiting_remote = state.kind == RuntimeKind::Deno
+        && state.deno_remote_latest.is_empty()
+        && state.deno_remote_refreshing;
+    let bun_waiting_remote = state.kind == RuntimeKind::Bun
+        && state.bun_remote_latest.is_empty()
+        && state.bun_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref() {
         if matches!(
@@ -1327,6 +1640,8 @@ pub fn env_center_view(
                 | RuntimeKind::Java
                 | RuntimeKind::Go
                 | RuntimeKind::Php
+                | RuntimeKind::Deno
+                | RuntimeKind::Bun
         ) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
@@ -1338,6 +1653,8 @@ pub fn env_center_view(
         || (java_waiting_remote && show_keys.is_empty())
         || (go_waiting_remote && show_keys.is_empty())
         || (php_waiting_remote && show_keys.is_empty())
+        || (deno_waiting_remote && show_keys.is_empty())
+        || (bun_waiting_remote && show_keys.is_empty())
     {
         list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
     } else if show_keys.is_empty() {
@@ -1426,6 +1743,14 @@ pub fn env_center_view(
                         .unwrap_or_else(|| key.clone())
                 } else if state.kind == RuntimeKind::Php {
                     php_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Deno {
+                    deno_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Bun {
+                    bun_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
                 } else {
@@ -1594,6 +1919,11 @@ pub fn env_center_view(
     .into();
 
     let direct_spec_nonempty = !state.direct_install_input.trim().is_empty();
+    let bun_spec_blocked = state.kind == RuntimeKind::Bun
+        && bun_direct_spec_blocked_on_windows(&state.direct_install_input);
+    let deno_spec_blocked =
+        state.kind == RuntimeKind::Deno && deno_direct_spec_blocked(&state.direct_install_input);
+    let direct_spec_ready = direct_spec_nonempty && !bun_spec_blocked && !deno_spec_blocked;
     let direct_install_btn = button(button_content_centered(
         row![
             Lucide::Download.view(14.0, txt),
@@ -1608,7 +1938,7 @@ pub fn env_center_view(
         .into(),
     ))
     .on_press_maybe(
-        direct_spec_nonempty.then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
+        direct_spec_ready.then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
     )
     .height(Length::Fixed(ctrl_h))
     .padding([sp.sm as f32, sp.md as f32])
@@ -1628,7 +1958,7 @@ pub fn env_center_view(
         .into(),
     ))
     .on_press_maybe(
-        (direct_spec_nonempty && path_proxy_on)
+        (direct_spec_ready && path_proxy_on)
             .then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstallAndUse)),
     )
     .height(Length::Fixed(ctrl_h))
@@ -1647,6 +1977,30 @@ pub fn env_center_view(
     ]
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
+
+    let bun_direct_spec_hint = if bun_spec_blocked {
+        Some(
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.bun.win_0x_blocked",
+                "Windows 不支持 Bun 0.x，请输入 1.x 及以上版本。",
+                "Bun 0.x is unavailable on Windows. Please enter version 1.x or newer.",
+            ))
+            .size(ty.micro)
+            .color(gui_theme::to_color(tokens.colors.warning)),
+        )
+    } else if deno_spec_blocked {
+        Some(
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.deno.0x_blocked",
+                "Deno 0.x 不受托管安装支持，请输入 1.x/2.x 版本。",
+                "Deno 0.x is not supported for managed install. Please enter a 1.x/2.x version.",
+            ))
+            .size(ty.micro)
+            .color(gui_theme::to_color(tokens.colors.warning)),
+        )
+    } else {
+        None
+    };
 
     let java_distro_row = if state.kind == RuntimeKind::Java {
         let current_distro = java_runtime
@@ -1705,6 +2059,8 @@ pub fn env_center_view(
         } else {
             column![header, runtime_settings_block]
         }
+    } else if let Some(hint) = bun_direct_spec_hint {
+        column![header, runtime_settings_block, filter_row, hint]
     } else {
         column![header, runtime_settings_block, filter_row]
     }
@@ -2121,6 +2477,27 @@ fn semver_cmp_desc(a: &str, b: &str) -> std::cmp::Ordering {
 
 fn parse_major_num(major: &str) -> u64 {
     major.parse::<u64>().unwrap_or(0)
+}
+
+fn bun_major_supported_on_host(major: &str) -> bool {
+    if cfg!(windows) {
+        parse_major_num(major) >= 1
+    } else {
+        true
+    }
+}
+
+fn bun_direct_spec_blocked_on_windows(spec: &str) -> bool {
+    if !cfg!(windows) {
+        return false;
+    }
+    let t = spec.trim().trim_start_matches('v');
+    t.starts_with("0.")
+}
+
+fn deno_direct_spec_blocked(spec: &str) -> bool {
+    let t = spec.trim().trim_start_matches('v');
+    t.starts_with("0.")
 }
 
 fn parse_major_from_ver(ver: &str) -> Option<String> {

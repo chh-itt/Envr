@@ -1,8 +1,10 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
-    go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
-    node_path_proxy_enabled_from_disk, php_path_proxy_enabled_from_disk,
-    php_windows_build_want_ts_from_disk, python_path_proxy_enabled_from_disk, resolve_runtime_root,
+    Settings, bun_package_registry_env, bun_path_proxy_enabled_from_disk,
+    deno_package_registry_env, deno_path_proxy_enabled_from_disk, go_path_proxy_enabled_from_disk,
+    java_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
+    php_path_proxy_enabled_from_disk, php_windows_build_want_ts_from_disk,
+    python_path_proxy_enabled_from_disk, resolve_runtime_root, settings_path_from_platform,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
@@ -57,6 +59,7 @@ pub enum CoreCommand {
     Go,
     Gofmt,
     Php,
+    Deno,
     Bun,
     Bunx,
 }
@@ -69,6 +72,7 @@ impl CoreCommand {
             CoreCommand::Java | CoreCommand::Javac => "java",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
+            CoreCommand::Deno => "deno",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
         }
     }
@@ -101,6 +105,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
+        "deno" => Some(CoreCommand::Deno),
         "bun" => Some(CoreCommand::Bun),
         "bunx" => Some(CoreCommand::Bunx),
         _ => None,
@@ -502,6 +507,41 @@ fn bun_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn deno_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Deno => Ok(first_existing(&[
+            home.join("deno.exe"),
+            home.join("bin").join("deno.exe"),
+            home.join("bin").join("deno"),
+            home.join("deno"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("deno missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a deno tool".into())),
+    }
+}
+
+fn deno_registry_env_from_disk() -> Vec<(String, String)> {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return Vec::new();
+    };
+    let path = settings_path_from_platform(&platform);
+    let Ok(settings) = Settings::load_or_default_from(&path) else {
+        return Vec::new();
+    };
+    deno_package_registry_env(&settings)
+}
+
+fn bun_registry_env_from_disk() -> Vec<(String, String)> {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return Vec::new();
+    };
+    let path = settings_path_from_platform(&platform);
+    let Ok(settings) = Settings::load_or_default_from(&path) else {
+        return Vec::new();
+    };
+    bun_package_registry_env(&settings)
+}
+
 fn go_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -535,6 +575,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
+        CoreCommand::Deno => deno_tool_path(home, cmd),
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
     }
 }
@@ -693,6 +734,39 @@ fn resolve_php_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
     })
 }
 
+fn resolve_deno_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Deno => "deno",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports deno tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
+fn resolve_bun_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Bun => "bun",
+        CoreCommand::Bunx => "bunx",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports bun tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
@@ -714,6 +788,12 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
     }
     if matches!(cmd, CoreCommand::Php) && !php_path_proxy_enabled_from_disk() {
         return resolve_php_tool_bypass_envr(cmd);
+    }
+    if matches!(cmd, CoreCommand::Deno) && !deno_path_proxy_enabled_from_disk() {
+        return resolve_deno_tool_bypass_envr(cmd);
+    }
+    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !bun_path_proxy_enabled_from_disk() {
+        return resolve_bun_tool_bypass_envr(cmd);
     }
 
     let cfg =
@@ -738,7 +818,14 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
             go_tool_path(&home, cmd)?
         }
         CoreCommand::Php => php_tool_path(&home, cmd)?,
-        CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(&home, cmd)?,
+        CoreCommand::Deno => {
+            extra_env.extend(deno_registry_env_from_disk());
+            deno_tool_path(&home, cmd)?
+        }
+        CoreCommand::Bun | CoreCommand::Bunx => {
+            extra_env.extend(bun_registry_env_from_disk());
+            bun_tool_path(&home, cmd)?
+        }
     };
 
     Ok(ResolvedShim {
@@ -805,6 +892,7 @@ mod tests {
         assert_eq!(parse_core_command("go"), Some(CoreCommand::Go));
         assert_eq!(parse_core_command("gofmt"), Some(CoreCommand::Gofmt));
         assert_eq!(parse_core_command("php"), Some(CoreCommand::Php));
+        assert_eq!(parse_core_command("deno"), Some(CoreCommand::Deno));
         assert_eq!(parse_core_command("unknown"), None);
     }
 

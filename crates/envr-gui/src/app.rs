@@ -808,6 +808,34 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                                     ),
                                 ]);
                             }
+                            envr_domain::runtime::RuntimeKind::Deno => {
+                                state.env_center.deno_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Deno,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Deno,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Deno,
+                                    ),
+                                ]);
+                            }
+                            envr_domain::runtime::RuntimeKind::Bun => {
+                                state.env_center.bun_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Bun,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Bun,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Bun,
+                                    ),
+                                ]);
+                            }
                             _ => {}
                         }
                     }
@@ -1402,6 +1430,14 @@ fn enqueue_demo_download(state: &mut AppState) -> Task<Message> {
 }
 
 fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Message> {
+    if url_str.trim().is_empty() {
+        state.error = Some(envr_core::i18n::tr_key(
+            "gui.error.retry_requires_url",
+            "该任务没有可重试的下载 URL，请回到运行时页面重新安装。",
+            "This task has no retryable download URL. Please retry install from runtime page.",
+        ));
+        return Task::none();
+    }
     let url = match reqwest::Url::parse(url_str) {
         Ok(u) => u,
         Err(e) => {
@@ -1597,6 +1633,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.go_remote_refreshing = false;
             state.env_center.php_remote_latest.clear();
             state.env_center.php_remote_refreshing = false;
+            state.env_center.deno_remote_latest.clear();
+            state.env_center.deno_remote_refreshing = false;
+            state.env_center.bun_remote_latest.clear();
+            state.env_center.bun_remote_refreshing = false;
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
             state.env_center.rust_targets.clear();
@@ -1647,6 +1687,31 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.python_remote_refreshing = false;
                 state.env_center.java_remote_refreshing = false;
                 state.env_center.go_remote_refreshing = false;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Deno {
+                state.env_center.deno_remote_refreshing = true;
+                state.env_center.node_remote_refreshing = false;
+                state.env_center.python_remote_refreshing = false;
+                state.env_center.java_remote_refreshing = false;
+                state.env_center.go_remote_refreshing = false;
+                state.env_center.php_remote_refreshing = false;
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Bun {
+                state.env_center.bun_remote_refreshing = true;
+                state.env_center.node_remote_refreshing = false;
+                state.env_center.python_remote_refreshing = false;
+                state.env_center.java_remote_refreshing = false;
+                state.env_center.go_remote_refreshing = false;
+                state.env_center.php_remote_refreshing = false;
+                state.env_center.deno_remote_refreshing = false;
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1723,6 +1788,20 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         state.env_center.php_remote_latest = rows;
                     }
                 }
+                envr_domain::runtime::RuntimeKind::Deno => {
+                    if state.env_center.deno_remote_latest.is_empty()
+                        || rows.len() > state.env_center.deno_remote_latest.len()
+                    {
+                        state.env_center.deno_remote_latest = rows;
+                    }
+                }
+                envr_domain::runtime::RuntimeKind::Bun => {
+                    if state.env_center.bun_remote_latest.is_empty()
+                        || rows.len() > state.env_center.bun_remote_latest.len()
+                    {
+                        state.env_center.bun_remote_latest = rows;
+                    }
+                }
                 _ => {}
             }
             Task::none()
@@ -1752,6 +1831,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                             state.env_center.php_remote_refreshing = false;
                             state.env_center.php_remote_latest = rows;
                         }
+                        envr_domain::runtime::RuntimeKind::Deno => {
+                            state.env_center.deno_remote_refreshing = false;
+                            state.env_center.deno_remote_latest = rows;
+                        }
+                        envr_domain::runtime::RuntimeKind::Bun => {
+                            state.env_center.bun_remote_refreshing = false;
+                            state.env_center.bun_remote_latest = rows;
+                        }
                         _ => {}
                     }
                 }
@@ -1774,6 +1861,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         envr_domain::runtime::RuntimeKind::Php => {
                             state.env_center.php_remote_refreshing = false;
                         }
+                        envr_domain::runtime::RuntimeKind::Deno => {
+                            state.env_center.deno_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Bun => {
+                            state.env_center.bun_remote_refreshing = false;
+                        }
                         _ => {}
                     }
                 }
@@ -1786,6 +1879,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
+                return Task::none();
+            }
+            if bun_direct_spec_blocked_on_windows(state.env_center.kind, &spec) {
+                state.error = Some(envr_core::i18n::tr_key(
+                    "gui.runtime.bun.win_0x_blocked",
+                    "Windows 不支持 Bun 0.x，请输入 1.x 及以上版本。",
+                    "Bun 0.x is unavailable on Windows. Please enter version 1.x or newer.",
+                ));
+                return Task::none();
+            }
+            if deno_direct_spec_blocked(state.env_center.kind, &spec) {
+                state.error = Some(envr_core::i18n::tr_key(
+                    "gui.runtime.deno.0x_blocked",
+                    "Deno 0.x 不受托管安装支持，请输入 1.x/2.x 版本。",
+                    "Deno 0.x is not supported for managed install. Please enter a 1.x/2.x version.",
+                ));
                 return Task::none();
             }
             state.env_center.busy = true;
@@ -1809,6 +1918,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
+                return Task::none();
+            }
+            if bun_direct_spec_blocked_on_windows(state.env_center.kind, &spec) {
+                state.error = Some(envr_core::i18n::tr_key(
+                    "gui.runtime.bun.win_0x_blocked",
+                    "Windows 不支持 Bun 0.x，请输入 1.x 及以上版本。",
+                    "Bun 0.x is unavailable on Windows. Please enter version 1.x or newer.",
+                ));
+                return Task::none();
+            }
+            if deno_direct_spec_blocked(state.env_center.kind, &spec) {
+                state.error = Some(envr_core::i18n::tr_key(
+                    "gui.runtime.deno.0x_blocked",
+                    "Deno 0.x 不受托管安装支持，请输入 1.x/2.x 版本。",
+                    "Deno 0.x is not supported for managed install. Please enter a 1.x/2.x version.",
+                ));
                 return Task::none();
             }
             state.env_center.busy = true;
@@ -1860,6 +1985,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         }
         EnvCenterMsg::InstallFinished(res) => {
             state.env_center.busy = false;
+            let kind = state.env_center.kind;
             if let Some(id) = state.env_center.op_job_id.take()
                 && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
             {
@@ -1895,7 +2021,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     }
                 }
             }
-            gui_ops::refresh_runtimes(state.env_center.kind)
+            match res {
+                Ok(_) => Task::batch([
+                    gui_ops::sync_shims_for_kind(kind),
+                    gui_ops::refresh_runtimes(kind),
+                ]),
+                Err(_) => gui_ops::refresh_runtimes(kind),
+            }
         }
         EnvCenterMsg::SubmitUse(v) => {
             if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
@@ -2164,6 +2296,65 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 persist_settings_clone_task(st)
             }
         }
+        EnvCenterMsg::SetDenoDownloadSource(src) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.deno.download_source = src;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetDenoPackageSource(mode) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.deno.package_source = mode;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetDenoPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.deno.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Deno),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SetBunPackageSource(mode) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.bun.package_source = mode;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
+        }
+        EnvCenterMsg::SetBunPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.bun.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Bun),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
         EnvCenterMsg::RustRefresh => {
             state.env_center.busy = true;
             state.env_center.remote_error = None;
@@ -2282,6 +2473,22 @@ fn direct_install_spec_ok(spec: &str) -> bool {
         return false;
     }
     true
+}
+
+fn bun_direct_spec_blocked_on_windows(kind: envr_domain::runtime::RuntimeKind, spec: &str) -> bool {
+    if !cfg!(windows) || kind != envr_domain::runtime::RuntimeKind::Bun {
+        return false;
+    }
+    let t = spec.trim().trim_start_matches('v');
+    t.starts_with("0.")
+}
+
+fn deno_direct_spec_blocked(kind: envr_domain::runtime::RuntimeKind, spec: &str) -> bool {
+    if kind != envr_domain::runtime::RuntimeKind::Deno {
+        return false;
+    }
+    let t = spec.trim().trim_start_matches('v');
+    t.starts_with("0.")
 }
 
 fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &str) -> String {

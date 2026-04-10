@@ -25,9 +25,9 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
                     "{} · {}",
                     envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
                     envr_core::i18n::tr_key(
-                        "gui.downloads.install_preparing",
-                        "正在准备下载…",
-                        "Preparing download…",
+                        "gui.downloads.install_working",
+                        "正在安装处理中…",
+                        "Installing…",
                     ),
                 );
             }

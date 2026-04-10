@@ -45,7 +45,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
         RuntimeKind::Php => &[(CoreCommand::Php, "php")],
-        RuntimeKind::Deno => &[],
+        RuntimeKind::Deno => &[(CoreCommand::Deno, "deno")],
         RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
     }
 }

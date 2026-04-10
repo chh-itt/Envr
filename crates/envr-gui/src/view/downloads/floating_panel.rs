@@ -148,7 +148,7 @@ pub fn floating_download_panel(
                         .style(button_style(tokens, ButtonVariant::Ghost)),
                     );
                 }
-                if j.state == JobState::Failed {
+                if j.state == JobState::Failed && !j.url.trim().is_empty() {
                     actions = actions.push(
                         button(text(envr_core::i18n::tr_key(
                             "gui.action.retry",

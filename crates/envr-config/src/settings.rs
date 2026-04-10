@@ -295,6 +295,17 @@ pub enum PhpDownloadSource {
     Official,
 }
 
+/// Deno binary zip source (`dl.deno.land` vs npmmirror binary mirror).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DenoDownloadSource {
+    /// Prefer npmmirror when UI locale suggests China, else official.
+    #[default]
+    Auto,
+    Domestic,
+    Official,
+}
+
 /// Windows PHP build flavor preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -450,6 +461,14 @@ pub const PHP_WINDOWS_RELEASES_JSON_OFFICIAL: &str =
 pub const PHP_WINDOWS_RELEASES_JSON_DOMESTIC: &str =
     "https://downloads.php.net/~windows/releases/releases.json";
 
+/// npmmirror binary mirror for Deno release zips (`deno-{tuple}.zip` under `v{version}/`).
+pub const DENO_NPMIRROR_BINARY_BASE: &str = "https://registry.npmmirror.com/-/binary/deno";
+
+/// Default JSR origin (Deno reads `JSR_URL` in supported versions).
+pub const JSR_REGISTRY_OFFICIAL: &str = "https://jsr.io/";
+/// Domestic JSR: no widely agreed mirror yet; keep official until validated.
+pub const JSR_REGISTRY_DOMESTIC: &str = "https://jsr.io/";
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RuntimeSettings {
     #[serde(default)]
@@ -464,6 +483,8 @@ pub struct RuntimeSettings {
     pub rust: RustRuntimeSettings,
     #[serde(default)]
     pub php: PhpRuntimeSettings,
+    #[serde(default)]
+    pub deno: DenoRuntimeSettings,
     #[serde(default)]
     pub bun: BunRuntimeSettings,
 }
@@ -500,6 +521,28 @@ impl Default for PhpRuntimeSettings {
             download_source: PhpDownloadSource::default(),
             windows_build: PhpWindowsBuildFlavor::default(),
             path_proxy_enabled: defaults::php_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DenoRuntimeSettings {
+    #[serde(default)]
+    pub download_source: DenoDownloadSource,
+    /// Single preset for both `NPM_CONFIG_REGISTRY` and `JSR_URL` (see `deno_package_registry_env`).
+    #[serde(default)]
+    pub package_source: NpmRegistryMode,
+    /// When false, `deno` shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::deno_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for DenoRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            download_source: DenoDownloadSource::default(),
+            package_source: NpmRegistryMode::default(),
+            path_proxy_enabled: defaults::deno_path_proxy_enabled(),
         }
     }
 }
@@ -545,13 +588,29 @@ impl Default for GoRuntimeSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BunRuntimeSettings {
+    /// Single preset for Bun package source env injection.
+    #[serde(default)]
+    pub package_source: NpmRegistryMode,
+    /// When false, bun/bunx shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::bun_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
     /// Optional override for Bun global bin directory (defaults to `bun pm bin -g`).
     ///
     /// This affects shim sync for global Bun executables.
     #[serde(default)]
     pub global_bin_dir: Option<String>,
+}
+
+impl Default for BunRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            package_source: NpmRegistryMode::default(),
+            path_proxy_enabled: defaults::bun_path_proxy_enabled(),
+            global_bin_dir: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -951,6 +1010,108 @@ pub fn npm_registry_url_to_apply(settings: &Settings) -> Option<&'static str> {
     }
 }
 
+fn deno_host_tuple() -> EnvrResult<&'static str> {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    match (os, arch) {
+        ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
+        ("windows", "aarch64") => Ok("aarch64-pc-windows-msvc"),
+        ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
+        ("linux", "aarch64") => Ok("aarch64-unknown-linux-gnu"),
+        ("macos", "x86_64") => Ok("x86_64-apple-darwin"),
+        ("macos", "aarch64") => Ok("aarch64-apple-darwin"),
+        _ => Err(EnvrError::Platform(format!(
+            "unsupported host for deno install: {os}-{arch}"
+        ))),
+    }
+}
+
+/// Resolved Deno release zip URL (official `dl.deno.land` vs npmmirror binary mirror).
+pub fn deno_release_zip_url(settings: &Settings, version: &str) -> EnvrResult<String> {
+    let tuple = deno_host_tuple()?;
+    let prefer_domestic = match settings.runtime.deno.download_source {
+        DenoDownloadSource::Official => false,
+        DenoDownloadSource::Domestic => true,
+        DenoDownloadSource::Auto => prefer_china_mirror_locale(settings),
+    };
+    if prefer_domestic {
+        Ok(format!(
+            "{DENO_NPMIRROR_BINARY_BASE}/v{version}/deno-{tuple}.zip"
+        ))
+    } else {
+        Ok(format!(
+            "https://dl.deno.land/release/v{version}/deno-{tuple}.zip"
+        ))
+    }
+}
+
+/// Official Deno release zip URL (always `dl.deno.land`).
+pub fn deno_official_release_zip_url(version: &str) -> EnvrResult<String> {
+    let tuple = deno_host_tuple()?;
+    Ok(format!(
+        "https://dl.deno.land/release/v{version}/deno-{tuple}.zip"
+    ))
+}
+
+/// `NPM_CONFIG_REGISTRY` and `JSR_URL` for managed Deno child processes. Empty when
+/// [`NpmRegistryMode::Restore`] (do not override user environment).
+pub fn deno_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
+    match settings.runtime.deno.package_source {
+        NpmRegistryMode::Restore => vec![],
+        NpmRegistryMode::Official => vec![
+            (
+                "NPM_CONFIG_REGISTRY".into(),
+                NPM_REGISTRY_OFFICIAL.to_string(),
+            ),
+            ("JSR_URL".into(), JSR_REGISTRY_OFFICIAL.to_string()),
+        ],
+        NpmRegistryMode::Domestic => vec![
+            (
+                "NPM_CONFIG_REGISTRY".into(),
+                NPM_REGISTRY_DOMESTIC.to_string(),
+            ),
+            ("JSR_URL".into(), JSR_REGISTRY_DOMESTIC.to_string()),
+        ],
+        NpmRegistryMode::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                vec![
+                    (
+                        "NPM_CONFIG_REGISTRY".into(),
+                        NPM_REGISTRY_DOMESTIC.to_string(),
+                    ),
+                    ("JSR_URL".into(), JSR_REGISTRY_DOMESTIC.to_string()),
+                ]
+            } else {
+                vec![
+                    (
+                        "NPM_CONFIG_REGISTRY".into(),
+                        NPM_REGISTRY_OFFICIAL.to_string(),
+                    ),
+                    ("JSR_URL".into(), JSR_REGISTRY_OFFICIAL.to_string()),
+                ]
+            }
+        }
+    }
+}
+
+/// `NPM_CONFIG_REGISTRY` for managed Bun child processes. Empty when
+/// [`NpmRegistryMode::Restore`] (do not override user environment).
+pub fn bun_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
+    let npm = match settings.runtime.bun.package_source {
+        NpmRegistryMode::Restore => return vec![],
+        NpmRegistryMode::Official => NPM_REGISTRY_OFFICIAL,
+        NpmRegistryMode::Domestic => NPM_REGISTRY_DOMESTIC,
+        NpmRegistryMode::Auto => {
+            if prefer_china_mirror_locale(settings) {
+                NPM_REGISTRY_DOMESTIC
+            } else {
+                NPM_REGISTRY_OFFICIAL
+            }
+        }
+    };
+    vec![("NPM_CONFIG_REGISTRY".into(), npm.to_string())]
+}
+
 pub fn python_get_pip_url(settings: &Settings) -> &'static str {
     match settings.runtime.python.download_source {
         PythonDownloadSource::Official => GET_PIP_URL_OFFICIAL,
@@ -1085,6 +1246,28 @@ pub fn php_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`DenoRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn deno_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.deno.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
+/// Read [`BunRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn bun_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.bun.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
 pub fn php_windows_build_want_ts_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1194,6 +1377,14 @@ mod defaults {
     pub fn php_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn deno_path_proxy_enabled() -> bool {
+        true
+    }
+
+    pub fn bun_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1263,9 +1454,12 @@ mod tests {
                 },
                 rust: RustRuntimeSettings::default(),
                 bun: BunRuntimeSettings {
+                    package_source: NpmRegistryMode::default(),
+                    path_proxy_enabled: true,
                     global_bin_dir: Some("/tmp/.bun/bin".to_string()),
                 },
                 php: PhpRuntimeSettings::default(),
+                deno: DenoRuntimeSettings::default(),
             },
         };
 

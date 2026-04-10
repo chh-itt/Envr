@@ -157,6 +157,10 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .then_some(&state.settings.cache.snapshot().runtime.rust),
                 matches!(state.env_center.kind, RuntimeKind::Php)
                     .then_some(&state.settings.cache.snapshot().runtime.php),
+                matches!(state.env_center.kind, RuntimeKind::Deno)
+                    .then_some(&state.settings.cache.snapshot().runtime.deno),
+                matches!(state.env_center.kind, RuntimeKind::Bun)
+                    .then_some(&state.settings.cache.snapshot().runtime.bun),
                 tokens,
             ));
         }

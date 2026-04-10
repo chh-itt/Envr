@@ -1,13 +1,20 @@
 use crate::index::{
-    DEFAULT_DENO_TAGS_API, Tag, blocking_http_client, fetch_tags, list_remote_versions, parse_tags,
+    DEFAULT_DENO_TAGS_API, Tag, blocking_http_client, fetch_all_tags, list_remote_versions,
     resolve_deno_version,
 };
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_config::settings::{
+    Settings, deno_official_release_zip_url, deno_release_zip_url, settings_path_from_platform,
+};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::{LinkType, ensure_link};
+use envr_platform::paths::current_platform_paths;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Debug, Clone)]
 pub struct DenoPaths {
@@ -76,15 +83,30 @@ pub fn read_current(paths: &DenoPaths) -> EnvrResult<Option<RuntimeVersion>> {
     if !cur.exists() {
         return Ok(None);
     }
-    let target = match fs::read_link(&cur) {
-        Ok(t) => t,
-        Err(_) => return Ok(None),
-    };
-    let resolved = if target.is_relative() {
-        cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+    // Prefer symlink/junction, but on some Windows environments we may fall back to a pointer file:
+    // `current` contains the absolute target dir.
+    let resolved = if cur.is_file() {
+        let Ok(s) = fs::read_to_string(&cur) else {
+            return Ok(None);
+        };
+        let t = s.trim();
+        if t.is_empty() {
+            return Ok(None);
+        }
+        PathBuf::from(t)
     } else {
-        target
+        let target = match fs::read_link(&cur) {
+            Ok(t) => t,
+            Err(_) => return Ok(None),
+        };
+        if target.is_relative() {
+            cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+        } else {
+            target
+        }
     };
+
+    let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
     let name = resolved
         .file_name()
         .and_then(|s| s.to_str())
@@ -109,28 +131,34 @@ fn remove_path_if_exists(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
-fn dl_url_for(version: &str) -> EnvrResult<String> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-    let tuple = match (os, arch) {
-        ("windows", "x86_64") => "x86_64-pc-windows-msvc",
-        ("windows", "aarch64") => "aarch64-pc-windows-msvc",
-        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
-        ("linux", "aarch64") => "aarch64-unknown-linux-gnu",
-        ("macos", "x86_64") => "x86_64-apple-darwin",
-        ("macos", "aarch64") => "aarch64-apple-darwin",
-        _ => {
-            return Err(EnvrError::Platform(format!(
-                "unsupported host for deno install: {os}-{arch}"
-            )));
+fn exact_semver_spec(spec: &str) -> Option<String> {
+    let s = spec.trim().trim_start_matches('v');
+    let mut it = s.split('.');
+    let a = it.next()?;
+    let b = it.next()?;
+    let c = it.next()?;
+    if it.next().is_some() {
+        return None;
+    }
+    if [a, b, c].iter().all(|p| !p.is_empty() && p.chars().all(|ch| ch.is_ascii_digit())) {
+        if a.parse::<u64>().ok()? >= 1 {
+            return Some(format!("{a}.{b}.{c}"));
         }
-    };
-    Ok(format!(
-        "https://dl.deno.land/release/v{version}/deno-{tuple}.zip"
-    ))
+    }
+    None
 }
 
-fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) -> EnvrResult<()> {
+fn download_to_path(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+        return Err(EnvrError::Download("download cancelled".to_string()));
+    }
     let mut response = client
         .get(url)
         .send()
@@ -145,11 +173,67 @@ fn download_to_path(client: &reqwest::blocking::Client, url: &str, path: &Path) 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
+    if let Some(t) = progress_total {
+        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
+    }
+    if let Some(d) = progress_downloaded {
+        d.store(0, Ordering::Relaxed);
+    }
     let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    response
-        .copy_to(&mut f)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
+        let n = response
+            .read(&mut buf)
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+        if let Some(d) = progress_downloaded {
+            d.fetch_add(n as u64, Ordering::Relaxed);
+        }
+    }
     Ok(())
+}
+
+fn download_to_path_with_fallback(
+    client: &reqwest::blocking::Client,
+    primary_url: &str,
+    fallback_url: Option<&str>,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    let first = download_to_path(
+        client,
+        primary_url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    );
+    let Some(fallback) = fallback_url.filter(|u| *u != primary_url) else {
+        return first;
+    };
+    first.or_else(|e| {
+        download_to_path(
+            client,
+            fallback,
+            path,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )
+        .map_err(|e2| {
+            EnvrError::Download(format!(
+                "{e} (retried official URL {fallback}: {e2})"
+            ))
+        })
+    })
 }
 
 fn promote_archive(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
@@ -183,8 +267,7 @@ impl DenoManager {
     }
 
     fn load_tags(&self) -> EnvrResult<Vec<Tag>> {
-        let body = fetch_tags(&self.client, &self.tags_api)?;
-        parse_tags(&body)
+        fetch_all_tags(&self.client, &self.tags_api)
     }
 
     pub fn list_remote(
@@ -195,17 +278,51 @@ impl DenoManager {
         list_remote_versions(&tags, filter)
     }
 
-    pub fn install_from_spec(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
+    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        if let Some(v) = exact_semver_spec(&request.spec.0) {
+            return self.install_resolved_version(
+                &RuntimeVersion(v),
+                request.progress_downloaded.as_ref(),
+                request.progress_total.as_ref(),
+                request.cancel.as_ref(),
+            );
+        }
         let tags = self.load_tags()?;
-        let v = resolve_deno_version(&tags, &spec.0)?;
-        self.install_resolved_version(&RuntimeVersion(v))
+        let v = resolve_deno_version(&tags, &request.spec.0)?;
+        self.install_resolved_version(
+            &RuntimeVersion(v),
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
-    pub fn install_resolved_version(&self, version: &RuntimeVersion) -> EnvrResult<RuntimeVersion> {
-        let url = dl_url_for(&version.0)?;
+    pub fn install_resolved_version(
+        &self,
+        version: &RuntimeVersion,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion> {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
+        let platform = current_platform_paths()?;
+        let path = settings_path_from_platform(&platform);
+        let settings = Settings::load_or_default_from(&path)?;
+        let url = deno_release_zip_url(&settings, &version.0)?;
+        let official_url = deno_official_release_zip_url(&version.0)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join("deno.zip");
-        download_to_path(&self.client, &url, &cache_file)?;
+        download_to_path_with_fallback(
+            &self.client,
+            &url,
+            Some(&official_url),
+            &cache_file,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )?;
 
         // Optional checksum: dl.deno.land has `.sha256sum` files, but we keep install robust without it.
         let sha_url = format!("{url}.sha256sum");
@@ -240,7 +357,23 @@ impl DenoManager {
                 version.0
             )));
         }
-        ensure_link(LinkType::Soft, &dir, self.paths.current_link())?;
+        let target = fs::canonicalize(&dir).unwrap_or(dir.clone());
+        let link = self.paths.current_link();
+        if let Err(_e) = ensure_link(LinkType::Soft, &target, &link) {
+            // Fall back to pointer file on Windows when symlink/junction creation is blocked.
+            #[cfg(windows)]
+            {
+                if let Some(parent) = link.parent() {
+                    fs::create_dir_all(parent).map_err(EnvrError::from)?;
+                }
+                fs::write(&link, target.display().to_string()).map_err(EnvrError::from)?;
+                return Ok(());
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(_e);
+            }
+        }
         Ok(())
     }
 

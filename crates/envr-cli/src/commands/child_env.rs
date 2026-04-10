@@ -1,7 +1,9 @@
 //! Build merged process environment for `exec`, `run`, and `env` (PATH, JAVA_HOME, project `env`).
 
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
-use envr_config::settings::{Settings, settings_path_from_platform};
+use envr_config::settings::{
+    Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
+};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
 use envr_shim_core::{ShimContext, pick_version_home, resolve_runtime_home_for_lang};
@@ -94,6 +96,22 @@ fn maybe_inject_go_settings(env: &mut HashMap<String, String>) -> EnvrResult<()>
             env.insert("GONOSUMDB".into(), v.to_string());
             env.insert("GONOPROXY".into(), v.to_string());
         }
+    }
+    Ok(())
+}
+
+fn maybe_inject_deno_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
+    let st = load_settings()?;
+    for (k, v) in deno_package_registry_env(&st) {
+        env.insert(k, v);
+    }
+    Ok(())
+}
+
+fn maybe_inject_bun_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
+    let st = load_settings()?;
+    for (k, v) in bun_package_registry_env(&st) {
+        env.insert(k, v);
     }
     Ok(())
 }
@@ -312,6 +330,12 @@ pub fn collect_exec_env(
         env.insert("GOROOT".into(), home.display().to_string());
         maybe_inject_go_settings(&mut env)?;
     }
+    if lang == "deno" {
+        maybe_inject_deno_settings(&mut env)?;
+    }
+    if lang == "bun" {
+        maybe_inject_bun_settings(&mut env)?;
+    }
     Ok(env)
 }
 
@@ -328,6 +352,8 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
     let mut path_entries: Vec<PathBuf> = Vec::new();
     let mut java_home: Option<PathBuf> = None;
     let mut go_home: Option<PathBuf> = None;
+    let mut deno_on_path = false;
+    let mut bun_on_path = false;
     for lang in ["node", "python", "java", "go", "rust", "php", "deno", "bun"] {
         if lang == "rust" {
             path_entries.extend(resolve_rust_bins(ctx));
@@ -349,6 +375,7 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
             };
             let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
             path_entries.extend(runtime_bin_dirs(&home, "deno"));
+            deno_on_path = true;
             continue;
         }
         if lang == "bun" {
@@ -358,6 +385,7 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
             };
             let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
             path_entries.extend(runtime_bin_dirs(&home, "bun"));
+            bun_on_path = true;
             continue;
         }
         let home = if lang == "go" {
@@ -390,5 +418,11 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
         env.insert("GOROOT".into(), gh.display().to_string());
     }
     maybe_inject_go_settings(&mut env)?;
+    if deno_on_path {
+        maybe_inject_deno_settings(&mut env)?;
+    }
+    if bun_on_path {
+        maybe_inject_bun_settings(&mut env)?;
+    }
     Ok(env)
 }
