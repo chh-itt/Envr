@@ -48,6 +48,18 @@ pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
     RuntimeService::with_runtime_root(root)
 }
 
+/// Run `f` with a resolved [`RuntimeService`], or print an error and return its exit code.
+pub fn with_runtime_service<F>(g: &GlobalArgs, f: F) -> i32
+where
+    F: FnOnce(&RuntimeService) -> i32,
+{
+    let service = match runtime_service() {
+        Ok(s) => s,
+        Err(e) => return print_envr_error(g, e),
+    };
+    f(&service)
+}
+
 /// Data directory for envr runtimes (`ENVR_RUNTIME_ROOT`, then `settings.toml`, then platform default).
 pub(crate) fn effective_runtime_root() -> Result<std::path::PathBuf, EnvrError> {
     resolve_runtime_root()

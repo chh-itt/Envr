@@ -1,6 +1,6 @@
 use crate::cli::{GlobalArgs, OutputFormat};
 use crate::commands::common::{self, kind_label};
-use crate::output::{self, fmt_template, print_error_text, write_envelope};
+use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind};
@@ -65,16 +65,12 @@ pub fn run(
                     ("version", &version.0),
                 ],
             );
-            match g.output_format.unwrap_or(OutputFormat::Text) {
-                OutputFormat::Json => {
-                    write_envelope(false, Some("validation"), &refuse_msg, data, &[]);
-                }
-                OutputFormat::Text => {
-                    print_dry_run_text(g, &paths, external.as_deref());
-                    print_error_text("validation", &refuse_msg);
-                }
+            if matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+                && !g.quiet
+            {
+                print_dry_run_text(g, &paths, external.as_deref());
             }
-            return 1;
+            return output::emit_failure_envelope(g, "validation", &refuse_msg, data, &[], 1);
         }
 
         return output::emit_ok(g, &msg, data, || {
@@ -132,8 +128,14 @@ pub fn run(
         let mut line = String::new();
         if io::stdin().read_line(&mut line).is_err() {
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
-            print_error_text("aborted", &aborted);
-            return 1;
+            return output::emit_failure_envelope(
+                g,
+                "aborted",
+                &aborted,
+                json!(null),
+                &[],
+                1,
+            );
         }
         let ok = matches!(
             line.trim().to_ascii_lowercase().as_str(),
@@ -141,8 +143,14 @@ pub fn run(
         );
         if !ok {
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
-            print_error_text("aborted", &aborted);
-            return 1;
+            return output::emit_failure_envelope(
+                g,
+                "aborted",
+                &aborted,
+                json!(null),
+                &[],
+                1,
+            );
         }
     }
 

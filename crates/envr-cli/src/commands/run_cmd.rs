@@ -102,13 +102,182 @@ fn resolve_run_command(
     command: &str,
     args: &[String],
     cfg: Option<&ProjectConfig>,
-) -> (String, Vec<String>) {
+) -> (String, Vec<String>, bool) {
     if let Some(cfg) = cfg {
         if let Some(script) = cfg.scripts.get(command) {
-            return script_shell_invocation(script, args);
+            let (exe, a) = script_shell_invocation(script, args);
+            return (exe, a, true);
         }
     }
-    (command.to_string(), args.to_vec())
+    (command.to_string(), args.to_vec(), false)
+}
+
+fn normalized_run_token(command: &str) -> String {
+    let mut t = command.trim().to_ascii_lowercase();
+    #[cfg(windows)]
+    if t.ends_with(".exe") {
+        t.truncate(t.len().saturating_sub(4));
+    }
+    t
+}
+
+/// True when the first token looks like a `[scripts]` task name (single segment, no path).
+fn looks_like_script_task_token(command: &str) -> bool {
+    let s = command.trim();
+    if s.is_empty() || s.len() > 64 {
+        return false;
+    }
+    if s.contains('/') || s.contains('\\') {
+        return false;
+    }
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+const COMMON_RUN_FIRST_TOKEN: &[&str] = &[
+    "ansible",
+    "apt",
+    "awk",
+    "bash",
+    "brew",
+    "bun",
+    "bundle",
+    "c++",
+    "cargo",
+    "cc",
+    "clang",
+    "clang++",
+    "clippy-driver",
+    "cmake",
+    "cmd",
+    "composer",
+    "corepack",
+    "cp",
+    "curl",
+    "deno",
+    "docker",
+    "dotnet",
+    "echo",
+    "elixir",
+    "emacs",
+    "env",
+    "erl",
+    "false",
+    "fish",
+    "g++",
+    "gcc",
+    "gem",
+    "git",
+    "go",
+    "gofmt",
+    "gradle",
+    "gradlew",
+    "helm",
+    "hg",
+    "irb",
+    "jar",
+    "java",
+    "javac",
+    "kubectl",
+    "ls",
+    "make",
+    "meson",
+    "mix",
+    "mvn",
+    "mvnw",
+    "mv",
+    "nano",
+    "ninja",
+    "node",
+    "npm",
+    "npx",
+    "nu",
+    "openssl",
+    "perl",
+    "php",
+    "pip",
+    "pip3",
+    "pnpm",
+    "podman",
+    "powershell",
+    "pwsh",
+    "py",
+    "python",
+    "python3",
+    "rbenv",
+    "rebar3",
+    "rm",
+    "ruby",
+    "rustc",
+    "rustfmt",
+    "rustup",
+    "scp",
+    "sed",
+    "sh",
+    "ssh",
+    "svn",
+    "tar",
+    "terraform",
+    "test",
+    "true",
+    "vim",
+    "wasmtime",
+    "wasmer",
+    "wget",
+    "yarn",
+    "yarnpkg",
+    "yum",
+    "zsh",
+];
+
+fn is_common_toolchain_binary(command: &str) -> bool {
+    let n = normalized_run_token(command);
+    COMMON_RUN_FIRST_TOKEN.iter().any(|&x| x == n)
+}
+
+fn maybe_emit_run_script_miss_hint(
+    g: &GlobalArgs,
+    command: &str,
+    cfg: Option<&ProjectConfig>,
+    ran_as_script: bool,
+) {
+    if ran_as_script || g.quiet || output::wants_porcelain(g) {
+        return;
+    }
+    if !matches!(
+        g.output_format.unwrap_or(OutputFormat::Text),
+        OutputFormat::Text
+    ) {
+        return;
+    }
+    let Some(cfg) = cfg else {
+        return;
+    };
+    if cfg.scripts.is_empty() {
+        return;
+    }
+    if !looks_like_script_task_token(command) {
+        return;
+    }
+    if is_common_toolchain_binary(command) {
+        return;
+    }
+    let msg = fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.run.script_miss_hint",
+            "本项目定义了 `[scripts]`，但 `{cmd}` 不是脚本名。若要直接调用语言工具链，可尝试：`envr exec --lang <种类> -- {cmd} ...`",
+            "This project defines `[scripts]`, but `{cmd}` is not a script name. To run a language toolchain directly, try: `envr exec --lang <kind> -- {cmd} ...`",
+        ),
+        &[("cmd", command)],
+    );
+    eprintln!("envr: {msg}");
 }
 
 #[cfg(unix)]
@@ -338,10 +507,16 @@ pub fn run(
         Ok(v) => v,
         Err(e) => return common::print_envr_error(g, enrich_project_config_error(e)),
     };
-    let (exe, exe_args) = resolve_run_command(
+    let (exe, exe_args, ran_as_script) = resolve_run_command(
         &command,
         &args,
         proj_loaded.as_ref().map(|(c, _)| c),
+    );
+    maybe_emit_run_script_miss_hint(
+        g,
+        &command,
+        proj_loaded.as_ref().map(|(c, _)| c),
+        ran_as_script,
     );
 
     if verbose && !g.quiet && text_out {
@@ -413,14 +588,6 @@ pub fn run(
             ),
             &[("exit", &exit.to_string())],
         );
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                output::write_envelope(false, Some("child_exit"), &msg, data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("child_exit", &msg);
-            }
-        }
-        exit
+        output::emit_failure_envelope(g, "child_exit", &msg, data, &[], exit)
     }
 }

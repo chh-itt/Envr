@@ -6,10 +6,25 @@ use std::fs;
 use std::path::Path;
 use std::process::Output;
 
+/// Keep PATH minimal so `envr run` / `template` do not pick up a user `rustup` while probing an
+/// empty envr rust dir (slow in parallel integration tests).
+fn narrow_path_for_envr_process() -> String {
+    #[cfg(windows)]
+    {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
+        format!("{root}\\System32;{root}")
+    }
+    #[cfg(not(windows))]
+    {
+        "/usr/bin:/bin".to_string()
+    }
+}
+
 fn run_envr(args: &[&str], runtime_root: &Path, cwd: &Path) -> Output {
     Command::cargo_bin("envr")
         .expect("envr binary")
         .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .env("PATH", narrow_path_for_envr_process())
         .current_dir(cwd)
         .args(args)
         .output()

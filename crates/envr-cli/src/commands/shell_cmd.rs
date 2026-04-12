@@ -1,6 +1,6 @@
 //! Interactive subshell with the same merged environment as `envr env` / `collect_run_env`.
 
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::commands::child_env;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
@@ -62,15 +62,7 @@ pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>, shell: Option
             "cwd": ctx.working_dir.to_string_lossy(),
             "exit_code": code,
         });
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                output::write_envelope(false, Some("shell_exit"), &msg, fail_data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("shell_exit", &msg);
-            }
-        }
-        code
+        output::emit_failure_envelope(g, "shell_exit", &msg, fail_data, &[], code)
     }
 }
 

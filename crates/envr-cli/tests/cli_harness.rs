@@ -183,3 +183,95 @@ fn why_node_spec_overrides_project_pin() {
         "expected --spec to resolve 20.1.0 tree:\n{stdout}"
     );
 }
+
+#[test]
+fn run_emits_script_miss_hint_when_scripts_exist_and_token_is_not_script() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    fs::write(
+        project.join(".envr.toml"),
+        r#"
+[scripts]
+build = "echo ok"
+"#,
+    )
+    .expect("envr.toml");
+
+    let out = run_envr(
+        &["run", "envr_probe_missing_script"],
+        &runtime_root,
+        &project,
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("exec") && stderr.contains("--lang"),
+        "expected script-miss hint on stderr; got:\n{stderr}"
+    );
+}
+
+#[test]
+fn run_does_not_emit_script_miss_hint_for_common_binaries_when_scripts_exist() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    fs::write(
+        project.join(".envr.toml"),
+        r#"
+[scripts]
+build = "echo ok"
+"#,
+    )
+    .expect("envr.toml");
+
+    let out = run_envr(&["run", "node", "--version"], &runtime_root, &project);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("not a script name"),
+        "did not expect script-miss hint for `node`; stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn use_prints_global_current_note_after_success() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let cwd = tmp.path().join("cwd");
+    fs::create_dir_all(&cwd).expect("cwd");
+    write_node_layout(&runtime_root, "20.10.0");
+
+    let out = run_envr(&["use", "node", "20.10.0"], &runtime_root, &cwd);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("ENVR_RUNTIME_ROOT")
+            && (stdout.contains("global") || stdout.contains("全局")),
+        "expected global current note on stdout; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn status_without_project_prints_next_step_hints() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let cwd = tmp.path().join("cwd");
+    fs::create_dir_all(&cwd).expect("cwd");
+
+    let out = run_envr(&["status"], &runtime_root, &cwd);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("envr init") && stdout.contains("envr doctor"),
+        "expected onboarding hints when no project; got:\n{stdout}"
+    );
+}

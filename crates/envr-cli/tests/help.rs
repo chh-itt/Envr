@@ -43,6 +43,7 @@ fn help_is_readable_and_lists_l1_commands() {
         "status",
         "project",
         "completion",
+        "help",
         "resolve",
         "why",
         "config",
@@ -89,6 +90,21 @@ fn completion_bash_writes_script() {
     assert!(
         out.contains("envr"),
         "bash completion should reference envr:\n{out}"
+    );
+    assert!(
+        out.contains("help shortcuts"),
+        "completion script should point at argv shorthands:\n{out}"
+    );
+}
+
+#[test]
+fn help_shortcuts_lists_preprocess_tokens() {
+    let mut cmd = Command::cargo_bin("envr").expect("envr binary");
+    let assert = cmd.args(["help", "shortcuts"]).assert().success();
+    let out = String::from_utf8_lossy(&assert.get_output().stdout);
+    assert!(
+        out.contains("add") && out.contains("project add"),
+        "expected shorthand table:\n{out}"
     );
 }
 

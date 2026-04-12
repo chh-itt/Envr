@@ -52,18 +52,10 @@ pub fn run(
         Err(e) => return common::print_envr_error(g, e),
     };
 
-    let mut vars = match child_env::collect_run_env(&ctx, false) {
+    let mut vars = match child_env::collect_run_env_for_template(&ctx) {
         Ok(m) => m,
         Err(e) => return common::print_envr_error(g, e),
     };
-    match child_env::template_extension_vars(&ctx) {
-        Ok(ext) => {
-            for (k, v) in ext {
-                vars.insert(k, v);
-            }
-        }
-        Err(e) => return common::print_envr_error(g, e),
-    }
     if let Err(e) = env_overrides::apply_env_overrides(&mut vars, &env_files, &env_pairs) {
         return common::print_envr_error(g, e);
     }

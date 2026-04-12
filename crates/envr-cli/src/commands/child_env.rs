@@ -178,13 +178,24 @@ pub fn collect_exec_env(
     }
 }
 
-/// Multi-runtime PATH (node, python, java, go) plus one `JAVA_HOME` when Java resolves.
-///
-/// When `install_if_missing` is true, resolution failures for languages pinned in `.envr.toml`
-/// are propagated instead of silently omitting that runtime from `PATH`.
-pub fn collect_run_env(
+fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
+    match lang {
+        "node" => Some("ENVR_NODE_VERSION"),
+        "python" => Some("ENVR_PYTHON_VERSION"),
+        "java" => Some("ENVR_JAVA_VERSION"),
+        "go" => Some("ENVR_GO_VERSION"),
+        "php" => Some("ENVR_PHP_VERSION"),
+        "deno" => Some("ENVR_DENO_VERSION"),
+        "bun" => Some("ENVR_BUN_VERSION"),
+        _ => None,
+    }
+}
+
+fn collect_run_env_impl(
     ctx: &ShimContext,
     install_if_missing: bool,
+    collect_template_keys: bool,
+    template_keys: &mut HashMap<String, String>,
 ) -> EnvrResult<HashMap<String, String>> {
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
@@ -207,8 +218,18 @@ pub fn collect_run_env(
         match piece {
             RunStackLang::RustBins(bins) => {
                 path_entries.extend(bins);
+                if collect_template_keys {
+                    let tc = rustup_active_toolchain(ctx).unwrap_or_else(|| "default".into());
+                    template_keys.insert("ENVR_RUST_VERSION".into(), tc);
+                }
             }
             RunStackLang::Runtime { lang, home } => {
+                if collect_template_keys {
+                    if let Some(key) = template_version_key_for_lang(&lang) {
+                        let ver = version_label_from_runtime_home(&home);
+                        template_keys.insert(key.to_string(), ver);
+                    }
+                }
                 if lang == "java" {
                     java_home = Some(home.clone());
                 }
@@ -239,34 +260,26 @@ pub fn collect_run_env(
     Ok(env)
 }
 
-/// Extra `ENVR_*_VERSION` keys for `envr template` (same resolution rules as `run --verbose`).
-pub fn template_extension_vars(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>> {
-    let mut m = HashMap::new();
-    for line in collect_run_verbose_lines(ctx, false)? {
-        let Some((left, _)) = line.split_once(" @ ") else {
-            continue;
-        };
-        let (lang, ver) = match left.split_once(' ') {
-            Some((a, b)) => (a, b.trim()),
-            None => continue,
-        };
-        if ver.is_empty() {
-            continue;
-        }
-        let key = match lang {
-            "node" => "ENVR_NODE_VERSION",
-            "python" => "ENVR_PYTHON_VERSION",
-            "java" => "ENVR_JAVA_VERSION",
-            "go" => "ENVR_GO_VERSION",
-            "rust" => "ENVR_RUST_VERSION",
-            "php" => "ENVR_PHP_VERSION",
-            "deno" => "ENVR_DENO_VERSION",
-            "bun" => "ENVR_BUN_VERSION",
-            _ => continue,
-        };
-        m.insert(key.to_string(), ver.to_string());
+/// Multi-runtime PATH (node, python, java, go) plus one `JAVA_HOME` when Java resolves.
+///
+/// When `install_if_missing` is true, resolution failures for languages pinned in `.envr.toml`
+/// are propagated instead of silently omitting that runtime from `PATH`.
+pub fn collect_run_env(
+    ctx: &ShimContext,
+    install_if_missing: bool,
+) -> EnvrResult<HashMap<String, String>> {
+    let mut discard = HashMap::new();
+    collect_run_env_impl(ctx, install_if_missing, false, &mut discard)
+}
+
+/// Same as [`collect_run_env`] plus `ENVR_*_VERSION` keys (same semantics as `run --verbose` lines).
+pub fn collect_run_env_for_template(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>> {
+    let mut tmpl = HashMap::new();
+    let mut env = collect_run_env_impl(ctx, false, true, &mut tmpl)?;
+    for (k, v) in tmpl {
+        env.insert(k, v);
     }
-    Ok(m)
+    Ok(env)
 }
 
 /// Variable names that `envr env` / `collect_run_env` may change for the given working directory,

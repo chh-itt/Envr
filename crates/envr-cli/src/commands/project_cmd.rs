@@ -104,23 +104,19 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
             "以下 pin 尚未安装；使用 `envr project sync --install` 安装。",
             "Pinned runtimes are missing; run `envr project sync --install` to install them.",
         );
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                let rows: Vec<_> = pending
-                    .iter()
-                    .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
-                    .collect();
-                let data = json!({ "missing": rows, "installed": [] });
-                output::write_envelope(false, Some("project_sync_pending"), &msg, data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("project_sync_pending", &msg);
-                for (k, v) in &pending {
-                    eprintln!("envr:   - {k} {v}");
-                }
+        let rows: Vec<_> = pending
+            .iter()
+            .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
+            .collect();
+        let data = json!({ "missing": rows, "installed": [] });
+        let code = output::emit_failure_envelope(g, "project_sync_pending", &msg, data, &[], 1);
+        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+        {
+            for (k, v) in &pending {
+                eprintln!("envr:   - {k} {v}");
             }
         }
-        return 1;
+        return code;
     }
 
     let mut installed = Vec::new();
@@ -285,23 +281,19 @@ fn validate(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, check_remot
             "项目校验失败",
             "project validation failed",
         );
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                let data = json!({
-                    "config_dir": loc.dir.to_string_lossy(),
-                    "issues": issues,
-                    "remote_warnings": remote_warnings,
-                });
-                output::write_envelope(false, Some("project_validate_failed"), &msg, data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("project_validate_failed", &msg);
-                for p in &issues {
-                    eprintln!("envr:   - {p}");
-                }
+        let data = json!({
+            "config_dir": loc.dir.to_string_lossy(),
+            "issues": issues,
+            "remote_warnings": remote_warnings,
+        });
+        let code = output::emit_failure_envelope(g, "project_validate_failed", &msg, data, &[], 1);
+        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+        {
+            for p in &issues {
+                eprintln!("envr:   - {p}");
             }
         }
-        return 1;
+        return code;
     }
 
     let data = json!({

@@ -448,14 +448,6 @@ pub fn run(
             ),
             &[("exit", &exit.to_string())],
         );
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                output::write_envelope(false, Some("child_exit"), &msg, data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("child_exit", &msg);
-            }
-        }
-        exit
+        output::emit_failure_envelope(g, "child_exit", &msg, data, &[], exit)
     }
 }

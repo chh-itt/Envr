@@ -145,6 +145,9 @@ fn doctor_json_contract() {
         "shims_dir_writable: {:?}",
         d.get("shims_dir_writable")
     );
+    let oc = d["onboarding_checklist"].as_array().expect("onboarding_checklist");
+    assert_eq!(oc.len(), 4, "onboarding_checklist: {oc:?}");
+    assert!(oc[0].is_string());
 }
 
 #[test]

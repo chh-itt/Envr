@@ -1,6 +1,6 @@
 //! `envr diagnostics export` — zip bundle for bug reports (doctor JSON, system/env summary, recent logs).
 
-use crate::cli::{DiagnosticsCmd, GlobalArgs, OutputFormat};
+use crate::cli::{DiagnosticsCmd, GlobalArgs};
 use crate::commands::common;
 use crate::commands::doctor::{self, DoctorReport};
 use crate::output;
@@ -91,40 +91,28 @@ fn emit_export_ok(g: &GlobalArgs, zip_path: &Path) -> i32 {
 
 fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
     let path_str = zip_path.display().to_string();
-    match g.output_format.unwrap_or(OutputFormat::Text) {
-        OutputFormat::Json => {
-            let msg = output::fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.diagnostics.export_failed",
-                    "导出诊断失败：{detail}",
-                    "diagnostics export failed: {detail}",
-                ),
-                &[("detail", &err.to_string())],
-            );
-            output::write_envelope(
-                false,
-                Some("diagnostics_export_failed"),
-                &msg,
-                json!({ "path": path_str }),
-                &[err.to_string()],
-            );
-        }
-        OutputFormat::Text => {
-            let line = output::fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.diagnostics.write_failed",
-                    "写入 {path} 失败：{detail}",
-                    "failed to write {path}: {detail}",
-                ),
-                &[
-                    ("path", &zip_path.display().to_string()),
-                    ("detail", &err.to_string()),
-                ],
-            );
-            output::print_error_text("diagnostics_export_failed", &line);
-        }
-    }
-    output::exit_code_for_error(&err)
+    let msg = output::fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.diagnostics.write_failed",
+            "写入 {path} 失败：{detail}",
+            "failed to write {path}: {detail}",
+        ),
+        &[
+            ("path", &zip_path.display().to_string()),
+            ("detail", &err.to_string()),
+        ],
+    );
+    let data = json!({ "path": path_str });
+    let diags = vec![err.to_string()];
+    let code = output::exit_code_for_error(&err);
+    output::emit_failure_envelope(
+        g,
+        "diagnostics_export_failed",
+        &msg,
+        data,
+        &diags,
+        code,
+    )
 }
 
 fn build_system_txt() -> String {

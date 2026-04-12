@@ -145,6 +145,7 @@ impl DoctorReport {
             "warnings": self.warnings,
             "notes": self.notes,
             "recommendations": rec,
+            "onboarding_checklist": onboarding_checklist_lines(),
             "path_shadowing": path_shadowing,
             "path_conflicts": path_conflicts,
             "path_analysis": path_analysis,
@@ -152,6 +153,31 @@ impl DoctorReport {
             "shims_dir_writable": self.shims_dir_writable,
         })
     }
+}
+
+fn onboarding_checklist_lines() -> Vec<String> {
+    vec![
+        envr_core::i18n::tr_key(
+            "cli.doctor.onboarding.1",
+            "在新目录中运行 `envr doctor`，确认运行时根目录、shims 与 PATH。",
+            "Run `envr doctor` in a fresh checkout to verify the runtime root, shims, and PATH.",
+        ),
+        envr_core::i18n::tr_key(
+            "cli.doctor.onboarding.2",
+            "使用 `envr init` 或手写 `.envr.toml`，并用 `envr project sync` / `envr install` 对齐固定版本。",
+            "Add a project config with `envr init` or edit `.envr.toml`, then align installs via `envr project sync` / `envr install`.",
+        ),
+        envr_core::i18n::tr_key(
+            "cli.doctor.onboarding.3",
+            "用 `envr use <种类> <版本>` 设置全局默认（`current`），需要时执行 `envr shim sync`。",
+            "Set global defaults with `envr use <kind> <version>` (`current`); run `envr shim sync` when integrating shims.",
+        ),
+        envr_core::i18n::tr_key(
+            "cli.doctor.onboarding.4",
+            "用 `envr status` 查看当前目录解析到的运行时来源（项目 / 全局 / 系统 PATH）。",
+            "Use `envr status` to see which runtimes resolve for the current directory (project pin / global / system PATH).",
+        ),
+    ]
 }
 
 fn build_findings_parts(
@@ -930,6 +956,24 @@ fn doctor_path_followup(
 
 fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_text: &[String]) {
     let none_label = envr_core::i18n::tr_key("cli.common.none", "（无）", "(none)");
+    if !g.quiet {
+        println!(
+            "{}",
+            doctor_style_line(
+                g,
+                3,
+                &envr_core::i18n::tr_key(
+                    "cli.doctor.onboarding_heading",
+                    "新仓库检查清单：",
+                    "New repo checklist:",
+                ),
+            )
+        );
+        for item in onboarding_checklist_lines() {
+            println!("  - {}", doctor_style_line(g, 3, &item));
+        }
+        println!();
+    }
     println!(
         "{} {}",
         envr_core::i18n::tr_key(

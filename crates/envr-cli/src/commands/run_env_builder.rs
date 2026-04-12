@@ -156,10 +156,15 @@ pub(crate) fn rust_paths(ctx: &ShimContext) -> (PathBuf, PathBuf) {
 
 pub(crate) fn rustup_active_toolchain(ctx: &ShimContext) -> Option<String> {
     let (rustup_home, cargo_home) = rust_paths(ctx);
+    // Skip `rustup` when envr has no rust data dir yet (typical for node-only projects); a cold
+    // probe can stall CI / integration tests.
+    if !rustup_home.is_dir() {
+        return None;
+    }
     let out = std::process::Command::new("rustup")
         .args(["show", "active-toolchain"])
-        .env("RUSTUP_HOME", rustup_home)
-        .env("CARGO_HOME", cargo_home)
+        .env("RUSTUP_HOME", rustup_home.as_os_str())
+        .env("CARGO_HOME", cargo_home.as_os_str())
         .output()
         .ok()?;
     if !out.status.success() {

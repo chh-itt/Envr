@@ -64,6 +64,14 @@ fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {
                     &[("kind", kind_label(kind)), ("version", &v.0)],
                 )
             );
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.use.global_current_note",
+                    "这会更新 ENVR_RUNTIME_ROOT 下的全局 `current`（默认工具版本），不是仅作用于当前 shell 的临时环境。",
+                    "This updates the global `current` symlink under ENVR_RUNTIME_ROOT (the default tool version), not a per-shell temporary override.",
+                )
+            );
         }
     })
 }

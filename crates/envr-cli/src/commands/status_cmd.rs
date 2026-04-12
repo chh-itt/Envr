@@ -54,6 +54,22 @@ pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>) -> i32 {
                     "No `.envr.toml` found (searching upward from the working directory).",
                 )
             );
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.status.no_project_hint1",
+                    "提示：可运行 `envr init` 添加项目配置，或 `envr doctor` 检查本机环境。",
+                    "Tip: run `envr init` to add a project config, or `envr doctor` to verify your setup.",
+                )
+            );
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.status.no_project_hint2",
+                    "有项目后可用 `envr project sync` 按 pin 安装/对齐运行时版本。",
+                    "Once a project exists, use `envr project sync` to install or align versions with pins.",
+                )
+            );
         }
         if let Some(ref prof) = st.profile {
             println!(

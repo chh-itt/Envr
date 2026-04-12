@@ -21,7 +21,8 @@ pub enum OutputFormat {
     name = "envr",
     version,
     about = "Language runtime version manager",
-    propagate_version = true
+    propagate_version = true,
+    disable_help_subcommand = true
 )]
 pub struct Cli {
     #[command(flatten)]
@@ -371,6 +372,9 @@ pub enum Command {
         #[arg(value_enum)]
         shell: Shell,
     },
+    /// Supplemental help (argv shorthands; see also completion script header comment)
+    #[command(subcommand)]
+    Help(HelpCmd),
     /// Show CLI version and update notes
     Update {
         /// Reserved for a future release check
@@ -557,6 +561,12 @@ pub enum DiagnosticsCmd {
         #[arg(long, value_name = "PATH")]
         output: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HelpCmd {
+    /// Built-in argv expansions before clap (`add`, `diag`, …)
+    Shortcuts,
 }
 
 #[derive(Subcommand, Debug)]
@@ -794,6 +804,16 @@ pub fn expand_user_cli_aliases(mut args: Vec<OsString>) -> Vec<OsString> {
     }
     args
 }
+
+/// Built-in argv rewrites applied by [`preprocess_cli_args`]; listed for `envr help shortcuts`.
+pub const BUILTIN_ARGV_SHORTHANDS: &[(&str, &str)] = &[
+    ("add <lang> <version>", "project add <lang>@<version>"),
+    ("add <spec>", "project add <spec>"),
+    ("diag", "diagnostics export"),
+    ("dx", "diagnostics export"),
+    ("ci", "cache index sync"),
+    ("cis", "cache index status"),
+];
 
 /// Expand argv shorthands before clap parsing (e.g. `diag` → `diagnostics export`).
 ///

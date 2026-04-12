@@ -60,22 +60,18 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
             "项目配置检查失败",
             "project configuration check failed",
         );
-        match g.output_format.unwrap_or(OutputFormat::Text) {
-            OutputFormat::Json => {
-                let data = json!({
-                    "config_dir": loc.dir.to_string_lossy(),
-                    "issues": problems,
-                });
-                output::write_envelope(false, Some("project_check_failed"), &msg, data, &[]);
-            }
-            OutputFormat::Text => {
-                output::print_error_text("project_check_failed", &msg);
-                for p in &problems {
-                    eprintln!("envr:   - {p}");
-                }
+        let data = json!({
+            "config_dir": loc.dir.to_string_lossy(),
+            "issues": problems,
+        });
+        let code = output::emit_failure_envelope(g, "project_check_failed", &msg, data, &[], 1);
+        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+        {
+            for p in &problems {
+                eprintln!("envr:   - {p}");
             }
         }
-        return 1;
+        return code;
     }
 
     let data = serde_json::json!({

@@ -26,8 +26,8 @@ fn patch_root(cmd: &mut Command) {
         ))
         .after_long_help(tr(
             "cli.help.command_groups",
-            "命令分组（与上方列表顺序一致）：\n  • 运行时管理 — install / use / list / current / uninstall / which / remote / rust / why / resolve / exec / run / env / template / shell / hook / deactivate / prune\n  • 项目与配置 — init / check / status / project / import / export / profile / config / alias\n  • 数据与环境 — shim / cache / bundle\n  • 诊断与信息 — doctor / debug / diagnostics / completion / update",
-            "Command groups (same order as the list above):\n  • Runtime management — install, use, list, current, uninstall, which, remote, rust, why, resolve, exec, run, env, template, shell, hook, deactivate, prune\n  • Project & configuration — init, check, status, project, import, export, profile, config, alias\n  • Data & environment — shim, cache, bundle\n  • Diagnostics & information — doctor, debug, diagnostics, completion, update",
+            "命令分组（与上方列表顺序一致）：\n  • 运行时管理 — install / use / list / current / uninstall / which / remote / rust / why / resolve / exec / run / env / template / shell / hook / deactivate / prune\n  • 项目与配置 — init / check / status / project / import / export / profile / config / alias\n  • 数据与环境 — shim / cache / bundle\n  • 诊断与信息 — doctor / debug / diagnostics / completion / help / update",
+            "Command groups (same order as the list above):\n  • Runtime management — install, use, list, current, uninstall, which, remote, rust, why, resolve, exec, run, env, template, shell, hook, deactivate, prune\n  • Project & configuration — init, check, status, project, import, export, profile, config, alias\n  • Data & environment — shim, cache, bundle\n  • Diagnostics & information — doctor, debug, diagnostics, completion, help, update",
         ))
         .mut_arg("output_format", |a| {
             a.help(tr(
@@ -402,7 +402,28 @@ fn patch_subcommand(cmd: &mut Command) {
                         "目标 shell：bash、zsh、fish、powershell、elvish",
                         "Target shell: bash, zsh, fish, powershell, elvish",
                     ))
-                });
+                })
+                .after_long_help(tr(
+                    "cli.help.completion.after_long",
+                    "脚本首行注释指向 `envr help shortcuts`（内置 argv 简写在 clap 之前生效，补全无法单独列出这些 token）。",
+                    "The script starts with a comment pointing at `envr help shortcuts` (built-in argv rewrites run before clap; completions cannot list those tokens alone).",
+                ));
+        }
+        "help" => {
+            *cmd = cmd.clone().about(tr(
+                "cli.help.cmd.help_topic",
+                "补充说明（argv 简写等）",
+                "Supplemental topics (argv shorthands, etc.)",
+            ));
+            for nested in cmd.get_subcommands_mut() {
+                if nested.get_name() == "shortcuts" {
+                    *nested = nested.clone().about(tr(
+                        "cli.help.cmd.help.shortcuts",
+                        "列出 preprocess_cli_args 内置改写；用户别名见 config/aliases.toml",
+                        "List preprocess_cli_args built-ins; user aliases live in config/aliases.toml",
+                    ));
+                }
+            }
         }
         "why" => {
             *cmd = cmd

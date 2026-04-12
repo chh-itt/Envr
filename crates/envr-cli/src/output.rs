@@ -59,6 +59,48 @@ pub fn print_error_text(json_code: &str, message: &str) {
     eprintln!("envr: {tag} {message}");
 }
 
+/// Failure with a stable string `code` (child exit, project checks, etc.): same envelope shape as other CLI errors.
+/// With `--quiet`, `message` is replaced by `[E_CODE]` and `diagnostics` are omitted from JSON.
+pub fn emit_failure_envelope(
+    g: &GlobalArgs,
+    code: &str,
+    message: &str,
+    data: Value,
+    diagnostics: &[String],
+    exit_code: i32,
+) -> i32 {
+    let json_message = if g.quiet {
+        error_bracket_label(code)
+    } else {
+        message.to_string()
+    };
+    let empty_diags: &[String] = &[];
+    let eff_diags: &[String] = if g.quiet {
+        empty_diags
+    } else {
+        diagnostics
+    };
+    match g.output_format.unwrap_or(OutputFormat::Text) {
+        OutputFormat::Json => {
+            write_envelope(
+                false,
+                Some(code),
+                &json_message,
+                data,
+                eff_diags,
+            );
+        }
+        OutputFormat::Text => {
+            if g.quiet {
+                eprintln!("envr: {}", error_bracket_label(code));
+            } else {
+                print_error_text(code, message);
+            }
+        }
+    }
+    exit_code
+}
+
 /// Per design doc: 1 = user/business, 2 = external (I/O, network fetch, mirror).
 pub fn exit_code_for_error(err: &EnvrError) -> i32 {
     match err.code() {
