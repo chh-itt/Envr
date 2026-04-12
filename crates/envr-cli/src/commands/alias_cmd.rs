@@ -44,7 +44,8 @@ pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
                 return crate::output::emit_validation(
                     g,
                     "alias add",
-                    "envr alias add mynode node",
+                    r#"envr alias add mynode node
+envr alias add mydiag "diagnostics export""#,
                 );
             }
             let mut file = match AliasesFile::load_or_default(&path) {

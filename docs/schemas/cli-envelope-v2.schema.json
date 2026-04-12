@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/cli-envelope-v2.schema.json",
+  "title": "envr CLI JSON line envelope (v2)",
+  "description": "Every `--format json` response is a single JSON object on one line. `schema_version` is 2: list/current/remote `data` keys were renamed (`installed_runtimes`, `active_versions`, `remote_runtimes`).",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "success",
+    "code",
+    "message",
+    "data",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2,
+      "description": "Breaking data-field renames from v1; see output-contract.md."
+    },
+    "success": { "type": "boolean" },
+    "code": {
+      "oneOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "message": { "type": "string" },
+    "data": {},
+    "diagnostics": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

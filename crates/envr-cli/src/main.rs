@@ -7,11 +7,18 @@ use clap::FromArgMatches;
 
 fn main() {
     bootstrap_i18n();
-    let matches = cli_help::localized_command().get_matches();
+    let argv = cli::expand_user_cli_aliases(std::env::args_os().collect());
+    let argv = cli::preprocess_cli_args(argv);
+    let matches = cli_help::localized_command().get_matches_from(argv);
     let cli = cli::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     cli::apply_global(&cli.global);
 
-    let _logging_guard = match envr_core::logging::init_logging("envr-cli") {
+    let _logging_guard = match envr_core::logging::init_logging_with(
+        "envr-cli",
+        envr_core::logging::LoggingInitOptions {
+            log_to_stderr: cli.global.debug,
+        },
+    ) {
         Ok(guard) => guard,
         Err(err) => {
             let prefix = envr_core::i18n::tr_key(

@@ -3,7 +3,9 @@
 mod resolve;
 
 pub use resolve::{
-    CoreCommand, ResolvedShim, ShimContext, core_tool_executable, normalize_invoked_basename,
+    CoreCommand, ResolvedShim, ShimContext, WhichRuntimeDetail, WhichRuntimeSource,
+    core_command_uses_path_proxy_bypass, core_tool_executable, normalize_invoked_basename,
     parse_core_command, parse_shim_invocation, pick_php_version_home, pick_version_home,
     resolve_core_shim, resolve_core_shim_command, resolve_runtime_home_for_lang,
+    which_runtime_detail,
 };

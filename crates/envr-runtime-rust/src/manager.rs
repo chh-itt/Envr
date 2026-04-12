@@ -1,8 +1,8 @@
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone)]
 pub struct RustPaths {
@@ -88,14 +88,10 @@ fn read_settings_rustup_env() -> HashMap<String, String> {
     out
 }
 
-fn run_rustup(
-    mode: RustupMode,
-    paths: &RustPaths,
-    args: &[&str],
-) -> EnvrResult<(i32, String, String)> {
+fn configure_rustup_cmd(mode: RustupMode, paths: &RustPaths, args: &[&str]) -> Command {
     let rustup_program = match mode {
-        RustupMode::System => "rustup".into(),
-        RustupMode::Managed => paths.managed_rustup_exe(),
+        RustupMode::System => std::ffi::OsString::from("rustup"),
+        RustupMode::Managed => paths.managed_rustup_exe().into_os_string(),
     };
     let mut cmd = Command::new(rustup_program);
     cmd.args(args);
@@ -106,13 +102,32 @@ fn run_rustup(
     for (k, v) in read_settings_rustup_env() {
         cmd.env(k, v);
     }
-    let out = cmd
+    cmd
+}
+
+fn run_rustup(
+    mode: RustupMode,
+    paths: &RustPaths,
+    args: &[&str],
+) -> EnvrResult<(i32, String, String)> {
+    let out = configure_rustup_cmd(mode, paths, args)
         .output()
         .map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
     let code = out.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     Ok((code, stdout, stderr))
+}
+
+/// When the CLI passes install progress handles, show `rustup`'s own download UI on the terminal.
+fn run_rustup_inherit_stdio(mode: RustupMode, paths: &RustPaths, args: &[&str]) -> EnvrResult<i32> {
+    let status = configure_rustup_cmd(mode, paths, args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
+    Ok(status.code().unwrap_or(1))
 }
 
 fn ensure_dirs(paths: &RustPaths) -> EnvrResult<()> {
@@ -242,8 +257,8 @@ impl RustManager {
         Ok(())
     }
 
-    pub fn install_toolchain(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
-        let raw = spec.0.trim();
+    pub fn install_toolchain(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let raw = request.spec.0.trim();
         if raw.is_empty() {
             return Err(EnvrError::Validation("empty rust toolchain spec".into()));
         }
@@ -251,15 +266,28 @@ impl RustManager {
             "latest" => "stable".to_string(),
             other => other.to_string(),
         };
-        let (code, _stdout, stderr) = run_rustup(
-            self.mode,
-            &self.paths,
-            &["toolchain", "install", &resolved, "--profile", "minimal"],
-        )?;
+        let args = [
+            "toolchain",
+            "install",
+            resolved.as_str(),
+            "--profile",
+            "minimal",
+        ];
+        let code = if request.progress_downloaded.is_some() {
+            run_rustup_inherit_stdio(self.mode, &self.paths, &args)?
+        } else {
+            let (c, _stdout, stderr) = run_rustup(self.mode, &self.paths, &args)?;
+            if c != 0 {
+                return Err(EnvrError::Runtime(format!(
+                    "rustup toolchain install failed: {stderr}"
+                )));
+            }
+            c
+        };
         if code != 0 {
-            return Err(EnvrError::Runtime(format!(
-                "rustup toolchain install failed: {stderr}"
-            )));
+            return Err(EnvrError::Runtime(
+                "rustup toolchain install failed (see stderr output above)".into(),
+            ));
         }
         Ok(RuntimeVersion(resolved))
     }

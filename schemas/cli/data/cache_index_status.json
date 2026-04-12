@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/cache_index_status.json",
+  "title": "envr --format json data (message: cache_index_status)",
+  "type": "object",
+  "additionalProperties": true
+}

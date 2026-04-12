@@ -198,10 +198,18 @@ impl RuntimeProvider for GoRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(&request.spec)
+        self.manager()?.install_from_spec(request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = GoPaths::new(self.runtime_root()?);
+        Ok((vec![paths.version_dir(&version.0)], None))
     }
 }

@@ -28,6 +28,22 @@ fn list_and_current_succeed_with_isolated_runtime_root() {
 }
 
 #[test]
+fn current_prints_use_hint_when_no_global_current() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let out = run_envr(&["current", "node"], tmp.path());
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("envr use") && stdout.contains("node"),
+        "expected `envr use` hint for node; got:\n{stdout}"
+    );
+}
+
+#[test]
 fn install_requires_two_positionals() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let out = run_envr(&["install", "node"], tmp.path());

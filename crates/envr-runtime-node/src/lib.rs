@@ -2,9 +2,9 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_NODE_INDEX_JSON_URL, NodeRelease, blocking_http_client, fetch_node_index,
-    list_remote_versions, node_version_v_prefix, normalize_node_version, parse_node_index,
-    release_has_platform, resolve_node_version,
+    DEFAULT_NODE_INDEX_JSON_URL, NodeRelease, NodeRemoteRow, blocking_http_client, fetch_node_index,
+    list_node_remote_rows, list_remote_versions, node_version_v_prefix, normalize_node_version,
+    parse_node_index, release_has_platform, resolve_node_version,
 };
 pub use manager::{
     NodeManager, NodePaths, dist_root_from_index_json_url, list_installed_versions,
@@ -17,8 +17,8 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::EnvrResult;
-use envr_platform::paths::current_platform_paths;
+use envr_error::{EnvrError, EnvrResult};
+use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -83,21 +83,10 @@ impl NodeRuntimeProvider {
             .unwrap_or(DEFAULT)
     }
 
-    fn fnv1a64_url_key(url: &str) -> u64 {
-        const OFFSET: u64 = 14695981039346656037;
-        const PRIME: u64 = 1099511628211;
-        let mut h = OFFSET;
-        for b in url.as_bytes() {
-            h ^= u64::from(*b);
-            h = h.wrapping_mul(PRIME);
-        }
-        h
-    }
-
-    fn index_body_cache_path(&self, cache_dir: &Path) -> EnvrResult<PathBuf> {
-        let url = self.resolved_index_json_url()?;
-        let h = Self::fnv1a64_url_key(&url);
-        Ok(cache_dir.join(format!("index_body_{h:016x}.json")))
+    fn index_body_cache_path(&self) -> EnvrResult<PathBuf> {
+        let platform = current_platform_paths()?;
+        let base = index_cache_dir_from_platform(&platform).join("node");
+        Ok(base.join("index.json"))
     }
 
     fn file_is_within_ttl(path: &Path, ttl_secs: u64) -> bool {
@@ -118,10 +107,8 @@ impl NodeRuntimeProvider {
 
     /// Load `index.json` text from disk when fresh, otherwise download and refresh the on-disk copy.
     fn load_index_body_cached(&self) -> EnvrResult<String> {
-        let paths = NodePaths::new(self.runtime_root()?);
-        let cache_dir = paths.cache_dir();
-        let index_cache = self.index_body_cache_path(&cache_dir)?;
         let ttl_secs = Self::remote_cache_ttl_secs();
+        let index_cache = self.index_body_cache_path()?;
 
         if Self::file_is_within_ttl(&index_cache, ttl_secs) {
             if let Ok(body) = std::fs::read_to_string(&index_cache) {
@@ -132,11 +119,23 @@ impl NodeRuntimeProvider {
             }
         }
 
+        // Offline mode: do not attempt network fetch; require a cached index.
+        let settings_path = settings::settings_path_from_platform(&current_platform_paths()?);
+        let st = settings::Settings::load_or_default_from(&settings_path)?;
+        if st.mirror.mode == settings::MirrorMode::Offline {
+            return Err(EnvrError::Download(format!(
+                "offline mode: missing cached node index at {} (run `envr cache index sync`)",
+                index_cache.display()
+            )));
+        }
+
         let url = self.resolved_index_json_url()?;
         let client = index::blocking_http_client()?;
         let body = index::fetch_node_index(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
-            std::fs::create_dir_all(&cache_dir)?;
+            if let Some(parent) = index_cache.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
             std::fs::write(&index_cache, &body)?;
             Ok(())
         })();
@@ -339,5 +338,13 @@ impl RuntimeProvider for NodeRuntimeProvider {
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = NodePaths::new(self.runtime_root()?);
+        Ok((vec![paths.version_dir(&version.0)], None))
     }
 }

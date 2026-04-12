@@ -1,52 +1,87 @@
 //! Build merged process environment for `exec`, `run`, and `env` (PATH, JAVA_HOME, project `env`).
 
-use envr_config::project_config::{ProjectConfig, load_project_config_profile};
+use super::run_env_builder::{
+    resolve_exec_lang_layer, resolve_rust_bins, rust_paths, rustup_active_toolchain, ExecLangResolution,
+    RunEnvStack, RunStackLang, RUN_STACK_LANG_ORDER,
+};
+use envr_config::project_config::load_project_config_profile;
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
-use envr_shim_core::{ShimContext, pick_version_home, resolve_runtime_home_for_lang};
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+// Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …
+#[allow(unused_imports)]
+pub use envr_resolver::{
+    dedup_paths, path_sep, prepend_path, runtime_bin_dirs, version_label_from_runtime_home,
+    runtime_error_might_install_fix,
+};
+use envr_resolver::{
+    extend_env_with_tooling_settings, plan_missing_installable_pins, resolve_exec_lang_home,
+    resolve_run_lang_home,
+};
+use envr_shim_core::ShimContext;
+use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
 
-pub fn path_sep() -> char {
-    if cfg!(windows) { ';' } else { ':' }
-}
-
-pub fn prepend_path(entries: &[PathBuf], existing: &str) -> String {
-    let sep = path_sep();
-    let mut parts: Vec<String> = entries.iter().map(|p| p.display().to_string()).collect();
-    if !existing.is_empty() {
-        parts.push(existing.to_string());
+/// Human line for `exec --verbose` (language + version label + home path).
+pub fn describe_exec_resolution(
+    ctx: &ShimContext,
+    lang: &str,
+    spec_override: Option<&str>,
+) -> EnvrResult<String> {
+    if lang == "rust" {
+        return Ok(describe_rust_exec_line(ctx));
     }
-    parts.join(&sep.to_string())
+    let home = resolve_exec_home_for_lang(ctx, lang, spec_override)?;
+    let canon = std::fs::canonicalize(&home).unwrap_or(home);
+    let ver = version_label_from_runtime_home(&canon);
+    Ok(format!("{} {} @ {}", lang, ver, canon.display()))
 }
 
-pub fn runtime_bin_dirs(home: &Path, lang: &str) -> Vec<PathBuf> {
-    match lang {
-        "node" => vec![home.join("bin"), home.to_path_buf()],
-        "python" => vec![home.join("Scripts"), home.join("bin")],
-        "java" => vec![home.join("bin")],
-        "go" => vec![home.join("bin")],
-        "rust" => vec![home.to_path_buf()],
-        "php" => vec![home.to_path_buf(), home.join("bin")],
-        "deno" => vec![home.to_path_buf(), home.join("bin")],
-        "bun" => vec![home.to_path_buf(), home.join("bin")],
-        _ => vec![],
-    }
+/// Rust `exec` environment (rustup + cargo homes under envr runtime root).
+pub fn describe_rust_exec_line(ctx: &ShimContext) -> String {
+    let (rustup_home, cargo_home) = rust_paths(ctx);
+    let tc = rustup_active_toolchain(ctx).unwrap_or_else(|| "default".into());
+    format!(
+        "rust {} @ rustup={} cargo_home={}",
+        tc,
+        rustup_home.display(),
+        cargo_home.display()
+    )
 }
 
-fn dedup_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    let mut seen = HashSet::<String>::new();
-    let mut out = Vec::new();
-    for p in paths {
-        let key = p.display().to_string();
-        if seen.insert(key) {
-            out.push(p);
+/// One line per runtime that contributes to `collect_run_env` (for `run --verbose`).
+pub fn collect_run_verbose_lines(
+    ctx: &ShimContext,
+    install_if_missing: bool,
+) -> EnvrResult<Vec<String>> {
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
+    let stack = RunEnvStack::new(ctx, cfg.as_ref(), install_if_missing);
+    let mut lines = Vec::new();
+    for &lang in RUN_STACK_LANG_ORDER {
+        let Some(piece) = stack.resolve_lang(lang)? else {
+            continue;
+        };
+        match piece {
+            RunStackLang::RustBins(bins) => {
+                let tc = rustup_active_toolchain(ctx).unwrap_or_else(|| "default".into());
+                lines.push(format!(
+                    "rust {} @ {}",
+                    tc,
+                    bins.first()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                ));
+            }
+            RunStackLang::Runtime { lang, home } => {
+                let ver = version_label_from_runtime_home(&home);
+                lines.push(format!("{} {} @ {}", lang, ver, home.display()));
+            }
         }
     }
-    out
+    Ok(lines)
 }
 
 fn load_settings() -> EnvrResult<Settings> {
@@ -55,213 +90,33 @@ fn load_settings() -> EnvrResult<Settings> {
     Settings::load_or_default_from(&sp)
 }
 
-fn maybe_inject_go_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
-    let st = load_settings()?;
-
-    // GOPROXY injection.
-    let legacy = st.runtime.go.goproxy.as_deref().unwrap_or("").trim();
-    let custom = st.runtime.go.proxy_custom.as_deref().unwrap_or("").trim();
-    let gp = match st.runtime.go.proxy_mode {
-        envr_config::settings::GoProxyMode::Auto => {
-            if !legacy.is_empty() {
-                legacy.to_string()
-            } else if envr_config::settings::prefer_china_mirror_locale(&st) {
-                "https://goproxy.cn,direct".to_string()
-            } else {
-                "https://proxy.golang.org,direct".to_string()
-            }
-        }
-        envr_config::settings::GoProxyMode::Domestic => "https://goproxy.cn,direct".to_string(),
-        envr_config::settings::GoProxyMode::Official => {
-            "https://proxy.golang.org,direct".to_string()
-        }
-        envr_config::settings::GoProxyMode::Direct => "direct".to_string(),
-        envr_config::settings::GoProxyMode::Custom => {
-            if !custom.is_empty() {
-                custom.to_string()
-            } else {
-                legacy.to_string()
-            }
-        }
-    };
-    if !gp.trim().is_empty() {
-        env.insert("GOPROXY".into(), gp);
-    }
-
-    // Private module patterns: keep these in sync for common corporate setups.
-    if let Some(p) = st.runtime.go.private_patterns.as_deref() {
-        let v = p.trim();
-        if !v.is_empty() {
-            env.insert("GOPRIVATE".into(), v.to_string());
-            env.insert("GONOSUMDB".into(), v.to_string());
-            env.insert("GONOPROXY".into(), v.to_string());
-        }
-    }
-    Ok(())
-}
-
-fn maybe_inject_deno_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
-    let st = load_settings()?;
-    for (k, v) in deno_package_registry_env(&st) {
-        env.insert(k, v);
-    }
-    Ok(())
-}
-
-fn maybe_inject_bun_settings(env: &mut HashMap<String, String>) -> EnvrResult<()> {
-    let st = load_settings()?;
-    for (k, v) in bun_package_registry_env(&st) {
-        env.insert(k, v);
-    }
-    Ok(())
-}
-
-fn resolve_go_home(
+/// After `--spec` override, fall back to the project pin for `lang` (for install + retry).
+pub fn effective_install_spec_for_exec(
     ctx: &ShimContext,
-    cfg: Option<&ProjectConfig>,
+    lang: &str,
     spec_override: Option<&str>,
-) -> EnvrResult<PathBuf> {
-    let versions_dir = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("go")
-        .join("versions");
-    let current_link = ctx.runtime_root.join("runtimes").join("go").join("current");
-
-    let pinned = spec_override
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            cfg.and_then(|c| c.runtimes.get("go"))
-                .and_then(|r| r.version.as_deref())
-        });
-
-    if let Some(spec) = pinned {
-        pick_version_home(&versions_dir, spec)
-    } else if !current_link.exists() {
-        Err(EnvrError::Runtime(format!(
-            "no global current for go at {}; install and select a version",
-            current_link.display()
-        )))
-    } else {
-        std::fs::canonicalize(&current_link).map_err(EnvrError::from)
+) -> EnvrResult<Option<String>> {
+    if let Some(s) = spec_override.map(str::trim).filter(|s| !s.is_empty()) {
+        return Ok(Some(s.to_string()));
     }
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
+    Ok(cfg.and_then(|c| {
+        c.runtimes
+            .get(lang)
+            .and_then(|r| r.version.as_ref())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }))
 }
 
-fn rust_paths(ctx: &ShimContext) -> (PathBuf, PathBuf) {
-    let rust_home = ctx.runtime_root.join("runtimes").join("rust");
-    let rustup_home = rust_home.join("rustup");
-    let cargo_home = rust_home.join("cargo");
-    (rustup_home, cargo_home)
-}
-
-fn rustup_active_toolchain(ctx: &ShimContext) -> Option<String> {
-    let (rustup_home, cargo_home) = rust_paths(ctx);
-    let out = std::process::Command::new("rustup")
-        .args(["show", "active-toolchain"])
-        .env("RUSTUP_HOME", rustup_home)
-        .env("CARGO_HOME", cargo_home)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout);
-    let first = s.split_whitespace().next()?.trim();
-    if first.is_empty() {
-        None
-    } else {
-        Some(first.to_string())
-    }
-}
-
-fn resolve_rust_bins(ctx: &ShimContext) -> Vec<PathBuf> {
-    let (rustup_home, cargo_home) = rust_paths(ctx);
-    let mut bins = vec![cargo_home.join("bin")];
-    if let Some(tc) = rustup_active_toolchain(ctx) {
-        bins.push(rustup_home.join("toolchains").join(tc).join("bin"));
-    }
-    bins
-}
-
-fn resolve_php_home(
-    ctx: &ShimContext,
-    _cfg: Option<&ProjectConfig>,
-    spec_override: Option<&str>,
-) -> EnvrResult<PathBuf> {
-    resolve_runtime_home_for_lang(ctx, "php", spec_override)
-}
-
-fn resolve_deno_home(
-    ctx: &ShimContext,
-    cfg: Option<&ProjectConfig>,
-    spec_override: Option<&str>,
-) -> EnvrResult<PathBuf> {
-    let versions_dir = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("deno")
-        .join("versions");
-    let current_link = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("deno")
-        .join("current");
-
-    let pinned = spec_override
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            cfg.and_then(|c| c.runtimes.get("deno"))
-                .and_then(|r| r.version.as_deref())
-        });
-
-    if let Some(spec) = pinned {
-        pick_version_home(&versions_dir, spec)
-    } else if !current_link.exists() {
-        Err(EnvrError::Runtime(format!(
-            "no global current for deno at {}; install and select a version",
-            current_link.display()
-        )))
-    } else {
-        std::fs::canonicalize(&current_link).map_err(EnvrError::from)
-    }
-}
-
-fn resolve_bun_home(
-    ctx: &ShimContext,
-    cfg: Option<&ProjectConfig>,
-    spec_override: Option<&str>,
-) -> EnvrResult<PathBuf> {
-    let versions_dir = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("bun")
-        .join("versions");
-    let current_link = ctx
-        .runtime_root
-        .join("runtimes")
-        .join("bun")
-        .join("current");
-
-    let pinned = spec_override
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            cfg.and_then(|c| c.runtimes.get("bun"))
-                .and_then(|r| r.version.as_deref())
-        });
-
-    if let Some(spec) = pinned {
-        pick_version_home(&versions_dir, spec)
-    } else if !current_link.exists() {
-        Err(EnvrError::Runtime(format!(
-            "no global current for bun at {}; install and select a version",
-            current_link.display()
-        )))
-    } else {
-        std::fs::canonicalize(&current_link).map_err(EnvrError::from)
-    }
+/// Pairs `(lang, version_spec)` for pinned runtimes that are missing on disk but look installable.
+pub fn plan_missing_pinned_runtimes_for_run(ctx: &ShimContext) -> EnvrResult<Vec<(String, String)>> {
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
+    Ok(plan_missing_installable_pins(cfg.as_ref(), |lang| {
+        resolve_run_lang_home(ctx, cfg.as_ref(), lang).map(|_| ())
+    }))
 }
 
 /// Resolve the runtime home directory for `exec` (same pin/current rules as `collect_exec_env`).
@@ -275,17 +130,7 @@ pub fn resolve_exec_home_for_lang(
 ) -> EnvrResult<PathBuf> {
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
-    if lang == "bun" {
-        resolve_bun_home(ctx, cfg.as_ref(), spec_override)
-    } else if lang == "deno" {
-        resolve_deno_home(ctx, cfg.as_ref(), spec_override)
-    } else if lang == "php" {
-        resolve_php_home(ctx, cfg.as_ref(), spec_override)
-    } else if lang == "go" {
-        resolve_go_home(ctx, cfg.as_ref(), spec_override)
-    } else {
-        resolve_runtime_home_for_lang(ctx, lang, spec_override)
-    }
+    resolve_exec_lang_home(ctx, cfg.as_ref(), lang, spec_override)
 }
 
 /// Single-language resolution: prepend that runtime's bin dirs to `PATH`, set `JAVA_HOME` for Java.
@@ -302,45 +147,45 @@ pub fn collect_exec_env(
             env.insert(k.clone(), v.clone());
         }
     }
-    let home = if lang == "bun" {
-        resolve_bun_home(ctx, cfg.as_ref(), spec_override)?
-    } else if lang == "deno" {
-        resolve_deno_home(ctx, cfg.as_ref(), spec_override)?
-    } else if lang == "rust" {
-        // For Rust, prefer cargo bin; also add active toolchain bin when available.
-        let bins = dedup_paths(resolve_rust_bins(ctx));
-        let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
-        env.insert("PATH".into(), prepend_path(&bins, old_path));
-        return Ok(env);
-    } else if lang == "php" {
-        resolve_php_home(ctx, cfg.as_ref(), spec_override)?
-    } else if lang == "go" {
-        resolve_go_home(ctx, cfg.as_ref(), spec_override)?
-    } else {
-        resolve_runtime_home_for_lang(ctx, lang, spec_override)?
-    };
-    let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
-    let bins = dedup_paths(runtime_bin_dirs(&home, lang));
-    let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
-    env.insert("PATH".into(), prepend_path(&bins, old_path));
-    if lang == "java" {
-        env.insert("JAVA_HOME".into(), home.display().to_string());
+    match resolve_exec_lang_layer(ctx, cfg.as_ref(), lang, spec_override)? {
+        ExecLangResolution::RustPathOnly => {
+            let bins = dedup_paths(resolve_rust_bins(ctx));
+            let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
+            env.insert("PATH".into(), prepend_path(&bins, old_path));
+            Ok(env)
+        }
+        ExecLangResolution::Home(home) => {
+            let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
+            let bins = dedup_paths(runtime_bin_dirs(&home, lang));
+            let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
+            env.insert("PATH".into(), prepend_path(&bins, old_path));
+            if lang == "java" {
+                env.insert("JAVA_HOME".into(), home.display().to_string());
+            }
+            if lang == "go" {
+                env.insert("GOROOT".into(), home.display().to_string());
+            }
+            let st = load_settings()?;
+            extend_env_with_tooling_settings(
+                &mut env,
+                &st,
+                lang == "go",
+                lang == "deno",
+                lang == "bun",
+            );
+            Ok(env)
+        }
     }
-    if lang == "go" {
-        env.insert("GOROOT".into(), home.display().to_string());
-        maybe_inject_go_settings(&mut env)?;
-    }
-    if lang == "deno" {
-        maybe_inject_deno_settings(&mut env)?;
-    }
-    if lang == "bun" {
-        maybe_inject_bun_settings(&mut env)?;
-    }
-    Ok(env)
 }
 
 /// Multi-runtime PATH (node, python, java, go) plus one `JAVA_HOME` when Java resolves.
-pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>> {
+///
+/// When `install_if_missing` is true, resolution failures for languages pinned in `.envr.toml`
+/// are propagated instead of silently omitting that runtime from `PATH`.
+pub fn collect_run_env(
+    ctx: &ShimContext,
+    install_if_missing: bool,
+) -> EnvrResult<HashMap<String, String>> {
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
     let mut env: HashMap<String, String> = std::env::vars().collect();
@@ -354,59 +199,31 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
     let mut go_home: Option<PathBuf> = None;
     let mut deno_on_path = false;
     let mut bun_on_path = false;
-    for lang in ["node", "python", "java", "go", "rust", "php", "deno", "bun"] {
-        if lang == "rust" {
-            path_entries.extend(resolve_rust_bins(ctx));
+    let stack = RunEnvStack::new(ctx, cfg.as_ref(), install_if_missing);
+    for &lang in RUN_STACK_LANG_ORDER {
+        let Some(piece) = stack.resolve_lang(lang)? else {
             continue;
-        }
-        if lang == "php" {
-            let home = match resolve_php_home(ctx, cfg.as_ref(), None) {
-                Ok(h) => h,
-                Err(_) => continue,
-            };
-            let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
-            path_entries.extend(runtime_bin_dirs(&home, "php"));
-            continue;
-        }
-        if lang == "deno" {
-            let home = match resolve_deno_home(ctx, cfg.as_ref(), None) {
-                Ok(h) => h,
-                Err(_) => continue,
-            };
-            let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
-            path_entries.extend(runtime_bin_dirs(&home, "deno"));
-            deno_on_path = true;
-            continue;
-        }
-        if lang == "bun" {
-            let home = match resolve_bun_home(ctx, cfg.as_ref(), None) {
-                Ok(h) => h,
-                Err(_) => continue,
-            };
-            let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
-            path_entries.extend(runtime_bin_dirs(&home, "bun"));
-            bun_on_path = true;
-            continue;
-        }
-        let home = if lang == "go" {
-            match resolve_go_home(ctx, cfg.as_ref(), None) {
-                Ok(h) => h,
-                Err(_) => continue,
-            }
-        } else {
-            let Ok(h) = resolve_runtime_home_for_lang(ctx, lang, None) else {
-                continue;
-            };
-            h
         };
-        let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
-        if lang == "java" {
-            java_home = Some(home.clone());
+        match piece {
+            RunStackLang::RustBins(bins) => {
+                path_entries.extend(bins);
+            }
+            RunStackLang::Runtime { lang, home } => {
+                if lang == "java" {
+                    java_home = Some(home.clone());
+                }
+                if lang == "go" {
+                    go_home = Some(home.clone());
+                }
+                if lang == "deno" {
+                    deno_on_path = true;
+                }
+                if lang == "bun" {
+                    bun_on_path = true;
+                }
+                path_entries.extend(runtime_bin_dirs(&home, &lang));
+            }
         }
-        if lang == "go" {
-            go_home = Some(home.clone());
-        }
-        path_entries.extend(runtime_bin_dirs(&home, lang));
     }
     path_entries = dedup_paths(path_entries);
     let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
@@ -417,12 +234,73 @@ pub fn collect_run_env(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>>
     if let Some(gh) = go_home {
         env.insert("GOROOT".into(), gh.display().to_string());
     }
-    maybe_inject_go_settings(&mut env)?;
-    if deno_on_path {
-        maybe_inject_deno_settings(&mut env)?;
-    }
-    if bun_on_path {
-        maybe_inject_bun_settings(&mut env)?;
-    }
+    let st = load_settings()?;
+    extend_env_with_tooling_settings(&mut env, &st, true, deno_on_path, bun_on_path);
     Ok(env)
+}
+
+/// Extra `ENVR_*_VERSION` keys for `envr template` (same resolution rules as `run --verbose`).
+pub fn template_extension_vars(ctx: &ShimContext) -> EnvrResult<HashMap<String, String>> {
+    let mut m = HashMap::new();
+    for line in collect_run_verbose_lines(ctx, false)? {
+        let Some((left, _)) = line.split_once(" @ ") else {
+            continue;
+        };
+        let (lang, ver) = match left.split_once(' ') {
+            Some((a, b)) => (a, b.trim()),
+            None => continue,
+        };
+        if ver.is_empty() {
+            continue;
+        }
+        let key = match lang {
+            "node" => "ENVR_NODE_VERSION",
+            "python" => "ENVR_PYTHON_VERSION",
+            "java" => "ENVR_JAVA_VERSION",
+            "go" => "ENVR_GO_VERSION",
+            "rust" => "ENVR_RUST_VERSION",
+            "php" => "ENVR_PHP_VERSION",
+            "deno" => "ENVR_DENO_VERSION",
+            "bun" => "ENVR_BUN_VERSION",
+            _ => continue,
+        };
+        m.insert(key.to_string(), ver.to_string());
+    }
+    Ok(m)
+}
+
+/// Variable names that `envr env` / `collect_run_env` may change for the given working directory,
+/// used by `envr hook` to save/restore shell state when leaving a project directory.
+pub fn hook_env_restore_keys(ctx: &ShimContext) -> EnvrResult<Vec<String>> {
+    let mut keys: BTreeSet<String> = [
+        "PATH",
+        "JAVA_HOME",
+        "GOROOT",
+        "GOPROXY",
+        "GOPRIVATE",
+        "GOSUMDB",
+        "GONOPROXY",
+        "GONOSUMDB",
+        "NPM_CONFIG_REGISTRY",
+        "JSR_URL",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+
+    if let Some((cfg, _)) = load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())? {
+        for k in cfg.env.keys() {
+            keys.insert(k.clone());
+        }
+    }
+
+    let st = load_settings()?;
+    for (k, _) in deno_package_registry_env(&st) {
+        keys.insert(k);
+    }
+    for (k, _) in bun_package_registry_env(&st) {
+        keys.insert(k);
+    }
+
+    Ok(keys.into_iter().collect())
 }

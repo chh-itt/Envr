@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/debug_info.json",
+  "title": "envr --format json data (message: debug_info)",
+  "type": "object",
+  "additionalProperties": true
+}

@@ -9,6 +9,7 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult};
+use std::path::PathBuf;
 use envr_platform::paths::current_platform_paths;
 
 pub struct RustRuntimeProvider {
@@ -83,10 +84,20 @@ impl RuntimeProvider for RustRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_toolchain(&request.spec)
+        self.manager()?.install_toolchain(request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall_toolchain(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        Ok((
+            vec![],
+            Some(format!("rustup toolchain uninstall {}", version.0)),
+        ))
     }
 }

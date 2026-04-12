@@ -3,7 +3,32 @@ use crate::cli::GlobalArgs;
 use envr_config::settings::resolve_runtime_root;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::RuntimeKind;
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
+use envr_shim_core::ShimContext;
+use std::path::PathBuf;
+
+/// Resolve the effective runtime root for this process (re-reads `settings.toml` each call so edits
+/// in another terminal are picked up on the next `exec` / `run` / `which`, unless `ENVR_RUNTIME_ROOT` is set).
+pub fn session_runtime_root() -> EnvrResult<PathBuf> {
+    effective_runtime_root()
+}
+
+/// [`ShimContext`] for CLI commands: cached `runtime_root`, merged `profile` (`--profile` wins over `ENVR_PROFILE`).
+pub fn shim_context_for(path: PathBuf, profile_cli: Option<String>) -> EnvrResult<ShimContext> {
+    let runtime_root = session_runtime_root()?;
+    let working_dir = std::fs::canonicalize(&path).unwrap_or(path);
+    let profile = profile_cli
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            std::env::var("ENVR_PROFILE")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        });
+    Ok(ShimContext::with_runtime_root(runtime_root, working_dir, profile))
+}
 
 pub fn kind_label(kind: RuntimeKind) -> &'static str {
     match kind {
@@ -19,7 +44,7 @@ pub fn kind_label(kind: RuntimeKind) -> &'static str {
 }
 
 pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
-    let root = effective_runtime_root()?;
+    let root = session_runtime_root()?;
     RuntimeService::with_runtime_root(root)
 }
 

@@ -9,3 +9,10 @@ envr-config = { path = "../envr-config" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 tempfile = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "resolve_runtime_home"
+harness = false

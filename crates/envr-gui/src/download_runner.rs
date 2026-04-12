@@ -42,6 +42,7 @@ pub fn start_http_job(
                 &DownloadOptions::default(),
                 Some(downloaded),
                 Some(total),
+                None,
             )
             .await
         {

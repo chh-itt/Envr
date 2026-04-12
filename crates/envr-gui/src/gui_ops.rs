@@ -171,7 +171,12 @@ pub fn rust_channel_install_or_switch(channel: String) -> Task<Message> {
                 }
                 // Ensure toolchain exists (idempotent), then set default.
                 let _ = mgr
-                    .install_toolchain(&envr_domain::runtime::VersionSpec(channel.clone()))
+                    .install_toolchain(&envr_domain::runtime::InstallRequest {
+                        spec: envr_domain::runtime::VersionSpec(channel.clone()),
+                        progress_downloaded: None,
+                        progress_total: None,
+                        cancel: None,
+                    })
                     .map_err(|e| e.to_string())?;
                 mgr.set_default(&RuntimeVersion(channel))
                     .map_err(|e| e.to_string())
@@ -210,13 +215,25 @@ pub fn rust_update_current() -> Task<Message> {
     })
 }
 
-pub fn rust_managed_install_stable() -> Task<Message> {
+pub fn rust_managed_install_stable(
+    progress_downloaded: Arc<AtomicU64>,
+    progress_total: Arc<AtomicU64>,
+    cancel: CancelToken,
+) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
             .spawn_blocking(move || -> Result<(), String> {
                 let root = resolve_runtime_root().map_err(|e| e.to_string())?;
-                install_rustup_managed(root, RustChannel::Stable).map_err(|e| e.to_string())
+                let cancel_flag = cancel.shared_atomic();
+                let request = InstallRequest {
+                    spec: VersionSpec("stable".into()),
+                    progress_downloaded: Some(progress_downloaded),
+                    progress_total: Some(progress_total),
+                    cancel: Some(cancel_flag),
+                };
+                install_rustup_managed(root, RustChannel::Stable, Some(&request))
+                    .map_err(|e| e.to_string())
             })
             .await;
         Message::EnvCenter(EnvCenterMsg::RustOpFinished(match res {
@@ -633,9 +650,9 @@ pub fn refresh_dashboard() -> Task<Message> {
                     let (installed, current) = if kind == RuntimeKind::Rust {
                         (0usize, None)
                     } else {
-                        let installed = svc
-                            .list_installed(kind)
-                            .map_err(|e: EnvrError| e.to_string())?;
+                    let installed = svc
+                        .list_installed(kind)
+                        .map_err(|e: EnvrError| e.to_string())?;
                         let current =
                             svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
                         (installed.len(), current.map(|v| v.0))

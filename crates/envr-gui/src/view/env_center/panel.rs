@@ -259,12 +259,12 @@ fn node_runtime_settings_section(
         };
         let variant = if src == node.download_source {
             ButtonVariant::Primary
-        } else {
+    } else {
             ButtonVariant::Secondary
-        };
+    };
         let h = if src == node.download_source {
             tokens.control_height_primary
-        } else {
+    } else {
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(text(lab).into()))
@@ -401,7 +401,7 @@ fn python_runtime_settings_section(
         };
         let variant = if src == py.download_source {
             ButtonVariant::Primary
-        } else {
+    } else {
             ButtonVariant::Secondary
         };
         let h = if src == py.download_source {
@@ -456,12 +456,12 @@ fn python_runtime_settings_section(
         };
         let variant = if mode == py.pip_registry_mode {
             ButtonVariant::Primary
-        } else {
+    } else {
             ButtonVariant::Secondary
-        };
+    };
         let h = if mode == py.pip_registry_mode {
             tokens.control_height_primary
-        } else {
+    } else {
             tokens.control_height_secondary
         };
         pip_row = pip_row.push(
@@ -505,7 +505,7 @@ fn python_runtime_settings_section(
     )
     .padding(Padding::from([sp.md as f32, sp.md as f32]))
     .style(card_container_style(tokens, 1))
-    .into()
+        .into()
 }
 
 fn java_runtime_settings_section(
@@ -529,7 +529,7 @@ fn java_runtime_settings_section(
         };
         let variant = if src == java.download_source {
             ButtonVariant::Primary
-        } else {
+    } else {
             ButtonVariant::Secondary
         };
         dl_row = dl_row.push(
@@ -679,7 +679,7 @@ fn go_runtime_settings_section(
     }
 
     let custom_block: Element<'static, Message> = if go.proxy_mode == GoProxyMode::Custom {
-        row![
+            row![
             container(
                 text_input("https://goproxy.cn,direct", proxy_draft)
                     .on_input(|s| Message::EnvCenter(EnvCenterMsg::SetGoProxyCustomDraft(s)))
@@ -705,7 +705,7 @@ fn go_runtime_settings_section(
             .style(button_style(tokens, ButtonVariant::Secondary)),
         ]
         .spacing(sp.sm as f32)
-        .align_y(Alignment::Center)
+            .align_y(Alignment::Center)
         .into()
     } else {
         column![].into()
@@ -768,7 +768,7 @@ fn go_runtime_settings_section(
             dl_row,
             gp_row,
             custom_block,
-            text(envr_core::i18n::tr_key(
+                text(envr_core::i18n::tr_key(
                 "gui.runtime.go.private_title",
                 "私有模块（可选）",
                 "Private modules (optional)",
@@ -994,7 +994,7 @@ fn deno_runtime_settings_section(
         };
         let variant = if mode == deno.package_source {
             ButtonVariant::Primary
-        } else {
+    } else {
             ButtonVariant::Secondary
         };
         let h = if mode == deno.package_source {
@@ -1170,8 +1170,8 @@ fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Mes
             .size(ty.caption)
             .color(muted)
             .width(Length::Fill),
-        ]
-        .spacing(sp.sm as f32)
+    ]
+    .spacing(sp.sm as f32)
         .align_y(Alignment::Center),
     )
     .padding(Padding::from([sp.sm as f32, sp.md as f32]))
@@ -1273,9 +1273,9 @@ pub fn env_center_view(
     let cur_line = match &state.current {
         Some(v) => {
             let mut s = format!(
-                "{} {}",
-                envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
-                v.0
+            "{} {}",
+            envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
+            v.0
             );
             if state.kind == RuntimeKind::Php {
                 if let Some(ts) = state.php_global_current_want_ts {
@@ -1309,12 +1309,12 @@ pub fn env_center_view(
     };
 
     let toggle_btn = button(button_content_centered(
-        row![
-            Lucide::ChevronsUpDown.view(16.0, gui_theme::to_color(tokens.colors.text)),
-            text(toggle_lbl),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
+            row![
+                Lucide::ChevronsUpDown.view(16.0, gui_theme::to_color(tokens.colors.text)),
+                text(toggle_lbl),
+            ]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
         .into(),
     ))
     .on_press_maybe(
@@ -1329,9 +1329,9 @@ pub fn env_center_view(
 
     let header_content = if show_runtime_fold {
         row![text(header_title).size(ty.section), cur_el, toggle_btn,]
-            .spacing(sp.sm as f32)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
     } else {
         row![text(header_title).size(ty.section), cur_el]
             .spacing(sp.sm as f32)
@@ -1549,7 +1549,7 @@ pub fn env_center_view(
 
     let mut show_keys: Vec<String> = if query_norm.is_empty() {
         keys.clone()
-    } else {
+            } else {
         let needle = query_key.as_deref().unwrap_or(query_norm);
         match state.kind {
             RuntimeKind::Node => keys.into_iter().filter(|k| k.contains(needle)).collect(),
@@ -1564,7 +1564,7 @@ pub fn env_center_view(
                             let minor = it.next().unwrap_or("");
                             major == needle || minor == needle
                         })
-                        .collect()
+                    .collect()
                 }
             }
             RuntimeKind::Go => {
@@ -1656,10 +1656,10 @@ pub fn env_center_view(
         || (deno_waiting_remote && show_keys.is_empty())
         || (bun_waiting_remote && show_keys.is_empty())
     {
-        list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
+                list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
     } else if show_keys.is_empty() {
-        list_col = list_col.push(matches_empty_hint());
-    } else {
+                list_col = list_col.push(matches_empty_hint());
+            } else {
         for key in show_keys.iter() {
             let installed_versions = installed_by_key.get(key).cloned().unwrap_or_default();
             let current_key = state.current.as_ref().and_then(|v| match state.kind {
@@ -1685,7 +1685,7 @@ pub fn env_center_view(
             };
             let show_as_active = is_active && path_proxy_on && flavor_matches_global;
 
-            let highest_installed = installed_versions.first().cloned();
+                    let highest_installed = installed_versions.first().cloned();
 
             let label_base = if state.kind == RuntimeKind::Node {
                 if let Some(_rv) = node_remote_latest_for_key(state, key) {
@@ -1715,7 +1715,7 @@ pub fn env_center_view(
             };
 
             let left_text = if show_as_active {
-                format!(
+                        format!(
                     "{} {}",
                     label_base,
                     envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)",)
@@ -1778,13 +1778,13 @@ pub fn env_center_view(
                     };
 
                     let use_btn = button(button_content_centered(
-                        row![
-                            Lucide::Package.view(14.0, txt),
-                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
+                                row![
+                                    Lucide::Package.view(14.0, txt),
+                                    text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                                ]
+                                .spacing(sp.xs as f32)
+                                .align_y(Alignment::Center)
+                                .into(),
                     ))
                     .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
                         Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
@@ -1832,22 +1832,22 @@ pub fn env_center_view(
                     );
                 }
                 container(rows).width(Length::Fill).into()
-            } else {
+                    } else {
                 let spec = install_spec();
                 let install_btn = button(button_content_centered(
-                    row![
-                        Lucide::Download.view(14.0, txt),
+                                row![
+                                    Lucide::Download.view(14.0, txt),
                         text(envr_core::i18n::tr_key(
                             "gui.action.install",
                             "安装",
                             "Install"
                         )),
-                    ]
-                    .spacing(sp.xs as f32)
-                    .align_y(Alignment::Center)
-                    .into(),
+                                ]
+                                .spacing(sp.xs as f32)
+                                .align_y(Alignment::Center)
+                                .into(),
                 ))
-                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
+                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
                     spec.clone(),
                 ))))
                 .height(Length::Fixed(
@@ -1856,20 +1856,20 @@ pub fn env_center_view(
                         .max(tokens.min_click_target_px()),
                 ))
                 .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, ButtonVariant::Primary));
+                        .style(button_style(tokens, ButtonVariant::Primary));
 
                 let install_and_use_btn = button(button_content_centered(
-                    row![
-                        Lucide::RefreshCw.view(14.0, txt),
-                        text(envr_core::i18n::tr_key(
-                            "gui.action.install_use",
-                            "安装并切换",
-                            "Install & Use"
-                        )),
-                    ]
-                    .spacing(sp.xs as f32)
-                    .align_y(Alignment::Center)
-                    .into(),
+                                row![
+                                    Lucide::RefreshCw.view(14.0, txt),
+                                    text(envr_core::i18n::tr_key(
+                                        "gui.action.install_use",
+                                        "安装并切换",
+                                        "Install & Use"
+                                    )),
+                                ]
+                                .spacing(sp.xs as f32)
+                                .align_y(Alignment::Center)
+                                .into(),
                 ))
                 .on_press_maybe(
                     path_proxy_on
@@ -1881,20 +1881,20 @@ pub fn env_center_view(
                         .max(tokens.min_click_target_px()),
                 ))
                 .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, ButtonVariant::Secondary));
+                        .style(button_style(tokens, ButtonVariant::Secondary));
 
-                container(
-                    row![install_btn, install_and_use_btn]
-                        .spacing(sp.sm as f32)
-                        .align_y(Alignment::Center),
-                )
-                .into()
-            };
+                        container(
+                            row![install_btn, install_and_use_btn]
+                                .spacing(sp.sm as f32)
+                                .align_y(Alignment::Center),
+                        )
+                        .into()
+                    };
 
-            list_col = list_col.push(
-                container(
+                    list_col = list_col.push(
+                        container(
                     row![text(left_text).width(Length::Fill), action_btn,]
-                        .spacing(sp.sm as f32)
+                            .spacing(sp.sm as f32)
                         .align_y(Alignment::Center),
                 )
                 .style(card_container_style(tokens, 1)),
@@ -1908,7 +1908,7 @@ pub fn env_center_view(
             "筛选主版本（例如 3.14）",
             "Filter by major.minor (e.g. 3.14)",
         )
-    } else {
+                } else {
         envr_core::i18n::tr_key(
             "gui.runtime.search_placeholder",
             "筛选主版本（例如 24）",
@@ -1957,17 +1957,17 @@ pub fn env_center_view(
         state.kind == RuntimeKind::Deno && deno_direct_spec_blocked(&state.direct_install_input);
     let direct_spec_ready = direct_spec_nonempty && !bun_spec_blocked && !deno_spec_blocked;
     let direct_install_btn = button(button_content_centered(
-        row![
+                            row![
             Lucide::Download.view(14.0, txt),
             text(envr_core::i18n::tr_key(
                 "gui.action.install",
                 "安装",
                 "Install"
             )),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
-        .into(),
+                            ]
+                            .spacing(sp.xs as f32)
+                            .align_y(Alignment::Center)
+                            .into(),
     ))
     .on_press_maybe(
         direct_spec_ready.then_some(Message::EnvCenter(EnvCenterMsg::SubmitDirectInstall)),
@@ -1977,7 +1977,7 @@ pub fn env_center_view(
     .style(button_style(tokens, ButtonVariant::Primary));
 
     let direct_install_use_btn = button(button_content_centered(
-        row![
+                            row![
             Lucide::RefreshCw.view(14.0, txt),
             text(envr_core::i18n::tr_key(
                 "gui.action.install_use",
@@ -1986,7 +1986,7 @@ pub fn env_center_view(
             )),
         ]
         .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
+                            .align_y(Alignment::Center)
         .into(),
     ))
     .on_press_maybe(
@@ -2030,7 +2030,7 @@ pub fn env_center_view(
             .size(ty.micro)
             .color(gui_theme::to_color(tokens.colors.warning)),
         )
-    } else {
+                        } else {
         None
     };
 
@@ -2100,12 +2100,12 @@ pub fn env_center_view(
     .width(Length::Fill);
     if busy {
         col = col.push(
-            text(envr_core::i18n::tr_key(
+                                        text(envr_core::i18n::tr_key(
                 "gui.app.loading",
                 "正在加载…",
                 "Loading…",
-            ))
-            .size(ty.micro)
+                                        ))
+                                        .size(ty.micro)
             .color(muted),
         );
     }
@@ -2342,7 +2342,7 @@ fn rust_env_center_view(
 
     column![header, status_card, settings_card, ops_card, tab_row, list]
         .spacing(sp.sm as f32)
-        .width(Length::Fill)
+            .width(Length::Fill)
         .into()
 }
 
@@ -2428,7 +2428,7 @@ fn rust_kv_list(
             button(button_content_centered(
                 row![
                     Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
-                    text(envr_core::i18n::tr_key(
+            text(envr_core::i18n::tr_key(
                         "gui.action.uninstall",
                         "卸载",
                         "Uninstall"
@@ -2469,8 +2469,8 @@ fn rust_kv_list(
             column![
                 text(name).size(ty.body_small),
                 text(if installed { "(installed)" } else { "" })
-                    .size(ty.micro)
-                    .color(muted),
+            .size(ty.micro)
+            .color(muted),
             ]
             .spacing(0)
             .width(Length::Fill),
@@ -2626,13 +2626,13 @@ fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Me
     for i in 0..n {
         col = col.push(
             container(space().width(Length::Fill).height(Length::Fixed(bar_h)))
-                .width(Length::Fill)
-                .height(Length::Fixed(row_h))
-                .align_y(iced::alignment::Vertical::Center)
-                .padding([0, tokens.space().md as u16])
-                .style(move |_theme: &Theme| {
-                    iced::widget::container::Style::default().background(Background::Color(fill))
-                }),
+            .width(Length::Fill)
+            .height(Length::Fixed(row_h))
+            .align_y(iced::alignment::Vertical::Center)
+            .padding([0, tokens.space().md as u16])
+            .style(move |_theme: &Theme| {
+                iced::widget::container::Style::default().background(Background::Color(fill))
+            }),
         );
         if i + 1 < n {
             col = col.push(rule::horizontal(1.0));

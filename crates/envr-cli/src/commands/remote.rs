@@ -4,6 +4,9 @@ use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, parse_runtime_kind};
+use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
+use envr_runtime_node::{list_node_remote_rows, parse_node_index, NodeRemoteRow};
+use serde_json::{Value, json};
 
 // Keep defaults limited to runtimes that support remote listing across platforms.
 const ALL_KINDS: [RuntimeKind; 5] = [
@@ -14,14 +17,79 @@ const ALL_KINDS: [RuntimeKind; 5] = [
     RuntimeKind::Bun,
 ];
 
+fn node_index_cache_path() -> Option<std::path::PathBuf> {
+    let platform = current_platform_paths().ok()?;
+    Some(
+        index_cache_dir_from_platform(&platform)
+            .join("node")
+            .join("index.json"),
+    )
+}
+
+fn try_node_remote_rows(filter: &RemoteFilter) -> Option<Vec<NodeRemoteRow>> {
+    let path = node_index_cache_path()?;
+    let body = std::fs::read_to_string(&path).ok()?;
+    let releases = parse_node_index(&body).ok()?;
+    list_node_remote_rows(
+        &releases,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        filter,
+    )
+    .ok()
+}
+
+fn node_version_json(row: &NodeRemoteRow) -> Value {
+    let mut o = json!({
+        "version": row.version,
+        "lts": row.lts,
+        "lts_codename": Value::Null,
+        "date": Value::Null,
+    });
+    if let Some(cn) = &row.lts_codename {
+        o["lts_codename"] = json!(cn);
+    }
+    if let Some(d) = &row.date {
+        o["date"] = json!(d);
+    }
+    o
+}
+
+fn format_remote_node_line(g: &GlobalArgs, row: &NodeRemoteRow) -> String {
+    let styles = output::use_terminal_styles(g);
+    let lts_tag = envr_core::i18n::tr_key("cli.list.lts_tag", "(LTS)", "(LTS)");
+    let mut tags = String::new();
+    if row.lts {
+        tags.push(' ');
+        if styles {
+            tags.push_str("\x1b[33m");
+        }
+        tags.push_str(&lts_tag);
+        if let Some(c) = &row.lts_codename {
+            tags.push_str(&format!(" {c}"));
+        }
+        if styles {
+            tags.push_str("\x1b[0m");
+        }
+    }
+    if let Some(d) = &row.date {
+        tags.push_str(if styles { " \x1b[2m" } else { " " });
+        tags.push_str(d);
+        if styles {
+            tags.push_str("\x1b[0m");
+        }
+    }
+    format!("  {}{tags}", row.version)
+}
+
 pub fn run(
     g: &GlobalArgs,
     service: &RuntimeService,
-    lang: Option<String>,
+    runtime: Option<String>,
     prefix: Option<String>,
 ) -> i32 {
     let filter = RemoteFilter { prefix };
-    let kinds: Vec<RuntimeKind> = match lang {
+    let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
         Some(l) => match parse_runtime_kind(l.trim()) {
             Ok(k) => vec![k],
@@ -29,28 +97,77 @@ pub fn run(
         },
     };
 
-    let mut rows: Vec<(RuntimeKind, Vec<String>)> = Vec::with_capacity(kinds.len());
+    enum RemoteRow {
+        Plain(Vec<String>),
+        Node(Vec<NodeRemoteRow>),
+    }
+
+    let mut rows: Vec<(RuntimeKind, RemoteRow)> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        match service.list_remote(kind, &filter) {
-            Ok(vers) => rows.push((kind, vers.into_iter().map(|v| v.0).collect())),
+        let vers = match service.list_remote(kind, &filter) {
+            Ok(v) => v,
             Err(e) => return common::print_envr_error(g, e),
-        }
+        };
+        let payload = if kind == RuntimeKind::Node {
+            if let Some(enriched) = try_node_remote_rows(&filter) {
+                RemoteRow::Node(enriched)
+            } else {
+                RemoteRow::Plain(vers.into_iter().map(|v| v.0).collect())
+            }
+        } else {
+            RemoteRow::Plain(vers.into_iter().map(|v| v.0).collect())
+        };
+        rows.push((kind, payload));
     }
 
     let runtimes: Vec<_> = rows
         .iter()
-        .map(|(k, vers)| {
+        .map(|(k, payload)| {
+            let versions: Vec<Value> = match payload {
+                RemoteRow::Plain(vers) => vers
+                    .iter()
+                    .map(|v| serde_json::json!({ "version": v }))
+                    .collect(),
+                RemoteRow::Node(node_rows) => node_rows.iter().map(node_version_json).collect(),
+            };
             serde_json::json!({
                 "kind": kind_label(*k),
-                "versions": vers,
+                "versions": versions,
             })
         })
         .collect();
-    let data = serde_json::json!({ "runtimes": runtimes });
+    let data = serde_json::json!({ "remote_runtimes": runtimes });
 
     output::emit_ok(g, "list_remote", data, || {
+        if output::wants_porcelain(g) {
+            let multi_kind = rows.len() > 1;
+            for (kind, payload) in &rows {
+                match payload {
+                    RemoteRow::Plain(vers) => {
+                        for v in vers {
+                            if multi_kind {
+                                println!("{}\t{}", kind_label(*kind), v);
+                            } else {
+                                println!("{v}");
+                            }
+                        }
+                    }
+                    RemoteRow::Node(node_rows) => {
+                        for r in node_rows {
+                            if multi_kind {
+                                println!("{}\t{}", kind_label(*kind), r.version);
+                            } else {
+                                println!("{}", r.version);
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
-        for (kind, versions) in rows {
+        for (kind, payload) in rows {
             println!(
                 "{}",
                 fmt_template(
@@ -62,11 +179,24 @@ pub fn run(
                     &[("kind", kind_label(kind))],
                 )
             );
-            if versions.is_empty() {
-                println!("{none_line}");
-            } else {
-                for v in versions {
-                    println!("  {v}");
+            match payload {
+                RemoteRow::Plain(versions) => {
+                    if versions.is_empty() {
+                        println!("{none_line}");
+                    } else {
+                        for v in versions {
+                            println!("  {v}");
+                        }
+                    }
+                }
+                RemoteRow::Node(node_rows) => {
+                    if node_rows.is_empty() {
+                        println!("{none_line}");
+                    } else {
+                        for r in &node_rows {
+                            println!("{}", format_remote_node_line(g, r));
+                        }
+                    }
                 }
             }
         }

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-alias-list-v1.schema.json",
+  "title": "envr alias list (message: alias_list)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["aliases"],
+  "properties": {
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "target"],
+        "properties": {
+          "name": { "type": "string" },
+          "target": { "type": "string" }
+        }
+      }
+    }
+  }
+}

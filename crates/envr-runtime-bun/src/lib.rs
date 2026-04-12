@@ -14,8 +14,8 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::EnvrResult;
-use envr_platform::paths::current_platform_paths;
+use envr_error::{EnvrError, EnvrResult};
+use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use std::path::{Path, PathBuf};
 
 pub struct BunRuntimeProvider {
@@ -53,10 +53,40 @@ impl BunRuntimeProvider {
     }
 
     fn load_tags(&self) -> EnvrResult<Vec<Tag>> {
-        let client = blocking_http_client()?;
+        let platform = current_platform_paths()?;
+        let base = index_cache_dir_from_platform(&platform).join("bun");
+        let cache_file = base.join("tags.json");
+
+        let ttl_secs = Self::remote_cache_ttl_secs();
         let settings = mirror::load_settings()?;
+        let offline = settings.mirror.mode == envr_config::settings::MirrorMode::Offline;
+
+        if (offline || Self::file_is_within_ttl(&cache_file, ttl_secs))
+            && let Ok(body) = std::fs::read_to_string(&cache_file)
+            && let Ok(tags) = parse_tags(&body)
+            && !tags.is_empty()
+        {
+            return Ok(tags);
+        }
+
+        if offline {
+            return Err(EnvrError::Download(format!(
+                "offline mode: missing cached bun tags at {} (run `envr cache index sync`)",
+                cache_file.display()
+            )));
+        }
+
+        let client = blocking_http_client()?;
         let url = mirror::maybe_mirror_url(&settings, &self.tags_api)?;
-        fetch_all_tags(&client, &url)
+        let tags = fetch_all_tags(&client, &url)?;
+        let _ = (|| -> EnvrResult<()> {
+            std::fs::create_dir_all(&base)?;
+            let s = serde_json::to_string(&tags)
+                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            std::fs::write(&cache_file, s)?;
+            Ok(())
+        })();
+        Ok(tags)
     }
 
     fn remote_cache_ttl_secs() -> u64 {
@@ -196,5 +226,13 @@ impl RuntimeProvider for BunRuntimeProvider {
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = BunPaths::new(self.runtime_root()?);
+        Ok((vec![paths.version_dir(&version.0)], None))
     }
 }

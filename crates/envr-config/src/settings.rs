@@ -2,6 +2,8 @@ use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvrPaths;
 use serde::{Deserialize, Serialize};
 use std::{
+    cell::RefCell,
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     time::SystemTime,
@@ -768,25 +770,49 @@ impl Settings {
         let path = path.as_ref();
         let content = fs::read_to_string(path).map_err(EnvrError::from)?;
         let settings: Settings = toml::from_str(&content).map_err(|err| {
-            EnvrError::Config(format!("failed to parse {}: {err}", path.display()))
+            EnvrError::Config(format!(
+                "failed to parse {}: {}",
+                path.display(),
+                format_toml_settings_deser_error(&content, &err)
+            ))
         })?;
         settings.validate()?;
         Ok(settings)
     }
 
     pub fn load_or_default_from(path: impl AsRef<Path>) -> EnvrResult<Self> {
-        let path = path.as_ref();
-        match Self::load_from(path) {
-            Ok(v) => Ok(v),
+        let path = path.as_ref().to_path_buf();
+        let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+
+        if let Some(s) = SETTINGS_FILE_CACHE.with(|c| {
+            c.borrow().get(&path).and_then(|(m2, s)| {
+                if m2 == &mtime {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+        }) {
+            return Ok(s);
+        }
+
+        let loaded: Settings = match Self::load_from(&path) {
+            Ok(v) => v,
             Err(_err) => {
                 if path.exists() {
-                    let _ = backup_corrupted_file(path);
+                    let _ = backup_corrupted_file(&path);
                 }
                 let defaults = Settings::default();
                 defaults.validate()?;
-                Ok(defaults)
+                defaults
             }
-        }
+        };
+
+        SETTINGS_FILE_CACHE.with(|c| {
+            c.borrow_mut()
+                .insert(path, (mtime, loaded.clone()));
+        });
+        Ok(loaded)
     }
 
     pub fn save_to(&self, path: impl AsRef<Path>) -> EnvrResult<()> {
@@ -803,8 +829,63 @@ impl Settings {
 
         fs::write(&tmp_path, content).map_err(EnvrError::from)?;
         replace_file(&tmp_path, path)?;
+        let pb = path.to_path_buf();
+        SETTINGS_FILE_CACHE.with(|c| {
+            c.borrow_mut().remove(&pb);
+        });
+        RESOLVE_RUNTIME_ROOT_CACHE.with(|c| *c.borrow_mut() = None);
         Ok(())
     }
+}
+
+thread_local! {
+    static SETTINGS_FILE_CACHE: RefCell<HashMap<PathBuf, (Option<SystemTime>, Settings)>> =
+        RefCell::new(HashMap::new());
+}
+
+thread_local! {
+    static RESOLVE_RUNTIME_ROOT_CACHE: RefCell<Option<(PathBuf, Option<SystemTime>, PathBuf)>> =
+        RefCell::new(None);
+}
+
+/// Clears in-process caches for [`Settings::load_or_default_from`] and [`resolve_runtime_root`].
+pub fn reset_settings_load_caches() {
+    SETTINGS_FILE_CACHE.with(|c| c.borrow_mut().clear());
+    RESOLVE_RUNTIME_ROOT_CACHE.with(|c| *c.borrow_mut() = None);
+}
+
+fn format_toml_settings_deser_error(content: &str, e: &toml::de::Error) -> String {
+    match e.span() {
+        Some(span) => {
+            let start = span.start.min(content.len());
+            let line = content[..start].bytes().filter(|&b| b == b'\n').count() + 1;
+            format!("line {line}: {e}")
+        }
+        None => e.to_string(),
+    }
+}
+
+/// Read `settings.toml` from disk, deserialize, and run [`Settings::validate`].
+///
+/// Fails on missing file, TOML/serde errors (with best-effort **line number**), or semantic validation.
+pub fn validate_settings_file(path: impl AsRef<Path>) -> EnvrResult<()> {
+    let path = path.as_ref();
+    if !path.is_file() {
+        return Err(EnvrError::Validation(format!(
+            "not a file: {}",
+            path.display()
+        )));
+    }
+    let content = fs::read_to_string(path).map_err(EnvrError::from)?;
+    let settings: Settings = toml::from_str(&content).map_err(|e| {
+        EnvrError::Config(format!(
+            "{}: {}",
+            path.display(),
+            format_toml_settings_deser_error(&content, &e)
+        ))
+    })?;
+    settings.validate()?;
+    Ok(())
 }
 
 /// Returns `RUSTUP_DIST_SERVER` when a non-official mirror is selected, otherwise `None`.
@@ -922,15 +1003,38 @@ pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
 
     let platform = envr_platform::paths::current_platform_paths()?;
     let settings_path = settings_path_from_platform(&platform);
-    let settings = Settings::load_or_default_from(&settings_path)?;
-    if let Some(ref r) = settings.paths.runtime_root {
-        let t = r.trim();
-        if !t.is_empty() {
-            return Ok(PathBuf::from(t));
-        }
+    let mtime = fs::metadata(&settings_path)
+        .ok()
+        .and_then(|m| m.modified().ok());
+
+    if let Some(root) = RESOLVE_RUNTIME_ROOT_CACHE.with(|c| {
+        c.borrow().as_ref().and_then(|(p, m2, root)| {
+            if p == &settings_path && m2 == &mtime {
+                Some(root.clone())
+            } else {
+                None
+            }
+        })
+    }) {
+        return Ok(root);
     }
 
-    Ok(platform.runtime_root.clone())
+    let settings = Settings::load_or_default_from(&settings_path)?;
+    let root = if let Some(ref r) = settings.paths.runtime_root {
+        let t = r.trim();
+        if !t.is_empty() {
+            PathBuf::from(t)
+        } else {
+            platform.runtime_root.clone()
+        }
+    } else {
+        platform.runtime_root.clone()
+    };
+
+    RESOLVE_RUNTIME_ROOT_CACHE.with(|c| {
+        *c.borrow_mut() = Some((settings_path, mtime, root.clone()));
+    });
+    Ok(root)
 }
 
 /// True when the primary language subtag of a BCP-47–style tag is `zh` (e.g. `zh-CN`, `zh_TW.UTF-8`).

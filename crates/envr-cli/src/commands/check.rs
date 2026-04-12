@@ -5,7 +5,7 @@ use crate::output::{self, fmt_template};
 use envr_config::project_config::load_project_config;
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::EnvrError;
-use envr_shim_core::{ShimContext, pick_version_home};
+use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -28,8 +28,8 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
         );
     };
 
-    let ctx = match ShimContext::from_process_env() {
-        Ok(c) => c,
+    let runtime_root = match common::session_runtime_root() {
+        Ok(p) => p,
         Err(e) => return common::print_envr_error(g, e),
     };
 
@@ -47,7 +47,7 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
             continue;
         }
         if let Some(spec) = &rt.version {
-            let vd = ctx.runtime_root.join("runtimes").join(key).join("versions");
+            let vd = runtime_root.join("runtimes").join(key).join("versions");
             if let Err(e) = pick_version_home(&vd, spec) {
                 problems.push(format!("{key}: {e}"));
             }
@@ -69,9 +69,9 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
                 output::write_envelope(false, Some("project_check_failed"), &msg, data, &[]);
             }
             OutputFormat::Text => {
-                eprintln!("envr: {msg}");
+                output::print_error_text("project_check_failed", &msg);
                 for p in &problems {
-                    eprintln!("  - {p}");
+                    eprintln!("envr:   - {p}");
                 }
             }
         }

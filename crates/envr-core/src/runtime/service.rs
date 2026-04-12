@@ -110,6 +110,14 @@ impl RuntimeService {
         self.provider(kind)?.uninstall(version)
     }
 
+    pub fn uninstall_dry_run_targets(
+        &self,
+        kind: RuntimeKind,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        self.provider(kind)?.uninstall_dry_run_targets(version)
+    }
+
     pub fn current(&self, kind: RuntimeKind) -> EnvrResult<Option<RuntimeVersion>> {
         self.provider(kind)?.current()
     }

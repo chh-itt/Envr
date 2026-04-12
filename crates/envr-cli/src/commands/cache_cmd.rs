@@ -4,9 +4,17 @@ use crate::output;
 
 use envr_error::{EnvrError, EnvrResult};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
-pub fn clean(g: &GlobalArgs, kind: Option<String>, all: bool) -> i32 {
+pub fn clean(
+    g: &GlobalArgs,
+    kind: Option<String>,
+    all: bool,
+    older_than: Option<String>,
+    newer_than: Option<String>,
+    dry_run: bool,
+) -> i32 {
     let root = match common::effective_runtime_root() {
         Ok(r) => r,
         Err(e) => return common::print_envr_error(g, e),
@@ -21,26 +29,720 @@ pub fn clean(g: &GlobalArgs, kind: Option<String>, all: bool) -> i32 {
         (false, Some(k)) => root.join("cache").join(k.to_ascii_lowercase()),
     };
 
-    match remove_dir_if_exists(&target) {
-        Ok(()) => {
-            let data = serde_json::json!({ "removed": target.to_string_lossy() });
-            output::emit_ok(g, "cache_cleaned", data, || {
+    let older_raw = older_than
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let newer_raw = newer_than
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    if newer_raw.is_some() && older_raw.is_none() {
+        return common::print_envr_error(
+            g,
+            EnvrError::Validation(
+                envr_core::i18n::tr_key(
+                    "cli.err.cache_newer_than_requires_older",
+                    "`--newer-than` 必须与 `--older-than` 同时使用。",
+                    "`--newer-than` requires `--older-than`.",
+                )
+            ),
+        );
+    }
+
+    if let Some(ref spec) = older_raw {
+        let age_old = match parse_duration_spec(spec) {
+            Ok(d) => d,
+            Err(e) => return common::print_envr_error(g, e),
+        };
+        let age_new = if let Some(ref ns) = newer_raw {
+            match parse_duration_spec(ns) {
+                Ok(d) => Some(d),
+                Err(e) => return common::print_envr_error(g, e),
+            }
+        } else {
+            None
+        };
+        if let Some(an) = age_new {
+            if an <= age_old {
+                return common::print_envr_error(
+                    g,
+                    EnvrError::Validation(
+                        envr_core::i18n::tr_key(
+                            "cli.err.cache_age_window_invalid",
+                            "`--newer-than` 必须比 `--older-than` 更长（更久以前），例如 `--newer-than 90d --older-than 30d`。",
+                            "`--newer-than` must be a longer age than `--older-than` (further in the past), e.g. `--newer-than 90d --older-than 30d`.",
+                        )
+                    ),
+                );
+            }
+        }
+
+        let now = SystemTime::now();
+        let cutoff_old = now
+            .checked_sub(age_old)
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let cutoff_new = age_new.map(|d| {
+            now.checked_sub(d)
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+        });
+
+        if !target.exists() {
+            let data = prune_missing_json(
+                &target,
+                spec,
+                newer_raw.as_deref(),
+                dry_run,
+            );
+            return output::emit_ok(g, "cache_cleaned", data, || {
                 if !g.quiet {
                     println!(
                         "{}",
-                        crate::output::fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.cache.removed",
-                                "已移除缓存：{path}",
-                                "cache removed: {path}",
-                            ),
-                            &[("path", &target.display().to_string())],
+                        envr_core::i18n::tr_key(
+                            "cli.cache.prune_none_missing",
+                            "缓存路径不存在，无需清理。",
+                            "cache path does not exist; nothing to do.",
                         )
                     );
                 }
-            })
+            });
         }
-        Err(e) => common::print_envr_error(g, e),
+
+        if target.is_file() {
+            return common::print_envr_error(
+                g,
+                EnvrError::Validation(crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.err.cache_path_is_file",
+                        "缓存路径是文件，应为目录：{path}",
+                        "cache path is a file, expected directory: {path}",
+                    ),
+                    &[("path", &target.display().to_string())],
+                )),
+            );
+        }
+
+        match prune_cache_by_age(&target, cutoff_old, cutoff_new, dry_run) {
+            Ok((n, b)) => {
+                let data = prune_result_json(
+                    &target,
+                    spec,
+                    newer_raw.as_deref(),
+                    dry_run,
+                    n,
+                    b,
+                );
+                output::emit_ok(g, "cache_cleaned", data, || {
+                    if !g.quiet {
+                        print_prune_human(
+                            &target,
+                            spec,
+                            newer_raw.as_deref(),
+                            dry_run,
+                            n,
+                            b,
+                        );
+                    }
+                })
+            }
+            Err(e) => common::print_envr_error(g, e),
+        }
+    } else if dry_run {
+        if !target.exists() {
+            let data = serde_json::json!({
+                "removed": target.to_string_lossy(),
+                "mode": "remove_tree",
+                "dry_run": true,
+                "files_would_remove": 0u64,
+                "bytes_would_free": 0u64,
+            });
+            return output::emit_ok(g, "cache_cleaned", data, || {
+                if !g.quiet {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.cache.remove_tree_dry_none",
+                            "[dry-run] 缓存路径不存在，无需操作。",
+                            "[dry-run] cache path does not exist; nothing to do.",
+                        )
+                    );
+                }
+            });
+        }
+        if target.is_file() {
+            return common::print_envr_error(
+                g,
+                EnvrError::Validation(crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.err.cache_path_is_file",
+                        "缓存路径是文件，应为目录：{path}",
+                        "cache path is a file, expected directory: {path}",
+                    ),
+                    &[("path", &target.display().to_string())],
+                )),
+            );
+        }
+        match count_tree_stats(&target) {
+            Ok((files, bytes)) => {
+                let data = serde_json::json!({
+                    "removed": target.to_string_lossy(),
+                    "mode": "remove_tree",
+                    "dry_run": true,
+                    "files_would_remove": files,
+                    "bytes_would_free": bytes,
+                });
+                output::emit_ok(g, "cache_cleaned", data, || {
+                    if !g.quiet {
+                        println!(
+                            "{}",
+                            crate::output::fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.cache.remove_tree_dry",
+                                    "[dry-run] 将整棵删除缓存目录 {path}（约 {files} 个文件，{bytes} 字节）",
+                                    "[dry-run] would remove entire cache tree {path} (~{files} file(s), {bytes} byte(s))",
+                                ),
+                                &[
+                                    ("path", &target.display().to_string()),
+                                    ("files", &files.to_string()),
+                                    ("bytes", &bytes.to_string()),
+                                ],
+                            )
+                        );
+                    }
+                })
+            }
+            Err(e) => common::print_envr_error(g, e),
+        }
+    } else {
+        match remove_dir_if_exists(&target) {
+            Ok(()) => {
+                let data = serde_json::json!({
+                    "removed": target.to_string_lossy(),
+                    "mode": "remove_tree",
+                });
+                output::emit_ok(g, "cache_cleaned", data, || {
+                    if !g.quiet {
+                        println!(
+                            "{}",
+                            crate::output::fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.cache.removed",
+                                    "已移除缓存：{path}",
+                                    "cache removed: {path}",
+                                ),
+                                &[("path", &target.display().to_string())],
+                            )
+                        );
+                    }
+                })
+            }
+            Err(e) => common::print_envr_error(g, e),
+        }
+    }
+}
+
+fn prune_missing_json(
+    target: &Path,
+    older_spec: &str,
+    newer_spec: Option<&str>,
+    dry_run: bool,
+) -> serde_json::Value {
+    let mut data = serde_json::json!({
+        "removed": target.to_string_lossy(),
+        "mode": "prune_by_age",
+        "older_than": older_spec,
+        "newer_than": newer_spec,
+    });
+    if dry_run {
+        data["dry_run"] = serde_json::json!(true);
+        data["files_would_remove"] = serde_json::json!(0u64);
+        data["bytes_would_free"] = serde_json::json!(0u64);
+    } else {
+        data["files_removed"] = serde_json::json!(0u64);
+        data["bytes_freed"] = serde_json::json!(0u64);
+    }
+    data
+}
+
+fn prune_result_json(
+    target: &Path,
+    older_spec: &str,
+    newer_spec: Option<&str>,
+    dry_run: bool,
+    files: u64,
+    bytes: u64,
+) -> serde_json::Value {
+    let mut data = serde_json::json!({
+        "removed": target.to_string_lossy(),
+        "mode": "prune_by_age",
+        "older_than": older_spec,
+        "newer_than": newer_spec,
+    });
+    if dry_run {
+        data["dry_run"] = serde_json::json!(true);
+        data["files_would_remove"] = serde_json::json!(files);
+        data["bytes_would_free"] = serde_json::json!(bytes);
+    } else {
+        data["files_removed"] = serde_json::json!(files);
+        data["bytes_freed"] = serde_json::json!(bytes);
+    }
+    data
+}
+
+fn print_prune_human(
+    target: &Path,
+    older_spec: &str,
+    newer_spec: Option<&str>,
+    dry_run: bool,
+    files: u64,
+    bytes: u64,
+) {
+    if dry_run {
+        if let Some(ns) = newer_spec {
+            println!(
+                "{}",
+                crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.cache.prune_dry_window",
+                        "[dry-run] 缓存 {path}：将删除 {files} 个文件，约 {bytes} 字节（早于 {older} 且晚于 {newer}）",
+                        "[dry-run] cache {path}: would remove {files} file(s), ~{bytes} byte(s) (older than {older} but newer than {newer})",
+                    ),
+                    &[
+                        ("path", &target.display().to_string()),
+                        ("files", &files.to_string()),
+                        ("bytes", &bytes.to_string()),
+                        ("older", older_spec),
+                        ("newer", ns),
+                    ],
+                )
+            );
+        } else {
+            println!(
+                "{}",
+                crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.cache.prune_dry",
+                        "[dry-run] 缓存 {path}：将删除 {files} 个文件，约 {bytes} 字节（早于 {spec}）",
+                        "[dry-run] cache {path}: would remove {files} file(s), ~{bytes} byte(s) older than {spec}",
+                    ),
+                    &[
+                        ("path", &target.display().to_string()),
+                        ("files", &files.to_string()),
+                        ("bytes", &bytes.to_string()),
+                        ("spec", older_spec),
+                    ],
+                )
+            );
+        }
+        return;
+    }
+    if let Some(ns) = newer_spec {
+        println!(
+            "{}",
+            crate::output::fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.cache.prune_done_window",
+                    "已按时间窗清理缓存 {path}：删除 {files} 个文件，释放约 {bytes} 字节（早于 {older} 且晚于 {newer}）",
+                    "Pruned cache under {path}: removed {files} file(s), ~{bytes} byte(s) (older than {older} but newer than {newer})",
+                ),
+                &[
+                    ("path", &target.display().to_string()),
+                    ("files", &files.to_string()),
+                    ("bytes", &bytes.to_string()),
+                    ("older", older_spec),
+                    ("newer", ns),
+                ],
+            )
+        );
+    } else {
+        println!(
+            "{}",
+            crate::output::fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.cache.prune_done",
+                    "已按时间清理缓存 {path}：删除 {files} 个文件，释放约 {bytes} 字节（早于 {spec}）",
+                    "Pruned cache under {path}: removed {files} file(s), ~{bytes} byte(s) older than {spec}",
+                ),
+                &[
+                    ("path", &target.display().to_string()),
+                    ("files", &files.to_string()),
+                    ("bytes", &bytes.to_string()),
+                    ("spec", older_spec),
+                ],
+            )
+        );
+    }
+}
+
+/// Parse `<n><unit>` with units `s|m|h|d|w` (ASCII, case-insensitive) plus common long forms (`days`, `hours`, …).
+fn parse_duration_spec(raw: &str) -> Result<Duration, EnvrError> {
+    let s = raw.trim();
+    let pos = s
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(s.len());
+    if pos == 0 || pos == s.len() {
+        return Err(EnvrError::Validation(format!(
+            "invalid duration {s:?}: expected e.g. 30d, 24h, 90m, 3600s, 1w (see help)"
+        )));
+    }
+    let (num_s, rest) = s.split_at(pos);
+    let num: u64 = num_s.parse().map_err(|_| {
+        EnvrError::Validation(format!("invalid number in duration {s:?}"))
+    })?;
+    if num == 0 {
+        return Err(EnvrError::Validation(
+            "duration must be positive (non-zero)".into(),
+        ));
+    }
+    let unit = rest.trim().to_ascii_lowercase();
+    const DAY: u64 = 86_400;
+    let secs: u64 = match unit.as_str() {
+        "s" | "sec" | "secs" | "second" | "seconds" => num,
+        "m" | "min" | "mins" | "minute" | "minutes" => num
+            .checked_mul(60)
+            .ok_or_else(|| EnvrError::Validation("duration too large".into()))?,
+        "h" | "hr" | "hrs" | "hour" | "hours" => num
+            .checked_mul(3_600)
+            .ok_or_else(|| EnvrError::Validation("duration too large".into()))?,
+        "d" | "day" | "days" => num
+            .checked_mul(DAY)
+            .ok_or_else(|| EnvrError::Validation("duration too large".into()))?,
+        "w" | "wk" | "wks" | "week" | "weeks" => num
+            .checked_mul(DAY)
+            .and_then(|x| x.checked_mul(7))
+            .ok_or_else(|| EnvrError::Validation("duration too large".into()))?,
+        _ => {
+            return Err(EnvrError::Validation(format!(
+                "unknown unit in duration {s:?}: use s, m, h, d, or w (e.g. 30d, 1w)"
+            )));
+        }
+    };
+    Ok(Duration::from_secs(secs))
+}
+
+/// Deletes regular files under `root` whose mtime is older than `cutoff_old` and (if set) newer than `cutoff_new`
+/// (`cutoff_new` < mtime < `cutoff_old`). When `dry_run` is false, removes empty subdirectories afterward (never `root`).
+fn prune_cache_by_age(
+    root: &Path,
+    cutoff_old: SystemTime,
+    cutoff_new: Option<SystemTime>,
+    dry_run: bool,
+) -> EnvrResult<(u64, u64)> {
+    let mut files_removed = 0u64;
+    let mut bytes_freed = 0u64;
+    prune_files_recursive(
+        root,
+        cutoff_old,
+        cutoff_new,
+        dry_run,
+        &mut files_removed,
+        &mut bytes_freed,
+    )?;
+    if !dry_run {
+        prune_empty_descendants(root, root)?;
+    }
+    Ok((files_removed, bytes_freed))
+}
+
+fn prune_files_recursive(
+    path: &Path,
+    cutoff_old: SystemTime,
+    cutoff_new: Option<SystemTime>,
+    dry_run: bool,
+    files_removed: &mut u64,
+    bytes_freed: &mut u64,
+) -> EnvrResult<()> {
+    if path.is_file() {
+        let meta = fs::metadata(path).map_err(EnvrError::from)?;
+        if let Ok(mtime) = meta.modified() {
+            if mtime < cutoff_old && cutoff_new.map(|cn| mtime > cn).unwrap_or(true) {
+                let len = meta.len();
+                if dry_run {
+                    *files_removed = files_removed.saturating_add(1);
+                    *bytes_freed = bytes_freed.saturating_add(len);
+                } else {
+                    fs::remove_file(path).map_err(EnvrError::from)?;
+                    *files_removed = files_removed.saturating_add(1);
+                    *bytes_freed = bytes_freed.saturating_add(len);
+                }
+            }
+        }
+        return Ok(());
+    }
+    if path.is_dir() {
+        for ent in fs::read_dir(path).map_err(EnvrError::from)? {
+            let ent = ent.map_err(EnvrError::from)?;
+            prune_files_recursive(
+                &ent.path(),
+                cutoff_old,
+                cutoff_new,
+                dry_run,
+                files_removed,
+                bytes_freed,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn count_tree_stats(path: &Path) -> EnvrResult<(u64, u64)> {
+    let mut files = 0u64;
+    let mut bytes = 0u64;
+    count_tree_recursive(path, &mut files, &mut bytes)?;
+    Ok((files, bytes))
+}
+
+fn count_tree_recursive(path: &Path, files: &mut u64, bytes: &mut u64) -> EnvrResult<()> {
+    if path.is_file() {
+        let meta = fs::metadata(path).map_err(EnvrError::from)?;
+        *files = files.saturating_add(1);
+        *bytes = bytes.saturating_add(meta.len());
+        return Ok(());
+    }
+    if path.is_dir() {
+        for ent in fs::read_dir(path).map_err(EnvrError::from)? {
+            let ent = ent.map_err(EnvrError::from)?;
+            count_tree_recursive(&ent.path(), files, bytes)?;
+        }
+    }
+    Ok(())
+}
+
+fn prune_empty_descendants(base: &Path, current: &Path) -> EnvrResult<()> {
+    if !current.is_dir() {
+        return Ok(());
+    }
+    for ent in fs::read_dir(current).map_err(EnvrError::from)? {
+        let ent = ent.map_err(EnvrError::from)?;
+        let p = ent.path();
+        if p.is_dir() {
+            prune_empty_descendants(base, &p)?;
+        }
+    }
+    if current != base && dir_is_empty(current)? {
+        let _ = fs::remove_dir(current);
+    }
+    Ok(())
+}
+
+fn dir_is_empty(path: &Path) -> EnvrResult<bool> {
+    Ok(fs::read_dir(path)
+        .map_err(EnvrError::from)?
+        .next()
+        .is_none())
+}
+
+pub fn index(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> i32 {
+    match sub {
+        crate::cli::CacheIndexCmd::Sync { runtime, all, dir } => index_sync(g, runtime, all, dir),
+        crate::cli::CacheIndexCmd::Status { dir } => index_status(g, dir),
+    }
+}
+
+fn index_cache_dir(dir_override: Option<PathBuf>) -> Result<PathBuf, EnvrError> {
+    if let Some(d) = dir_override {
+        return Ok(d);
+    }
+    let platform = envr_platform::paths::current_platform_paths()?;
+    Ok(envr_platform::paths::index_cache_dir_from_platform(&platform))
+}
+
+fn index_sync(g: &GlobalArgs, runtime: Option<String>, all: bool, dir: Option<PathBuf>) -> i32 {
+    let cache_dir = match index_cache_dir(dir) {
+        Ok(d) => d,
+        Err(e) => return common::print_envr_error(g, e),
+    };
+
+    // Temporarily override index cache dir for this process.
+    // This keeps runtime providers consistent without adding new plumbing.
+    let _guard = ScopedEnvVar::set("ENVR_INDEX_CACHE_DIR", cache_dir.to_string_lossy().as_ref());
+
+    let service = match common::runtime_service() {
+        Ok(s) => s,
+        Err(e) => return common::print_envr_error(g, e),
+    };
+
+    let target = runtime
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
+    if target.is_some() && all {
+        return common::print_envr_error(
+            g,
+            EnvrError::Validation("cannot combine RUNTIME with --all".to_string()),
+        );
+    }
+
+    let kinds = match target {
+        None => vec![
+            envr_domain::runtime::RuntimeKind::Node,
+            envr_domain::runtime::RuntimeKind::Deno,
+            envr_domain::runtime::RuntimeKind::Bun,
+        ],
+        Some("node") => vec![envr_domain::runtime::RuntimeKind::Node],
+        Some("deno") => vec![envr_domain::runtime::RuntimeKind::Deno],
+        Some("bun") => vec![envr_domain::runtime::RuntimeKind::Bun],
+        Some(other) => {
+            return common::print_envr_error(
+                g,
+                EnvrError::Validation(format!("unknown runtime: {other}")),
+            );
+        }
+    };
+
+    let mut synced: Vec<String> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+    for k in kinds {
+        // Prefer smaller indexes; ensure Node index.json is populated.
+        let res: Result<(), envr_error::EnvrError> = (|| {
+            if k == envr_domain::runtime::RuntimeKind::Node {
+                let _ = service.list_remote_majors(k)?;
+                let _ = service.list_remote_latest_per_major(k);
+                return Ok(());
+            }
+            let _ = service.list_remote_latest_per_major(k)?;
+            Ok(())
+        })();
+        if let Err(e) = res {
+            errors.push(format!("{k:?}: {e}"));
+        } else {
+            synced.push(format!("{k:?}"));
+        }
+    }
+
+    if !errors.is_empty() {
+        return common::print_envr_error(
+            g,
+            EnvrError::Download(format!(
+                "index sync failed for some runtimes: {}",
+                errors.join("; ")
+            )),
+        );
+    }
+
+    let data = serde_json::json!({
+        "dir": cache_dir.to_string_lossy(),
+        "synced": synced,
+    });
+    output::emit_ok(g, "cache_index_synced", data, || {
+        if !g.quiet {
+            println!(
+                "{}",
+                crate::output::fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.cache.index.synced",
+                        "已预缓存远程索引：{dir}",
+                        "remote indexes cached: {dir}",
+                    ),
+                    &[("dir", &cache_dir.display().to_string())],
+                )
+            );
+        }
+    })
+}
+
+fn index_status(g: &GlobalArgs, dir: Option<PathBuf>) -> i32 {
+    let cache_dir = match index_cache_dir(dir) {
+        Ok(d) => d,
+        Err(e) => return common::print_envr_error(g, e),
+    };
+    let report = build_index_status(&cache_dir);
+    let entries_json: Vec<serde_json::Value> = report
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "runtime": r.runtime,
+                "files": r.files,
+                "newest_mtime_unix_secs": r.newest_mtime_unix_secs,
+            })
+        })
+        .collect();
+    let data = serde_json::json!({
+        "dir": cache_dir.to_string_lossy(),
+        "entries": entries_json,
+    });
+    output::emit_ok(g, "cache_index_status", data, || {
+        println!("{}", cache_dir.display());
+        for r in report {
+            println!(
+                "{}\t{}\t{}",
+                r.runtime,
+                r.files,
+                r
+                    .newest_mtime_unix_secs
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "-".to_string())
+            );
+        }
+    })
+}
+
+#[derive(Clone)]
+struct IndexStatusRow {
+    runtime: String,
+    files: usize,
+    newest_mtime_unix_secs: Option<u64>,
+}
+
+fn build_index_status(dir: &PathBuf) -> Vec<IndexStatusRow> {
+    let runtimes = ["node", "deno", "bun"];
+    let mut out = Vec::new();
+    for r in runtimes {
+        let sub = dir.join(r);
+        let mut files = 0usize;
+        let mut newest: Option<SystemTime> = None;
+        if let Ok(rd) = fs::read_dir(&sub) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_file() {
+                    files += 1;
+                    if let Ok(m) = ent.metadata().and_then(|m| m.modified()) {
+                        newest = Some(newest.map(|cur| cur.max(m)).unwrap_or(m));
+                    }
+                }
+            }
+        }
+        let newest_secs = newest
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+        out.push(IndexStatusRow {
+            runtime: r.to_string(),
+            files,
+            newest_mtime_unix_secs: newest_secs,
+        });
+    }
+    out
+}
+
+struct ScopedEnvVar {
+    key: &'static str,
+    prev: Option<String>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let prev = std::env::var(key).ok();
+        // SAFETY: CLI entry point mutates env during startup; this is local to current thread.
+        unsafe {
+            std::env::set_var(key, value);
+        }
+        Self { key, prev }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        // SAFETY: single-threaded CLI command execution.
+        unsafe {
+            match &self.prev {
+                Some(v) => std::env::set_var(self.key, v),
+                None => std::env::remove_var(self.key),
+            }
+        }
     }
 }
 
@@ -60,4 +762,35 @@ fn remove_dir_if_exists(path: &PathBuf) -> EnvrResult<()> {
     }
     fs::remove_dir_all(path).map_err(EnvrError::from)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod parse_duration_tests {
+    use super::parse_duration_spec;
+    use std::time::Duration;
+
+    #[test]
+    fn parses_days_hours_minutes_seconds_weeks() {
+        assert_eq!(parse_duration_spec("30d").unwrap(), Duration::from_secs(30 * 86_400));
+        assert_eq!(parse_duration_spec("24h").unwrap(), Duration::from_secs(24 * 3600));
+        assert_eq!(parse_duration_spec("90m").unwrap(), Duration::from_secs(90 * 60));
+        assert_eq!(parse_duration_spec("3600s").unwrap(), Duration::from_secs(3600));
+        assert_eq!(parse_duration_spec("1w").unwrap(), Duration::from_secs(7 * 86_400));
+        assert_eq!(parse_duration_spec("2days").unwrap(), Duration::from_secs(2 * 86_400));
+    }
+
+    #[test]
+    fn rejects_zero_and_garbage() {
+        assert!(parse_duration_spec("0d").is_err());
+        assert!(parse_duration_spec("30").is_err());
+        assert!(parse_duration_spec("xyz").is_err());
+        assert!(parse_duration_spec("30x").is_err());
+    }
+
+    #[test]
+    fn prune_window_uses_longer_newer_than_bound() {
+        let older = parse_duration_spec("30d").unwrap();
+        let newer = parse_duration_spec("90d").unwrap();
+        assert!(newer > older, "mtime window needs newer span > older span");
+    }
 }

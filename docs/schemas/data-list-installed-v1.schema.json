@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-list-installed-v1.schema.json",
+  "title": "envr list --format json (message: list_installed); v2 field name",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["installed_runtimes"],
+  "properties": {
+    "installed_runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "versions"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Runtime key: node, python, java, go, rust, php, deno, bun"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["version", "current", "lts", "lts_codename", "npm"],
+              "additionalProperties": true,
+              "properties": {
+                "version": { "type": "string" },
+                "current": { "type": "boolean" },
+                "lts": { "type": "boolean" },
+                "lts_codename": {
+                  "oneOf": [{ "type": "string" }, { "type": "null" }]
+                },
+                "npm": {
+                  "oneOf": [{ "type": "string" }, { "type": "null" }],
+                  "description": "Bundled npm version for Node rows; null otherwise"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

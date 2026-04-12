@@ -2,6 +2,7 @@
 
 use assert_cmd::Command;
 use serde_json::Value;
+use std::fs;
 
 fn parse_json_line(stdout: &[u8]) -> Value {
     for line in stdout.split(|b| *b == b'\n') {
@@ -36,6 +37,11 @@ fn json_stdout(args: &[&str], root: &std::path::Path) -> Value {
 }
 
 fn assert_envelope_shape(v: &Value) {
+    assert_eq!(
+        v.get("schema_version"),
+        Some(&serde_json::json!(2)),
+        "missing or wrong schema_version: {v}"
+    );
     assert!(v.get("success").is_some(), "missing success: {v}");
     assert!(v.get("code").is_some(), "missing code: {v}");
     assert!(v.get("message").is_some(), "missing message: {v}");
@@ -51,7 +57,19 @@ fn list_json_contract() {
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());
     assert_eq!(v["message"], "list_installed");
-    assert!(v["data"]["runtimes"].is_array());
+    let runtimes = v["data"]["installed_runtimes"]
+        .as_array()
+        .expect("installed_runtimes array");
+    assert!(!runtimes.is_empty(), "expected at least one runtime row");
+    let row = &runtimes[0];
+    assert!(row["kind"].is_string());
+    let vers = row["versions"].as_array().expect("versions");
+    if let Some(v0) = vers.first() {
+        assert!(
+            v0["version"].is_string(),
+            "list versions[] entries are objects with version: {v0}"
+        );
+    }
 }
 
 #[test]
@@ -62,7 +80,22 @@ fn current_json_contract() {
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());
     assert_eq!(v["message"], "show_current");
-    assert!(v["data"]["current"].is_array());
+    let runtimes = v["data"]["active_versions"]
+        .as_array()
+        .expect("active_versions");
+    assert!(!runtimes.is_empty());
+    let row = &runtimes[0];
+    assert!(row["kind"].is_string());
+    assert!(
+        row["version"].is_string() || row["version"].is_null(),
+        "version string or null: {:?}",
+        row["version"]
+    );
+    assert!(
+        row["hint"].is_string() || row["hint"].is_null(),
+        "hint string or null: {:?}",
+        row["hint"]
+    );
 }
 
 #[test]
@@ -73,7 +106,89 @@ fn doctor_json_contract() {
     assert_eq!(v["success"], true);
     assert!(v["code"].is_null());
     assert_eq!(v["message"], "doctor_ok");
+    let kinds = v["data"]["kinds"].as_array().expect("kinds");
+    assert!(!kinds.is_empty());
+    let row = &kinds[0];
+    assert!(row["kind"].is_string());
+    assert!(row.get("current").is_none(), "use current_version, not current");
+    assert!(
+        row["current_version"].is_string() || row["current_version"].is_null(),
+        "current_version: {:?}",
+        row.get("current_version")
+    );
+    let d = &v["data"];
+    assert!(d["warnings"].is_array(), "warnings: {:?}", d.get("warnings"));
+    assert!(d["notes"].is_array(), "notes: {:?}", d.get("notes"));
+    assert!(d["recommendations"].is_array());
+    assert!(
+        d["path_shadowing"].is_null() || d["path_shadowing"].is_object(),
+        "path_shadowing: {:?}",
+        d.get("path_shadowing")
+    );
+    assert!(
+        d["path_conflicts"].is_array(),
+        "path_conflicts: {:?}",
+        d.get("path_conflicts")
+    );
+    assert!(
+        d["findings"].is_array(),
+        "findings: {:?}",
+        d.get("findings")
+    );
+    assert!(
+        d["path_analysis"].is_null() || d["path_analysis"].is_object(),
+        "path_analysis: {:?}",
+        d.get("path_analysis")
+    );
+    assert!(
+        d["shims_dir_writable"].is_boolean() || d["shims_dir_writable"].is_null(),
+        "shims_dir_writable: {:?}",
+        d.get("shims_dir_writable")
+    );
+}
+
+#[test]
+fn doctor_json_flag_matches_doctor_format_json() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["doctor", "--json"], tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], true);
+    assert_eq!(v["message"], "doctor_ok");
     assert!(v["data"]["kinds"].is_array());
+}
+
+#[test]
+fn deactivate_json_contract() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["--format", "json", "deactivate"], tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], true);
+    assert_eq!(v["message"], "deactivate_hint");
+    let d = &v["data"];
+    assert_eq!(d["hint"], "hook_shell_only");
+    assert!(d["docs"].is_string());
+}
+
+#[test]
+fn status_json_contract() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["--format", "json", "status"], tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], true);
+    assert_eq!(v["message"], "project_status");
+    let d = &v["data"];
+    assert!(d["working_dir"].is_string());
+    assert!(d["runtimes"].is_array());
+}
+
+#[test]
+fn hook_prompt_json_contract() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["--format", "json", "hook", "prompt"], tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], true);
+    assert_eq!(v["message"], "hook_prompt");
+    assert!(v["data"]["segment"].is_string());
 }
 
 #[test]
@@ -82,7 +197,7 @@ fn validation_error_json_has_code() {
     let out = Command::cargo_bin("envr")
         .expect("envr binary")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
-        .args(["--format", "json", "install", "node"])
+        .args(["--format", "json", "list", "not-a-lang"])
         .output()
         .expect("run");
     assert!(!out.status.success());
@@ -90,4 +205,53 @@ fn validation_error_json_has_code() {
     assert_envelope_shape(&v);
     assert_eq!(v["success"], false);
     assert_eq!(v["code"], "validation");
+}
+
+#[test]
+fn template_json_contract() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let tpl = tmp.path().join("x.tpl");
+    fs::write(&tpl, r#"{"k":"${PATH}"}"#).expect("write tpl");
+    let p = tpl.to_string_lossy();
+    let v = json_stdout(
+        &["--format", "json", "template", p.as_ref()],
+        tmp.path(),
+    );
+    assert_envelope_shape(&v);
+    assert_eq!(v["message"], "template_rendered");
+    assert!(v["data"]["file"].is_string());
+    assert!(v["data"]["rendered"].is_string());
+}
+
+#[test]
+fn update_json_contract() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["--format", "json", "update"], tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["message"], "update_info");
+    assert!(v["data"]["version"].is_string());
+    assert!(v["data"]["check_requested"].is_boolean());
+    assert!(v["data"]["self_update"].is_string());
+}
+
+#[test]
+fn run_json_child_includes_install_metadata() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let args: Vec<&str> = if cfg!(windows) {
+        vec!["--format", "json", "run", "cmd", "/c", "echo", "ok"]
+    } else {
+        vec!["--format", "json", "run", "sh", "-c", "echo ok"]
+    };
+    let v = json_stdout(&args, tmp.path());
+    assert_envelope_shape(&v);
+    assert_eq!(v["message"], "child_completed");
+    let d = &v["data"];
+    assert_eq!(d["install_if_missing"], false);
+    assert_eq!(d["dry_run"], false);
+    assert_eq!(d["verbose"], false);
+    let auto = d["auto_installed"].as_array().expect("auto_installed");
+    assert!(auto.is_empty());
+    assert!(d.get("lang").is_none(), "run must not set data.lang");
+    assert!(d["env_files"].is_array());
+    assert!(d["env_overrides"].is_array());
 }

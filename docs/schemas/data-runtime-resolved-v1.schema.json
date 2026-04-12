@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-runtime-resolved-v1.schema.json",
+  "title": "envr resolve (message: runtime_resolved)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["kind", "resolution_source", "home", "version_dir"],
+  "properties": {
+    "kind": { "type": "string" },
+    "resolution_source": {
+      "type": "string",
+      "enum": ["cli_override", "project", "global_current"]
+    },
+    "home": { "type": "string" },
+    "version_dir": { "type": "string" }
+  }
+}

@@ -1,38 +1,42 @@
 use crate::cli::GlobalArgs;
+use crate::commands::cli_install_progress;
 use crate::commands::common::{self, kind_label};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{
-    InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind,
+    RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind,
 };
 
 pub fn run(
     g: &GlobalArgs,
     service: &RuntimeService,
-    lang: Option<String>,
-    runtime_version: Option<String>,
+    runtime: String,
+    runtime_version: String,
 ) -> i32 {
-    let Some(lang) = lang else {
-        return common::missing_positional(g, "install", "envr install node 20");
-    };
-    let Some(ver) = runtime_version else {
-        return common::missing_positional(g, "install", "envr install node 20");
-    };
-
-    let kind = match parse_runtime_kind(lang.trim()) {
+    let kind = match parse_runtime_kind(runtime.trim()) {
         Ok(k) => k,
         Err(e) => return common::print_envr_error(g, e),
     };
 
-    let request = InstallRequest {
-        spec: VersionSpec(ver),
-        progress_downloaded: None,
-        progress_total: None,
-        cancel: None,
-    };
-
-    match service.install(kind, &request) {
+    let rv = runtime_version.trim().to_string();
+    let headline = fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.install.downloading",
+            "正在下载 {kind} {version}…",
+            "Downloading {kind} {version}…",
+        ),
+        &[
+            ("kind", kind_label(kind)),
+            ("version", rv.as_str()),
+        ],
+    );
+    let spec = VersionSpec(rv);
+    let (request, guard) =
+        cli_install_progress::install_request_with_progress(g, spec, headline);
+    let res = service.install(kind, &request);
+    guard.finish();
+    match res {
         Ok(v) => print_success(g, kind, &v),
         Err(e) => common::print_envr_error(g, e),
     }

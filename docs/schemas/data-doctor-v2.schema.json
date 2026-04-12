@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-doctor-v2.schema.json",
+  "title": "envr doctor --format json (message: doctor_ok or doctor_issues)",
+  "description": "v2 renames kinds[].current → kinds[].current_version to avoid confusion with unrelated “current” concepts.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "runtime_root",
+    "envr_runtime_root_env",
+    "kinds",
+    "issues",
+    "warnings",
+    "notes",
+    "recommendations",
+    "path_shadowing"
+  ],
+  "properties": {
+    "runtime_root": { "type": "string" },
+    "envr_runtime_root_env": {
+      "oneOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "installed_count", "current_version"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "installed_count": { "type": "integer", "minimum": 0 },
+          "current_version": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }],
+            "description": "Globally selected version for this runtime, if any"
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Backward compatible: warnings followed by notes (same strings as those arrays)."
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "path_shadowing": {
+      "description": "Legacy: first PATH conflict (same as path_conflicts[0] when non-empty); null if none.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "tool",
+            "executable",
+            "first_path_directory",
+            "shims_directory"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "tool": { "type": "string" },
+            "executable": { "type": "string" },
+            "first_path_directory": { "type": "string" },
+            "shims_directory": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "path_conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "executable",
+          "first_path_directory",
+          "shims_directory"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "tool": { "type": "string" },
+          "executable": { "type": "string" },
+          "first_path_directory": { "type": "string" },
+          "shims_directory": { "type": "string" }
+        }
+      }
+    },
+    "path_analysis": {
+      "description": "PATH directory order and where shims appear (for dashboards).",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "path_directory_order",
+            "shims_path_index",
+            "shims_directory"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "path_directory_order": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "shims_path_index": {
+              "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+            },
+            "shims_directory": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "additionalProperties": true,
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"]
+          },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "shims_dir_writable": {
+      "oneOf": [{ "type": "boolean" }, { "type": "null" }]
+    }
+  }
+}

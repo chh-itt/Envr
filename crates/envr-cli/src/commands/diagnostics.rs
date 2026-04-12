@@ -121,7 +121,7 @@ fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
                     ("detail", &err.to_string()),
                 ],
             );
-            eprintln!("envr: {line}");
+            output::print_error_text("diagnostics_export_failed", &line);
         }
     }
     output::exit_code_for_error(&err)

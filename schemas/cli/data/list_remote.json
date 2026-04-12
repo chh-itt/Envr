@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/list_remote.json",
+  "title": "envr remote --format json → envelope.data (message: list_remote)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["remote_runtimes"],
+  "properties": {
+    "remote_runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["kind", "versions"],
+        "properties": {
+          "kind": { "type": "string" },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

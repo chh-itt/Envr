@@ -23,6 +23,7 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::EnvrResult;
+use std::path::PathBuf;
 use envr_platform::paths::current_platform_paths;
 
 /// JDK runtime provider (Adoptium Temurin: index, download, `current`, `JAVA_HOME` marker file).
@@ -280,5 +281,13 @@ impl RuntimeProvider for JavaRuntimeProvider {
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = JavaPaths::new(self.runtime_root()?, self.resolved_vendor()?.dir_name());
+        Ok((vec![paths.version_dir(&version.0)], None))
     }
 }

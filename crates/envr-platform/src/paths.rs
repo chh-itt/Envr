@@ -138,6 +138,21 @@ pub fn current_platform_paths() -> EnvrResult<EnvrPaths> {
     compute_paths(os, &envs)
 }
 
+/// Directory used to store offline-capable remote indexes (shared across machines via env var).
+///
+/// Resolution:
+/// - `ENVR_INDEX_CACHE_DIR` (when set and non-empty after trim)
+/// - `{paths.cache_dir}/indexes` (default)
+pub fn index_cache_dir_from_platform(paths: &EnvrPaths) -> PathBuf {
+    if let Ok(v) = std::env::var("ENVR_INDEX_CACHE_DIR") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return PathBuf::from(t);
+        }
+    }
+    paths.cache_dir.join("indexes")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

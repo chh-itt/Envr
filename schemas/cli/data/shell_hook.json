@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/shell_hook.json",
+  "title": "envr --format json data (message: shell_hook)",
+  "type": "object",
+  "additionalProperties": true
+}

@@ -374,17 +374,20 @@ fn source_dir_for_promotion(staging: &Path) -> EnvrResult<PathBuf> {
 }
 
 fn promote_archive(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
-    if final_dir.exists() {
-        fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
-    }
-    fs::create_dir_all(final_dir).map_err(EnvrError::from)?;
+    use envr_platform::install_layout;
+
     let source_dir = source_dir_for_promotion(staging)?;
-    for e in fs::read_dir(&source_dir).map_err(EnvrError::from)? {
-        let e = e.map_err(EnvrError::from)?;
-        let from = e.path();
-        let to = final_dir.join(e.file_name());
-        fs::rename(&from, &to).map_err(EnvrError::from)?;
+    install_layout::ensure_final_parent(final_dir)?;
+    let staging_final = install_layout::sibling_staging_path(final_dir)?;
+    install_layout::remove_if_exists(&staging_final)?;
+    install_layout::hoist_directory_children(&source_dir, &staging_final)?;
+    if !bun_installation_valid(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(
+            "extracted bun layout missing bun executable".into(),
+        ));
     }
+    install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
 }
 
@@ -481,11 +484,6 @@ impl BunManager {
 
         let final_dir = self.paths.version_dir(&version.0);
         promote_archive(staging.path(), &final_dir)?;
-        if !bun_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation(
-                "extracted bun layout missing bun executable".into(),
-            ));
-        }
         self.set_current(version)?;
         Ok(RuntimeVersion(version.0.clone()))
     }

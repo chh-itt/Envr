@@ -15,6 +15,8 @@ pub struct NodeRelease {
     pub version: String,
     pub files: Vec<String>,
     pub lts_codename: Option<String>,
+    /// ISO date from upstream `index.json` when present (e.g. `2024-10-29`).
+    pub date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,6 +24,8 @@ struct NodeReleaseJson {
     version: String,
     files: Vec<String>,
     lts: serde_json::Value,
+    #[serde(default)]
+    date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +47,7 @@ impl TryFrom<NodeReleaseJson> for NodeRelease {
             version: j.version,
             files: j.files,
             lts_codename,
+            date: j.date,
         })
     }
 }
@@ -248,6 +253,57 @@ pub fn list_remote_versions(
     Ok(out)
 }
 
+/// One remote row for Node (aligned with `list` JSON: version + LTS + optional release date).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeRemoteRow {
+    pub version: String,
+    pub lts: bool,
+    pub lts_codename: Option<String>,
+    pub date: Option<String>,
+}
+
+/// Like [`list_remote_versions`] but keeps LTS and `date` metadata from the index.
+pub fn list_node_remote_rows(
+    releases: &[NodeRelease],
+    os: &str,
+    arch: &str,
+    filter: &RemoteFilter,
+) -> EnvrResult<Vec<NodeRemoteRow>> {
+    let mut items: Vec<(SemVerKey, NodeRemoteRow)> = releases
+        .iter()
+        .filter(|r| release_has_platform(&r.files, os, arch))
+        .map(|r| {
+            let key = semver_key(&r.version)?;
+            let v = normalize_node_version(&r.version);
+            let (lts, lts_codename) = match &r.lts_codename {
+                None => (false, None),
+                Some(cn) if cn == "true" => (true, None),
+                Some(cn) => (true, Some(cn.clone())),
+            };
+            let row = NodeRemoteRow {
+                version: v,
+                lts,
+                lts_codename,
+                date: r.date.clone(),
+            };
+            Ok((key, row))
+        })
+        .collect::<EnvrResult<Vec<_>>>()?;
+
+    items.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let mut out: Vec<NodeRemoteRow> = items.into_iter().map(|(_, row)| row).collect();
+
+    if let Some(prefix) = &filter.prefix {
+        let p = normalize_prefix(prefix);
+        if !p.is_empty() {
+            out.retain(|row| row.version.to_ascii_lowercase().starts_with(&p));
+        }
+    }
+
+    Ok(out)
+}
+
 pub fn resolve_node_version(
     releases: &[NodeRelease],
     os: &str,
@@ -445,8 +501,29 @@ mod tests {
     fn parse_index_smoke() {
         let rel = parsed();
         assert_eq!(rel.len(), 6);
+        assert_eq!(rel[0].date.as_deref(), Some("2026-01-01"));
         assert_eq!(rel[2].lts_codename.as_deref(), Some("Krypton"));
         assert!(rel[5].lts_codename.is_none());
+    }
+
+    #[test]
+    fn list_node_remote_rows_matches_list_remote_versions() {
+        let rel = parsed();
+        let plain = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter { prefix: None })
+            .expect("list_remote_versions");
+        let rows = list_node_remote_rows(&rel, "linux", "x86_64", &RemoteFilter { prefix: None })
+            .expect("rows");
+        assert_eq!(plain.len(), rows.len());
+        for (p, r) in plain.iter().zip(rows.iter()) {
+            assert_eq!(p.0, r.version);
+        }
+        let top = rows.first().expect("top");
+        assert_eq!(top.version, "30.0.0");
+        assert!(!top.lts);
+        assert_eq!(top.date.as_deref(), Some("2026-01-01"));
+        let lts = rows.iter().find(|r| r.version == "24.2.0").expect("lts row");
+        assert!(lts.lts);
+        assert_eq!(lts.lts_codename.as_deref(), Some("Krypton"));
     }
 
     #[test]

@@ -7,6 +7,13 @@ pub struct LoggingGuard {
     _file_guard: WorkerGuard,
 }
 
+/// Options for [`init_logging_with`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LoggingInitOptions {
+    /// Emit tracing to **stderr** instead of stdout (recommended with `--debug` so stdout stays clean).
+    pub log_to_stderr: bool,
+}
+
 fn default_log_dir() -> EnvrResult<PathBuf> {
     let cwd = env::current_dir().map_err(EnvrError::from)?;
     Ok(cwd.join(".envr").join("logs"))
@@ -21,26 +28,50 @@ pub fn resolve_log_dir() -> EnvrResult<PathBuf> {
 }
 
 pub fn init_logging(app_name: &str) -> EnvrResult<LoggingGuard> {
+    init_logging_with(app_name, LoggingInitOptions::default())
+}
+
+pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult<LoggingGuard> {
     let log_dir = resolve_log_dir()?;
 
     fs::create_dir_all(&log_dir).map_err(EnvrError::from)?;
 
     let file_appender = tracing_appender::rolling::daily(&log_dir, format!("{app_name}.log"));
-    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
+    let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let stdout_layer = tracing_subscriber::fmt::layer().with_target(false);
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(false)
-        .with_target(true)
-        .with_writer(file_writer);
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(stdout_layer)
-        .with(file_layer)
-        .try_init()
-        .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+    if opts.log_to_stderr {
+        let file_layer = tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .with_target(true)
+            .with_writer(non_blocking.clone());
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .with_writer(std::io::stderr),
+            )
+            .with(file_layer)
+            .try_init()
+            .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+    } else {
+        let file_layer = tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .with_target(true)
+            .with_writer(non_blocking.clone());
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_target(false)
+                    .with_writer(std::io::stdout),
+            )
+            .with(file_layer)
+            .try_init()
+            .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+    }
 
     tracing::info!(app = app_name, log_dir = %log_dir.display(), "logging initialized");
 
@@ -63,7 +94,7 @@ pub fn format_error_chain(err: &(dyn Error + 'static)) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_error_chain, init_logging};
+    use super::{format_error_chain, init_logging, init_logging_with, LoggingInitOptions};
     use std::{error::Error, fmt};
     use tempfile::TempDir;
 
@@ -116,7 +147,7 @@ mod tests {
         let old = std::env::current_dir().expect("cwd");
         std::env::set_current_dir(tmp.path()).expect("chdir");
 
-        let _guard = init_logging("envr-core-test").expect("first init");
+        let _guard = init_logging_with("envr-core-test", LoggingInitOptions::default()).expect("first init");
         let err = match init_logging("envr-core-test") {
             Ok(_) => panic!("second init should fail"),
             Err(e) => e,

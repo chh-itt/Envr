@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/prune_dry_run.json",
+  "title": "envr --format json data (message: prune_dry_run)",
+  "type": "object",
+  "additionalProperties": true
+}

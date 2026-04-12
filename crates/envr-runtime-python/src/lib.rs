@@ -19,6 +19,7 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::EnvrResult;
+use std::path::PathBuf;
 
 pub struct PythonRuntimeProvider {
     releases_url: String,
@@ -205,5 +206,13 @@ impl RuntimeProvider for PythonRuntimeProvider {
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = PythonPaths::new(self.runtime_root()?);
+        Ok((vec![paths.version_dir(&version.0)], None))
     }
 }

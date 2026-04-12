@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/diagnostics_export_ok.json",
+  "title": "envr --format json data (message: diagnostics_export_ok)",
+  "type": "object",
+  "additionalProperties": true
+}

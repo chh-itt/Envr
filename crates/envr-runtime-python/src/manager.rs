@@ -118,21 +118,26 @@ fn verify_sha256_if_present(path: &Path, hex: &Option<String>) -> EnvrResult<()>
 
 /// Embeddable layout: many files in one directory (no single root to promote).
 fn lone_child_directory(staging: &Path) -> EnvrResult<PathBuf> {
-    let mut dirs: Vec<PathBuf> = fs::read_dir(staging)
-        .map_err(EnvrError::from)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.path())
-        .collect();
-    dirs.sort();
-    if dirs.len() != 1 {
-        return Err(EnvrError::Validation(format!(
-            "expected one source directory under {}, found {}",
-            staging.display(),
-            dirs.len()
-        )));
+    let mut found: Option<PathBuf> = None;
+    for e in fs::read_dir(staging).map_err(EnvrError::from)? {
+        let e = e.map_err(EnvrError::from)?;
+        if !e.path().is_dir() {
+            continue;
+        }
+        if found.is_some() {
+            return Err(EnvrError::Validation(format!(
+                "expected one source directory under {}, found more than one",
+                staging.display()
+            )));
+        }
+        found = Some(e.path());
     }
-    Ok(dirs.into_iter().next().expect("len checked"))
+    found.ok_or_else(|| {
+        EnvrError::Validation(format!(
+            "expected one source directory under {}, found 0",
+            staging.display()
+        ))
+    })
 }
 
 fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
@@ -231,6 +236,9 @@ fn ensure_cached_get_pip(
     client: &reqwest::blocking::Client,
     paths: &PythonPaths,
     source_urls: &[String],
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<PathBuf> {
     let cache_file = paths.cache_dir().join("bootstrap").join("get-pip.py");
     let stale = fs::metadata(&cache_file)
@@ -246,7 +254,14 @@ fn ensure_cached_get_pip(
     }
     let pid = std::process::id();
     let tmp = cache_file.with_extension(format!("tmp.{pid}"));
-    download_with_fallbacks(client, source_urls, &tmp, None, None, None)?;
+    download_with_fallbacks(
+        client,
+        source_urls,
+        &tmp,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    )?;
     // Best-effort atomic replacement. Parallel writers may race; winner keeps a valid script.
     if cache_file.exists() {
         let _ = fs::remove_file(&cache_file);
@@ -280,11 +295,21 @@ fn bootstrap_pip_windows(
     client: &reqwest::blocking::Client,
     paths: &PythonPaths,
     home: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
     let py = python_executable(home)
         .ok_or_else(|| EnvrError::Runtime("python.exe missing after embeddable install".into()))?;
     let (get_pip_urls, pip_index_urls) = load_python_bootstrap_from_settings();
-    let script = ensure_cached_get_pip(client, paths, &get_pip_urls)?;
+    let script = ensure_cached_get_pip(
+        client,
+        paths,
+        &get_pip_urls,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    )?;
     let mut used_index = pip_index_urls.first().map(String::as_str);
     let mut out = run_get_pip(&py, &script, home, used_index)?;
     if !out.status.success() {
@@ -298,6 +323,9 @@ fn bootstrap_pip_windows(
                 client,
                 paths,
                 &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+                progress_downloaded,
+                progress_total,
+                cancel,
             )?;
             out = run_get_pip(&py, &script, home, used_index)?;
         }
@@ -320,6 +348,9 @@ fn bootstrap_pip_windows(
                 client,
                 paths,
                 &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+                progress_downloaded,
+                progress_total,
+                cancel,
             )?;
             out = run_get_pip(
                 &py,
@@ -586,26 +617,62 @@ impl PythonManager {
         verify_sha256_if_present(&cache_file, &artifact.sha256_sum)?;
 
         let final_dir = self.paths.version_dir(&version.0);
-        if final_dir.exists() {
-            fs::remove_dir_all(&final_dir).map_err(EnvrError::from)?;
-        }
+        use envr_platform::install_layout;
+        install_layout::ensure_final_parent(&final_dir)?;
 
         if os == "windows" {
-            fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
-            extract::extract_archive(&cache_file, &final_dir)?;
-            fix_windows_embed_pth(&final_dir)?;
-            bootstrap_pip_windows(&self.client, &self.paths, &final_dir)?;
+            fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
+            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
+                .map_err(EnvrError::from)?;
+            extract::extract_archive(&cache_file, staging.path())?;
+            let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+            install_layout::remove_if_exists(&staging_final)?;
+            install_layout::hoist_directory_children(staging.path(), &staging_final)?;
+            fix_windows_embed_pth(&staging_final)?;
+            bootstrap_pip_windows(
+                &self.client,
+                &self.paths,
+                &staging_final,
+                progress_downloaded,
+                progress_total,
+                cancel,
+            )?;
+            let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
+            if !python_installation_valid(&install_root) {
+                let _ = fs::remove_dir_all(&staging_final);
+                return Err(EnvrError::Validation(
+                    "python install did not produce a usable prefix".into(),
+                ));
+            }
+            if let Err(e) = verify_python_and_pip(&install_root) {
+                let _ = fs::remove_dir_all(&staging_final);
+                return Err(e);
+            }
+            install_layout::commit_staging_dir(&staging_final, &final_dir)?;
         } else {
             fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
             let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
                 .map_err(EnvrError::from)?;
             extract::extract_archive(&cache_file, staging.path())?;
             let src_root = lone_child_directory(staging.path())?;
-            fs::create_dir_all(self.paths.versions_dir()).map_err(EnvrError::from)?;
-            let abs_prefix = fs::canonicalize(self.paths.versions_dir())
-                .map_err(EnvrError::from)?
-                .join(&version.0);
-            build_cpython_unix(&src_root, &abs_prefix)?;
+            let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+            install_layout::remove_if_exists(&staging_final)?;
+            if let Err(e) = build_cpython_unix(&src_root, &staging_final) {
+                let _ = fs::remove_dir_all(&staging_final);
+                return Err(e);
+            }
+            let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
+            if !python_installation_valid(&install_root) {
+                let _ = fs::remove_dir_all(&staging_final);
+                return Err(EnvrError::Validation(
+                    "python install did not produce a usable prefix".into(),
+                ));
+            }
+            if let Err(e) = verify_python_and_pip(&install_root) {
+                let _ = fs::remove_dir_all(&staging_final);
+                return Err(e);
+            }
+            install_layout::commit_staging_dir(&staging_final, &final_dir)?;
         }
 
         let install_root = fs::canonicalize(&final_dir).map_err(EnvrError::from)?;

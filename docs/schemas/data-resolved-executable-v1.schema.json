@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-resolved-executable-v1.schema.json",
+  "title": "envr which (message: resolved_executable)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["executable", "version", "selection_source", "extra_env"],
+  "properties": {
+    "executable": { "type": "string" },
+    "version": { "type": "string" },
+    "selection_source": {
+      "type": "string",
+      "enum": ["project_pin", "global_current", "path_proxy_bypass"]
+    },
+    "extra_env": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "value"],
+        "properties": {
+          "key": { "type": "string" },
+          "value": { "type": "string" }
+        }
+      }
+    }
+  }
+}

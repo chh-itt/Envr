@@ -1,11 +1,14 @@
-use envr_domain::runtime::RuntimeVersion;
-use envr_domain::runtime::VersionSpec;
+use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::{LinkType, ensure_link};
 use reqwest::blocking::Client;
+use std::io::Read;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -151,7 +154,17 @@ impl GoManager {
             })
     }
 
-    fn download_to_path(&self, url: &str, path: &Path) -> EnvrResult<()> {
+    fn download_to_path(
+        &self,
+        url: &str,
+        path: &Path,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<()> {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
         let mut response = self
             .client
             .get(url)
@@ -167,20 +180,50 @@ impl GoManager {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(EnvrError::from)?;
         }
+        if let Some(t) = progress_total {
+            t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
+        }
+        if let Some(d) = progress_downloaded {
+            d.store(0, Ordering::Relaxed);
+        }
         let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-        response
-            .copy_to(&mut f)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+                return Err(EnvrError::Download("download cancelled".to_string()));
+            }
+            let n = response
+                .read(&mut buf)
+                .map_err(|e| EnvrError::Download(e.to_string()))?;
+            if n == 0 {
+                break;
+            }
+            f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+            if let Some(d) = progress_downloaded {
+                d.fetch_add(n as u64, Ordering::Relaxed);
+            }
+        }
         Ok(())
     }
 
-    pub fn install_from_spec(&self, spec: &VersionSpec) -> EnvrResult<RuntimeVersion> {
+    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let releases = self.load_releases()?;
-        let label = resolve_go_version(&releases, &spec.0)?;
-        self.install_resolved_version(&RuntimeVersion(label))
+        let label = resolve_go_version(&releases, &request.spec.0)?;
+        self.install_resolved_version(
+            &RuntimeVersion(label),
+            request.progress_downloaded.as_ref(),
+            request.progress_total.as_ref(),
+            request.cancel.as_ref(),
+        )
     }
 
-    pub fn install_resolved_version(&self, version: &RuntimeVersion) -> EnvrResult<RuntimeVersion> {
+    pub fn install_resolved_version(
+        &self,
+        version: &RuntimeVersion,
+        progress_downloaded: Option<&Arc<AtomicU64>>,
+        progress_total: Option<&Arc<AtomicU64>>,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion> {
         let want = format!("go{}", normalize_go_version(&version.0));
         let releases = self.load_releases()?;
         let release = releases
@@ -197,7 +240,13 @@ impl GoManager {
             .join(&dist.filename);
         let base = self.dl_base_url.trim_end_matches('/');
         let url = format!("{base}/dl/{}", dist.filename);
-        self.download_to_path(&url, &cache_file)?;
+        self.download_to_path(
+            &url,
+            &cache_file,
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )?;
         if !dist.sha256.trim().is_empty() {
             checksum::verify_sha256_hex(&cache_file, dist.sha256.trim())?;
         }
@@ -212,11 +261,6 @@ impl GoManager {
 
         let final_dir = self.paths.version_dir(&normalize_go_version(&version.0));
         promote_single_root_dir(staging.path(), &final_dir)?;
-        if !go_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation(
-                "extracted go layout missing go executable".into(),
-            ));
-        }
         let normalized = RuntimeVersion(normalize_go_version(&version.0));
         self.set_current(&normalized)?;
         Ok(normalized)
@@ -252,6 +296,8 @@ impl GoManager {
 }
 
 pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
+    use envr_platform::install_layout;
+
     let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
     let first = iter
         .next()
@@ -269,15 +315,19 @@ pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<(
             "expected go archive root to be a directory".into(),
         ));
     }
-    if final_dir.exists() {
-        fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
+    install_layout::ensure_final_parent(final_dir)?;
+    let staging_final = install_layout::sibling_staging_path(final_dir)?;
+    install_layout::remove_if_exists(&staging_final)?;
+
+    fs::rename(&inner, &staging_final).map_err(EnvrError::from)?;
+
+    if !go_installation_valid(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(
+            "extracted go layout missing go binary".into(),
+        ));
     }
-    // `fs::rename(src, dst)` requires the destination parent to exist.
-    // Ensure it to avoid Windows `os error 3` when the runtimes dir hasn't been created yet.
-    let parent = final_dir
-        .parent()
-        .ok_or_else(|| EnvrError::Validation("final_dir has no parent".into()))?;
-    fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    fs::rename(&inner, final_dir).map_err(EnvrError::from)?;
+
+    install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
 }

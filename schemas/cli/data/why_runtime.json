@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/why_runtime.json",
+  "title": "envr --format json data (message: why_runtime)",
+  "type": "object",
+  "additionalProperties": true
+}

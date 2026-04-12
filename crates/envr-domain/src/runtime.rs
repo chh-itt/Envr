@@ -1,4 +1,5 @@
 use envr_error::{EnvrError, EnvrResult};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 
@@ -70,6 +71,12 @@ pub trait RuntimeProvider: Send + Sync {
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion>;
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()>;
+
+    /// Directories envr would remove, plus an optional external command line (e.g. `rustup`).
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)>;
 }
 
 pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {

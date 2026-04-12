@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/alias_added.json",
+  "title": "envr --format json data (message: alias_added)",
+  "type": "object",
+  "additionalProperties": true
+}

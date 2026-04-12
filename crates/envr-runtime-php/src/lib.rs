@@ -242,4 +242,12 @@ impl RuntimeProvider for PhpRuntimeProvider {
             unix::uninstall_registration(&paths, version)
         }
     }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = PhpPaths::new(self.runtime_root()?);
+        Ok((vec![paths.versions_dir().join(&version.0)], None))
+    }
 }

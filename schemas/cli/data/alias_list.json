@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/alias_list.json",
+  "title": "envr --format json data (message: alias_list)",
+  "type": "object",
+  "additionalProperties": true
+}

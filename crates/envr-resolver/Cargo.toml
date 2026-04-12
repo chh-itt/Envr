@@ -1,0 +1,12 @@
+[package]
+name = "envr-resolver"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+description = "Project pins, pin grammar, and runtime home resolution (shared by CLI / GUI / shims)"
+
+[dependencies]
+envr-config = { path = "../envr-config" }
+envr-domain = { path = "../envr-domain" }
+envr-error = { path = "../envr-error" }
+envr-shim-core = { path = "../envr-shim-core" }

@@ -225,7 +225,7 @@ pub fn run() -> iced::Result {
     .title("Envr")
     .default_font(configured_default_font(&startup))
     .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
-    .subscription(|state| {
+        .subscription(|state| {
         let runtime_skeleton = matches!(state.route(), Route::Runtime)
             && state.env_center.installed.is_empty()
             && (state.env_center.busy
@@ -235,57 +235,57 @@ pub fn run() -> iced::Result {
                 || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
                     && state.env_center.go_remote_refreshing
                     && state.env_center.go_remote_latest.is_empty()));
-        let need_motion = state.downloads.needs_motion_tick()
-            || state.downloads.title_drag_armed_since.is_some()
+            let need_motion = state.downloads.needs_motion_tick()
+                || state.downloads.title_drag_armed_since.is_some()
             || runtime_skeleton;
-        let maybe_motion = need_motion
-            .then(|| iced::time::every(Duration::from_millis(32)))
-            .map(|s| s.map(|_| Message::MotionTick));
+            let maybe_motion = need_motion
+                .then(|| iced::time::every(Duration::from_millis(32)))
+                .map(|s| s.map(|_| Message::MotionTick));
 
-        let progress_only = state.downloads.needs_tick() && !need_motion;
-        let maybe_tick = progress_only
-            .then(|| iced::time::every(Duration::from_millis(400)))
-            .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
+            let progress_only = state.downloads.needs_tick() && !need_motion;
+            let maybe_tick = progress_only
+                .then(|| iced::time::every(Duration::from_millis(400)))
+                .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
 
-        let need_pointer_events =
-            state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
-        let maybe_events = need_pointer_events
-            .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
+            let need_pointer_events =
+                state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
+            let maybe_events = need_pointer_events
+                .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
 
         let theme_poll = (state.settings.draft.appearance.theme_mode == ThemeMode::FollowSystem)
-            .then(|| iced::time::every(Duration::from_secs(1)))
-            .map(|s| s.map(|_| Message::ThemePollTick));
+                .then(|| iced::time::every(Duration::from_secs(1)))
+                .map(|s| s.map(|_| Message::ThemePollTick));
 
-        let mut subs = Vec::new();
-        if let Some(t) = maybe_motion {
-            subs.push(t);
-        }
-        if let Some(t) = maybe_tick {
-            subs.push(t);
-        }
-        if let Some(e) = maybe_events {
-            subs.push(e);
-        }
-        if let Some(t) = theme_poll {
-            subs.push(t);
-        }
-        subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
-        subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
-        Subscription::batch(subs)
-    })
-    .window(iced::window::Settings {
-        size: Size::new(
-            layout_shell::WINDOW_DEFAULT_W,
-            layout_shell::WINDOW_DEFAULT_H,
-        ),
-        min_size: Some(Size::new(
-            layout_shell::WINDOW_MIN_W,
-            layout_shell::WINDOW_MIN_H,
-        )),
-        position: iced::window::Position::Centered,
-        ..iced::window::Settings::default()
-    })
-    .run()
+            let mut subs = Vec::new();
+            if let Some(t) = maybe_motion {
+                subs.push(t);
+            }
+            if let Some(t) = maybe_tick {
+                subs.push(t);
+            }
+            if let Some(e) = maybe_events {
+                subs.push(e);
+            }
+            if let Some(t) = theme_poll {
+                subs.push(t);
+            }
+            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
+            subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
+            Subscription::batch(subs)
+        })
+        .window(iced::window::Settings {
+            size: Size::new(
+                layout_shell::WINDOW_DEFAULT_W,
+                layout_shell::WINDOW_DEFAULT_H,
+            ),
+            min_size: Some(Size::new(
+                layout_shell::WINDOW_MIN_W,
+                layout_shell::WINDOW_MIN_H,
+            )),
+            position: iced::window::Position::Centered,
+            ..iced::window::Settings::default()
+        })
+        .run()
 }
 
 static STARTUP_SETTINGS: OnceLock<Settings> = OnceLock::new();
@@ -1726,8 +1726,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         gui_ops::rust_load_targets(),
                     ])
                 } else {
-                    Task::batch([gui_ops::refresh_runtimes(k)])
-                }
+            Task::batch([gui_ops::refresh_runtimes(k)])
+        }
             }
         }
         EnvCenterMsg::InstallInput(s) => {
@@ -2128,7 +2128,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Python),
                 ])
-            } else {
+    } else {
                 persist_settings_clone_task(st)
             }
         }
@@ -2165,7 +2165,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Java),
                 ])
-            } else {
+    } else {
                 persist_settings_clone_task(st)
             }
         }
@@ -2418,7 +2418,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
-            gui_ops::rust_managed_install_stable()
+            let label = envr_core::i18n::tr_key(
+                "gui.runtime.rust.managed_install_task",
+                "正在安装托管 rustup（stable）…",
+                "Installing managed rustup (stable)…",
+            );
+            let (id, downloaded, total, cancel) =
+                enqueue_runtime_install_job(state, label);
+            state.env_center.op_job_id = Some(id);
+            gui_ops::rust_managed_install_stable(downloaded, total, cancel)
         }
         EnvCenterMsg::RustManagedUninstall => {
             if state.env_center.busy {
@@ -2446,8 +2454,34 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         }
         EnvCenterMsg::RustOpFinished(res) => {
             state.env_center.busy = false;
-            if let Err(e) = res {
-                state.error = Some(e);
+            if let Some(id) = state.env_center.op_job_id.take()
+                && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
+            {
+                match &res {
+                    Ok(()) => {
+                        j.state = JobState::Done;
+                        let d = j.downloaded.load(Ordering::Relaxed);
+                        let t = j.total.load(Ordering::Relaxed);
+                        if t == 0 || d < t {
+                            j.total.store(d.max(t), Ordering::Relaxed);
+                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                        }
+                    }
+                    Err(e) => {
+                        if looks_like_user_cancelled(e) {
+                            j.state = JobState::Cancelled;
+                            j.last_error = None;
+                        } else {
+                            j.state = JobState::Failed;
+                            j.last_error = Some(e.clone());
+                        }
+                    }
+                }
+            }
+            if let Err(e) = &res {
+                if !looks_like_user_cancelled(e) {
+                    state.error = Some(e.clone());
+                }
             }
             Task::batch([
                 gui_ops::rust_refresh(),

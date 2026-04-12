@@ -12,7 +12,8 @@ It is intended as a living note for future iterations and testing.
   - Provide channel switching (stable/beta/nightly), update, components, and targets.
   - Rust download source setting affects rustup via **child-process env injection** (no system env writes).
 - **When system `rustup` does not exist**: Envr provides a managed install:
-  - GUI offers **Install stable** (managed, silent).
+  - GUI offers **Install stable** (managed; `rustup-init` download shows in the same download panel as other runtime installs, with cancel wired through).
+  - CLI: `envr rust install-managed` (stable default toolchain; uses the same stderr progress rules as `envr install` when appropriate).
   - GUI offers **Uninstall** for managed Rust only (delete managed directories under runtime root).
   - All other actions (channel/update/components/targets) operate on the managed installation.
 - **Project constraints** via `.envr.toml`:
@@ -77,6 +78,7 @@ Implementation:
   - `-y --default-toolchain stable --no-modify-path`
   - plus `RUSTUP_HOME/CARGO_HOME` and mirror env.
 - The rustup-init download URL is aligned with `runtime.rust.download_source`.
+- Callers may pass an `InstallRequest` so the download reports **bytes** and supports **cancel** (GUI download panel, CLI `install_request_with_progress` / `envr rust install-managed`).
 
 Implementation:
 

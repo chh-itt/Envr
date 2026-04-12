@@ -4,7 +4,6 @@ use crate::commands::child_env;
 use crate::commands::common;
 use crate::output;
 
-use envr_shim_core::ShimContext;
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 
@@ -27,16 +26,12 @@ fn emit_pair(shell: EnvShellKind, key: &str, val: &str) {
 }
 
 pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>, shell: EnvShellKind) -> i32 {
-    let mut ctx = match ShimContext::from_process_env() {
+    let ctx = match common::shim_context_for(path, profile) {
         Ok(c) => c,
         Err(e) => return common::print_envr_error(g, e),
     };
-    ctx.working_dir = std::fs::canonicalize(&path).unwrap_or(path);
-    if let Some(p) = profile.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        ctx.profile = Some(p.to_string());
-    }
 
-    let env_map = match child_env::collect_run_env(&ctx) {
+    let env_map = match child_env::collect_run_env(&ctx, false) {
         Ok(m) => m,
         Err(e) => return common::print_envr_error(g, e),
     };

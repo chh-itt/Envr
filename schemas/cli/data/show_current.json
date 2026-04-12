@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/show_current.json",
+  "title": "envr current --format json → envelope.data (message: show_current)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["active_versions"],
+  "properties": {
+    "active_versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["kind", "version", "hint"],
+        "properties": {
+          "kind": { "type": "string" },
+          "version": { "type": ["string", "null"] },
+          "hint": {}
+        }
+      }
+    }
+  }
+}

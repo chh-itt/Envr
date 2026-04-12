@@ -4,7 +4,7 @@ use crate::output::{self, fmt_template};
 
 use envr_config::project_config::load_project_config_profile;
 use envr_domain::runtime::parse_runtime_kind;
-use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
+use envr_shim_core::resolve_runtime_home_for_lang;
 use std::path::PathBuf;
 
 pub fn run(
@@ -19,14 +19,10 @@ pub fn run(
         return common::print_envr_error(g, e);
     }
 
-    let mut ctx = match ShimContext::from_process_env() {
+    let ctx = match common::shim_context_for(path, profile) {
         Ok(c) => c,
         Err(e) => return common::print_envr_error(g, e),
     };
-    ctx.working_dir = std::fs::canonicalize(&path).unwrap_or(path);
-    if let Some(p) = profile.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        ctx.profile = Some(p.to_string());
-    }
 
     let cfg = match load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref()) {
         Ok(l) => l.map(|(c, _)| c),
@@ -68,6 +64,10 @@ pub fn run(
         "version_dir": version_label,
     });
     output::emit_ok(g, "runtime_resolved", data, || {
+        if output::wants_porcelain(g) {
+            println!("{}", home.display());
+            return;
+        }
         if !g.quiet {
             let source_label = match source {
                 "cli_override" => envr_core::i18n::tr_key(

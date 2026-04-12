@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-show-current-v1.schema.json",
+  "title": "envr current --format json (message: show_current)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["active_versions"],
+  "properties": {
+    "active_versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "version", "hint"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "version": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }],
+            "description": "Globally selected version label, or null if none"
+          },
+          "hint": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }],
+            "description": "Localized hint when version is null; otherwise null"
+          }
+        }
+      }
+    }
+  }
+}

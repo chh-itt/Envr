@@ -2,6 +2,7 @@ use envr_error::{EnvrError, EnvrResult};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     env, fs,
     path::{Path, PathBuf},
@@ -19,11 +20,19 @@ pub struct ProjectConfigLocation {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectConfig {
+    /// Remote layers merged before this file (URLs or `github.com/owner/repo/ref` shorthand).
+    #[serde(default)]
+    pub extends: Vec<String>,
+
     #[serde(default)]
     pub env: HashMap<String, String>,
 
     #[serde(default)]
     pub runtimes: HashMap<String, RuntimeConfig>,
+
+    /// Named command aliases for `envr run <name>` (shell one-liners).
+    #[serde(default)]
+    pub scripts: HashMap<String, String>,
 
     /// Named overlays (e.g. CI vs local). Activated via `ENVR_PROFILE` or `envr exec --profile`.
     #[serde(default)]
@@ -38,6 +47,9 @@ pub struct ProjectProfile {
 
     #[serde(default)]
     pub env: HashMap<String, String>,
+
+    #[serde(default)]
+    pub scripts: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,8 +78,10 @@ impl ProjectConfig {
     pub fn merge_over(mut self, base: ProjectConfig) -> ProjectConfig {
         // local/self overrides base
         let mut merged = base;
+        merged.extends.extend(self.extends.drain(..));
         merged.env.extend(self.env.drain());
         merged.runtimes.extend(self.runtimes.drain());
+        merged.scripts.extend(self.scripts.drain());
         merged.profiles.extend(self.profiles.drain());
         merged
     }
@@ -81,6 +95,10 @@ impl ProjectConfig {
             if let Some(version) = runtime.version.take() {
                 runtime.version = Some(expand_string(&version, &self.env, &env_snapshot)?);
             }
+        }
+
+        for script in self.scripts.values_mut() {
+            *script = expand_string(script, &self.env, &env_snapshot)?;
         }
 
         Ok(self)
@@ -97,7 +115,15 @@ pub fn load_project_config(
 pub fn load_project_config_disk_only(
     start_dir: impl AsRef<Path>,
 ) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
-    load_project_config_inner(start_dir, None)
+    let start_dir = start_dir.as_ref();
+    let norm = normalize_project_config_start_dir(start_dir)?;
+    let key = (norm, ProjectConfigCacheProfile::DiskOnly);
+    if let Some(hit) = project_config_cache_get(&key) {
+        return Ok(hit);
+    }
+    let res = load_project_config_inner_uncached(start_dir, None);
+    project_config_cache_store_ok(&key, &res);
+    res
 }
 
 /// Load project config; `profile` overrides [`ENVR_PROFILE`] when set.
@@ -105,6 +131,8 @@ pub fn load_project_config_profile(
     start_dir: impl AsRef<Path>,
     profile: Option<&str>,
 ) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
+    let start_dir = start_dir.as_ref();
+    let norm = normalize_project_config_start_dir(start_dir)?;
     let effective_profile = profile
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -115,22 +143,73 @@ pub fn load_project_config_profile(
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
         });
-    load_project_config_inner(start_dir, effective_profile)
+    let key = (
+        norm,
+        ProjectConfigCacheProfile::Effective(effective_profile.clone()),
+    );
+    if let Some(hit) = project_config_cache_get(&key) {
+        return Ok(hit);
+    }
+    let res = load_project_config_inner_uncached(start_dir, effective_profile);
+    project_config_cache_store_ok(&key, &res);
+    res
 }
 
-fn load_project_config_inner(
+/// Clears the in-process project config cache for the **current OS thread** (CLI / shims are single-threaded).
+/// Benchmarks and tests that mutate `.envr.toml` between loads should call this so results stay fresh.
+pub fn reset_project_config_load_cache() {
+    PROJECT_CONFIG_CACHE.with(|c| c.borrow_mut().clear());
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum ProjectConfigCacheProfile {
+    /// `load_project_config_disk_only`: never apply `ENVR_PROFILE` / `[profiles.*]` overlay.
+    DiskOnly,
+    /// `load_project_config_profile` after merging CLI `profile` and `ENVR_PROFILE`.
+    Effective(Option<String>),
+}
+
+type ProjectConfigCacheKey = (PathBuf, ProjectConfigCacheProfile);
+
+thread_local! {
+    static PROJECT_CONFIG_CACHE: RefCell<HashMap<ProjectConfigCacheKey, Option<(ProjectConfig, ProjectConfigLocation)>>> =
+        RefCell::new(HashMap::new());
+}
+
+fn normalize_project_config_start_dir(start_dir: &Path) -> EnvrResult<PathBuf> {
+    if start_dir.is_dir() {
+        Ok(start_dir.to_path_buf())
+    } else {
+        match start_dir.parent() {
+            Some(p) => Ok(p.to_path_buf()),
+            None => Err(EnvrError::Config("start_dir has no parent".to_string())),
+        }
+    }
+}
+
+fn project_config_cache_get(
+    key: &ProjectConfigCacheKey,
+) -> Option<Option<(ProjectConfig, ProjectConfigLocation)>> {
+    PROJECT_CONFIG_CACHE.with(|c| c.borrow().get(key).cloned())
+}
+
+fn project_config_cache_store_ok(
+    key: &ProjectConfigCacheKey,
+    res: &EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>>,
+) {
+    if let Ok(v) = res {
+        PROJECT_CONFIG_CACHE.with(|c| {
+            c.borrow_mut().insert(key.clone(), v.clone());
+        });
+    }
+}
+
+fn load_project_config_inner_uncached(
     start_dir: impl AsRef<Path>,
     effective_profile: Option<String>,
 ) -> EnvrResult<Option<(ProjectConfig, ProjectConfigLocation)>> {
     let start_dir = start_dir.as_ref();
-    let mut current = if start_dir.is_dir() {
-        start_dir.to_path_buf()
-    } else {
-        start_dir
-            .parent()
-            .ok_or_else(|| EnvrError::Config("start_dir has no parent".to_string()))?
-            .to_path_buf()
-    };
+    let mut current = normalize_project_config_start_dir(start_dir)?;
 
     loop {
         let base_path = current.join(PROJECT_CONFIG_FILE);
@@ -141,12 +220,16 @@ fn load_project_config_inner(
 
         if base_exists || local_exists {
             let base_cfg = if base_exists {
-                Some(parse_project_config(&base_path)?)
+                Some(crate::project_extends::resolve_extends(
+                    parse_project_config(&base_path)?,
+                )?)
             } else {
                 None
             };
             let local_cfg = if local_exists {
-                Some(parse_project_config(&local_path)?)
+                Some(crate::project_extends::resolve_extends(
+                    parse_project_config(&local_path)?,
+                )?)
             } else {
                 None
             };
@@ -166,6 +249,9 @@ fn load_project_config_inner(
                 }
                 for (k, v) in &p.env {
                     merged.env.insert(k.clone(), v.clone());
+                }
+                for (k, v) in &p.scripts {
+                    merged.scripts.insert(k.clone(), v.clone());
                 }
             }
 
@@ -195,8 +281,13 @@ fn load_project_config_inner(
 pub fn parse_project_config(path: impl AsRef<Path>) -> EnvrResult<ProjectConfig> {
     let path = path.as_ref();
     let content = fs::read_to_string(path).map_err(EnvrError::from)?;
-    toml::from_str(&content)
-        .map_err(|err| EnvrError::Config(format!("failed to parse {}: {err}", path.display())))
+    parse_project_config_str(&content).map_err(|err| {
+        EnvrError::Config(format!("failed to parse {}: {err}", path.display()))
+    })
+}
+
+pub fn parse_project_config_str(content: &str) -> EnvrResult<ProjectConfig> {
+    toml::from_str(content).map_err(|err| EnvrError::Config(format!("failed to parse project config: {err}")))
 }
 
 pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
@@ -367,7 +458,21 @@ FOO = "a-local"
     }
 
     #[test]
+    fn merge_scripts_prefers_local_over_base() {
+        let mut base = ProjectConfig::default();
+        base.scripts.insert("dev".into(), "vite".into());
+        let mut local = ProjectConfig::default();
+        local.scripts.insert("dev".into(), "vite --port 3001".into());
+        let merged = local.merge_over(base);
+        assert_eq!(
+            merged.scripts.get("dev").map(String::as_str),
+            Some("vite --port 3001")
+        );
+    }
+
+    #[test]
     fn expands_env_vars_and_detects_cycles() {
+        reset_project_config_load_cache();
         let tmp = TempDir::new().expect("tmp");
         let dir = tmp.path();
 
@@ -393,8 +498,47 @@ A = "${B}"
 B = "${A}"
 "#,
         );
+        reset_project_config_load_cache();
         let err = load_project_config(dir).expect_err("cycle should error");
         assert!(matches!(err, EnvrError::Validation(_)));
+    }
+
+    #[test]
+    fn project_config_process_cache_reused_until_reset() {
+        reset_project_config_load_cache();
+        let tmp = TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let leaf = root.join("a").join("b");
+        fs::create_dir_all(&leaf).expect("mkdir");
+        fs::write(
+            root.join(PROJECT_CONFIG_FILE),
+            "[runtimes.node]\nversion = \"18\"\n",
+        )
+        .expect("write");
+        let first = load_project_config_profile(&leaf, None)
+            .expect("load")
+            .expect("found");
+        fs::write(
+            root.join(PROJECT_CONFIG_FILE),
+            "[runtimes.node]\nversion = \"22\"\n",
+        )
+        .expect("rewrite");
+        let cached = load_project_config_profile(&leaf, None)
+            .expect("load")
+            .expect("found");
+        assert_eq!(
+            first.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            cached.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            "second load should hit in-process cache"
+        );
+        reset_project_config_load_cache();
+        let fresh = load_project_config_profile(&leaf, None)
+            .expect("load")
+            .expect("found");
+        assert_eq!(
+            fresh.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            Some("22")
+        );
     }
 
     proptest! {

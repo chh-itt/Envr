@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-child-process-v1.schema.json",
+  "title": "envr exec/run child process result (messages: child_completed, child_exit)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "exit_code",
+    "command",
+    "args",
+    "install_if_missing",
+    "auto_installed"
+  ],
+  "properties": {
+    "exit_code": { "type": "integer" },
+    "command": { "type": "string" },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "install_if_missing": { "type": "boolean" },
+    "auto_installed": {
+      "type": "array",
+      "description": "Runtimes installed during this invocation (`--install-if-missing`); empty if none.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "version"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "version": { "type": "string" }
+        }
+      }
+    },
+    "lang": {
+      "type": "string",
+      "description": "Present for `exec` only (`--lang`). Omitted for `run`."
+    }
+  }
+}

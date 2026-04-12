@@ -1,0 +1,7 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/dry_run_diff.json",
+  "title": "envr --format json data (message: dry_run_diff)",
+  "type": "object",
+  "additionalProperties": true
+}

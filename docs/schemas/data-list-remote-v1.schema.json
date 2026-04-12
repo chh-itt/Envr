@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-list-remote-v1.schema.json",
+  "title": "envr remote --format json (message: list_remote)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["remote_runtimes"],
+  "properties": {
+    "remote_runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "versions"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["version"],
+              "additionalProperties": true,
+              "properties": {
+                "version": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

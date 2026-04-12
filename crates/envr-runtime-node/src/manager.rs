@@ -211,7 +211,11 @@ fn download_to_path(
 }
 
 /// Node official archives contain a single top-level directory; promote it to `final_dir`.
+/// Uses a sibling staging directory under `versions/` so a failed install does not leave a
+/// half-populated version directory (staging is removed on validation failure).
 pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
+    use envr_platform::install_layout;
+
     let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
     let first = iter
         .next()
@@ -229,16 +233,20 @@ pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<(
             "expected node archive root to be a directory".into(),
         ));
     }
-    if final_dir.exists() {
-        fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
+    install_layout::ensure_final_parent(final_dir)?;
+    let staging_final = install_layout::sibling_staging_path(final_dir)?;
+    install_layout::remove_if_exists(&staging_final)?;
+
+    fs::rename(&inner, &staging_final).map_err(EnvrError::from)?;
+
+    if !node_installation_valid(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(
+            "extracted node layout missing node binary".into(),
+        ));
     }
-    // `fs::rename(src, dst)` requires the destination parent to exist.
-    // On Windows, missing parent directories commonly surfaces as `os error 3`.
-    let parent = final_dir
-        .parent()
-        .ok_or_else(|| EnvrError::Validation("final_dir has no parent".into()))?;
-    fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    fs::rename(&inner, final_dir).map_err(EnvrError::from)?;
+
+    install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
 }
 

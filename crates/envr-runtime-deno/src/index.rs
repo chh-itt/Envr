@@ -1,13 +1,13 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
 pub const DEFAULT_DENO_TAGS_API: &str =
     "https://api.github.com/repos/denoland/deno/tags?per_page=100";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Tag {
     pub name: String,
 }

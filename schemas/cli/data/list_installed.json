@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/list_installed.json",
+  "title": "envr list --format json → envelope.data (message: list_installed)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["installed_runtimes"],
+  "properties": {
+    "installed_runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["kind", "versions"],
+        "properties": {
+          "kind": { "type": "string" },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["version", "current", "lts"],
+              "properties": {
+                "version": { "type": "string" },
+                "current": { "type": "boolean" },
+                "lts": { "type": "boolean" },
+                "lts_codename": {},
+                "npm": {},
+                "remote_latest": {},
+                "outdated": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

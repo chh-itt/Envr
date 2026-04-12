@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-project-op-v1.schema.json",
+  "title": "envr project subcommands JSON `data` (add / sync / validate)",
+  "type": "object",
+  "additionalProperties": true
+}

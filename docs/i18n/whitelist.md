@@ -57,7 +57,8 @@
 |------|----------|------|
 | `envr` | 产品名 | 帮助模板、`envr:` 前缀 |
 | 子命令名 | `install`, `doctor`, `diagnostics export`, … | `--help` 树与脚本解析 |
-| JSON `message` 成功/流程 token | `list_installed`, `doctor_ok`, `project_config_ok`, `child_completed`, … | **契约**：自动化依赖固定英文 token；自然语言在 `data`/stderr 等层 |
+| JSON `message` 成功/流程 token | `list_installed`, `doctor_ok`, `project_status`, `hook_prompt`, `deactivate_hint`, `project_config_ok`, `project_pin_added`, `project_synced`, `project_validated`, `project_sync_pending`, `project_validate_failed`, `child_completed`, … | **契约**：自动化依赖固定英文 token；自然语言在 `data`/stderr 等层 |
+| `envr-shim` stderr 提示文案键 | `cli.shim.hint.node_engines`（占位 `{spec}`、`{active}`） | 与 CLI 共用 `locales/*` + `settings.toml` `[i18n]`；非 JSON 契约 |
 
 ---
 

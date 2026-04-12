@@ -1,10 +1,13 @@
 use crate::manager::{RustManager, RustPaths, RustupMode};
 use envr_config::settings::{Settings, settings_path_from_platform};
-use envr_domain::runtime::VersionSpec;
+use envr_domain::runtime::{InstallRequest, VersionSpec};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RustChannel {
@@ -86,7 +89,16 @@ fn rustup_init_url_from_settings(st: &Settings) -> String {
     )
 }
 
-fn download_rustup_init_to(url: &str, dest: &Path) -> EnvrResult<()> {
+fn download_rustup_init_to(
+    url: &str,
+    dest: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+) -> EnvrResult<()> {
+    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+        return Err(EnvrError::Download("download cancelled".to_string()));
+    }
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(90))
         .user_agent(concat!("envr-runtime-rust/", env!("CARGO_PKG_VERSION")))
@@ -105,9 +117,29 @@ fn download_rustup_init_to(url: &str, dest: &Path) -> EnvrResult<()> {
     if let Some(p) = dest.parent() {
         fs::create_dir_all(p).map_err(EnvrError::from)?;
     }
+    if let Some(t) = progress_total {
+        t.store(resp.content_length().unwrap_or(0), Ordering::Relaxed);
+    }
+    if let Some(d) = progress_downloaded {
+        d.store(0, Ordering::Relaxed);
+    }
     let mut f = fs::File::create(dest).map_err(EnvrError::from)?;
-    resp.copy_to(&mut f)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return Err(EnvrError::Download("download cancelled".to_string()));
+        }
+        let n = resp
+            .read(&mut buf)
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
+        if let Some(d) = progress_downloaded {
+            d.fetch_add(n as u64, Ordering::Relaxed);
+        }
+    }
     Ok(())
 }
 
@@ -130,9 +162,14 @@ fn rustup_env_from_settings(st: &Settings) -> Vec<(String, String)> {
     out
 }
 
+/// Install envr-managed rustup (downloads `rustup-init`, runs it, then ensures default toolchain).
+///
+/// When `progress` is set (e.g. CLI `InstallRequest` or GUI download-panel atomics), `rustup-init`
+/// download reports bytes via `progress_downloaded` / `progress_total` and honors `cancel`.
 pub fn install_rustup_managed(
     runtime_root: PathBuf,
     default_channel: RustChannel,
+    progress: Option<&InstallRequest>,
 ) -> EnvrResult<()> {
     // Rule B: if system rustup exists, do not install a managed one.
     if RustManager::system_rustup_available() {
@@ -149,7 +186,13 @@ pub fn install_rustup_managed(
     let installer = cache_dir.join(rustup_init_filename());
     let st = load_settings_best_effort();
     let url = rustup_init_url_from_settings(&st);
-    download_rustup_init_to(&url, &installer)?;
+    download_rustup_init_to(
+        &url,
+        &installer,
+        progress.and_then(|r| r.progress_downloaded.as_ref()),
+        progress.and_then(|r| r.progress_total.as_ref()),
+        progress.and_then(|r| r.cancel.as_ref()),
+    )?;
 
     #[cfg(unix)]
     {
@@ -190,6 +233,11 @@ pub fn install_rustup_managed(
             "managed rustup did not become available after install".into(),
         ));
     }
-    let _ = mgr.install_toolchain(&VersionSpec(default_channel.as_str().to_string()));
+    let _ = mgr.install_toolchain(&InstallRequest {
+        spec: VersionSpec(default_channel.as_str().to_string()),
+        progress_downloaded: None,
+        progress_total: None,
+        cancel: None,
+    });
     Ok(())
 }

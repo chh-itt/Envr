@@ -49,6 +49,36 @@ fn check_passes_after_init() {
 }
 
 #[test]
+fn project_add_writes_pin() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args(["project", "add", "node@22.1.0"])
+        .assert()
+        .success();
+    let p = tmp.path().join(DOT_ENVR_TOML);
+    let text = fs::read_to_string(&p).expect("read");
+    assert!(
+        text.contains("22.1.0") && text.contains("[runtimes.node]"),
+        "unexpected toml:\n{text}"
+    );
+}
+
+#[test]
+fn project_add_rejects_bad_spec() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args(["project", "add", "not-a-runtime@1"])
+        .assert()
+        .failure();
+}
+
+#[test]
 fn check_fails_when_no_config() {
     let tmp = tempfile::tempdir().expect("tempdir");
     Command::cargo_bin("envr")

@@ -5,6 +5,28 @@ use crate::output;
 use envr_core::shim_service::ShimService;
 use envr_domain::runtime::RuntimeKind;
 
+/// Ensure all core shims exist (strict). Used by `doctor --fix`.
+pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<String>> {
+    let root = common::effective_runtime_root()?;
+    let shim_exe = find_envr_shim_executable()?;
+    let svc = ShimService::new(root, shim_exe);
+    let mut ensured: Vec<String> = Vec::new();
+    for kind in [
+        RuntimeKind::Node,
+        RuntimeKind::Python,
+        RuntimeKind::Java,
+        RuntimeKind::Go,
+        RuntimeKind::Rust,
+        RuntimeKind::Php,
+        RuntimeKind::Deno,
+        RuntimeKind::Bun,
+    ] {
+        svc.ensure_shims(kind)?;
+        ensured.push(common::kind_label(kind).to_string());
+    }
+    Ok(ensured)
+}
+
 pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
     let root = match common::effective_runtime_root() {
         Ok(r) => r,

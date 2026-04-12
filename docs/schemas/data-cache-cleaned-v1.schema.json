@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-cache-cleaned-v1.schema.json",
+  "title": "envr cache clean (message: cache_cleaned)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["removed"],
+  "properties": {
+    "removed": { "type": "string" },
+    "mode": {
+      "type": "string",
+      "description": "`remove_tree` (default full clean) or `prune_by_age` when `--older-than` is set"
+    },
+    "dry_run": {
+      "type": "boolean",
+      "description": "Present and true when `--dry-run` was used (no files or directories were deleted)"
+    },
+    "older_than": {
+      "type": "string",
+      "description": "Original `--older-than` argument when mode is prune_by_age"
+    },
+    "newer_than": {
+      "type": ["string", "null"],
+      "description": "Original `--newer-than` argument when set (prune_by_age only)"
+    },
+    "files_removed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of deleted files (prune_by_age, non–dry-run)"
+    },
+    "bytes_freed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sum of deleted file sizes in bytes (prune_by_age, non–dry-run)"
+    },
+    "files_would_remove": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of files that would be deleted (`--dry-run`, prune_by_age or remove_tree)"
+    },
+    "bytes_would_free": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sum of file sizes that would be freed (`--dry-run`)"
+    }
+  }
+}

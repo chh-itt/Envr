@@ -1,5 +1,8 @@
 //! envr-shim: resolve a core tool via [`envr_shim_core`], then exec (Unix) or spawn and forward exit code (Windows).
 
+mod node_engines_hint;
+mod shim_i18n;
+
 use envr_error::EnvrError;
 use envr_shim_core::{
     CoreCommand, ResolvedShim, ShimContext, parse_shim_invocation, resolve_core_shim_command,
@@ -16,6 +19,12 @@ fn prepare(
     let (cmd, forward) = parse_shim_invocation(args)?;
     let resolved = resolve_core_shim_command(cmd, &ctx)?;
     Ok((cmd, ctx, resolved, forward))
+}
+
+fn maybe_node_engines_hint(cmd: CoreCommand, ctx: &ShimContext) {
+    if matches!(cmd, CoreCommand::Node) {
+        node_engines_hint::maybe_emit(ctx);
+    }
 }
 
 fn is_python_core_stem(stem: &str) -> bool {
@@ -67,14 +76,16 @@ fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Pa
 
 #[cfg(unix)]
 fn main() {
+    shim_i18n::bootstrap();
     let args: Vec<OsString> = std::env::args_os().collect();
-    let (_core_cmd, _ctx, resolved, forward) = match prepare(&args) {
+    let (core_cmd, ctx, resolved, forward) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);
         }
     };
+    maybe_node_engines_hint(core_cmd, &ctx);
 
     use std::os::unix::process::CommandExt;
     let mut cmd = Command::new(&resolved.executable);
@@ -89,6 +100,7 @@ fn main() {
 
 #[cfg(windows)]
 fn main() {
+    shim_i18n::bootstrap();
     let args: Vec<OsString> = std::env::args_os().collect();
     let (core_cmd, ctx, resolved, forward) = match prepare(&args) {
         Ok(x) => x,
@@ -97,6 +109,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    maybe_node_engines_hint(core_cmd, &ctx);
 
     let mut cmd = Command::new(&resolved.executable);
     cmd.args(&forward);

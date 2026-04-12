@@ -5,11 +5,14 @@ use reqwest::{Client, StatusCode, Url, header};
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
+
+/// Optional `(downloaded_bytes, total_bytes)` reporter; `total_bytes` may be 0 until `Content-Length` is known.
+pub type DownloadProgressFn = Arc<dyn Fn(u64, u64) + Send + Sync>;
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -57,6 +60,8 @@ impl DownloadEngine {
     /// Optional `progress_downloaded` / `progress_total` are updated for GUI observability.
     /// `progress_downloaded` starts at the resume offset (if any) and increases with each written chunk.
     /// `progress_total` is set from `Content-Length` when present (full file size ≈ resume + remainder).
+    ///
+    /// Optional `on_progress` is throttled (≈200ms or 256KiB) and invoked with current `(downloaded, total)`.
     pub async fn download_to_file(
         &self,
         url: Url,
@@ -65,6 +70,7 @@ impl DownloadEngine {
         options: &DownloadOptions,
         progress_downloaded: Option<Arc<AtomicU64>>,
         progress_total: Option<Arc<AtomicU64>>,
+        on_progress: Option<DownloadProgressFn>,
     ) -> EnvrResult<DownloadOutcome> {
         let dest_path = dest_path.as_ref().to_path_buf();
         if let Some(parent) = dest_path.parent() {
@@ -118,6 +124,30 @@ impl DownloadEngine {
         let mut limiter = RateLimiter::new(options.max_bytes_per_sec);
         let mut bytes_written = 0u64;
 
+        let emit_state: Option<Arc<Mutex<(Instant, u64)>>> = on_progress
+            .as_ref()
+            .map(|_| Arc::new(Mutex::new((Instant::now(), 0u64))));
+
+        let maybe_emit = |downloaded: u64, total: u64, force: bool| {
+            let Some(cb) = on_progress.as_ref() else {
+                return;
+            };
+            let Some(st) = emit_state.as_ref() else {
+                return;
+            };
+            let now = Instant::now();
+            let mut g = st.lock().expect("progress mutex");
+            let byte_delta = downloaded.saturating_sub(g.1);
+            if force
+                || now.duration_since(g.0) >= Duration::from_millis(200)
+                || byte_delta >= 256 * 1024
+            {
+                cb(downloaded, total);
+                g.0 = now;
+                g.1 = downloaded;
+            }
+        };
+
         let mut stream = response.bytes_stream();
         while let Some(chunk) = stream.next().await {
             if cancel.is_cancelled() {
@@ -133,8 +163,27 @@ impl DownloadEngine {
             if let Some(dl) = progress_downloaded.as_ref() {
                 dl.fetch_add(chunk.len() as u64, Ordering::Relaxed);
             }
+            let downloaded = progress_downloaded
+                .as_ref()
+                .map(|d| d.load(Ordering::Relaxed))
+                .unwrap_or(effective_resumed_from.saturating_add(bytes_written));
+            let total = progress_total
+                .as_ref()
+                .map(|t| t.load(Ordering::Relaxed))
+                .unwrap_or(0);
+            maybe_emit(downloaded, total, false);
         }
         file.flush().await.map_err(EnvrError::from)?;
+
+        let downloaded_final = progress_downloaded
+            .as_ref()
+            .map(|d| d.load(Ordering::Relaxed))
+            .unwrap_or(effective_resumed_from.saturating_add(bytes_written));
+        let total_final = progress_total
+            .as_ref()
+            .map(|t| t.load(Ordering::Relaxed))
+            .unwrap_or(0);
+        maybe_emit(downloaded_final, total_final, true);
 
         Ok(DownloadOutcome {
             path: dest_path,
@@ -279,7 +328,7 @@ mod tests {
             max_bytes_per_sec: None,
         };
         let out = DownloadEngine::new(Client::new())
-            .download_to_file(url, &dest, &cancel, &opts, None, None)
+            .download_to_file(url, &dest, &cancel, &opts, None, None, None)
             .await
             .expect("dl");
         assert_eq!(out.bytes_written, 5);
@@ -313,7 +362,7 @@ mod tests {
             max_bytes_per_sec: None,
         };
         let out = DownloadEngine::new(Client::new())
-            .download_to_file(url, &dest, &cancel, &opts, None, None)
+            .download_to_file(url, &dest, &cancel, &opts, None, None, None)
             .await
             .expect("dl");
         assert_eq!(out.bytes_written, 3);
@@ -339,6 +388,7 @@ mod tests {
                 &dest,
                 &CancelToken::new(),
                 &DownloadOptions::default(),
+                None,
                 None,
                 None,
             )
@@ -372,11 +422,47 @@ mod tests {
                 &DownloadOptions::default(),
                 Some(dl.clone()),
                 Some(total.clone()),
+                None,
             )
             .await
             .expect("dl");
         assert_eq!(total.load(Ordering::Relaxed), 4);
         assert_eq!(dl.load(Ordering::Relaxed), 4);
+    }
+
+    #[tokio::test]
+    async fn download_to_file_invokes_on_progress() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-length", "4")
+                    .set_body_bytes(b"abcd"),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = TempDir::new().expect("tmp");
+        let dest = tmp.path().join("cb.bin");
+        let hits = Arc::new(AtomicU64::new(0));
+        let h2 = hits.clone();
+        let cb: DownloadProgressFn = Arc::new(move |_, _| {
+            h2.fetch_add(1, Ordering::Relaxed);
+        });
+        let url = Url::parse(&format!("{}/cb", server.uri())).expect("url");
+        DownloadEngine::new(Client::new())
+            .download_to_file(
+                url,
+                &dest,
+                &CancelToken::new(),
+                &DownloadOptions::default(),
+                None,
+                None,
+                Some(cb),
+            )
+            .await
+            .expect("dl");
+        assert!(hits.load(Ordering::Relaxed) >= 1);
     }
 
     #[tokio::test]
@@ -393,7 +479,15 @@ mod tests {
         cancel.cancel();
         let url = Url::parse(&format!("{}/x", server.uri())).expect("url");
         let err = DownloadEngine::new(Client::new())
-            .download_to_file(url, &dest, &cancel, &DownloadOptions::default(), None, None)
+            .download_to_file(
+                url,
+                &dest,
+                &cancel,
+                &DownloadOptions::default(),
+                None,
+                None,
+                None,
+            )
             .await
             .expect_err("cancelled");
         let EnvrError::Download(msg) = err else {

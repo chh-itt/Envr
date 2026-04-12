@@ -4,6 +4,7 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult};
+use std::path::PathBuf;
 
 struct StubProvider {
     kind: RuntimeKind,
@@ -42,6 +43,13 @@ impl RuntimeProvider for StubProvider {
 
     fn uninstall(&self, _version: &RuntimeVersion) -> EnvrResult<()> {
         Ok(())
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        _version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        Ok((vec![], None))
     }
 }
 

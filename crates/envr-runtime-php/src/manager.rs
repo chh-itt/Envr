@@ -230,25 +230,13 @@ pub(crate) fn remove_stale_split_current_files(paths: &PhpPaths) {
     let _ = fs::remove_file(h.join("current-nts"));
 }
 
-fn move_dir_contents(src: &Path, dst: &Path) -> EnvrResult<()> {
-    fs::create_dir_all(dst).map_err(EnvrError::from)?;
-    for e in fs::read_dir(src).map_err(EnvrError::from)? {
-        let e = e.map_err(EnvrError::from)?;
-        let from = e.path();
-        let to = dst.join(e.file_name());
-        if to.exists() {
-            if to.is_dir() {
-                fs::remove_dir_all(&to).map_err(EnvrError::from)?;
-            } else {
-                fs::remove_file(&to).map_err(EnvrError::from)?;
-            }
-        }
-        fs::rename(&from, &to).map_err(EnvrError::from)?;
-    }
-    Ok(())
-}
-
 fn promote_archive_layout(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
+    use envr_platform::install_layout;
+
+    install_layout::ensure_final_parent(final_dir)?;
+    let staging_final = install_layout::sibling_staging_path(final_dir)?;
+    install_layout::remove_if_exists(&staging_final)?;
+
     // Prefer "single root directory" layouts.
     let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
     let first = iter.next().transpose().map_err(EnvrError::from)?;
@@ -257,20 +245,20 @@ fn promote_archive_layout(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     if let (Some(first), None) = (first, second) {
         let p = first.path();
         if p.is_dir() && php_installation_valid(&p) {
-            if final_dir.exists() {
-                fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
-            }
-            fs::rename(&p, final_dir).map_err(EnvrError::from)?;
+            fs::rename(&p, &staging_final).map_err(EnvrError::from)?;
+            install_layout::commit_staging_dir(&staging_final, final_dir)?;
             return Ok(());
         }
     }
 
-    // Otherwise assume files live at the archive root.
-    if final_dir.exists() {
-        fs::remove_dir_all(final_dir).map_err(EnvrError::from)?;
+    install_layout::hoist_directory_children(staging, &staging_final)?;
+    if !php_installation_valid(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(
+            "extracted php layout missing php executable".into(),
+        ));
     }
-    fs::create_dir_all(final_dir).map_err(EnvrError::from)?;
-    move_dir_contents(staging, final_dir)?;
+    install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
 }
 
@@ -367,11 +355,6 @@ impl PhpManager {
 
         let final_dir = self.paths.version_dir_for(&version.0, self.want_ts);
         promote_archive_layout(staging.path(), &final_dir)?;
-        if !php_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation(
-                "extracted php layout missing php executable".into(),
-            ));
-        }
 
         self.set_current(version)?;
         Ok(RuntimeVersion(version.0.clone()))

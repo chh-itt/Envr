@@ -44,6 +44,15 @@ impl ShimContext {
             profile,
         })
     }
+
+    /// Build context with an explicit runtime data root (CLI session cache, tests, shims).
+    pub fn with_runtime_root(runtime_root: PathBuf, working_dir: PathBuf, profile: Option<String>) -> Self {
+        Self {
+            runtime_root,
+            working_dir,
+            profile,
+        }
+    }
 }
 
 /// Well-known language entrypoints handled by envr shims (not arbitrary global npm bins yet).
@@ -83,6 +92,107 @@ impl CoreCommand {
 pub struct ResolvedShim {
     pub executable: PathBuf,
     pub extra_env: Vec<(String, String)>,
+}
+
+/// How `envr which` / JSON labels the selected runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WhichRuntimeSource {
+    /// `[runtimes.<key>].version` from merged project config.
+    ProjectPin,
+    /// Global `runtimes/<key>/current` (no project pin for this key).
+    GlobalCurrent,
+    /// PATH proxy disabled in settings; binary was taken from system `PATH`.
+    PathProxyBypass,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WhichRuntimeDetail {
+    /// Version directory label (or `system` when bypassing and not under `.../versions/<label>/...`).
+    pub version: String,
+    pub source: WhichRuntimeSource,
+}
+
+/// `true` when [`resolve_core_shim_command`] would use the PATH-proxy-bypass branch.
+pub fn core_command_uses_path_proxy_bypass(cmd: CoreCommand) -> bool {
+    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
+        && !node_path_proxy_enabled_from_disk()
+    {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip)
+        && !python_path_proxy_enabled_from_disk()
+    {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk() {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Php) && !php_path_proxy_enabled_from_disk() {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Deno) && !deno_path_proxy_enabled_from_disk() {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !bun_path_proxy_enabled_from_disk() {
+        return true;
+    }
+    false
+}
+
+fn envr_version_dir_from_executable(executable: &Path) -> Option<String> {
+    let mut cur = executable.parent()?;
+    loop {
+        let parent = cur.parent()?;
+        if parent.file_name().and_then(|n| n.to_str()) == Some("versions") {
+            return cur.file_name()?.to_str().map(|s| s.to_string());
+        }
+        cur = parent;
+    }
+}
+
+/// Metadata for `envr which` (no subprocess; aligns with [`resolve_core_shim_command`] routing).
+pub fn which_runtime_detail(
+    cmd: CoreCommand,
+    ctx: &ShimContext,
+    executable: &Path,
+) -> EnvrResult<WhichRuntimeDetail> {
+    if core_command_uses_path_proxy_bypass(cmd) {
+        let version = envr_version_dir_from_executable(executable).unwrap_or_else(|| "system".into());
+        return Ok(WhichRuntimeDetail {
+            version,
+            source: WhichRuntimeSource::PathProxyBypass,
+        });
+    }
+
+    let key = cmd.project_runtime_key();
+    let cfg =
+        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
+
+    let from_project = cfg
+        .as_ref()
+        .and_then(|c| c.runtimes.get(key))
+        .and_then(|r| r.version.as_deref())
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
+    let home = resolve_runtime_home_for_lang(ctx, key, None)?;
+    let home = std::fs::canonicalize(&home).unwrap_or(home);
+    let version = home
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("?")
+        .to_string();
+
+    let source = if from_project {
+        WhichRuntimeSource::ProjectPin
+    } else {
+        WhichRuntimeSource::GlobalCurrent
+    };
+
+    Ok(WhichRuntimeDetail { version, source })
 }
 
 pub fn normalize_invoked_basename(invoked_as: &str) -> String {
@@ -133,17 +243,15 @@ pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf>
         return Ok(exact);
     }
 
-    let dirs: Vec<PathBuf> = std::fs::read_dir(versions_dir)
-        .map_err(EnvrError::from)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.path())
-        .collect();
-
     let constraint = SpecConstraint::parse(spec)?;
 
     let mut best: Option<((u32, u32, u32), PathBuf)> = None;
-    for d in dirs {
+    for e in std::fs::read_dir(versions_dir).map_err(EnvrError::from)? {
+        let e = e.map_err(EnvrError::from)?;
+        if !e.file_type().map_err(EnvrError::from)?.is_dir() {
+            continue;
+        }
+        let d = e.path();
         let Some(name) = d.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
@@ -205,17 +313,15 @@ pub fn pick_php_version_home(
             }
         }
 
-        let dirs: Vec<PathBuf> = std::fs::read_dir(versions_dir)
-            .map_err(EnvrError::from)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.path())
-            .collect();
-
         let constraint = SpecConstraint::parse(spec)?;
 
         let mut best: Option<((u32, u32, u32), PathBuf)> = None;
-        for d in dirs {
+        for e in std::fs::read_dir(versions_dir).map_err(EnvrError::from)? {
+            let e = e.map_err(EnvrError::from)?;
+            if !e.file_type().map_err(EnvrError::from)?.is_dir() {
+                continue;
+            }
+            let d = e.path();
             let Some(name) = d.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
@@ -850,6 +956,16 @@ mod tests {
     use super::*;
     use std::ffi::OsString;
     use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn envr_version_dir_from_executable_finds_segment() {
+        let p = Path::new("/data/runtimes/node/versions/20.10.0/bin/node");
+        assert_eq!(
+            envr_version_dir_from_executable(p).as_deref(),
+            Some("20.10.0")
+        );
+    }
 
     #[test]
     fn parse_invocation_argv0_basename() {

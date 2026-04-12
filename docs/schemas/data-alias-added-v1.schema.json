@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/envr-workspace/envr/blob/main/docs/schemas/data-alias-added-v1.schema.json",
+  "title": "envr alias add (message: alias_added)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["name", "target"],
+  "properties": {
+    "name": { "type": "string" },
+    "target": { "type": "string" }
+  }
+}

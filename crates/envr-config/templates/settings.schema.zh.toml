@@ -1,0 +1,120 @@
+# =============================================================================
+# envr 全局配置 settings.toml — 模板（含中文说明与默认值）
+# 实际路径：`envr config path`；勿直接复制未知段落到生产环境，按需取消注释。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# paths — 安装与数据目录
+# -----------------------------------------------------------------------------
+# runtime_root：运行时根目录（node/python/… 版本与 shims）。留空则使用平台默认。
+# 可被环境变量 ENVR_RUNTIME_ROOT 覆盖（优先级更高）。
+[paths]
+# runtime_root = "D:\\envr-data"
+
+# -----------------------------------------------------------------------------
+# behavior — CLI / 安装行为
+# -----------------------------------------------------------------------------
+[behavior]
+# 安装成功后是否清理临时下载文件（逐步由各 provider 采用）
+cleanup_downloads_after_install = false
+
+# -----------------------------------------------------------------------------
+# mirror — 下载镜像总开关（影响多语言包源解析）
+# -----------------------------------------------------------------------------
+# mode：official | auto | manual | offline
+#   auto — 根据界面语言等启发式选择国内/官方源
+#   manual — 必须设置 manual_id
+#   offline — 禁止联网拉取索引（仅用本地缓存）
+[mirror]
+mode = "auto"
+# manual_id = "npmmirror"
+
+# -----------------------------------------------------------------------------
+# download — 并发与重试
+# -----------------------------------------------------------------------------
+[download]
+max_concurrent_downloads = 4
+retry_max = 3
+
+# -----------------------------------------------------------------------------
+# i18n — CLI / GUI 语言
+# -----------------------------------------------------------------------------
+# locale：follow_system | zh_cn | en_us
+[i18n]
+locale = "follow_system"
+
+# -----------------------------------------------------------------------------
+# appearance — GUI 外观（CLI 可忽略）
+# -----------------------------------------------------------------------------
+[appearance]
+# theme_mode：follow_system | light | dark
+theme_mode = "follow_system"
+# accent_color = "#3B82F6"
+
+[appearance.font]
+# mode：auto | custom；custom 时必须填写 family
+mode = "auto"
+# family = "Segoe UI"
+
+# -----------------------------------------------------------------------------
+# gui — 图形界面状态（CLI 可忽略）
+# -----------------------------------------------------------------------------
+[gui.downloads_panel]
+visible = true
+expanded = true
+x = 12
+y = 12
+# x_frac / y_frac：0.0–1.0 归一化坐标（可选）
+
+# -----------------------------------------------------------------------------
+# runtime — 各语言运行时与代理
+# -----------------------------------------------------------------------------
+
+# Node：index.json 源 + npm registry 预设 + shim 是否劫持 PATH
+[runtime.node]
+# download_source：auto | domestic | official
+download_source = "auto"
+# npm_registry_mode：auto | domestic | official | restore（不改动用户 .npmrc）
+npm_registry_mode = "auto"
+path_proxy_enabled = true
+
+[runtime.python]
+download_source = "auto"
+# pip_registry_mode：auto | domestic | official | restore
+pip_registry_mode = "auto"
+path_proxy_enabled = true
+
+[runtime.java]
+current_distro = "temurin"
+# distro：temurin | oracle_open_jdk | amazon_corretto | microsoft | oracle_jdk | azul_zulu | alibaba_dragonwell | open_jdk
+download_source = "auto"
+path_proxy_enabled = true
+
+[runtime.go]
+download_source = "auto"
+# proxy_mode：auto | domestic | official | direct | custom
+proxy_mode = "auto"
+# proxy_mode = custom 时需填写 proxy_custom 或兼容字段 goproxy
+# proxy_custom = "https://goproxy.cn,direct"
+# private_patterns：私有模块 glob，逗号分隔；会注入 GOPRIVATE / GONOSUMDB / GONOPROXY
+# private_patterns = "*.corp.example.com"
+path_proxy_enabled = true
+
+[runtime.rust]
+download_source = "auto"
+
+[runtime.php]
+download_source = "auto"
+# windows_build：nts | ts
+windows_build = "nts"
+path_proxy_enabled = true
+
+[runtime.deno]
+download_source = "auto"
+package_source = "auto"
+path_proxy_enabled = true
+
+[runtime.bun]
+package_source = "auto"
+path_proxy_enabled = true
+# global_bin_dir = "自定义 bun 全局 bin，用于 shim 同步"

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/envelope.json",
+  "title": "envr CLI JSON envelope (stdout, one object per line)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "success",
+    "code",
+    "message",
+    "data",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Current CLI contract is v2 (`installed_runtimes` / `active_versions` / `remote_runtimes`). Bump on breaking changes."
+    },
+    "success": { "type": "boolean" },
+    "code": { "type": ["string", "null"] },
+    "message": { "type": "string" },
+    "data": {
+      "description": "Command-specific payload; see schemas/cli/data/*.json"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

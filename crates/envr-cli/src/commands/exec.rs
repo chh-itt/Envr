@@ -1,12 +1,17 @@
 use crate::cli::{GlobalArgs, OutputFormat};
 use crate::commands::child_env;
+use crate::commands::dry_run_env;
+use crate::commands::cli_install_progress;
 use crate::commands::common;
+use crate::commands::env_overrides;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::{RustEnforceMode, load_project_config_profile};
-use envr_domain::runtime::parse_runtime_kind;
+use envr_domain::runtime::{VersionSpec, parse_runtime_kind};
 use envr_shim_core::ShimContext;
 use serde_json::json;
+use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -38,6 +43,18 @@ fn rustc_version_from_output(out: &str) -> Option<String> {
     } else {
         Some(v.to_string())
     }
+}
+
+fn enrich_project_config_error(e: envr_error::EnvrError) -> envr_error::EnvrError {
+    envr_error::EnvrError::Validation(format!(
+        "{}\n{}",
+        e,
+        envr_core::i18n::tr_key(
+            "cli.config.invalid_hint",
+            "请检查 `.envr.toml` 键名/值类型（示例：`[runtimes.node] version = \"20\"`）。",
+            "Check `.envr.toml` key names/value types (example: `[runtimes.node] version = \"20\"`).",
+        )
+    ))
 }
 
 fn enforce_rust_constraints(
@@ -127,6 +144,124 @@ fn enforce_rust_constraints(
     }
 }
 
+fn collect_exec_env_maybe_install(
+    g: &GlobalArgs,
+    ctx: &ShimContext,
+    lang: &str,
+    spec: &Option<String>,
+    install_if_missing: bool,
+) -> Result<
+    (
+        std::collections::HashMap<String, String>,
+        Vec<serde_json::Value>,
+    ),
+    envr_error::EnvrError,
+> {
+    let spec_deref = spec.as_deref();
+    match child_env::collect_exec_env(ctx, lang, spec_deref) {
+        Ok(m) => Ok((m, Vec::new())),
+        Err(e) if install_if_missing && lang != "rust" => {
+            let install_spec = child_env::effective_install_spec_for_exec(ctx, lang, spec_deref)?;
+            let Some(ref spec_str) = install_spec else {
+                return Err(e);
+            };
+            if !child_env::runtime_error_might_install_fix(&e) {
+                return Err(e);
+            }
+            let headline = fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.exec.installing_missing",
+                    "envr：正在安装缺失的运行时 {lang} {version}…",
+                    "envr: installing missing runtime {lang} {version}…",
+                ),
+                &[
+                    ("lang", lang),
+                    ("version", spec_str.as_str()),
+                ],
+            );
+            let service = common::runtime_service()?;
+            let kind = parse_runtime_kind(lang)?;
+            let use_prog = cli_install_progress::wants_cli_download_progress(g);
+            let (request, guard) = cli_install_progress::install_request_with_progress(
+                g,
+                VersionSpec(spec_str.clone()),
+                headline.clone(),
+            );
+            if !use_prog
+                && !g.quiet
+                && matches!(
+                    g.output_format.unwrap_or(OutputFormat::Text),
+                    OutputFormat::Text
+                )
+            {
+                eprintln!("{headline}");
+            }
+            let installed = service.install(kind, &request)?;
+            guard.finish();
+            let meta = json!({
+                "kind": lang,
+                "version": installed.0,
+            });
+            let m = child_env::collect_exec_env(ctx, lang, spec_deref)?;
+            Ok((m, vec![meta]))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn emit_dry_run_exec(
+    g: &GlobalArgs,
+    env_map: &HashMap<String, String>,
+    command: &str,
+    args: &[String],
+) -> i32 {
+    let mut keys: Vec<_> = env_map.keys().cloned().collect();
+    keys.sort();
+    let mut env_obj = serde_json::Map::new();
+    for k in &keys {
+        if let Some(v) = env_map.get(k) {
+            env_obj.insert(k.clone(), json!(v));
+        }
+    }
+    let data = json!({
+        "command": command,
+        "args": args,
+        "env": env_obj,
+    });
+    output::emit_ok(g, "dry_run", data, || {
+        if !g.quiet {
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.dry_run.would_run",
+                    "将执行：",
+                    "Would run:",
+                )
+            );
+            println!("  {} {}", command, shell_words_join(args));
+            println!();
+            for k in &keys {
+                if let Some(v) = env_map.get(k) {
+                    println!("{k}={v}");
+                }
+            }
+        }
+    })
+}
+
+fn shell_words_join(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            if a.contains(char::is_whitespace) {
+                format!("{a:?}")
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn go_tool_executable(home: &std::path::Path, tool: &str) -> Option<std::path::PathBuf> {
     let bin = home.join("bin");
     #[cfg(windows)]
@@ -151,8 +286,15 @@ pub fn run(
     g: &GlobalArgs,
     lang: String,
     spec: Option<String>,
+    install_if_missing: bool,
+    dry_run: bool,
+    dry_run_diff: bool,
+    verbose: bool,
     path: PathBuf,
     profile: Option<String>,
+    env_pairs: Vec<String>,
+    env_files: Vec<PathBuf>,
+    output: Option<PathBuf>,
     command: String,
     args: Vec<String>,
 ) -> i32 {
@@ -161,26 +303,75 @@ pub fn run(
         return common::print_envr_error(g, e);
     }
 
-    let mut ctx = match ShimContext::from_process_env() {
+    let ctx = match common::shim_context_for(path, profile) {
         Ok(c) => c,
         Err(e) => return common::print_envr_error(g, e),
     };
-    ctx.working_dir = std::fs::canonicalize(&path).unwrap_or(path);
-    if let Some(p) = profile.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        ctx.profile = Some(p.to_string());
-    }
 
-    let env_map = match child_env::collect_exec_env(&ctx, &lang, spec.as_deref()) {
-        Ok(m) => m,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let text_out = matches!(
+        g.output_format.unwrap_or(OutputFormat::Text),
+        OutputFormat::Text
+    );
 
-    if let Ok(Some((cfg, _loc))) =
-        load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())
-    {
-        if let Err(e) = enforce_rust_constraints(&env_map, &cfg, &ctx.working_dir) {
+    if dry_run || dry_run_diff {
+        let mut env_map = match child_env::collect_exec_env(&ctx, &lang, spec.as_deref()) {
+            Ok(m) => m,
+            Err(e) => return common::print_envr_error(g, e),
+        };
+        if let Err(e) = env_overrides::apply_env_overrides(&mut env_map, &env_files, &env_pairs) {
             return common::print_envr_error(g, e);
         }
+        if verbose && !g.quiet && text_out {
+            if let Ok(line) = child_env::describe_exec_resolution(&ctx, &lang, spec.as_deref()) {
+                let msg = fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.exec.verbose_using",
+                        "Using {detail}",
+                        "Using {detail}",
+                    ),
+                    &[("detail", &line)],
+                );
+                eprintln!("envr: {msg}");
+            }
+        }
+        if dry_run_diff {
+            let parent = dry_run_env::parent_env_snapshot();
+            return dry_run_env::emit_dry_run_diff(g, &parent, &env_map, &command, &args);
+        }
+        return emit_dry_run_exec(g, &env_map, &command, &args);
+    }
+
+    let (mut env_map, auto_installed) =
+        match collect_exec_env_maybe_install(g, &ctx, &lang, &spec, install_if_missing) {
+            Ok(x) => x,
+            Err(e) => return common::print_envr_error(g, e),
+        };
+    if let Err(e) = env_overrides::apply_env_overrides(&mut env_map, &env_files, &env_pairs) {
+        return common::print_envr_error(g, e);
+    }
+
+    if verbose && !g.quiet && text_out {
+        if let Ok(line) = child_env::describe_exec_resolution(&ctx, &lang, spec.as_deref()) {
+            let msg = fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.exec.verbose_using",
+                    "Using {detail}",
+                    "Using {detail}",
+                ),
+                &[("detail", &line)],
+            );
+            eprintln!("envr: {msg}");
+        }
+    }
+
+    match load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref()) {
+        Ok(Some((cfg, _loc))) => {
+            if let Err(e) = enforce_rust_constraints(&env_map, &cfg, &ctx.working_dir) {
+                return common::print_envr_error(g, e);
+            }
+        }
+        Ok(None) => {}
+        Err(e) => return common::print_envr_error(g, enrich_project_config_error(e)),
     }
 
     // On Windows, executable lookup may happen before applying the child's environment block
@@ -202,16 +393,49 @@ pub fn run(
         child.env(k, v);
     }
     child.current_dir(&ctx.working_dir);
+    if let Some(ref out_path) = output {
+        let file = match OpenOptions::new().create(true).append(true).open(out_path) {
+            Ok(f) => f,
+            Err(e) => {
+                return common::print_envr_error(
+                    g,
+                    envr_error::EnvrError::Io(std::io::Error::new(
+                        e.kind(),
+                        format!("{}: {e}", out_path.display()),
+                    )),
+                );
+            }
+        };
+        match file.try_clone() {
+            Ok(f2) => {
+                child.stdout(file);
+                child.stderr(f2);
+            }
+            Err(e) => return common::print_envr_error(g, e.into()),
+        }
+    }
 
     let status = match child.status() {
         Ok(s) => s,
         Err(e) => return common::print_envr_error(g, e.into()),
     };
     let exit = status.code().unwrap_or(1);
+    let env_file_s: Vec<String> = env_files
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
     let data = json!({
         "exit_code": exit,
         "command": command,
         "args": args,
+        "lang": lang,
+        "install_if_missing": install_if_missing,
+        "dry_run": false,
+        "verbose": verbose,
+        "auto_installed": auto_installed,
+        "env_files": env_file_s,
+        "env_overrides": env_pairs,
+        "output_file": output.as_ref().map(|p| p.display().to_string()),
     });
     if exit == 0 {
         output::emit_ok(g, "child_completed", data, || {})
@@ -229,7 +453,7 @@ pub fn run(
                 output::write_envelope(false, Some("child_exit"), &msg, data, &[]);
             }
             OutputFormat::Text => {
-                eprintln!("envr: {msg}");
+                output::print_error_text("child_exit", &msg);
             }
         }
         exit
