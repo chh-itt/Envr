@@ -151,7 +151,7 @@ fn zulu_preferred_download_url(
 ) -> EnvrResult<String> {
     let mut rows = zulu_fetch_packages_json(client, major, os, arch, 100)?;
     rows.retain(zulu_headless_jdk_row);
-    rows.sort_by(|a, b| zulu_row_sort_key(b).cmp(&zulu_row_sort_key(a)));
+    rows.sort_by_key(|b| std::cmp::Reverse(zulu_row_sort_key(b)));
     let Some(best) = rows.first() else {
         return Err(EnvrError::Validation(format!(
             "no Zulu JDK package found for Java {major} on {os}-{arch}"
@@ -198,7 +198,7 @@ fn zulu_download_url_matching_label(
             "no Zulu package matches label {label:?} on {os}-{arch}"
         )));
     }
-    filtered.sort_by(|a, b| zulu_row_sort_key(b).cmp(&zulu_row_sort_key(a)));
+    filtered.sort_by_key(|b| std::cmp::Reverse(zulu_row_sort_key(b)));
     Ok(filtered[0].download_url.clone())
 }
 
@@ -430,9 +430,7 @@ fn sync_user_java_home(home: Option<&Path>) -> EnvrResult<()> {
     #[cfg(windows)]
     {
         use std::process::Command;
-        let value = home
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(String::new);
+        let value = home.map(|p| p.display().to_string()).unwrap_or_default();
         let out = Command::new("setx")
             .args(["JAVA_HOME", &value])
             .output()

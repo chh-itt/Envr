@@ -24,10 +24,18 @@ fn patch_root(cmd: &mut Command) {
             "语言运行时版本管理器",
             "Language runtime version manager",
         ))
-        .after_long_help(tr(
-            "cli.help.command_groups",
-            "命令分组（与上方列表顺序一致）：\n  • 运行时管理 — install / use / list / current / uninstall / which / remote / rust / why / resolve / exec / run / env / template / shell / hook / deactivate / prune\n  • 项目与配置 — init / check / status / project / import / export / profile / config / alias\n  • 数据与环境 — shim / cache / bundle\n  • 诊断与信息 — doctor / debug / diagnostics / completion / help / update",
-            "Command groups (same order as the list above):\n  • Runtime management — install, use, list, current, uninstall, which, remote, rust, why, resolve, exec, run, env, template, shell, hook, deactivate, prune\n  • Project & configuration — init, check, status, project, import, export, profile, config, alias\n  • Data & environment — shim, cache, bundle\n  • Diagnostics & information — doctor, debug, diagnostics, completion, help, update",
+        .after_long_help(format!(
+            "{}\n\n{}",
+            tr(
+                "cli.help.command_groups",
+                "命令分组（与上方列表顺序一致）：\n  • 运行时管理 — install / use / list / current / uninstall / which / remote / rust / why / resolve / exec / run / env / template / shell / hook / deactivate / prune\n  • 项目与配置 — init / check / status / project / import / export / profile / config / alias\n  • 数据与环境 — shim / cache / bundle\n  • 诊断与信息 — doctor / debug / diagnostics / completion / help / update",
+                "Command groups (same order as the list above):\n  • Runtime management — install, use, list, current, uninstall, which, remote, rust, why, resolve, exec, run, env, template, shell, hook, deactivate, prune\n  • Project & configuration — init, check, status, project, import, export, profile, config, alias\n  • Data & environment — shim, cache, bundle\n  • Diagnostics & information — doctor, debug, diagnostics, completion, help, update",
+            ),
+            tr(
+                "cli.help.command_tiers",
+                "命令层级（与 CLI 设计文档 §2 一致；完整对照表见 docs/cli/commands.md）：\n  • L1 核心 — install · use · list · current · uninstall · which · remote · doctor\n  • L2 增强 — config · alias · prune · update · resolve · shell；另含 init · check · project · hook · deactivate · why · rust\n  • L3 自动化 — exec · run · env · import · export · profile · status · template\n  • 平台与数据 — shim · cache · bundle · debug · diagnostics · completion · help · update",
+                "Design tiers (CLI design doc §2; full matrix: docs/cli/commands.md):\n  • L1 essential — install, use, list, current, uninstall, which, remote, doctor\n  • L2 enhanced — config, alias, prune, update, resolve, shell; also init, check, project, hook, deactivate, why, rust\n  • L3 automation — exec, run, env, import, export, profile, status, template\n  • Platform & data — shim, cache, bundle, debug, diagnostics, completion, help, update",
+            ),
         ))
         .mut_arg("output_format", |a| {
             a.help(tr(
@@ -357,7 +365,7 @@ fn patch_subcommand(cmd: &mut Command) {
         }
         "project" => {
             *cmd = cmd.clone().about(tr(
-                "cli.help.cmd.project",
+                "cli.help.cmd.project.about",
                 "管理 `.envr.toml` 中的运行时 pin（添加、同步安装、校验）",
                 "Manage runtime pins in `.envr.toml` (add, sync installs, validate)",
             ));

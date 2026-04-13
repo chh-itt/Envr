@@ -1,13 +1,13 @@
 //! `envr diagnostics export` — zip bundle for bug reports (doctor JSON, system/env summary, recent logs).
 
 use crate::cli::{DiagnosticsCmd, GlobalArgs};
-use crate::commands::common;
+use crate::CommandOutcome;
 use crate::commands::doctor::{self, DoctorReport};
 use crate::output;
 
 use envr_core::logging::resolve_log_dir;
 use envr_core::runtime::service::RuntimeService;
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -22,15 +22,18 @@ const MAX_LOG_BYTES_PER_FILE: usize = 512 * 1024;
 
 pub fn run(g: &GlobalArgs, service: &RuntimeService, cmd: DiagnosticsCmd) -> i32 {
     match cmd {
-        DiagnosticsCmd::Export { output } => export_zip(g, service, output),
+        DiagnosticsCmd::Export { output } => {
+            CommandOutcome::from_result(export_zip_inner(g, service, output)).finish(g)
+        }
     }
 }
 
-fn export_zip(g: &GlobalArgs, service: &RuntimeService, output: Option<PathBuf>) -> i32 {
-    let report = match doctor::build_doctor_report(service) {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn export_zip_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    output: Option<PathBuf>,
+) -> EnvrResult<i32> {
+    let report = doctor::build_doctor_report(service)?;
 
     let zip_path = match output {
         Some(p) => p,
@@ -46,19 +49,18 @@ fn export_zip(g: &GlobalArgs, service: &RuntimeService, output: Option<PathBuf>)
     };
 
     if let Some(parent) = zip_path.parent()
-        && let Err(e) = fs::create_dir_all(parent)
-    {
-        return emit_export_error(g, EnvrError::from(e), zip_path.as_path());
-    }
+        && let Err(e) = fs::create_dir_all(parent) {
+            return Ok(emit_export_error(g, EnvrError::from(e), zip_path.as_path()));
+        }
 
     let doctor_json = match serde_json::to_string_pretty(&report.to_json()) {
         Ok(s) => s,
         Err(e) => {
-            return emit_export_error(
+            return Ok(emit_export_error(
                 g,
                 EnvrError::Runtime(format!("serialize doctor: {e}")),
                 zip_path.as_path(),
-            );
+            ));
         }
     };
 
@@ -66,8 +68,8 @@ fn export_zip(g: &GlobalArgs, service: &RuntimeService, output: Option<PathBuf>)
     let environment_txt = build_environment_txt(&report);
 
     match write_diagnostic_zip(&zip_path, &doctor_json, &system_txt, &environment_txt) {
-        Ok(()) => emit_export_ok(g, &zip_path),
-        Err(e) => emit_export_error(g, e, zip_path.as_path()),
+        Ok(()) => Ok(emit_export_ok(g, &zip_path)),
+        Err(e) => Ok(emit_export_error(g, e, zip_path.as_path())),
     }
 }
 

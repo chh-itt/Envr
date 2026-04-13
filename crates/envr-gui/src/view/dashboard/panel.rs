@@ -64,7 +64,7 @@ pub fn dashboard_view(
                 "刷新仪表盘失败",
                 "Couldn't refresh the dashboard",
             );
-            let body = format!("{err}");
+            let body = err.to_string();
             let hint = Some(envr_core::i18n::tr_key(
                 "gui.empty.hint.dashboard_stale",
                 "下方仍显示上次成功加载的数据。",
@@ -148,7 +148,7 @@ pub fn dashboard_view(
         body,
         hint,
     ));
-    return col.into();
+    col.into()
 }
 
 fn card(

@@ -233,7 +233,7 @@ impl DownloadPanelState {
             return;
         }
         self.progress_throttle_frames = self.progress_throttle_frames.wrapping_add(1);
-        if self.progress_throttle_frames % 13 == 0 {
+        if self.progress_throttle_frames.is_multiple_of(13) {
             self.on_tick();
         }
     }

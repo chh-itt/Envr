@@ -211,9 +211,7 @@ fn synthetic_lts_entries_via_binary_latest(
         if !supported(vendor, *m) {
             continue;
         }
-        let url = match vendor {
-            _ => vendor_latest_binary_url(vendor, *m, os, arch),
-        };
+        let url = vendor_latest_binary_url(vendor, *m, os, arch);
         let Some(url) = url else {
             continue;
         };

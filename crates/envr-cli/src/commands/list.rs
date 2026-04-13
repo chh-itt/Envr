@@ -1,8 +1,10 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::{kind_label, session_runtime_root};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
+use envr_error::EnvrResult;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodePaths, normalize_node_version, parse_node_index};
@@ -49,7 +51,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
             }
         }
         _ => t
-            .split(|c| c == '.' || c == '-' || c == '+')
+            .split(['.', '-', '+'])
             .next()
             .unwrap_or(t)
             .to_string(),
@@ -147,14 +149,13 @@ fn version_json_entries(
             }
             if kind == RuntimeKind::Node {
                 let norm = normalize_node_version(&ver.0);
-                if let Some(map) = node_lts {
-                    if let Some(cn) = map.get(&norm) {
+                if let Some(map) = node_lts
+                    && let Some(cn) = map.get(&norm) {
                         row["lts"] = json!(true);
                         if !cn.is_empty() {
                             row["lts_codename"] = json!(cn);
                         }
                     }
-                }
                 if let Some(np) = &node_paths {
                     let home = np.version_dir(&ver.0);
                     if let Some(npm) = try_read_bundled_npm_version(&home) {
@@ -194,11 +195,10 @@ fn format_version_text_line(
             tags.push_str("\x1b[33m");
         }
         tags.push_str(&lts_tag);
-        if let Some(c) = lts_codename {
-            if !c.is_empty() {
+        if let Some(c) = lts_codename
+            && !c.is_empty() {
                 tags.push_str(&format!(" {c}"));
             }
-        }
         if styles {
             tags.push_str("\x1b[0m");
         }
@@ -237,25 +237,27 @@ pub fn run(
     runtime: Option<String>,
     outdated: bool,
 ) -> i32 {
+    CommandOutcome::from_result(run_inner(g, service, runtime, outdated)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: Option<String>,
+    outdated: bool,
+) -> EnvrResult<i32> {
     let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
-        Some(l) => match parse_runtime_kind(l.trim()) {
-            Ok(k) => vec![k],
-            Err(e) => return common::print_envr_error(g, e),
-        },
+        Some(l) => vec![parse_runtime_kind(l.trim())?],
     };
 
     let mut rows: Vec<(RuntimeKind, Vec<RuntimeVersion>)> = Vec::with_capacity(kinds.len());
     let mut currents: Vec<Option<RuntimeVersion>> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        match service.list_installed(kind) {
-            Ok(vers) => {
-                let cur = service.current(kind).ok().flatten();
-                currents.push(cur);
-                rows.push((kind, vers));
-            }
-            Err(e) => return common::print_envr_error(g, e),
-        }
+        let vers = service.list_installed(kind)?;
+        let cur = service.current(kind).ok().flatten();
+        currents.push(cur);
+        rows.push((kind, vers));
     }
 
     let remote_maps: Vec<Option<HashMap<String, String>>> = if outdated {
@@ -275,7 +277,7 @@ pub fn run(
     };
 
     let node_lts = try_node_lts_map();
-    let runtime_root = common::session_runtime_root().ok();
+    let runtime_root = session_runtime_root().ok();
 
     let runtimes: Vec<_> = rows
         .iter()
@@ -290,7 +292,7 @@ pub fn run(
         .collect();
     let data = json!({ "installed_runtimes": runtimes });
 
-    output::emit_ok(g, "list_installed", data, || {
+    Ok(output::emit_ok(g, "list_installed", data, || {
         if output::wants_porcelain(g) {
             if rows.len() == 1 {
                 for v in &rows[0].1 {
@@ -348,17 +350,14 @@ pub fn run(
                         let key = major_line_key(*kind, &ver.0);
                         map.get(&key).and_then(|latest| {
                             (cmp_version_labels(&ver.0, latest) == Ordering::Less).then(|| {
-                                format!(
-                                    "{}",
-                                    fmt_template(
+                                fmt_template(
                                         &envr_core::i18n::tr_key(
                                             "cli.list.outdated_hint",
                                             "（可升级至 {latest}）",
                                             "(upgrade to {latest})",
                                         ),
                                         &[("latest", latest.as_str())],
-                                    )
-                                )
+                                    ).to_string()
                             })
                         })
                     });
@@ -375,5 +374,5 @@ pub fn run(
                 }
             }
         }
-    })
+    }))
 }

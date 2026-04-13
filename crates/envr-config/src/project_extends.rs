@@ -103,10 +103,10 @@ pub fn fetch_extend_body(url: &str) -> EnvrResult<String> {
         )));
     }
 
-    if let Ok(cache_path) = url_cache_path(url) {
-        if let Some(hit) = read_cache_if_fresh(&cache_path) {
-            return Ok(hit);
-        }
+    if let Ok(cache_path) = url_cache_path(url)
+        && let Some(hit) = read_cache_if_fresh(&cache_path)
+    {
+        return Ok(hit);
     }
 
     let body = ureq::get(url)

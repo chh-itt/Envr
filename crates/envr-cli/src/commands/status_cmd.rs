@@ -1,24 +1,25 @@
 //! `envr status` — project + active runtime summary.
 
-use crate::cli::GlobalArgs;
-use crate::commands::common;
-use crate::commands::project_status::{build_project_status, format_prompt_segment, status_to_json};
+use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
+use crate::CommandOutcome;
+use crate::commands::project_status::{
+    build_project_status_from_loaded, format_prompt_segment, status_to_json,
+};
 use crate::output::{self, fmt_template};
+use crate::CliPathProfile;
 
+use envr_error::EnvrResult;
 use serde_json::json;
-use std::path::PathBuf;
+pub fn run(g: &GlobalArgs, project: ProjectPathProfileArgs) -> i32 {
+    CommandOutcome::from_result(run_inner(g, project)).finish(g)
+}
 
-pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>) -> i32 {
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let st = match build_project_status(&ctx) {
-        Ok(s) => s,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
     let data = status_to_json(&st);
-    output::emit_ok(g, "project_status", data, || {
+    Ok(output::emit_ok(g, "project_status", data, || {
         if g.quiet {
             return;
         }
@@ -143,22 +144,21 @@ pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>) -> i32 {
             };
             println!("{line}");
         }
-    })
+    }))
 }
 
 /// `envr hook prompt` — one line for PS1 (plain text); JSON envelope when `--format json`.
-pub fn run_hook_prompt(g: &GlobalArgs, path: PathBuf, profile: Option<String>) -> i32 {
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let st = match build_project_status(&ctx) {
-        Ok(s) => s,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+pub fn run_hook_prompt(g: &GlobalArgs, project: ProjectPathProfileArgs) -> i32 {
+    CommandOutcome::from_result(run_hook_prompt_inner(g, project)).finish(g)
+}
+
+fn run_hook_prompt_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
     let segment = format_prompt_segment(&st);
     let data = json!({ "segment": segment });
-    output::emit_ok(g, "hook_prompt", data, || {
+    Ok(output::emit_ok(g, "hook_prompt", data, || {
         print!("{segment}");
-    })
+    }))
 }

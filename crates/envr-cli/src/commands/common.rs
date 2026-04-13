@@ -1,4 +1,6 @@
 use crate::cli::GlobalArgs;
+use crate::CommandOutcome;
+use crate::runtime_session::CliRuntimeSession;
 
 use envr_config::settings::resolve_runtime_root;
 use envr_core::runtime::service::RuntimeService;
@@ -43,21 +45,23 @@ pub fn kind_label(kind: RuntimeKind) -> &'static str {
     }
 }
 
+/// [`RuntimeService`] for the **process default** runtime root (see [`CliRuntimeSession::connect`]).
+/// For an explicit root (e.g. bundle apply target), use [`RuntimeService::with_runtime_root`].
 pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
-    let root = session_runtime_root()?;
-    RuntimeService::with_runtime_root(root)
+    Ok(CliRuntimeSession::connect()?.into_service())
 }
 
-/// Run `f` with a resolved [`RuntimeService`], or print an error and return its exit code.
-pub fn with_runtime_service<F>(g: &GlobalArgs, f: F) -> i32
+/// Run `f` with a resolved [`RuntimeService`]; connection errors become [`CommandOutcome::Err`].
+/// The caller maps the outcome with [`CommandOutcome::finish`].
+pub fn with_runtime_service<F>(f: F) -> CommandOutcome
 where
-    F: FnOnce(&RuntimeService) -> i32,
+    F: FnOnce(&RuntimeService) -> EnvrResult<i32>,
 {
-    let service = match runtime_service() {
-        Ok(s) => s,
-        Err(e) => return print_envr_error(g, e),
-    };
-    f(&service)
+    let result = (|| {
+        let session = CliRuntimeSession::connect()?;
+        f(&session)
+    })();
+    CommandOutcome::from_result(result)
 }
 
 /// Data directory for envr runtimes (`ENVR_RUNTIME_ROOT`, then `settings.toml`, then platform default).

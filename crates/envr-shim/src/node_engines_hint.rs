@@ -59,13 +59,11 @@ fn throttle_allows_emit(cache_dir: &Path, key: &str) -> bool {
         let mut lines = prev.lines();
         let ts_s = lines.next().unwrap_or("0");
         let prev_key = lines.next().unwrap_or("");
-        if prev_key == key {
-            if let Ok(ts) = ts_s.parse::<u64>() {
-                if now.saturating_sub(ts) < THROTTLE_SECS {
+        if prev_key == key
+            && let Ok(ts) = ts_s.parse::<u64>()
+                && now.saturating_sub(ts) < THROTTLE_SECS {
                     return false;
                 }
-            }
-        }
     }
     let mut f = match fs::File::create(&path) {
         Ok(f) => f,

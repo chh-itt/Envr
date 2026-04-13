@@ -1,9 +1,11 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, parse_runtime_kind};
+use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{list_node_remote_rows, parse_node_index, NodeRemoteRow};
 use serde_json::{Value, json};
@@ -88,13 +90,19 @@ pub fn run(
     runtime: Option<String>,
     prefix: Option<String>,
 ) -> i32 {
+    CommandOutcome::from_result(run_inner(g, service, runtime, prefix)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: Option<String>,
+    prefix: Option<String>,
+) -> EnvrResult<i32> {
     let filter = RemoteFilter { prefix };
     let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
-        Some(l) => match parse_runtime_kind(l.trim()) {
-            Ok(k) => vec![k],
-            Err(e) => return common::print_envr_error(g, e),
-        },
+        Some(l) => vec![parse_runtime_kind(l.trim())?],
     };
 
     enum RemoteRow {
@@ -104,10 +112,7 @@ pub fn run(
 
     let mut rows: Vec<(RuntimeKind, RemoteRow)> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        let vers = match service.list_remote(kind, &filter) {
-            Ok(v) => v,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        let vers = service.list_remote(kind, &filter)?;
         let payload = if kind == RuntimeKind::Node {
             if let Some(enriched) = try_node_remote_rows(&filter) {
                 RemoteRow::Node(enriched)
@@ -138,7 +143,7 @@ pub fn run(
         .collect();
     let data = serde_json::json!({ "remote_runtimes": runtimes });
 
-    output::emit_ok(g, "list_remote", data, || {
+    Ok(output::emit_ok(g, "list_remote", data, || {
         if output::wants_porcelain(g) {
             let multi_kind = rows.len() > 1;
             for (kind, payload) in &rows {
@@ -200,5 +205,5 @@ pub fn run(
                 }
             }
         }
-    })
+    }))
 }

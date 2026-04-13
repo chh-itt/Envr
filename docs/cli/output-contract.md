@@ -11,11 +11,59 @@ These guarantees are for automation usage only:
 
 Human-readable default text output is not a stability target for parsers.
 
+### CLI argument parse errors (before dispatch)
+
+If the process **exits while parsing argv** (unknown flag, missing required argument, invalid value type, etc.), **clap** prints a **human-oriented** help or error message to **stderr** and exits with a **non-zero** status. That path is **not** wrapped in the JSON envelope: there is **no** guarantee of a JSON line on stdout (stdout may be empty). Integrators and CI that always pass `--format json` should still treat **exit code + stderr** as the contract for parse failures, or pre-validate arguments before calling `envr`.
+
 ## Precedence
 
 If both flags are provided, JSON mode wins:
 
 - `--format json` > `--porcelain`
+
+### Effective output format (implementation note)
+
+- Global default is **text** when `--format` is omitted ([`GlobalArgs::effective_output_format`](../../crates/envr-cli/src/cli.rs)).
+- **`doctor --json`** is treated like **`--format json` for that process**: it affects handler output and sets **`ENVR_OUTPUT_FORMAT=json`** the same way as the global flag (see [`Cli::resolved_output_format`](../../crates/envr-cli/src/cli.rs), [`apply_global`](../../crates/envr-cli/src/cli.rs)). If both `--format text` and `doctor --json` appear, the legacy `--json` shorthand wins for resolution.
+
+## Output mode matrix (automation)
+
+| Mode | stdout | stderr on success | stderr on error |
+|------|--------|-------------------|-----------------|
+| **Text** (default) | Human-oriented lines from each command | Optional progress / hints (`envr: …`) | `envr: [E_<CODE>] <message>`; network-class errors may append a mirror hint line |
+| **`--porcelain`** | Plain lines only (per-command contract below); no envelope | Same as text unless a command documents otherwise | Same bracket line as text (`[E_<CODE>]`) |
+| **`--format json`** | Single JSON object per logical response (see envelope) | Tracing to **stderr** when `RUST_LOG` / filters apply (never mixed into stdout) | Same envelope with `success: false`; see failure `data` below |
+| **`--quiet`** | Suppressed where documented (many commands still emit JSON stdout when `json`) | Reduced or empty | Text: bracket-only line; JSON: `message` is bracket tag, `diagnostics` omitted, failure `data` omitted |
+
+`--quiet` does not disable `--format json` success lines; it trims human-oriented fields inside the envelope where implemented.
+
+## Observability (tracing)
+
+- The `envr` binary attaches a `tracing` console layer to **stderr** and a rolling file under `ENVR_LOG_DIR` or `<cwd>/.envr/logs`.
+- **`RUST_LOG`** (e.g. `info`, `debug`) therefore only affects **stderr**, so **stdout** stays a single JSON line (or porcelain lines) for automation. Regression: `crates/envr-cli/tests/json_stdout_with_rust_log.rs`.
+- Each dispatched subcommand runs under span **`envr.cli.command`** with field **`command`** = stable snake_case (see [`Command::trace_name`](../../crates/envr-cli/src/cli.rs) / `cli::command_trace_tests`).
+- User-visible CLI failures routed through `emit_envr_error` also emit a **`tracing::error!`** event on target **`envr_cli`** with structured fields `cli_error_kind`, `cli_error_exit_code`, `cli_error_diagnostics_len` (message text stays on stderr / JSON envelope as before).
+
+## HTTP timeouts (reqwest-based downloads)
+
+- [`envr_download::DownloadEngine::default_client`](../../crates/envr-download/src/engine.rs) sets a **TCP connect timeout** of **30s** by default ([`DEFAULT_HTTP_CONNECT_TIMEOUT`](../../crates/envr-download/src/engine.rs)). Each transfer still uses [`DownloadOptions::timeout`](../../crates/envr-download/src/engine.rs) (default **60s** for the request body) on top of that.
+- **`ENVR_HTTP_CONNECT_TIMEOUT_SECS`**: optional override in seconds, range **1–600**; invalid values fall back to the default.
+
+## Maintainer workflow: changing JSON `data`
+
+1. Change the `serde_json` value passed to `output::emit_ok` / `write_envelope` / failure paths.
+2. If the shape is documented or schema-checked, update the matching file under [`docs/schemas/`](../schemas/README.md).
+3. Run `cargo test -p envr-cli` (includes JSON envelope and schema contract tests).
+4. If the change is breaking for scripts, bump `CLI_JSON_SCHEMA_VERSION` in `crates/envr-cli/src/output.rs` and document the migration in this file.
+
+New optional fields inside existing documented objects are generally non-breaking. Renaming or removing fields requires a schema version bump.
+
+## Envelope schema_version vs per-command data schemas
+
+- **`schema_version`** (top-level integer on every JSON line, e.g. `2`): bump only when the **envelope shape** changes in a breaking way (`success`, `code`, `message`, `data`, `diagnostics` semantics or required keys).
+- **Per-command `data`**: discriminated by the envelope’s **`message`** string (`list_installed`, `config_path`, `child_completed`, …). Each documented shape has a JSON Schema file under [`docs/schemas/`](../schemas/README.md) named `data-*-vN.schema.json`. Bump **`N`** when **`data` for that message** changes incompatibly (rename/remove fields). You do **not** have to bump the envelope `schema_version` if the envelope itself is unchanged.
+- Optional new keys inside an existing `data` object are usually non-breaking; document them and extend the corresponding `data-*` schema.
+- Maintainer checklist for automation coverage: [automation-matrix.md](./automation-matrix.md).
 
 ## Porcelain contract
 
@@ -54,6 +102,21 @@ If both flags are provided, JSON mode wins:
 
 ## JSON envelope contract
 
+### What scripts should rely on
+
+For automation, treat these as the **stable contract**:
+
+- **`success`**, **`schema_version`**, and (on failure) **`code`**
+- **`message`** on **success** paths: a stable snake_case **discriminator** for the payload shape (e.g. `list_installed`, `child_completed`), used with the matching **`data`** schema
+- **Typed fields inside `data`** as documented per `message` and JSON Schema under [`docs/schemas/`](../schemas/README.md)
+
+Do **not** build logic on:
+
+- **Natural-language strings** in the envelope **`message`** on **failure** paths (e.g. [`emit_envr_error`](../../crates/envr-cli/src/output.rs) may localize prose); use **`code`**, **`schema_version`**, structured **`data`** when present, and **`diagnostics`** only as human hints
+- **Ad-hoc wording** in **`diagnostics`** or stderr mirror hints
+
+Success **`message`** values are programmatic ids, not translated sentences. If future i18n ever touched success labels, **`data`** schemas and **`code`** would remain authoritative; parsers should still prefer **`data`** over free-text fields.
+
 All JSON responses use a single-line envelope:
 
 ```json
@@ -72,7 +135,7 @@ All JSON responses use a single-line envelope:
 - `schema_version`: integer (currently **2**). v2 renames list/current/remote `data` keys (see below). Scripts should read this before assuming `data` layout; it will increment on breaking contract changes.
 - `success`: boolean
 - `code`: nullable string (error code token on failure)
-- `message`: stable message key / short result id
+- `message`: on success, stable snake_case id for the payload (see **What scripts should rely on** above); on failure via `emit_envr_error`, may be localized human text — use `code` + `data` for logic
 - `data`: command-specific payload
 - `diagnostics`: string array (error chain / hints)
 
@@ -160,9 +223,38 @@ Not part of the CLI JSON envelope; documented here because it affects automation
 - In **text** mode, errors on stderr use a single unified line: `envr: [E_<CODE>] <message>`, where `<CODE>` is the JSON `code` token in uppercase with underscores (for example `validation` → `[E_VALIDATION]`). This matches searchable codes in logs while JSON output keeps the original snake_case `code` field.
 - Process exit code remains non-zero on failure.
 
+#### Selected non-null failure `data` shapes (`code` → schema)
+
+These use the same envelope as other failures (`success: false`, string `code`). Repository mirrors for machine checks live under `schemas/cli/data/` where noted.
+
+| `code` | When | `data` schema (repo mirror or doc) |
+|--------|------|-------------------------------------|
+| `project_check_failed` | `envr check` finds pin / resolution problems | [`failure_project_check_failed.json`](../../schemas/cli/data/failure_project_check_failed.json) (mirrors [`data-project-check-failed-v1.schema.json`](../schemas/data-project-check-failed-v1.schema.json)) |
+| `diagnostics_export_failed` | `envr diagnostics export` cannot write the zip | [`data-diagnostics-export-failed-v1.schema.json`](../schemas/data-diagnostics-export-failed-v1.schema.json) |
+| `child_exit` | `exec` / `run` child non-zero (and similar) | Command-specific object; see command docs / tests |
+| `doctor_issues` | `envr doctor` when `issues` is non-empty | Same object as success `doctor_ok` — [`data-doctor-v2.schema.json`](../schemas/data-doctor-v2.schema.json) |
+
+Other failures usually keep `data` as `null` unless documented above or under network hints.
+
+#### Structured hints on failure (`data`)
+
+When `--format json` is set and **`--quiet` is not set**, some failures include a non-null **`data`** object (in addition to string `diagnostics` from the error source chain):
+
+- **Network / download class**: if the error is classified as download, mirror, or I/O that looks network-related (e.g. connection, TLS, timeout, DNS), `data` may be:
+
+  ```json
+  { "hints": [ "<localized mirror / network suggestion>" ] }
+  ```
+
+  The same suggestion is appended to the **text** mode stderr message as a second line. With `--quiet`, JSON failure responses use a null `data` field and omit `diagnostics` as today.
+
+- Other failures keep `data` as `null` unless a specific command documents otherwise.
+
+Scripts should treat unknown keys inside `data` as forward-compatible.
+
 ## Compatibility policy
 
 - New fields may be added to JSON `data` objects.
 - Existing envelope top-level keys will not be removed without a **`schema_version`** bump.
-- Breaking changes to documented `data` shapes require a **`schema_version`** bump and updated schemas under `docs/schemas/`.
+- Breaking changes to a **specific** success `message`’s `data` shape: bump that command’s **`data-*-vN`** schema revision (see [schemas README](../schemas/README.md)); bump the envelope **`schema_version`** only if the outer envelope contract changes.
 - Porcelain line formats above are treated as stable and must remain backward compatible.

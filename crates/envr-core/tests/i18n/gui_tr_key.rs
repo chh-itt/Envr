@@ -1,13 +1,11 @@
 //! T915: GUI-oriented `tr_key` strings resolve from embedded `locales/*` (no full GUI harness).
 
-use envr_core::i18n::{Locale, set, tr_key};
-use std::sync::Mutex;
-
-static I18N_LOCK: Mutex<()> = Mutex::new(());
+use envr_core::i18n::{Locale, RestoreLocale, lock_locale_for_test, set, tr_key};
 
 #[test]
 fn gui_route_labels_match_locale_files() {
-    let _g = I18N_LOCK.lock().expect("i18n lock");
+    let _lock = lock_locale_for_test();
+    let _restore = RestoreLocale::new();
 
     set(Locale::ZhCn);
     assert_eq!(

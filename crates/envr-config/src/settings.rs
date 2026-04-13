@@ -491,19 +491,11 @@ pub struct RuntimeSettings {
     pub bun: BunRuntimeSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RustRuntimeSettings {
     /// Rust toolchain download source choice (used for `rustup` env injection).
     #[serde(default)]
     pub download_source: RustDownloadSource,
-}
-
-impl Default for RustRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: RustDownloadSource::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -748,19 +740,19 @@ impl Settings {
             ));
         }
 
-        if let Some(xf) = self.gui.downloads_panel.x_frac {
-            if !xf.is_finite() || !(0.0..=1.0).contains(&xf) {
-                return Err(EnvrError::Validation(
-                    "gui.downloads_panel x_frac must be in [0, 1]".to_string(),
-                ));
-            }
+        if let Some(xf) = self.gui.downloads_panel.x_frac
+            && (!xf.is_finite() || !(0.0..=1.0).contains(&xf))
+        {
+            return Err(EnvrError::Validation(
+                "gui.downloads_panel x_frac must be in [0, 1]".to_string(),
+            ));
         }
-        if let Some(yf) = self.gui.downloads_panel.y_frac {
-            if !yf.is_finite() || !(0.0..=1.0).contains(&yf) {
-                return Err(EnvrError::Validation(
-                    "gui.downloads_panel y_frac must be in [0, 1]".to_string(),
-                ));
-            }
+        if let Some(yf) = self.gui.downloads_panel.y_frac
+            && (!yf.is_finite() || !(0.0..=1.0).contains(&yf))
+        {
+            return Err(EnvrError::Validation(
+                "gui.downloads_panel y_frac must be in [0, 1]".to_string(),
+            ));
         }
 
         Ok(())
@@ -845,7 +837,7 @@ thread_local! {
 
 thread_local! {
     static RESOLVE_RUNTIME_ROOT_CACHE: RefCell<Option<(PathBuf, Option<SystemTime>, PathBuf)>> =
-        RefCell::new(None);
+        const { RefCell::new(None) };
 }
 
 /// Clears in-process caches for [`Settings::load_or_default_from`] and [`resolve_runtime_root`].
@@ -1041,7 +1033,7 @@ pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
 fn bcp47_primary_language_is_zh(tag: &str) -> bool {
     let t = tag.trim();
     let first = t
-        .split(|c| c == '-' || c == '_')
+        .split(['-', '_'])
         .next()
         .unwrap_or("")
         .to_ascii_lowercase();
@@ -1070,10 +1062,8 @@ fn env_locale_vars_suggest_chinese() -> bool {
 ///
 /// Order: [`sys_locale::get_locale`] (cross-platform OS API), then `LC_*` / `LANG` / `LANGUAGE`.
 pub fn system_locale_suggests_chinese() -> bool {
-    if let Some(tag) = sys_locale::get_locale() {
-        if bcp47_primary_language_is_zh(&tag) {
-            return true;
-        }
+    if let Some(tag) = sys_locale::get_locale() && bcp47_primary_language_is_zh(&tag) {
+        return true;
     }
     env_locale_vars_suggest_chinese()
 }

@@ -1,7 +1,11 @@
-﻿{
+{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://envr.dev/schemas/cli/data/config_path.json",
-  "title": "envr --format json data (message: config_path)",
+  "title": "envr config path --format json → envelope.data (message: config_path)",
   "type": "object",
-  "additionalProperties": true
+  "additionalProperties": true,
+  "required": ["path"],
+  "properties": {
+    "path": { "type": "string" }
+  }
 }

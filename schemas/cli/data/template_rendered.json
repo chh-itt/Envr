@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/template_rendered.json",
+  "title": "envr template --format json → envelope.data (message: template_rendered)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["file", "rendered"],
+  "properties": {
+    "file": { "type": "string" },
+    "rendered": { "type": "string" }
+  }
+}

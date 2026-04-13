@@ -21,16 +21,14 @@ pub fn path_sep() -> char {
 
 /// Directory name under `.../versions/<name>` when applicable; otherwise the last path component.
 pub fn version_label_from_runtime_home(home: &Path) -> String {
-    if let Some(parent) = home.parent() {
-        if parent
+    if let Some(parent) = home.parent()
+        && parent
             .file_name()
             .and_then(|s| s.to_str())
             .is_some_and(|n| n == "versions")
-        {
-            if let Some(leaf) = home.file_name().and_then(|s| s.to_str()) {
-                return leaf.to_string();
-            }
-        }
+        && let Some(leaf) = home.file_name().and_then(|s| s.to_str())
+    {
+        return leaf.to_string();
     }
     home.file_name()
         .and_then(|s| s.to_str())

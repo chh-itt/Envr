@@ -78,7 +78,7 @@ impl ProjectConfig {
     pub fn merge_over(mut self, base: ProjectConfig) -> ProjectConfig {
         // local/self overrides base
         let mut merged = base;
-        merged.extends.extend(self.extends.drain(..));
+        merged.extends.append(&mut self.extends);
         merged.env.extend(self.env.drain());
         merged.runtimes.extend(self.runtimes.drain());
         merged.scripts.extend(self.scripts.drain());

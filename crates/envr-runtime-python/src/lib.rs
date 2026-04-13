@@ -156,17 +156,16 @@ impl RuntimeProvider for PythonRuntimeProvider {
         let ttl_secs = Self::remote_cache_ttl_secs();
         let cache_file = self.remote_latest_per_major_cache_file(os, arch)?;
 
-        if Self::file_is_within_ttl(&cache_file, ttl_secs) {
-            if let Ok(s) = std::fs::read_to_string(&cache_file) {
-                if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
-                    // Heuristic: an unexpectedly tiny list usually indicates a legacy cache
-                    // generated with a different grouping strategy (e.g. major-only). Refresh it.
-                    if list.len() >= 6 {
-                        return Ok(list.into_iter().map(RuntimeVersion).collect());
-                    }
-                    let _ = std::fs::remove_file(&cache_file);
-                }
+        if Self::file_is_within_ttl(&cache_file, ttl_secs)
+            && let Ok(s) = std::fs::read_to_string(&cache_file)
+            && let Ok(list) = serde_json::from_str::<Vec<String>>(&s)
+        {
+            // Heuristic: an unexpectedly tiny list usually indicates a legacy cache
+            // generated with a different grouping strategy (e.g. major-only). Refresh it.
+            if list.len() >= 6 {
+                return Ok(list.into_iter().map(RuntimeVersion).collect());
             }
+            let _ = std::fs::remove_file(&cache_file);
         }
 
         let idx = self.load_index()?;

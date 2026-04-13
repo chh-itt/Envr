@@ -41,6 +41,17 @@
   - `cli.doctor.issue.root_not_writable`
   - `common.action.retry`
 
+### 3.1 `locales/*.toml` 点号键约束（必须）
+
+`[messages]` 里使用点号路径时，**同一个前缀不能既是字符串值又是更长 key 的父路径**。否则 TOML 解析失败（例如不能同时存在 `foo.bar = "…"` 与 `foo.bar.baz = "…"`）。
+
+- **错误**：`gui.runtime.search_placeholder` + `gui.runtime.search_placeholder.python`
+- **正确**：`gui.runtime.search_placeholder.default` + `gui.runtime.search_placeholder.python`
+- **错误**：`cli.help.cmd.project` + `cli.help.cmd.project.add`
+- **正确**：`cli.help.cmd.project.about` + `cli.help.cmd.project.add`
+
+新增文案前先扫一眼是否会产生“父键字符串 + 子键”冲突；`envr-i18n-lint --write-locales` 会在写入前检测并报错。
+
 ---
 
 ## 4. 参数与复数规则
@@ -68,10 +79,13 @@
 
 每个涉及用户文本的改动，提交前必须满足：
 
-1. 新增/修改文本均使用 i18n key。
-2. `zh-CN` 与 `en` 均补齐（或在 PR 明确说明临时缺口与补齐计划）。
-3. 本地运行对应模块测试/冒烟，确认无 key 缺失与回退异常。
-4. PR 描述包含 i18n 影响范围（GUI/CLI、涉及 key 前缀）。
+1. 新增/修改文本均使用 i18n key（`tr_key("…", zh, en)` 或 `cli_help.rs` 的 `tr(…)`），**中英回退字面量必须与最终 `locales` 语义一致**。
+2. `zh-CN.toml` 与 `en-US.toml` key 集合完全一致；可运行 `cargo run -p envr-i18n-lint --locked` 校验（CI 同命令）。
+3. 若大量 key 缺漏，可一次性从源码回退字面量合并进 locale：`cargo run -p envr-i18n-lint --locked -- --write-locales`（会按 key 排序重写两个文件；提交前请 `git diff` 审阅）。
+4. 本地运行对应模块测试/冒烟，确认无 key 缺失与回退异常。
+5. PR 描述包含 i18n 影响范围（GUI/CLI、涉及 key 前缀）。
+
+**扫描范围（lint）**：`crates/envr-gui/src`、`envr-cli/src`、`envr-core/src`、`envr-shim/src`。在其它 crate 使用 `tr_key` 时需同步扩展 lint 扫描路径。
 
 ---
 
@@ -91,5 +105,5 @@
 
 - T911/T912：按本规范实施 GUI/CLI 全量迁移。
 - T913：术语表与白名单作为本规范的配套约束（见 [`glossary.md`](glossary.md)、[`whitelist.md`](whitelist.md)）。
-- T914：基于本规范落地 i18n lint 与 CI 阻断。
+- T914：`envr-i18n-lint` 校验 zh/en 对等、代码引用 key 存在、GUI/CLI 禁止 `i18n::tr(`；`--write-locales` 用于从源码批量补全缺键。
 - T915：以本规范作为中英文回归的验收基线。

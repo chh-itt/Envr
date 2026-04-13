@@ -305,12 +305,11 @@ pub fn pick_php_version_home(
         }
 
         let direct = versions_dir.join(spec);
-        if direct.is_dir() {
-            if let Some(name) = direct.file_name().and_then(|n| n.to_str()) {
-                if envr_config::php_layout::dir_matches_build_flavor(name, want_ts) {
-                    return Ok(direct);
-                }
-            }
+        if direct.is_dir()
+            && let Some(name) = direct.file_name().and_then(|n| n.to_str())
+            && envr_config::php_layout::dir_matches_build_flavor(name, want_ts)
+        {
+            return Ok(direct);
         }
 
         let constraint = SpecConstraint::parse(spec)?;
@@ -518,6 +517,18 @@ fn runtime_home_for_key(
     }
 }
 
+/// Like [`resolve_runtime_home_for_lang`], but uses `project_config` when `Some` instead of
+/// loading `.envr.toml` from disk. Pass config from `load_project_config_profile` when you
+/// already have it to avoid a second read.
+pub fn resolve_runtime_home_for_lang_with_project(
+    ctx: &ShimContext,
+    lang_key: &str,
+    spec_override: Option<&str>,
+    project_config: Option<&ProjectConfig>,
+) -> EnvrResult<PathBuf> {
+    runtime_home_for_key(ctx, lang_key, project_config, spec_override)
+}
+
 /// Runtime installation directory for `lang_key` (`node` / `python` / `java`), matching shim routing:
 /// `spec_override` wins, else `[runtimes.lang_key]` in `.envr.toml`, else global `current` symlink.
 pub fn resolve_runtime_home_for_lang(
@@ -527,7 +538,7 @@ pub fn resolve_runtime_home_for_lang(
 ) -> EnvrResult<PathBuf> {
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
-    runtime_home_for_key(ctx, lang_key, cfg.as_ref(), spec_override)
+    resolve_runtime_home_for_lang_with_project(ctx, lang_key, spec_override, cfg.as_ref())
 }
 
 fn node_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {

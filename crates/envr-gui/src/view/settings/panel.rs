@@ -216,7 +216,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant),
         ))
         .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
         .width(Length::FillPortion(1))
@@ -320,7 +320,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant),
         ))
         .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
         .width(Length::FillPortion(1))
@@ -480,7 +480,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             tokens.control_height_secondary
         };
         let b = button(button_content_centered(
-            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant).into(),
+            button_label_for_variant(envr_core::i18n::tr_key(key, zh, en), tokens, variant),
         ))
         .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
         .width(Length::FillPortion(1))

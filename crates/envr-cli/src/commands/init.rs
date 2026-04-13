@@ -1,5 +1,5 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common;
+use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::PROJECT_CONFIG_FILE;
@@ -198,71 +198,66 @@ pub fn run(
     full: bool,
     interactive: bool,
 ) -> i32 {
-    if interactive {
-        if matches!(
-            g.output_format.unwrap_or(crate::cli::OutputFormat::Text),
+    CommandOutcome::from_result(run_inner(g, path, force, full, interactive)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    path: PathBuf,
+    force: bool,
+    full: bool,
+    interactive: bool,
+) -> EnvrResult<i32> {
+    if interactive
+        && matches!(
+            g.effective_output_format(),
             crate::cli::OutputFormat::Json
         ) {
-            return common::print_envr_error(
-                g,
-                EnvrError::Validation(
-                    envr_core::i18n::tr_key(
-                        "cli.err.init_interactive_format",
-                        "`envr init --interactive` 不能与 `--format json` 同时使用。",
-                        "`envr init --interactive` cannot be used with `--format json`.",
-                    ),
+            return Err(EnvrError::Validation(
+                envr_core::i18n::tr_key(
+                    "cli.err.init_interactive_format",
+                    "`envr init --interactive` 不能与 `--format json` 同时使用。",
+                    "`envr init --interactive` cannot be used with `--format json`.",
                 ),
-            );
+            ));
         }
-    }
 
     if !path.is_dir() {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.not_a_directory",
-                    "不是目录：{path}",
-                    "not a directory: {path}",
-                ),
-                &[("path", &path.display().to_string())],
-            )),
-        );
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.not_a_directory",
+                "不是目录：{path}",
+                "not a directory: {path}",
+            ),
+            &[("path", &path.display().to_string())],
+        )));
     }
     let target = path.join(PROJECT_CONFIG_FILE);
     if target.exists() && !force {
-        return common::print_envr_error(
-            g,
-            EnvrError::Config(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.init_exists",
-                    "{path} 已存在（使用 --force 覆盖）",
-                    "{path} already exists (use --force to overwrite)",
-                ),
-                &[("path", &target.display().to_string())],
-            )),
-        );
+        return Err(EnvrError::Config(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.init_exists",
+                "{path} 已存在（使用 --force 覆盖）",
+                "{path} already exists (use --force to overwrite)",
+            ),
+            &[("path", &target.display().to_string())],
+        )));
     }
 
     let body = if interactive {
-        match interactive_toml() {
-            Ok(s) => s,
-            Err(e) => return common::print_envr_error(g, e),
-        }
+        interactive_toml()?
     } else if full {
         INIT_TEMPLATE_FULL.to_string()
     } else {
         INIT_TEMPLATE.to_string()
     };
 
-    if let Err(e) = fs::write(&target, &body) {
-        return common::print_envr_error(g, EnvrError::from(e));
-    }
+    fs::write(&target, &body).map_err(EnvrError::from)?;
     let data = serde_json::json!({
         "path": target.to_string_lossy(),
         "interactive": interactive,
     });
-    output::emit_ok(g, "project_config_init", data, || {
+    Ok(output::emit_ok(g, "project_config_init", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -272,5 +267,5 @@ pub fn run(
                 )
             );
         }
-    })
+    }))
 }

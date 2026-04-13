@@ -1,35 +1,34 @@
-use crate::cli::GlobalArgs;
-use crate::commands::common;
+use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
+use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
+use crate::CliPathProfile;
 
-use envr_config::project_config::load_project_config_profile;
 use envr_domain::runtime::parse_runtime_kind;
-use envr_shim_core::resolve_runtime_home_for_lang;
-use std::path::PathBuf;
-
+use envr_error::{EnvrError, EnvrResult};
+use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 pub fn run(
     g: &GlobalArgs,
     lang: String,
     spec: Option<String>,
-    path: PathBuf,
-    profile: Option<String>,
+    project: ProjectPathProfileArgs,
 ) -> i32 {
+    CommandOutcome::from_result(run_inner(g, lang, spec, project)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    lang: String,
+    spec: Option<String>,
+    project: ProjectPathProfileArgs,
+) -> EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
     let lang = lang.trim().to_ascii_lowercase();
-    if let Err(e) = parse_runtime_kind(&lang) {
-        return common::print_envr_error(g, e);
-    }
+    parse_runtime_kind(&lang)?;
 
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let cfg = session.project_config();
 
-    let cfg = match load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref()) {
-        Ok(l) => l.map(|(c, _)| c),
-        Err(e) => return common::print_envr_error(g, e),
-    };
     let has_pin = cfg
-        .as_ref()
         .and_then(|c| c.runtimes.get(&lang))
         .and_then(|r| r.version.as_deref())
         .is_some();
@@ -43,14 +42,9 @@ pub fn run(
     };
 
     let trimmed = spec.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let home = match resolve_runtime_home_for_lang(&ctx, &lang, trimmed) {
-        Ok(h) => h,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let home = match std::fs::canonicalize(&home) {
-        Ok(h) => h,
-        Err(e) => return common::print_envr_error(g, e.into()),
-    };
+    let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, trimmed, cfg)?;
+    let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
+
     let version_label = home
         .file_name()
         .and_then(|s| s.to_str())
@@ -63,7 +57,7 @@ pub fn run(
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
-    output::emit_ok(g, "runtime_resolved", data, || {
+    Ok(output::emit_ok(g, "runtime_resolved", data, || {
         if output::wants_porcelain(g) {
             println!("{}", home.display());
             return;
@@ -101,5 +95,5 @@ pub fn run(
                 )
             );
         }
-    })
+    }))
 }

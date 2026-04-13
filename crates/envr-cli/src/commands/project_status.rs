@@ -1,6 +1,6 @@
 //! Shared logic for `envr status` and `envr hook prompt`.
 
-use envr_config::project_config::{ProjectConfig, load_project_config_profile};
+use envr_config::project_config::{ProjectConfig, ProjectConfigLocation, load_project_config_profile};
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::EnvrResult;
 use envr_shim_core::{
@@ -65,8 +65,11 @@ fn pin_for_key(
         .map(|s| s.to_string())
 }
 
-pub fn build_project_status(ctx: &ShimContext) -> EnvrResult<ProjectStatus> {
-    let loaded = load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?;
+/// Build status using project config already loaded for this session (e.g. from [`crate::CliProjectContext`]).
+pub fn build_project_status_from_loaded(
+    ctx: &ShimContext,
+    loaded: &Option<(ProjectConfig, ProjectConfigLocation)>,
+) -> EnvrResult<ProjectStatus> {
     let (project_dir, cfg_ref) = loaded
         .as_ref()
         .map(|(c, loc)| (Some(loc.dir.clone()), Some(c)))
@@ -122,6 +125,13 @@ pub fn build_project_status(ctx: &ShimContext) -> EnvrResult<ProjectStatus> {
     })
 }
 
+/// Load project config from disk, then build status (for callers that only have a [`ShimContext`]).
+#[allow(dead_code)] // Kept for embedders/tests; CLI uses [`build_project_status_from_loaded`] + session.
+pub fn build_project_status(ctx: &ShimContext) -> EnvrResult<ProjectStatus> {
+    let loaded = load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?;
+    build_project_status_from_loaded(ctx, &loaded)
+}
+
 fn source_label(src: WhichRuntimeSource) -> &'static str {
     match src {
         WhichRuntimeSource::ProjectPin => "project_pin",
@@ -169,9 +179,10 @@ pub fn format_prompt_segment(st: &ProjectStatus) -> String {
             parts.push(format!("{}:sys", r.kind));
             continue;
         }
-        if r.pin.is_some() || r.source == WhichRuntimeSource::ProjectPin {
-            parts.push(format!("{}:{}", r.kind, r.active_version));
-        } else if matches!(r.kind.as_str(), "node" | "python" | "java") {
+        if r.pin.is_some()
+            || r.source == WhichRuntimeSource::ProjectPin
+            || matches!(r.kind.as_str(), "node" | "python" | "java")
+        {
             parts.push(format!("{}:{}", r.kind, r.active_version));
         }
     }

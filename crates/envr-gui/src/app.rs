@@ -522,11 +522,10 @@ async fn browse_runtime_root_folder(
 ) -> Option<std::path::PathBuf> {
     tokio::task::spawn_blocking(move || {
         let mut dlg = rfd::FileDialog::new();
-        if let Some(p) = start {
-            if p.is_dir() {
+        if let Some(p) = start
+            && p.is_dir() {
                 dlg = dlg.set_directory(p);
             }
-        }
         dlg.pick_folder()
     })
     .await
@@ -670,7 +669,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                         .paths
                         .runtime_root
                         .as_deref()
-                        .map_or(true, |r| r.trim().is_empty());
+                        .is_none_or(|r| r.trim().is_empty());
 
                     state.settings.cache.set_cached(st);
                     if let Err(e) = state.settings.sync_from_cache() {
@@ -909,6 +908,7 @@ fn write_pip_user_ini(
     trusted_host: &str,
     extra_index_url: Option<&str>,
 ) -> Result<(), String> {
+    #[allow(clippy::too_many_arguments)]
     fn append_missing_global_keys(
         buf: &mut Vec<String>,
         index_url: &str,
@@ -991,8 +991,8 @@ fn write_pip_user_ini(
         if skipping_duplicate_global {
             continue;
         }
-        if in_global && !trimmed.starts_with('#') && !trimmed.starts_with(';') {
-            if let Some((k, _v)) = line.split_once('=') {
+        if in_global && !trimmed.starts_with('#') && !trimmed.starts_with(';')
+            && let Some((k, _v)) = line.split_once('=') {
                 let key = k.trim().to_ascii_lowercase();
                 if key == "index-url" {
                     if !wrote_index {
@@ -1027,7 +1027,6 @@ fn write_pip_user_ini(
                     continue;
                 }
             }
-        }
         out.push(line);
     }
     if in_global {
@@ -1111,11 +1110,10 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
         async move {
             settings.validate().map_err(|e| e.to_string())?;
             settings.save_to(&path).map_err(|e| e.to_string())?;
-            if let Some(url) = envr_config::settings::npm_registry_url_to_apply(&settings) {
-                if let Err(e) = apply_npm_registry_cli(url) {
+            if let Some(url) = envr_config::settings::npm_registry_url_to_apply(&settings)
+                && let Err(e) = apply_npm_registry_cli(url) {
                     tracing::warn!(%e, "npm config set registry skipped after settings save");
                 }
-            }
             if let Err(e) = apply_pip_registry_config(&settings) {
                 tracing::warn!(%e, "pip user config update skipped after settings save");
             }
@@ -1168,14 +1166,13 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
 }
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
-    if let Some(since) = state.downloads.title_drag_armed_since {
-        if !state.downloads.dragging && since.elapsed() >= TITLE_DRAG_HOLD {
+    if let Some(since) = state.downloads.title_drag_armed_since
+        && !state.downloads.dragging && since.elapsed() >= TITLE_DRAG_HOLD {
             state.downloads.dragging = true;
             state.downloads.drag_from_cursor = None;
             state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
             state.downloads.title_drag_armed_since = None;
         }
-    }
     let tokens = state.tokens();
     state.downloads.advance_reveal(tokens);
     if state.downloads.take_persist_after_hide() {
@@ -1352,15 +1349,14 @@ fn persist_download_panel_settings(state: &mut AppState) -> Result<(), envr_erro
         .paths
         .runtime_root
         .as_deref()
-        .map_or(true, |s| s.trim().is_empty());
-    if disk_rr_empty {
-        if let Some(ref r) = mem.paths.runtime_root {
+        .is_none_or(|s| s.trim().is_empty());
+    if disk_rr_empty
+        && let Some(ref r) = mem.paths.runtime_root {
             let t = r.trim();
             if !t.is_empty() {
                 st.paths.runtime_root = Some(t.to_string());
             }
         }
-    }
 
     let panel = &state.downloads;
     st.gui.downloads_panel.visible = panel.visible;
@@ -2478,11 +2474,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     }
                 }
             }
-            if let Err(e) = &res {
-                if !looks_like_user_cancelled(e) {
+            if let Err(e) = &res
+                && !looks_like_user_cancelled(e) {
                     state.error = Some(e.clone());
                 }
-            }
             Task::batch([
                 gui_ops::rust_refresh(),
                 gui_ops::rust_load_components(),

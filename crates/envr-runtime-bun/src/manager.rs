@@ -35,10 +35,12 @@ fn exact_semver_spec(spec: &str) -> Option<String> {
     if it.next().is_some() {
         return None;
     }
-    if [a, b, c].iter().all(|p| !p.is_empty() && p.chars().all(|ch| ch.is_ascii_digit())) {
-        if a.parse::<u64>().ok()? >= 1 {
-            return Some(format!("{a}.{b}.{c}"));
-        }
+    if [a, b, c]
+        .iter()
+        .all(|p| !p.is_empty() && p.chars().all(|ch| ch.is_ascii_digit()))
+        && a.parse::<u64>().ok()? >= 1
+    {
+        return Some(format!("{a}.{b}.{c}"));
     }
     None
 }

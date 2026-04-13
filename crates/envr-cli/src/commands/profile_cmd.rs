@@ -1,29 +1,27 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common;
+use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::load_project_config_disk_only;
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::path::PathBuf;
 
 pub fn list(g: &GlobalArgs, path: PathBuf) -> i32 {
-    let loaded = match load_project_config_disk_only(&path) {
-        Ok(l) => l,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(list_inner(g, path)).finish(g)
+}
+
+fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+    let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.no_project_config",
-                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
-                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
-                ),
-                &[("path", &path.display().to_string())],
-            )),
-        );
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.no_project_config",
+                "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+            ),
+            &[("path", &path.display().to_string())],
+        )));
     };
 
     let mut names: Vec<_> = cfg.profiles.keys().cloned().collect();
@@ -32,7 +30,7 @@ pub fn list(g: &GlobalArgs, path: PathBuf) -> i32 {
         "config_dir": loc.dir.to_string_lossy(),
         "profiles": names,
     });
-    output::emit_ok(g, "profiles_list", data, || {
+    Ok(output::emit_ok(g, "profiles_list", data, || {
         if !g.quiet {
             if names.is_empty() {
                 println!(
@@ -52,43 +50,38 @@ pub fn list(g: &GlobalArgs, path: PathBuf) -> i32 {
                 }
             }
         }
-    })
+    }))
 }
 
 pub fn show(g: &GlobalArgs, path: PathBuf, name: String) -> i32 {
-    let loaded = match load_project_config_disk_only(&path) {
-        Ok(l) => l,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(show_inner(g, path, name)).finish(g)
+}
+
+fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrResult<i32> {
+    let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.no_project_config",
-                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
-                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
-                ),
-                &[("path", &path.display().to_string())],
-            )),
-        );
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.no_project_config",
+                "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+            ),
+            &[("path", &path.display().to_string())],
+        )));
     };
 
     let Some(p) = cfg.profiles.get(&name) else {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.no_profile",
-                    "在 {path} 中不存在 profile `{name}`",
-                    "no profile `{name}` in {path}",
-                ),
-                &[
-                    ("name", name.as_str()),
-                    ("path", &loc.dir.display().to_string()),
-                ],
-            )),
-        );
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.no_profile",
+                "在 {path} 中不存在 profile `{name}`",
+                "no profile `{name}` in {path}",
+            ),
+            &[
+                ("name", name.as_str()),
+                ("path", &loc.dir.display().to_string()),
+            ],
+        )));
     };
 
     let data = json!({
@@ -97,7 +90,7 @@ pub fn show(g: &GlobalArgs, path: PathBuf, name: String) -> i32 {
         "runtimes": p.runtimes,
         "env": p.env,
     });
-    output::emit_ok(g, "profile_show", data, || {
+    Ok(output::emit_ok(g, "profile_show", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -115,5 +108,5 @@ pub fn show(g: &GlobalArgs, path: PathBuf, name: String) -> i32 {
             );
             println!("{}", serde_json::to_string_pretty(p).unwrap_or_default());
         }
-    })
+    }))
 }

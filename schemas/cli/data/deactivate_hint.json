@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/deactivate_hint.json",
+  "title": "envr deactivate --format json → envelope.data (message: deactivate_hint)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["hint", "docs"],
+  "properties": {
+    "hint": { "type": "string" },
+    "docs": { "type": "string" }
+  }
+}

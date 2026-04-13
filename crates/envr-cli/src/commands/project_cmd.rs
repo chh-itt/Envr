@@ -1,6 +1,8 @@
 use crate::cli::{GlobalArgs, OutputFormat, ProjectCmd};
+use crate::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
+use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
@@ -11,7 +13,7 @@ use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{
     RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind,
 };
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use envr_resolver::{parse_runtime_pin_spec, runtime_kind_toml_key, upsert_runtime_pin};
 use envr_shim_core::pick_version_home;
 use serde_json::json;
@@ -19,28 +21,28 @@ use std::path::PathBuf;
 
 pub fn run(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> i32 {
     match cmd {
-        ProjectCmd::Add { spec, path } => add(g, spec, path),
-        ProjectCmd::Sync { path, install } => sync(g, service, path, install),
-        ProjectCmd::Validate { path, check_remote } => validate(g, service, path, check_remote),
+        ProjectCmd::Add { spec, path } => {
+            CommandOutcome::from_result(add_inner(g, spec, path)).finish(g)
+        }
+        ProjectCmd::Sync { path, install } => {
+            CommandOutcome::from_result(sync_inner(g, service, path, install)).finish(g)
+        }
+        ProjectCmd::Validate { path, check_remote } => {
+            CommandOutcome::from_result(validate_inner(g, service, path, check_remote)).finish(g)
+        }
     }
 }
 
-fn add(g: &GlobalArgs, spec: String, path: PathBuf) -> i32 {
-    let pin = match parse_runtime_pin_spec(&spec) {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<i32> {
+    let pin = parse_runtime_pin_spec(&spec)?;
     let dir = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
     if !dir.is_dir() {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(format!("not a directory: {}", dir.display())),
-        );
+        return Err(EnvrError::Validation(format!(
+            "not a directory: {}",
+            dir.display()
+        )));
     }
-    let written = match upsert_runtime_pin(&dir, &pin) {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let written = upsert_runtime_pin(&dir, &pin)?;
     reset_project_config_load_cache();
     let kind_s = runtime_kind_toml_key(pin.kind);
     let version = pin.version.clone();
@@ -50,7 +52,7 @@ fn add(g: &GlobalArgs, spec: String, path: PathBuf) -> i32 {
         "version": version,
     });
     let path_s = written.display().to_string();
-    output::emit_ok(g, "project_pin_added", data, || {
+    Ok(output::emit_ok(g, "project_pin_added", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -68,24 +70,25 @@ fn add(g: &GlobalArgs, spec: String, path: PathBuf) -> i32 {
                 )
             );
         }
-    })
+    }))
 }
 
-fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) -> i32 {
-    let ctx = match common::shim_context_for(path, None) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let pending = match child_env::plan_missing_pinned_runtimes_for_run(&ctx) {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn sync_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    path: PathBuf,
+    install: bool,
+) -> EnvrResult<i32> {
+    let session = CliPathProfile::new(path, None).load_project()?;
+    let ctx = &session.ctx;
+    let pending =
+        child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
         let data = json!({
             "missing": Vec::<serde_json::Value>::new(),
             "installed": Vec::<serde_json::Value>::new(),
         });
-        return output::emit_ok(g, "project_synced", data, || {
+        return Ok(output::emit_ok(g, "project_synced", data, || {
             if !g.quiet {
                 println!(
                     "{}",
@@ -96,7 +99,7 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
                     )
                 );
             }
-        });
+        }));
     }
     if !install {
         let msg = envr_core::i18n::tr_key(
@@ -110,28 +113,22 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
             .collect();
         let data = json!({ "missing": rows, "installed": [] });
         let code = output::emit_failure_envelope(g, "project_sync_pending", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text)
         {
             for (k, v) in &pending {
                 eprintln!("envr:   - {k} {v}");
             }
         }
-        return code;
+        return Ok(code);
     }
 
     let mut installed = Vec::new();
     for (lang, spec) in &pending {
-        let kind = match parse_runtime_kind(lang) {
-            Ok(k) => k,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        let kind = parse_runtime_kind(lang)?;
         if kind == RuntimeKind::Rust {
-            return common::print_envr_error(
-                g,
-                EnvrError::Validation(
-                    "rust pin sync is not automated here; use `envr rust` / rustup".into(),
-                ),
-            );
+            return Err(EnvrError::Validation(
+                "rust pin sync is not automated here; use `envr rust` / rustup".into(),
+            ));
         }
         let headline = fmt_template(
             &envr_core::i18n::tr_key(
@@ -147,7 +144,7 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
         if !use_prog
             && !g.quiet
             && matches!(
-                g.output_format.unwrap_or(OutputFormat::Text),
+                g.effective_output_format(),
                 OutputFormat::Text
             )
         {
@@ -157,7 +154,7 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
             Ok(v) => v,
             Err(e) => {
                 guard.finish();
-                return common::print_envr_error(g, e);
+                return Err(e);
             }
         };
         guard.finish();
@@ -171,7 +168,7 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
             .collect::<Vec<_>>(),
         "installed": installed,
     });
-    output::emit_ok(g, "project_synced", data, || {
+    Ok(output::emit_ok(g, "project_synced", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -182,30 +179,26 @@ fn sync(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, install: bool) 
                 )
             );
         }
-    })
+    }))
 }
 
-fn validate(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, check_remote: bool) -> i32 {
-    let runtime_root = match common::session_runtime_root() {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let loaded = match load_project_config_profile(&path, None) {
-        Ok(l) => l,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn validate_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    path: PathBuf,
+    check_remote: bool,
+) -> EnvrResult<i32> {
+    let runtime_root = common::session_runtime_root()?;
+    let loaded = load_project_config_profile(&path, None)?;
     let Some((cfg, loc)) = loaded else {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.no_project_config",
-                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
-                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
-                ),
-                &[("path", &path.display().to_string())],
-            )),
-        );
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.no_project_config",
+                "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+            ),
+            &[("path", &path.display().to_string())],
+        )));
     };
 
     let mut issues = Vec::new();
@@ -287,13 +280,13 @@ fn validate(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, check_remot
             "remote_warnings": remote_warnings,
         });
         let code = output::emit_failure_envelope(g, "project_validate_failed", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text)
         {
             for p in &issues {
                 eprintln!("envr:   - {p}");
             }
         }
-        return code;
+        return Ok(code);
     }
 
     let data = json!({
@@ -303,7 +296,7 @@ fn validate(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, check_remot
         "check_remote": check_remote,
     });
     let root_s = loc.dir.display().to_string();
-    output::emit_ok(g, "project_validated", data, || {
+    Ok(output::emit_ok(g, "project_validated", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -320,5 +313,5 @@ fn validate(g: &GlobalArgs, service: &RuntimeService, path: PathBuf, check_remot
                 eprintln!("envr: warning: {w}");
             }
         }
-    })
+    }))
 }

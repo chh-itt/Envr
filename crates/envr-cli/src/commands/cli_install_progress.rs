@@ -14,7 +14,7 @@ pub fn wants_cli_text_feedback(g: &GlobalArgs) -> bool {
     !g.quiet
         && !g.porcelain
         && matches!(
-            g.output_format.unwrap_or(OutputFormat::Text),
+            g.effective_output_format(),
             OutputFormat::Text
         )
 }

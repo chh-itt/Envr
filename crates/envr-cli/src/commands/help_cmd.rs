@@ -1,16 +1,18 @@
 //! Supplemental CLI help (`envr help …`).
 
 use crate::cli::{GlobalArgs, HelpCmd, OutputFormat};
+use crate::CommandOutcome;
 use crate::output;
+use envr_error::EnvrResult;
 use serde_json::json;
 
 pub fn run(g: &GlobalArgs, cmd: HelpCmd) -> i32 {
     match cmd {
-        HelpCmd::Shortcuts => shortcuts(g),
+        HelpCmd::Shortcuts => CommandOutcome::from_result(shortcuts_inner(g)).finish(g),
     }
 }
 
-fn shortcuts(g: &GlobalArgs) -> i32 {
+fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<i32> {
     let note = envr_core::i18n::tr_key(
         "cli.help.shortcuts.note",
         "以上在 clap 解析之前改写 argv。用户自定义名称见 runtime root 下 config/aliases.toml（优先级高于内置简写）。",
@@ -24,7 +26,7 @@ fn shortcuts(g: &GlobalArgs) -> i32 {
         "builtin_shorthands": rows,
         "note": note,
     });
-    output::emit_ok(g, "help_shortcuts", data, || {
+    Ok(output::emit_ok(g, "help_shortcuts", data, || {
         if g.quiet {
             return;
         }
@@ -42,7 +44,7 @@ fn shortcuts(g: &GlobalArgs) -> i32 {
         println!();
         println!("{note}");
         if matches!(
-            g.output_format.unwrap_or(OutputFormat::Text),
+            g.effective_output_format(),
             OutputFormat::Text
         ) {
             println!(
@@ -54,5 +56,5 @@ fn shortcuts(g: &GlobalArgs) -> i32 {
                 )
             );
         }
-    })
+    }))
 }

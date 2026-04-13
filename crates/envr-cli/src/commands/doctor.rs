@@ -1,4 +1,5 @@
 use crate::cli::GlobalArgs;
+use crate::CommandOutcome;
 use crate::commands::common::{self, kind_label};
 use crate::commands::shim_cmd;
 use crate::output::{self, fmt_template};
@@ -828,9 +829,9 @@ fn doctor_path_followup(
         #[cfg(not(windows))]
         {
             let p = shims.display().to_string();
-            println!(
+                println!(
                 "{}",
-                envr_core::i18n::tr_key(
+                    envr_core::i18n::tr_key(
                     "cli.doctor.path_fix.posix_profile",
                     "在 ~/.profile 或 ~/.bashrc 中加入一行（示例）：",
                     "Append one line to `~/.profile` or `~/.bashrc` (example):",
@@ -871,12 +872,12 @@ fn doctor_path_followup(
                                     )
                                 ),
                                 Err(e) => println!(
-                                    "{}",
+                        "{}",
                                     doctor_style_line(
                                         g,
                                         1,
                                         &fmt_template(
-                                            &envr_core::i18n::tr_key(
+                            &envr_core::i18n::tr_key(
                                                 "cli.doctor.path_fix.apply_err",
                                                 "写入用户 PATH 失败：{detail}",
                                                 "Failed to update User PATH: {detail}",
@@ -974,66 +975,66 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
         }
         println!();
     }
-    println!(
-        "{} {}",
-        envr_core::i18n::tr_key(
-            "cli.doctor.runtime_root_label",
-            "运行时根目录：",
-            "runtime root:",
-        ),
-        report.root.display()
-    );
-    if let Some(ref e) = report.env_override {
-        println!(
-            "{} {e}",
-            envr_core::i18n::tr_key(
-                "cli.doctor.env_override_label",
-                "ENVR_RUNTIME_ROOT：",
-                "ENVR_RUNTIME_ROOT:",
-            )
-        );
-    }
-    println!();
-    for (kind, ic, cur) in &report.kinds {
-        match cur {
-            Some(v) => println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.doctor.line_installed_current",
-                        "{kind}：已安装 {count} 个版本，当前 = {current}",
-                        "{kind}: {count} installed, current = {current}",
-                    ),
+            println!(
+                "{} {}",
+                envr_core::i18n::tr_key(
+                    "cli.doctor.runtime_root_label",
+                    "运行时根目录：",
+                    "runtime root:",
+                ),
+                report.root.display()
+            );
+            if let Some(ref e) = report.env_override {
+                println!(
+                    "{} {e}",
+                    envr_core::i18n::tr_key(
+                        "cli.doctor.env_override_label",
+                        "ENVR_RUNTIME_ROOT：",
+                        "ENVR_RUNTIME_ROOT:",
+                    )
+                );
+            }
+            println!();
+            for (kind, ic, cur) in &report.kinds {
+                match cur {
+                    Some(v) => println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.doctor.line_installed_current",
+                                "{kind}：已安装 {count} 个版本，当前 = {current}",
+                                "{kind}: {count} installed, current = {current}",
+                            ),
                     &[("kind", kind), ("count", &ic.to_string()), ("current", v)],
-                )
-            ),
-            None => println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.doctor.line_installed_none",
-                        "{kind}：已安装 {count} 个版本，当前 = {none}",
-                        "{kind}: {count} installed, current = {none}",
+                        )
                     ),
-                    &[
-                        ("kind", kind),
-                        ("count", &ic.to_string()),
-                        ("none", &none_label),
-                    ],
-                )
-            ),
-        }
-    }
-    if !report.issues.is_empty() {
-        println!(
-            "\n{}",
+                    None => println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.doctor.line_installed_none",
+                                "{kind}：已安装 {count} 个版本，当前 = {none}",
+                                "{kind}: {count} installed, current = {none}",
+                            ),
+                            &[
+                                ("kind", kind),
+                                ("count", &ic.to_string()),
+                                ("none", &none_label),
+                            ],
+                        )
+                    ),
+                }
+            }
+            if !report.issues.is_empty() {
+                println!(
+                    "\n{}",
             doctor_style_line(
                 g,
                 1,
                 &envr_core::i18n::tr_key("cli.doctor.issues_heading", "问题：", "Issues:",),
             )
-        );
-        for i in &report.issues {
+                );
+                for i in &report.issues {
             println!("  - {}", doctor_style_line(g, 1, i));
         }
     }
@@ -1064,9 +1065,9 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
         }
     }
     if !fixes_for_text.is_empty() && !g.quiet {
-        println!(
-            "\n{}",
-            envr_core::i18n::tr_key(
+                println!(
+                    "\n{}",
+                    envr_core::i18n::tr_key(
                 "cli.doctor.fixes_heading",
                 "已执行的修复：",
                 "Fixes applied:",
@@ -1085,10 +1086,17 @@ pub fn run(
     fix_path: bool,
     fix_path_apply: bool,
 ) -> i32 {
-    let mut report = match build_doctor_report(service) {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(run_inner(g, service, fix, fix_path, fix_path_apply)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    fix: bool,
+    fix_path: bool,
+    fix_path_apply: bool,
+) -> envr_error::EnvrResult<i32> {
+    let mut report = build_doctor_report(service)?;
 
     let fixes_applied = if fix {
         apply_doctor_fixes(g, service, &report)
@@ -1097,40 +1105,43 @@ pub fn run(
     };
 
     if fix {
-        report = match build_doctor_report(service) {
-            Ok(r) => r,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        report = build_doctor_report(service)?;
     }
 
     let mut data = report.to_json();
-    if fix {
-        if let Some(obj) = data.as_object_mut() {
+    if fix
+        && let Some(obj) = data.as_object_mut() {
             obj.insert(
                 "fixes_applied".into(),
                 serde_json::to_value(&fixes_applied).unwrap_or_else(|_| json!([])),
             );
         }
-    }
     merge_path_fix_json(&mut data, fix_path, &report);
     let ok = report.ok();
     let fixes_for_text = fixes_applied.clone();
 
     if ok {
-        output::emit_doctor(g, ok, "doctor_ok", None, data, || {
+        Ok(output::emit_doctor(g, ok, "doctor_ok", None, data, || {
             print_doctor_human_sections(g, &report, &fixes_for_text);
             doctor_path_followup(g, &report, fix_path, fix_path_apply);
-        })
+        }))
     } else {
         let fail_msg = envr_core::i18n::tr_key(
             "cli.doctor.json_fail_message",
             "环境检查发现问题",
             "environment checks found problems",
         );
-        output::emit_doctor(g, ok, &fail_msg, Some("doctor_issues"), data, || {
-            print_doctor_human_sections(g, &report, &fixes_for_text);
-            doctor_path_followup(g, &report, fix_path, fix_path_apply);
-        })
+        Ok(output::emit_doctor(
+            g,
+            ok,
+            &fail_msg,
+            Some("doctor_issues"),
+            data,
+            || {
+                print_doctor_human_sections(g, &report, &fixes_for_text);
+                doctor_path_followup(g, &report, fix_path, fix_path_apply);
+            },
+        ))
     }
 }
 
@@ -1170,10 +1181,9 @@ fn detect_shell_kind() -> &'static str {
     if std::env::var("PSModulePath").is_ok() {
         return "powershell";
     }
-    if let Ok(comspec) = std::env::var("ComSpec") {
-        if comspec.to_ascii_lowercase().contains("cmd.exe") {
+    if let Ok(comspec) = std::env::var("ComSpec")
+        && comspec.to_ascii_lowercase().contains("cmd.exe") {
             return "cmd";
         }
-    }
     "posix"
 }

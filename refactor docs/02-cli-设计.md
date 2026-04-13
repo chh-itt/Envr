@@ -15,6 +15,8 @@
 - L3（高级能力）
   - `exec`, `run`, `env`, `import`, `export`, `profile`, `status`
 
+实现侧完整谱系（含别名、`rust` / `bundle` / `cache` 等扩展命令）见仓库内 **[`docs/cli/commands.md`](../docs/cli/commands.md)**；`envr --help` 末尾同步展示「命令分组」与 L1/L2/L3 速查。
+
 ## 3. 命令风格规范
 
 - 可读性：`envr <cmd> <lang> <version>` 优先。

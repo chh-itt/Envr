@@ -1,6 +1,6 @@
 //! Command-line interface for `envr` (clap tree and global flags).
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use envr_config::aliases::AliasesFile;
 use envr_platform::paths::current_platform_paths;
@@ -50,13 +50,94 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub no_color: bool,
 
-    /// Verbose tracing to stderr (and default `RUST_LOG=debug` when unset); does not change `--format json` stdout.
+    /// When set, default `RUST_LOG=debug` if unset; tracing always goes to **stderr** (stdout stays for command / JSON output).
     #[arg(long, global = true)]
     pub debug: bool,
 
     /// Override runtime root directory (sets `ENVR_RUNTIME_ROOT`).
     #[arg(long, global = true, value_name = "PATH")]
     pub runtime_root: Option<String>,
+}
+
+/// Project config search directory and optional `[profiles.*]` overlay.
+/// Shared by `why`, `resolve`, `status`, `env`, `template`, and `shell`.
+#[derive(Args, Clone, Debug)]
+pub struct ProjectPathProfileArgs {
+    /// Working directory for upward `.envr.toml` search
+    #[arg(long, value_name = "DIR", default_value = ".")]
+    pub path: PathBuf,
+    /// Profile overlay (`[profiles.<name>]`), overrides `ENVR_PROFILE` for this invocation
+    #[arg(long, value_name = "NAME")]
+    pub profile: Option<String>,
+}
+
+/// Shared flags for [`Command::Exec`] and [`Command::Run`]: working directory, profile, env files,
+/// install-if-missing, and dry-run modes. Keep this struct in sync for both subcommands.
+#[derive(Args, Clone, Debug)]
+pub struct ExecRunSharedArgs {
+    /// Install missing pinned (or specified) runtimes before executing
+    #[arg(long, alias = "install")]
+    pub install_if_missing: bool,
+    /// Print merged env and command, then exit without running
+    #[arg(long, conflicts_with = "dry_run_diff")]
+    pub dry_run: bool,
+    /// Like `--dry-run` but print only **changes** vs the current process env (PATH entries split)
+    #[arg(long, conflicts_with = "dry_run")]
+    pub dry_run_diff: bool,
+    /// Log resolved runtime paths before executing
+    #[arg(long, short = 'v')]
+    pub verbose: bool,
+    #[arg(long, value_name = "DIR", default_value = ".")]
+    pub path: PathBuf,
+    /// Profile overlay (`[profiles.<name>]`), overrides `ENVR_PROFILE` for this invocation
+    #[arg(long, value_name = "NAME")]
+    pub profile: Option<String>,
+    /// Set or override an environment variable for the child (`KEY=VALUE`; repeatable)
+    #[arg(long = "env", value_name = "KEY=VALUE", action = clap::ArgAction::Append)]
+    pub env: Vec<String>,
+    /// Load environment entries from a file before applying `--env` (repeatable)
+    #[arg(long, value_name = "PATH", action = clap::ArgAction::Append)]
+    pub env_file: Vec<PathBuf>,
+}
+
+impl GlobalArgs {
+    /// Output format from global `--format` (default: [`OutputFormat::Text`]).
+    ///
+    /// Prefer this over `output_format.unwrap_or(OutputFormat::Text)` so behavior stays consistent
+    /// with [`Cli::resolved_output_format`] and subcommand `--json` shorthands (see
+    /// [`GlobalArgs::cloned_with_legacy_json`]).
+    #[inline]
+    pub fn effective_output_format(&self) -> OutputFormat {
+        self.output_format.unwrap_or(OutputFormat::Text)
+    }
+
+    /// Clone `self`, forcing [`OutputFormat::Json`] when the subcommand sets a legacy `--json` flag
+    /// (e.g. `doctor --json`), equivalent to `--format json` for that invocation.
+    #[inline]
+    pub fn cloned_with_legacy_json(&self, legacy_json: bool) -> Self {
+        if legacy_json {
+            Self {
+                output_format: Some(OutputFormat::Json),
+                ..self.clone()
+            }
+        } else {
+            self.clone()
+        }
+    }
+}
+
+impl Cli {
+    /// Effective output format for this argv after global flags and known subcommand shorthands.
+    ///
+    /// Used by [`apply_global`] so `ENVR_OUTPUT_FORMAT` matches what handlers will use (e.g.
+    /// `doctor --json` implies JSON the same way as `--format json`).
+    #[inline]
+    pub fn resolved_output_format(&self) -> OutputFormat {
+        match &self.command {
+            Command::Doctor { json: true, .. } => OutputFormat::Json,
+            _ => self.global.effective_output_format(),
+        }
+    }
 }
 
 // Subcommands are ordered by topic (runtime → project → data → diagnostics) to make `--help` easier to scan.
@@ -135,10 +216,8 @@ pub enum Command {
         /// Version spec override (same as `resolve --spec`; wins over project pin)
         #[arg(long, value_name = "SPEC")]
         spec: Option<String>,
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
     },
     /// Print the runtime home directory shims would use (project pin, or global current)
     Resolve {
@@ -148,12 +227,8 @@ pub enum Command {
         /// Version spec override (ignores project pin for this invocation)
         #[arg(long, value_name = "SPEC")]
         spec: Option<String>,
-        /// Working directory for upward `.envr.toml` search
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        /// Profile overlay (`[profiles.<name>]`), overrides `ENVR_PROFILE` for this invocation
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
     },
     /// Run a subprocess with PATH and env for one language (project pins + `ENVR_PROFILE` / `--profile`)
     Exec {
@@ -162,28 +237,8 @@ pub enum Command {
         lang: String,
         #[arg(long, value_name = "SPEC")]
         spec: Option<String>,
-        /// Install the pinned or `--spec` runtime if it is missing, then run the command
-        #[arg(long, alias = "install")]
-        install_if_missing: bool,
-        /// Print merged env and command, then exit without running
-        #[arg(long, conflicts_with = "dry_run_diff")]
-        dry_run: bool,
-        /// Like `--dry-run` but print only **changes** vs the current process env (PATH entries split)
-        #[arg(long, conflicts_with = "dry_run")]
-        dry_run_diff: bool,
-        /// Log resolved runtime paths before executing
-        #[arg(long, short = 'v')]
-        verbose: bool,
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
-        /// Set or override an environment variable for the child (`KEY=VALUE`; repeatable)
-        #[arg(long = "env", value_name = "KEY=VALUE", action = clap::ArgAction::Append)]
-        env: Vec<String>,
-        /// Load environment entries from a file before applying `--env` (repeatable)
-        #[arg(long, value_name = "PATH", action = clap::ArgAction::Append)]
-        env_file: Vec<PathBuf>,
+        #[command(flatten)]
+        shared: ExecRunSharedArgs,
         /// Append child stdout and stderr to this file (envr messages stay on stderr)
         #[arg(long, value_name = "FILE")]
         output: Option<PathBuf>,
@@ -199,28 +254,8 @@ pub enum Command {
     /// Run a subprocess with merged PATH for node, python, and java (plus project `env`).
     /// If the first token matches `[scripts]` in `.envr.toml`, it is run as a shell one-liner.
     Run {
-        /// Install any pinned runtimes from `.envr.toml` that are missing before running
-        #[arg(long, alias = "install")]
-        install_if_missing: bool,
-        /// Print merged env and command, then exit without running
-        #[arg(long, conflicts_with = "dry_run_diff")]
-        dry_run: bool,
-        /// Like `--dry-run` but print only **changes** vs the current process env (PATH entries split)
-        #[arg(long, conflicts_with = "dry_run")]
-        dry_run_diff: bool,
-        /// Log resolved runtime paths before executing
-        #[arg(long, short = 'v')]
-        verbose: bool,
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
-        /// Set or override an environment variable for the child (`KEY=VALUE`; repeatable)
-        #[arg(long = "env", value_name = "KEY=VALUE", action = clap::ArgAction::Append)]
-        env: Vec<String>,
-        /// Load environment entries from a file before applying `--env` (repeatable)
-        #[arg(long, value_name = "PATH", action = clap::ArgAction::Append)]
-        env_file: Vec<PathBuf>,
+        #[command(flatten)]
+        shared: ExecRunSharedArgs,
         #[arg(value_name = "COMMAND", required = true)]
         command: String,
         #[arg(
@@ -232,10 +267,8 @@ pub enum Command {
     },
     /// Print shell snippets setting PATH / JAVA_HOME / project env (merged runtimes)
     Env {
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
         #[arg(long, value_enum, default_value_t = EnvShellKind::Posix)]
         shell: EnvShellKind,
     },
@@ -243,10 +276,8 @@ pub enum Command {
     Template {
         #[arg(value_name = "FILE")]
         file: PathBuf,
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
         /// Set or override an environment variable for substitution (`KEY=VALUE`; repeatable)
         #[arg(long = "env", value_name = "KEY=VALUE", action = clap::ArgAction::Append)]
         env: Vec<String>,
@@ -256,10 +287,8 @@ pub enum Command {
     },
     /// Start an interactive subshell with the merged `envr env` environment
     Shell {
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
         /// Executable to run instead of `$SHELL` / `%ComSpec%` (or `ENVR_SHELL`)
         #[arg(long, value_name = "EXE")]
         shell: Option<PathBuf>,
@@ -300,12 +329,8 @@ pub enum Command {
     /// Show project root (if any), pins, and active runtime versions for this directory
     #[command(visible_alias = "st")]
     Status {
-        /// Directory to start `.envr.toml` search from
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        /// Profile overlay (`[profiles.<name>]`), overrides `ENVR_PROFILE` for this invocation
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
     },
     /// Manage `.envr.toml` pins (add, install sync, validate)
     #[command(subcommand)]
@@ -540,10 +565,8 @@ pub enum HookCmd {
     },
     /// One-line runtime summary for shell prompts (use after `eval "$(envr hook …)"`; see `PS1` examples in hook output)
     Prompt {
-        #[arg(long, value_name = "DIR", default_value = ".")]
-        path: PathBuf,
-        #[arg(long, value_name = "NAME")]
-        profile: Option<String>,
+        #[command(flatten)]
+        project: ProjectPathProfileArgs,
     },
 }
 
@@ -637,13 +660,105 @@ pub enum AliasCmd {
     },
 }
 
+impl Command {
+    /// Stable snake_case label for tracing and structured logs (not localized).
+    pub fn trace_name(&self) -> &'static str {
+        match self {
+            Command::Install { .. } => "install",
+            Command::Use { .. } => "use",
+            Command::List { .. } => "list",
+            Command::Current { .. } => "current",
+            Command::Uninstall { .. } => "uninstall",
+            Command::Which { .. } => "which",
+            Command::Remote { .. } => "remote",
+            Command::Rust(sub) => match sub {
+                RustCmd::InstallManaged => "rust_install_managed",
+            },
+            Command::Why { .. } => "why",
+            Command::Resolve { .. } => "resolve",
+            Command::Exec { .. } => "exec",
+            Command::Run { .. } => "run",
+            Command::Env { .. } => "env",
+            Command::Template { .. } => "template",
+            Command::Shell { .. } => "shell",
+            Command::Hook(sub) => match sub {
+                HookCmd::Bash => "hook_bash",
+                HookCmd::Zsh => "hook_zsh",
+                HookCmd::Keys { .. } => "hook_keys",
+                HookCmd::Prompt { .. } => "hook_prompt",
+            },
+            Command::Prune { .. } => "prune",
+            Command::Init { .. } => "init",
+            Command::Check { .. } => "check",
+            Command::Status { .. } => "status",
+            Command::Project(sub) => match sub {
+                ProjectCmd::Add { .. } => "project_add",
+                ProjectCmd::Sync { .. } => "project_sync",
+                ProjectCmd::Validate { .. } => "project_validate",
+            },
+            Command::Import { .. } => "import",
+            Command::Export { .. } => "export",
+            Command::Profile(sub) => match sub {
+                ProfileCmd::List { .. } => "profile_list",
+                ProfileCmd::Show { .. } => "profile_show",
+            },
+            Command::Config(sub) => match sub {
+                ConfigCmd::Schema => "config_schema",
+                ConfigCmd::Validate => "config_validate",
+                ConfigCmd::Edit => "config_edit",
+                ConfigCmd::Path => "config_path",
+                ConfigCmd::Show => "config_show",
+                ConfigCmd::Keys => "config_keys",
+                ConfigCmd::Get { .. } => "config_get",
+                ConfigCmd::Set { .. } => "config_set",
+            },
+            Command::Alias(sub) => match sub {
+                AliasCmd::List => "alias_list",
+                AliasCmd::Add { .. } => "alias_add",
+                AliasCmd::Remove { .. } => "alias_remove",
+            },
+            Command::Shim(sub) => match sub {
+                ShimCmd::Sync { .. } => "shim_sync",
+            },
+            Command::Cache(sub) => match sub {
+                CacheCmd::Clean { .. } => "cache_clean",
+                CacheCmd::Index(sub) => match sub {
+                    CacheIndexCmd::Sync { .. } => "cache_index_sync",
+                    CacheIndexCmd::Status { .. } => "cache_index_status",
+                },
+            },
+            Command::Bundle(sub) => match sub {
+                BundleCmd::Create { .. } => "bundle_create",
+                BundleCmd::Apply { .. } => "bundle_apply",
+            },
+            Command::Doctor { .. } => "doctor",
+            Command::Deactivate => "deactivate",
+            Command::Debug(sub) => match sub {
+                DebugCmd::Info => "debug_info",
+            },
+            Command::Diagnostics(sub) => match sub {
+                DiagnosticsCmd::Export { .. } => "diagnostics_export",
+            },
+            Command::Completion { .. } => "completion",
+            Command::Help(sub) => match sub {
+                HelpCmd::Shortcuts => "help_shortcuts",
+            },
+            Command::Update { .. } => "update",
+        }
+    }
+}
+
 /// Apply global flags to the process environment before logging and core calls.
+///
+/// Uses [`Cli::resolved_output_format`] so `ENVR_OUTPUT_FORMAT` matches subcommand shorthands such as
+/// `doctor --json`.
 ///
 /// # Safety
 ///
 /// Mutates process environment during single-threaded startup before any other
 /// threads read these variables (see `std::env::set_var` safety contract in Rust 2024).
-pub fn apply_global(args: &GlobalArgs) {
+pub fn apply_global(cli: &Cli) {
+    let args = &cli.global;
     // SAFETY: CLI entry point runs before worker threads; env is read by logging/core after this.
     unsafe {
         if args.no_color {
@@ -652,7 +767,7 @@ pub fn apply_global(args: &GlobalArgs) {
         if let Some(ref p) = args.runtime_root {
             std::env::set_var("ENVR_RUNTIME_ROOT", p);
         }
-        match args.output_format.unwrap_or(OutputFormat::Text) {
+        match cli.resolved_output_format() {
             OutputFormat::Json => {
                 std::env::set_var("ENVR_OUTPUT_FORMAT", "json");
             }
@@ -878,7 +993,63 @@ pub fn preprocess_cli_args(mut args: Vec<OsString>) -> Vec<OsString> {
 }
 
 pub fn run(cli: Cli) -> i32 {
-    crate::commands::dispatch(cli)
+    let global = cli.global.clone();
+    crate::commands::dispatch(cli).finish(&global)
+}
+
+#[cfg(test)]
+mod command_trace_tests {
+    use super::{Cli, Command, HookCmd, Parser};
+
+    #[test]
+    fn trace_name_matches_subcommand() {
+        let cli = Cli::try_parse_from(["envr", "doctor"]).expect("parse");
+        assert_eq!(cli.command.trace_name(), "doctor");
+        let cli = Cli::try_parse_from(["envr", "config", "path"]).expect("parse");
+        assert_eq!(cli.command.trace_name(), "config_path");
+        let cli = Cli::try_parse_from(["envr", "hook", "bash"]).expect("parse");
+        assert!(matches!(cli.command, Command::Hook(HookCmd::Bash)));
+        assert_eq!(cli.command.trace_name(), "hook_bash");
+    }
+}
+
+#[cfg(test)]
+mod output_format_resolution_tests {
+    use super::{Cli, OutputFormat, Parser};
+
+    #[test]
+    fn resolved_output_format_doctor_json_shorthand() {
+        let cli = Cli::try_parse_from(["envr", "doctor", "--json"]).expect("parse");
+        assert_eq!(cli.resolved_output_format(), OutputFormat::Json);
+    }
+
+    #[test]
+    fn resolved_output_format_global_json() {
+        let cli = Cli::try_parse_from(["envr", "--format", "json", "doctor"]).expect("parse");
+        assert_eq!(cli.resolved_output_format(), OutputFormat::Json);
+    }
+
+    #[test]
+    fn resolved_output_format_doctor_default_text() {
+        let cli = Cli::try_parse_from(["envr", "doctor"]).expect("parse");
+        assert_eq!(cli.resolved_output_format(), OutputFormat::Text);
+    }
+
+    #[test]
+    fn legacy_json_overrides_global_format_text_for_doctor() {
+        let cli =
+            Cli::try_parse_from(["envr", "--format", "text", "doctor", "--json"]).expect("parse");
+        assert_eq!(cli.resolved_output_format(), OutputFormat::Json);
+    }
+
+    #[test]
+    fn cloned_with_legacy_json_sets_json() {
+        let cli = Cli::try_parse_from(["envr", "doctor", "--json"]).expect("parse");
+        let g = cli.global.cloned_with_legacy_json(true);
+        assert_eq!(g.effective_output_format(), OutputFormat::Json);
+        let g2 = cli.global.cloned_with_legacy_json(false);
+        assert_eq!(g2.effective_output_format(), OutputFormat::Text);
+    }
 }
 
 #[cfg(test)]

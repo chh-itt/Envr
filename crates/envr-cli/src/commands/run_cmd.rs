@@ -1,16 +1,17 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
+use crate::run_context::CliPathProfile;
 use crate::commands::child_env;
-use crate::commands::dry_run_env;
 use crate::commands::cli_install_progress;
-use crate::commands::common;
+use crate::CommandOutcome;
+use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
 use crate::output::{self, fmt_template};
 
-use envr_config::project_config::{ProjectConfig, RustEnforceMode, load_project_config_profile};
+use envr_config::project_config::{ProjectConfig, RustEnforceMode};
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::process::Command;
 
 fn parse_rust_channel_from_toolchain(toolchain: &str) -> Option<String> {
@@ -103,12 +104,11 @@ fn resolve_run_command(
     args: &[String],
     cfg: Option<&ProjectConfig>,
 ) -> (String, Vec<String>, bool) {
-    if let Some(cfg) = cfg {
-        if let Some(script) = cfg.scripts.get(command) {
+    if let Some(cfg) = cfg
+        && let Some(script) = cfg.scripts.get(command) {
             let (exe, a) = script_shell_invocation(script, args);
             return (exe, a, true);
         }
-    }
     (command.to_string(), args.to_vec(), false)
 }
 
@@ -252,7 +252,7 @@ fn maybe_emit_run_script_miss_hint(
         return;
     }
     if !matches!(
-        g.output_format.unwrap_or(OutputFormat::Text),
+        g.effective_output_format(),
         OutputFormat::Text
     ) {
         return;
@@ -314,23 +314,11 @@ fn shell_words_join(args: &[String]) -> String {
         .join(" ")
 }
 
-fn enrich_project_config_error(e: envr_error::EnvrError) -> envr_error::EnvrError {
-    envr_error::EnvrError::Validation(format!(
-        "{}\n{}",
-        e,
-        envr_core::i18n::tr_key(
-            "cli.config.invalid_hint",
-            "请检查 `.envr.toml` 键名/值类型（示例：`[runtimes.node] version = \"20\"`）。",
-            "Check `.envr.toml` key names/value types (example: `[runtimes.node] version = \"20\"`).",
-        )
-    ))
-}
-
 fn enforce_rust_constraints(
     env_map: &std::collections::HashMap<String, String>,
     cfg: &envr_config::project_config::ProjectConfig,
     working_dir: &std::path::Path,
-) -> Result<(), envr_error::EnvrError> {
+) -> EnvrResult<()> {
     let Some(r) = cfg.runtimes.get("rust") else {
         return Ok(());
     };
@@ -380,16 +368,15 @@ fn enforce_rust_constraints(
     })();
 
     let mut problems = Vec::new();
-    if let Some(want) = want_channel {
-        if current_channel.as_deref() != Some(&want.to_ascii_lowercase()) {
+    if let Some(want) = want_channel
+        && current_channel.as_deref() != Some(&want.to_ascii_lowercase()) {
             problems.push(format!(
                 "rust channel mismatch: want {want}, got {}",
                 current_channel.as_deref().unwrap_or("(unknown)")
             ));
         }
-    }
-    if let Some(pref) = want_prefix {
-        if !current_rustc
+    if let Some(pref) = want_prefix
+        && !current_rustc
             .as_deref()
             .is_some_and(|v| v.starts_with(pref))
         {
@@ -398,7 +385,6 @@ fn enforce_rust_constraints(
                 current_rustc.as_deref().unwrap_or("(unknown)")
             ));
         }
-    }
     if problems.is_empty() {
         return Ok(());
     }
@@ -409,39 +395,48 @@ fn enforce_rust_constraints(
             eprintln!("envr: warning: {msg}");
             Ok(())
         }
-        RustEnforceMode::Error => Err(envr_error::EnvrError::Validation(msg)),
+        RustEnforceMode::Error => Err(EnvrError::Validation(msg)),
     }
 }
 
 pub fn run(
     g: &GlobalArgs,
-    install_if_missing: bool,
-    dry_run: bool,
-    dry_run_diff: bool,
-    verbose: bool,
-    path: PathBuf,
-    profile: Option<String>,
-    env_pairs: Vec<String>,
-    env_files: Vec<PathBuf>,
+    shared: ExecRunSharedArgs,
     command: String,
     args: Vec<String>,
 ) -> i32 {
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(run_inner(g, shared, command, args)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    shared: ExecRunSharedArgs,
+    command: String,
+    args: Vec<String>,
+) -> EnvrResult<i32> {
+    let ExecRunSharedArgs {
+        install_if_missing,
+        dry_run,
+        dry_run_diff,
+        verbose,
+        path,
+        profile,
+        env: env_pairs,
+        env_file: env_files,
+    } = shared;
+
+    let rex = CliPathProfile::new(path, profile).load_run_exec()?;
+    let ctx = rex.ctx();
+    let pc = rex.project_config();
 
     let text_out = matches!(
-        g.output_format.unwrap_or(OutputFormat::Text),
+        g.effective_output_format(),
         OutputFormat::Text
     );
 
     let mut auto_installed: Vec<serde_json::Value> = Vec::new();
     if install_if_missing && !dry_run && !dry_run_diff {
-        let plan = match child_env::plan_missing_pinned_runtimes_for_run(&ctx) {
-            Ok(p) => p,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        let plan = child_env::plan_missing_pinned_runtimes_for_run(ctx, pc)?;
         let mut seen = std::collections::HashSet::<String>::new();
         let mut uniq: Vec<(String, String)> = Vec::new();
         for (lang, spec) in plan {
@@ -450,15 +445,9 @@ pub fn run(
             }
         }
         if !uniq.is_empty() {
-            let service = match common::runtime_service() {
-                Ok(s) => s,
-                Err(e) => return common::print_envr_error(g, e),
-            };
+            let service = rex.service();
             for (lang, spec) in uniq {
-                let kind = match parse_runtime_kind(&lang) {
-                    Ok(k) => k,
-                    Err(e) => return common::print_envr_error(g, e),
-                };
+                let kind = parse_runtime_kind(&lang)?;
                 let headline = fmt_template(
                     &envr_core::i18n::tr_key(
                         "cli.run.installing_missing",
@@ -476,16 +465,13 @@ pub fn run(
                 if !use_prog
                     && !g.quiet
                     && matches!(
-                        g.output_format.unwrap_or(OutputFormat::Text),
+                        g.effective_output_format(),
                         OutputFormat::Text
                     )
                 {
                     eprintln!("{headline}");
                 }
-                let installed: RuntimeVersion = match service.install(kind, &request) {
-                    Ok(v) => v,
-                    Err(e) => return common::print_envr_error(g, e),
-                };
+                let installed: RuntimeVersion = service.install(kind, &request)?;
                 guard.finish();
                 auto_installed.push(json!({
                     "kind": lang,
@@ -495,32 +481,16 @@ pub fn run(
         }
     }
 
-    let mut env_map = match child_env::collect_run_env(&ctx, install_if_missing) {
-        Ok(m) => m,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    if let Err(e) = env_overrides::apply_env_overrides(&mut env_map, &env_files, &env_pairs) {
-        return common::print_envr_error(g, e);
-    }
+    let mut env_map = child_env::collect_run_env(ctx, install_if_missing, pc)?;
+    env_overrides::apply_env_overrides(&mut env_map, &env_files, &env_pairs)?;
 
-    let proj_loaded = match load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref()) {
-        Ok(v) => v,
-        Err(e) => return common::print_envr_error(g, enrich_project_config_error(e)),
-    };
-    let (exe, exe_args, ran_as_script) = resolve_run_command(
-        &command,
-        &args,
-        proj_loaded.as_ref().map(|(c, _)| c),
-    );
-    maybe_emit_run_script_miss_hint(
-        g,
-        &command,
-        proj_loaded.as_ref().map(|(c, _)| c),
-        ran_as_script,
-    );
+    let proj_loaded = rex.project();
+    let (exe, exe_args, ran_as_script) =
+        resolve_run_command(&command, &args, proj_loaded.as_ref().map(|(c, _)| c));
+    maybe_emit_run_script_miss_hint(g, &command, pc, ran_as_script);
 
-    if verbose && !g.quiet && text_out {
-        if let Ok(lines) = child_env::collect_run_verbose_lines(&ctx, install_if_missing) {
+    if verbose && !g.quiet && text_out
+        && let Ok(lines) = child_env::collect_run_verbose_lines(ctx, install_if_missing, pc) {
             for line in lines {
                 let msg = fmt_template(
                     &envr_core::i18n::tr_key(
@@ -533,20 +503,19 @@ pub fn run(
                 eprintln!("envr: {msg}");
             }
         }
-    }
 
     if dry_run_diff {
         let parent = dry_run_env::parent_env_snapshot();
-        return dry_run_env::emit_dry_run_diff(g, &parent, &env_map, &exe, &exe_args);
+        return Ok(dry_run_env::emit_dry_run_diff(
+            g, &parent, &env_map, &exe, &exe_args,
+        ));
     }
     if dry_run {
-        return emit_dry_run_run(g, &env_map, &exe, &exe_args);
+        return Ok(emit_dry_run_run(g, &env_map, &exe, &exe_args));
     }
 
-    if let Some((cfg, _loc)) = &proj_loaded {
-        if let Err(e) = enforce_rust_constraints(&env_map, cfg, &ctx.working_dir) {
-            return common::print_envr_error(g, e);
-        }
+    if let Some((cfg, _loc)) = proj_loaded {
+        enforce_rust_constraints(&env_map, cfg, &ctx.working_dir)?;
     }
 
     let mut child = Command::new(&exe);
@@ -557,10 +526,7 @@ pub fn run(
     }
     child.current_dir(&ctx.working_dir);
 
-    let status = match child.status() {
-        Ok(s) => s,
-        Err(e) => return common::print_envr_error(g, e.into()),
-    };
+    let status = child.status().map_err(EnvrError::from)?;
     let exit = status.code().unwrap_or(1);
     let env_file_s: Vec<String> = env_files
         .iter()
@@ -577,7 +543,7 @@ pub fn run(
         "env_files": env_file_s,
         "env_overrides": env_pairs,
     });
-    if exit == 0 {
+    Ok(if exit == 0 {
         output::emit_ok(g, "child_completed", data, || {})
     } else {
         let msg = fmt_template(
@@ -589,5 +555,5 @@ pub fn run(
             &[("exit", &exit.to_string())],
         );
         output::emit_failure_envelope(g, "child_exit", &msg, data, &[], exit)
-    }
+    })
 }

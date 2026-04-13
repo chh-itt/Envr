@@ -915,6 +915,8 @@ dependencies = [
  "envr-runtime-rust",
  "envr-shim-core",
  "jsonschema",
+ "proptest",
+ "regex",
  "serde_json",
  "tempfile",
  "toml",

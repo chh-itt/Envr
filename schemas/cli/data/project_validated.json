@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/project_validated.json",
+  "title": "envr project validate --format json → envelope.data (message: project_validated)",
+  "type": "object",
+  "additionalProperties": true
+}

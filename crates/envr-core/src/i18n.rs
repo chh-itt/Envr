@@ -207,14 +207,54 @@ pub fn tr_key(key: &str, zh_cn_fallback: &'static str, en_us_fallback: &'static 
     }
 }
 
+/// Serialize any test that mutates the process-global locale (`set` / `init_from_settings`).
+///
+/// Unit tests and integration tests must share this lock; otherwise parallel `cargo test` races on
+/// [`CURRENT`] and `tr_key` may read the wrong locale or appear to miss embedded `locales/*` keys.
+///
+/// Not `#[cfg(test)]`: integration tests link the library without `cfg(test)`, so this stays
+/// available whenever tests need it. Not intended for production callers.
+#[doc(hidden)]
+pub fn lock_locale_for_test() -> std::sync::MutexGuard<'static, ()> {
+    use std::sync::{Mutex, OnceLock};
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("locale test lock poisoned")
+}
+
+/// Restore [`current`] when dropped (use under [`lock_locale_for_test`]).
+#[doc(hidden)]
+pub struct RestoreLocale {
+    prev: Locale,
+}
+
+#[doc(hidden)]
+impl RestoreLocale {
+    pub fn new() -> Self {
+        Self { prev: current() }
+    }
+}
+
+#[doc(hidden)]
+impl Default for RestoreLocale {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[doc(hidden)]
+impl Drop for RestoreLocale {
+    fn drop(&mut self) {
+        set(self.prev);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use envr_config::settings::{I18nSettings, Settings};
-    use std::sync::Mutex;
-
-    /// `CURRENT` is process-global; serialize tests that call `set` / `init_from_settings`.
-    static I18N_LOCALE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn parses_locale_name_from_reg_output() {
@@ -228,7 +268,8 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn set_and_tr_follow_current_locale() {
-        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
+        let _lock = lock_locale_for_test();
+        let _restore = RestoreLocale::new();
         set(Locale::ZhCn);
         assert_eq!(tr("中文", "English"), "中文");
         set(Locale::EnUs);
@@ -237,7 +278,8 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn init_from_settings_uses_explicit_locale() {
-        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
+        let _lock = lock_locale_for_test();
+        let _restore = RestoreLocale::new();
         let mut s = Settings {
             i18n: I18nSettings {
                 locale: LocaleMode::ZhCn,
@@ -266,7 +308,8 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn tr_key_uses_locales_and_falls_back() {
-        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
+        let _lock = lock_locale_for_test();
+        let _restore = RestoreLocale::new();
         set(Locale::EnUs);
         assert_eq!(tr_key("gui.action.install", "安装", "Install"), "Install");
         assert_eq!(
@@ -283,7 +326,8 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn tr_key_loads_cli_locale_entries() {
-        let _lock = I18N_LOCALE_LOCK.lock().unwrap();
+        let _lock = lock_locale_for_test();
+        let _restore = RestoreLocale::new();
         set(Locale::EnUs);
         assert_eq!(
             tr_key(
@@ -312,5 +356,27 @@ a.b.c = "nested"
 "#;
         let m = super::load_messages(raw);
         assert_eq!(m.get("a.b.c").map(String::as_str), Some("nested"));
+    }
+
+    #[test]
+    fn embedded_zh_messages_include_gui_route_keys() {
+        let _lock = lock_locale_for_test();
+        assert_eq!(
+            super::zh_messages().get("gui.route.dashboard").map(String::as_str),
+            Some("仪表盘")
+        );
+        assert_eq!(
+            super::zh_messages().get("gui.route.settings").map(String::as_str),
+            Some("设置")
+        );
+    }
+
+    #[test]
+    fn embedded_en_messages_include_gui_route_keys() {
+        let _lock = lock_locale_for_test();
+        assert_eq!(
+            super::en_messages().get("gui.route.dashboard").map(String::as_str),
+            Some("Dashboard")
+        );
     }
 }

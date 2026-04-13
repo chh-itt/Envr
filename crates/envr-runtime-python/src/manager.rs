@@ -340,25 +340,23 @@ fn bootstrap_pip_windows(
             }
         }
     }
-    if !out.status.success() {
-        if used_index != Some(envr_config::settings::PIP_INDEX_OFFICIAL) {
-            // Last resort: force fresh official get-pip + official index.
-            let _ = fs::remove_file(&script);
-            let script = ensure_cached_get_pip(
-                client,
-                paths,
-                &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
-                progress_downloaded,
-                progress_total,
-                cancel,
-            )?;
-            out = run_get_pip(
-                &py,
-                &script,
-                home,
-                Some(envr_config::settings::PIP_INDEX_OFFICIAL),
-            )?;
-        }
+    if !out.status.success() && used_index != Some(envr_config::settings::PIP_INDEX_OFFICIAL) {
+        // Last resort: force fresh official get-pip + official index.
+        let _ = fs::remove_file(&script);
+        let script = ensure_cached_get_pip(
+            client,
+            paths,
+            &[envr_config::settings::GET_PIP_URL_OFFICIAL.to_string()],
+            progress_downloaded,
+            progress_total,
+            cancel,
+        )?;
+        out = run_get_pip(
+            &py,
+            &script,
+            home,
+            Some(envr_config::settings::PIP_INDEX_OFFICIAL),
+        )?;
     }
     if !out.status.success() {
         let stdout = String::from_utf8_lossy(&out.stdout);

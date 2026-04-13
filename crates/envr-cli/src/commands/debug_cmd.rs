@@ -1,10 +1,12 @@
 //! `envr debug` — quick introspection for bug reports.
 
 use crate::cli::{DebugCmd, GlobalArgs};
+use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output;
 
 use envr_config::settings::{settings_path_from_platform, validate_settings_file};
+use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
 use serde_json::json;
 
@@ -23,11 +25,11 @@ fn summarize_dir(path: &std::path::Path, max_entries: usize) -> Vec<String> {
 
 pub fn run(g: &GlobalArgs, sub: DebugCmd) -> i32 {
     match sub {
-        DebugCmd::Info => info(g),
+        DebugCmd::Info => CommandOutcome::from_result(info_inner(g)).finish(g),
     }
 }
 
-fn info(g: &GlobalArgs) -> i32 {
+fn info_inner(g: &GlobalArgs) -> EnvrResult<i32> {
     let mut envr_vars: Vec<(String, String)> = std::env::vars()
         .filter(|(k, _)| k.starts_with("ENVR_"))
         .collect();
@@ -36,7 +38,7 @@ fn info(g: &GlobalArgs) -> i32 {
     let platform = current_platform_paths().ok();
     let settings_path = platform
         .as_ref()
-        .map(|p| settings_path_from_platform(p));
+        .map(settings_path_from_platform);
     let settings_ok = settings_path
         .as_ref()
         .map(|p| validate_settings_file(p).is_ok());
@@ -66,7 +68,7 @@ fn info(g: &GlobalArgs) -> i32 {
         "log_dir": log_dir,
     });
 
-    output::emit_ok(g, "debug_info", data, || {
+    Ok(output::emit_ok(g, "debug_info", data, || {
         if g.quiet {
             return;
         }
@@ -97,5 +99,5 @@ fn info(g: &GlobalArgs) -> i32 {
         for (k, v) in &envr_vars {
             println!("  {k}={v}");
         }
-    })
+    }))
 }

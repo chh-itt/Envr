@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/project_status.json",
+  "title": "envr status --format json → envelope.data (message: project_status)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["working_dir", "profile", "project", "runtimes"],
+  "properties": {
+    "working_dir": { "type": "string" },
+    "profile": {
+      "oneOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "project": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["dir"],
+          "additionalProperties": true,
+          "properties": {
+            "dir": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "pin", "active_version", "source", "ok"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "pin": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+          },
+          "active_version": { "type": "string" },
+          "source": {
+            "type": "string",
+            "enum": ["project_pin", "global_current", "path_proxy_bypass"]
+          },
+          "ok": { "type": "boolean" },
+          "detail": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+          }
+        }
+      }
+    }
+  }
+}

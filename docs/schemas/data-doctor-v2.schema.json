@@ -13,7 +13,12 @@
     "warnings",
     "notes",
     "recommendations",
-    "path_shadowing"
+    "onboarding_checklist",
+    "path_shadowing",
+    "path_conflicts",
+    "path_analysis",
+    "findings",
+    "shims_dir_writable"
   ],
   "properties": {
     "runtime_root": { "type": "string" },
@@ -52,6 +57,13 @@
     "notes": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "onboarding_checklist": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "string" },
+      "description": "Four fixed onboarding hints (localized); length is stable, wording may change with locale."
     },
     "path_shadowing": {
       "description": "Legacy: first PATH conflict (same as path_conflicts[0] when non-empty); null if none.",
@@ -137,6 +149,16 @@
     },
     "shims_dir_writable": {
       "oneOf": [{ "type": "boolean" }, { "type": "null" }]
+    },
+    "fixes_applied": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Present only when `envr doctor --fix` runs; omit when `--fix` is not used."
+    },
+    "path_fix_suggestions": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Present when `envr doctor --fix-path` is set and PATH needs attention."
     }
   }
 }

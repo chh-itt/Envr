@@ -6,15 +6,21 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
+use crate::CommandOutcome;
 
+use envr_error::EnvrResult;
 use serde_json::json;
 
 pub fn run(g: &GlobalArgs) -> i32 {
+    CommandOutcome::from_result(run_inner(g)).finish(g)
+}
+
+fn run_inner(g: &GlobalArgs) -> EnvrResult<i32> {
     let data = json!({
         "hint": "hook_shell_only",
         "docs": "After eval \"$(envr hook bash)\" or eval \"$(envr hook zsh)\", run `envr deactivate` or `envr off` to restore saved variables. You can also call `envr_deactivate` if defined.",
     });
-    output::emit_ok(g, "deactivate_hint", data, || {
+    Ok(output::emit_ok(g, "deactivate_hint", data, || {
         if !g.quiet {
             eprintln!(
                 "{}",
@@ -39,5 +45,5 @@ pub fn run(g: &GlobalArgs) -> i32 {
                 );
             }
         }
-    })
+    }))
 }

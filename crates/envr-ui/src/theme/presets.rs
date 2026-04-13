@@ -83,10 +83,10 @@ pub fn tokens_for_appearance(
     let mut t = raw_tokens(flavor, scheme);
     if let Some(p) = accent {
         t.colors.primary = p;
-    } else if flavor == UiFlavor::Material3 {
-        if let Some(p) = material_seed::linux_material_primary_seed() {
-            t.colors.primary = p;
-        }
+    } else if flavor == UiFlavor::Material3
+        && let Some(p) = material_seed::linux_material_primary_seed()
+    {
+        t.colors.primary = p;
     }
     t
 }

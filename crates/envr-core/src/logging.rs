@@ -10,7 +10,8 @@ pub struct LoggingGuard {
 /// Options for [`init_logging_with`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LoggingInitOptions {
-    /// Emit tracing to **stderr** instead of stdout (recommended with `--debug` so stdout stays clean).
+    /// When `true`, emit the console tracing layer to **stderr**; when `false`, to **stdout**.
+    /// The `envr` CLI uses `true` so machine-readable stdout (`--format json`, porcelain) is never mixed with logs.
     pub log_to_stderr: bool,
 }
 

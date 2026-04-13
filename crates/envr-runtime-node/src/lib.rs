@@ -110,13 +110,13 @@ impl NodeRuntimeProvider {
         let ttl_secs = Self::remote_cache_ttl_secs();
         let index_cache = self.index_body_cache_path()?;
 
-        if Self::file_is_within_ttl(&index_cache, ttl_secs) {
-            if let Ok(body) = std::fs::read_to_string(&index_cache) {
-                if body.trim_start().starts_with('[') && index::parse_node_index(&body).is_ok() {
-                    return Ok(body);
-                }
-                let _ = std::fs::remove_file(&index_cache);
+        if Self::file_is_within_ttl(&index_cache, ttl_secs)
+            && let Ok(body) = std::fs::read_to_string(&index_cache)
+        {
+            if body.trim_start().starts_with('[') && index::parse_node_index(&body).is_ok() {
+                return Ok(body);
             }
+            let _ = std::fs::remove_file(&index_cache);
         }
 
         // Offline mode: do not attempt network fetch; require a cached index.
@@ -211,21 +211,18 @@ impl RuntimeProvider for NodeRuntimeProvider {
             .cache_dir()
             .join(format!("remote_majors_{os}_{arch}.json"));
 
-        if let Ok(meta) = std::fs::metadata(&cache_file) {
-            if let Ok(mtime) = meta.modified() {
-                if let Ok(age) = std::time::SystemTime::now().duration_since(mtime) {
-                    if age.as_secs() <= ttl_secs {
-                        if let Ok(s) = std::fs::read_to_string(&cache_file) {
-                            if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
-                                return Ok(list);
-                            }
-                            // Cache exists but is not in the expected format (e.g. accidentally
-                            // contains `index.json` or other JSON). Remove it so we can rebuild.
-                            let _ = std::fs::remove_file(&cache_file);
-                        }
-                    }
-                }
+        if let Ok(meta) = std::fs::metadata(&cache_file)
+            && let Ok(mtime) = meta.modified()
+            && let Ok(age) = std::time::SystemTime::now().duration_since(mtime)
+            && age.as_secs() <= ttl_secs
+            && let Ok(s) = std::fs::read_to_string(&cache_file)
+        {
+            if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
+                return Ok(list);
             }
+            // Cache exists but is not in the expected format (e.g. accidentally
+            // contains `index.json` or other JSON). Remove it so we can rebuild.
+            let _ = std::fs::remove_file(&cache_file);
         }
 
         let body = self.fetch_index_body()?;
@@ -294,13 +291,13 @@ impl RuntimeProvider for NodeRuntimeProvider {
             .cache_dir()
             .join(format!("remote_latest_per_major_{os}_{arch}.json"));
 
-        if Self::file_is_within_ttl(&cache_file, ttl_secs) {
-            if let Ok(s) = std::fs::read_to_string(&cache_file) {
-                if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
-                    return Ok(list.into_iter().map(RuntimeVersion).collect());
-                }
-                let _ = std::fs::remove_file(&cache_file);
+        if Self::file_is_within_ttl(&cache_file, ttl_secs)
+            && let Ok(s) = std::fs::read_to_string(&cache_file)
+        {
+            if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
+                return Ok(list.into_iter().map(RuntimeVersion).collect());
             }
+            let _ = std::fs::remove_file(&cache_file);
         }
 
         let body = self.load_index_body_cached()?;

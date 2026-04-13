@@ -23,12 +23,15 @@ use crate::widget_styles::{
     ButtonVariant, button_content_centered, button_style, card_container_style, text_input_style,
 };
 
+type EnvCenterDataLoad =
+    Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>), String>;
+
 #[derive(Debug, Clone)]
 pub enum EnvCenterMsg {
     PickKind(RuntimeKind),
     InstallInput(String),
     DirectInstallInput(String),
-    DataLoaded(Result<(Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>), String>),
+    DataLoaded(EnvCenterDataLoad),
     RemoteLatestDiskSnapshot(RuntimeKind, Vec<RuntimeVersion>),
     RemoteLatestRefreshed(RuntimeKind, Result<Vec<RuntimeVersion>, String>),
     SubmitInstall(String),
@@ -328,7 +331,7 @@ fn node_runtime_settings_section(
     }
 
     let proxy_label = text(envr_core::i18n::tr_key(
-        "gui.runtime.node.path_proxy",
+        "gui.runtime.node.path_proxy.label",
         "PATH 代理",
         "PATH proxy",
     ))
@@ -1238,6 +1241,7 @@ fn bun_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runtim
         .cloned()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn env_center_view(
     state: &EnvCenterState,
     node_runtime: Option<&NodeRuntimeSettings>,
@@ -1277,11 +1281,10 @@ pub fn env_center_view(
             envr_core::i18n::tr_key("gui.runtime.current", "当前：", "Current:"),
             v.0
             );
-            if state.kind == RuntimeKind::Php {
-                if let Some(ts) = state.php_global_current_want_ts {
+            if state.kind == RuntimeKind::Php
+                && let Some(ts) = state.php_global_current_want_ts {
                     s.push_str(if ts { " · TS" } else { " · NTS" });
                 }
-            }
             s
         }
         None => envr_core::i18n::tr_key(
@@ -1458,11 +1461,10 @@ pub fn env_center_view(
         }
     } else if state.kind == RuntimeKind::Bun {
         for v in &state.bun_remote_latest {
-            if let Some(k) = parse_major_from_ver(&v.0) {
-                if bun_major_supported_on_host(&k) {
+            if let Some(k) = parse_major_from_ver(&v.0)
+                && bun_major_supported_on_host(&k) {
                     keys_set.insert(k);
                 }
-            }
         }
     }
     let mut keys: Vec<String> = keys_set.into_iter().collect();
@@ -1632,8 +1634,8 @@ pub fn env_center_view(
         && state.bun_remote_latest.is_empty()
         && state.bun_remote_refreshing;
 
-    if let Some(err) = state.remote_error.as_deref() {
-        if matches!(
+    if let Some(err) = state.remote_error.as_deref()
+        && matches!(
             state.kind,
             RuntimeKind::Node
                 | RuntimeKind::Python
@@ -1645,7 +1647,6 @@ pub fn env_center_view(
         ) {
             list_col = list_col.push(remote_error_inline(tokens, err));
         }
-    }
 
     if (busy && show_keys.is_empty())
         || (node_waiting_remote && show_keys.is_empty())
@@ -1687,13 +1688,9 @@ pub fn env_center_view(
 
                     let highest_installed = installed_versions.first().cloned();
 
+            // Node list shows stable major keys; install spec still resolves latest patch elsewhere.
             let label_base = if state.kind == RuntimeKind::Node {
-                if let Some(_rv) = node_remote_latest_for_key(state, key) {
-                    // Keep list stable: show `Node <major>` but use latest patch for install spec.
-                    format!("{} {}", kind_label(state.kind), key)
-                } else {
-                    format!("{} {}", kind_label(state.kind), key)
-                }
+                format!("{} {}", kind_label(state.kind), key)
             } else if state.kind == RuntimeKind::Php {
                 if cfg!(windows) {
                     let tag = php_runtime
@@ -1706,10 +1703,6 @@ pub fn env_center_view(
                 } else {
                     format!("{} {}", kind_label(state.kind), key)
                 }
-            } else if state.kind == RuntimeKind::Python {
-                format!("{} {}", kind_label(state.kind), key)
-            } else if state.kind == RuntimeKind::Go {
-                format!("{} {}", kind_label(state.kind), key)
             } else {
                 format!("{} {}", kind_label(state.kind), key)
             };
@@ -1910,7 +1903,7 @@ pub fn env_center_view(
         )
                 } else {
         envr_core::i18n::tr_key(
-            "gui.runtime.search_placeholder",
+            "gui.runtime.search_placeholder.default",
             "筛选主版本（例如 24）",
             "Filter by major (e.g. 24)",
         )
@@ -2629,7 +2622,7 @@ fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Me
             .width(Length::Fill)
             .height(Length::Fixed(row_h))
             .align_y(iced::alignment::Vertical::Center)
-            .padding([0, tokens.space().md as u16])
+            .padding([0, tokens.space().md])
             .style(move |_theme: &Theme| {
                 iced::widget::container::Style::default().background(Background::Color(fill))
             }),

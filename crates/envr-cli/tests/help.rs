@@ -20,6 +20,10 @@ fn long_help_includes_command_group_index() {
         out.contains("Command groups") && out.contains("Runtime management"),
         "expected grouped command index in long --help; got:\n{out}"
     );
+    assert!(
+        out.contains("L1 essential") && out.contains("L3 automation"),
+        "expected L1/L3 tier legend in long --help; got:\n{out}"
+    );
 }
 
 #[test]

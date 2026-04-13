@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/hook_prompt.json",
+  "title": "envr hook prompt --format json → envelope.data (message: hook_prompt)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["segment"],
+  "properties": {
+    "segment": { "type": "string" }
+  }
+}

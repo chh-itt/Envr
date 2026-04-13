@@ -1,6 +1,9 @@
 use crate::cli::GlobalArgs;
+use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output;
+
+use envr_error::EnvrResult;
 
 use envr_core::shim_service::ShimService;
 use envr_domain::runtime::RuntimeKind;
@@ -28,15 +31,12 @@ pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<Str
 }
 
 pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
-    let root = match common::effective_runtime_root() {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(sync_inner(g, include_globals)).finish(g)
+}
 
-    let shim_exe = match find_envr_shim_executable() {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<i32> {
+    let root = common::effective_runtime_root()?;
+    let shim_exe = find_envr_shim_executable()?;
 
     let svc = ShimService::new(root.clone(), shim_exe);
     let mut ensured: Vec<&'static str> = Vec::new();
@@ -66,7 +66,7 @@ pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
         "globals_synced": include_globals,
     });
 
-    output::emit_ok(g, "shims_synced", data, || {
+    Ok(output::emit_ok(g, "shims_synced", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -80,7 +80,7 @@ pub fn sync(g: &GlobalArgs, include_globals: bool) -> i32 {
                 )
             );
         }
-    })
+    }))
 }
 
 fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {

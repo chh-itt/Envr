@@ -1,28 +1,32 @@
 //! Explain runtime resolution for the current project directory (`envr why <runtime>`).
 
-use crate::cli::GlobalArgs;
-use crate::commands::common;
+use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
+use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
+use crate::CliPathProfile;
 
-use envr_config::project_config::load_project_config_profile;
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 use envr_error::EnvrError;
-use envr_shim_core::resolve_runtime_home_for_lang;
+use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 use serde_json::json;
-use std::path::PathBuf;
-
 pub fn run(
     g: &GlobalArgs,
     runtime: String,
     spec: Option<String>,
-    path: PathBuf,
-    profile: Option<String>,
+    project: ProjectPathProfileArgs,
 ) -> i32 {
+    CommandOutcome::from_result(run_inner(g, runtime, spec, project)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    runtime: String,
+    spec: Option<String>,
+    project: ProjectPathProfileArgs,
+) -> envr_error::EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
     let lang = runtime.trim().to_ascii_lowercase();
-    let kind = match parse_runtime_kind(&lang) {
-        Ok(k) => k,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let kind = parse_runtime_kind(&lang)?;
 
     if kind == RuntimeKind::Rust {
         let msg = envr_core::i18n::tr_key(
@@ -30,7 +34,7 @@ pub fn run(
             "Rust 由 envr 托管的 rustup 解析；请使用 `envr rust` / `rustup show` 查看工具链。",
             "Rust is resolved via envr-managed rustup; use `envr rust` / `rustup show` for toolchain details.",
         );
-        return common::print_envr_error(g, EnvrError::Validation(msg));
+        return Err(EnvrError::Validation(msg));
     }
 
     let spec_trim = spec
@@ -40,15 +44,9 @@ pub fn run(
         .map(|s| s.to_string());
     let spec_deref = spec_trim.as_deref();
 
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-
-    let loaded = match load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref()) {
-        Ok(l) => l,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let loaded = &session.project;
+    let cfg = session.project_config();
 
     let pin = loaded.as_ref().and_then(|(c, _)| {
         c.runtimes
@@ -66,10 +64,8 @@ pub fn run(
         "global_current"
     };
 
-    let home = match resolve_runtime_home_for_lang(&ctx, &lang, spec_deref) {
-        Ok(h) => std::fs::canonicalize(&h).unwrap_or(h),
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, spec_deref, cfg)?;
+    let home = std::fs::canonicalize(&home).unwrap_or(home);
 
     let project_json = loaded.as_ref().map(|(_, loc)| {
         json!({
@@ -82,15 +78,15 @@ pub fn run(
 
     let data = json!({
         "lang": lang,
-        "working_dir": ctx.working_dir.to_string_lossy(),
-        "profile": ctx.profile,
+        "working_dir": session.ctx.working_dir.to_string_lossy(),
+        "profile": session.ctx.profile,
         "spec_override": spec_trim.clone(),
         "project": project_json,
         "resolution": resolution,
         "resolved_home": home.to_string_lossy(),
     });
 
-    output::emit_ok(g, "why_runtime", data, || {
+    Ok(output::emit_ok(g, "why_runtime", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -100,10 +96,10 @@ pub fn run(
                         "工作目录：{path}",
                         "Working directory: {path}",
                     ),
-                    &[("path", &ctx.working_dir.display().to_string())],
+                    &[("path", &session.ctx.working_dir.display().to_string())],
                 )
             );
-            if let Some((_, loc)) = &loaded {
+            if let Some((_, loc)) = loaded {
                 println!(
                     "{}",
                     fmt_template(
@@ -197,5 +193,5 @@ pub fn run(
                 home.display()
             );
         }
-    })
+    }))
 }

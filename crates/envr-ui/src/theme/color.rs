@@ -17,6 +17,7 @@ impl Srgb {
     }
 
     /// Parses `#RGB` or `#RRGGBB` (case-insensitive). Used for persisted accent strings.
+    #[allow(clippy::result_unit_err)] // Opaque parse failure; callers only need ok/err
     pub fn from_hex(s: &str) -> Result<Self, ()> {
         fn nibble(h: u8) -> Result<u8, ()> {
             match h {

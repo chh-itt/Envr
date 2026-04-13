@@ -1,9 +1,11 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
+use envr_error::EnvrResult;
 use serde_json::Value;
 
 const ALL_KINDS: [RuntimeKind; 8] = [
@@ -18,20 +20,23 @@ const ALL_KINDS: [RuntimeKind; 8] = [
 ];
 
 pub fn run(g: &GlobalArgs, service: &RuntimeService, runtime: Option<String>) -> i32 {
+    CommandOutcome::from_result(run_inner(g, service, runtime)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: Option<String>,
+) -> EnvrResult<i32> {
     let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
-        Some(l) => match parse_runtime_kind(l.trim()) {
-            Ok(k) => vec![k],
-            Err(e) => return common::print_envr_error(g, e),
-        },
+        Some(l) => vec![parse_runtime_kind(l.trim())?],
     };
 
     let mut rows: Vec<(RuntimeKind, Option<String>)> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        match service.current(kind) {
-            Ok(cur) => rows.push((kind, cur.map(|v| v.0))),
-            Err(e) => return common::print_envr_error(g, e),
-        }
+        let cur = service.current(kind)?;
+        rows.push((kind, cur.map(|v| v.0)));
     }
 
     let runtimes: Vec<_> = rows
@@ -59,7 +64,7 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService, runtime: Option<String>) ->
     // JSON `data.active_versions`: one row per runtime kind (see `schemas/cli/data/show_current.json`).
     let data = serde_json::json!({ "active_versions": runtimes });
 
-    output::emit_ok(g, "show_current", data, || {
+    Ok(output::emit_ok(g, "show_current", data, || {
         if output::wants_porcelain(g) {
             if rows.len() == 1 {
                 if let Some(v) = rows[0].1.as_deref() {
@@ -123,5 +128,5 @@ pub fn run(g: &GlobalArgs, service: &RuntimeService, runtime: Option<String>) ->
                 }
             }
         }
-    })
+    }))
 }

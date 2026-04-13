@@ -169,8 +169,8 @@ pub fn emit_dry_run_diff(
             println!();
         }
 
-        if let Some(obj) = diff.get("added").and_then(|v| v.as_object()) {
-            if !obj.is_empty() {
+        if let Some(obj) = diff.get("added").and_then(|v| v.as_object())
+            && !obj.is_empty() {
                 println!(
                     "{}",
                     envr_core::i18n::tr_key(
@@ -191,10 +191,9 @@ pub fn emit_dry_run_diff(
                 }
                 println!();
             }
-        }
 
-        if let Some(obj) = diff.get("changed").and_then(|v| v.as_object()) {
-            if !obj.is_empty() {
+        if let Some(obj) = diff.get("changed").and_then(|v| v.as_object())
+            && !obj.is_empty() {
                 println!(
                     "{}",
                     envr_core::i18n::tr_key(
@@ -216,6 +215,5 @@ pub fn emit_dry_run_diff(
                     }
                 }
             }
-        }
     })
 }

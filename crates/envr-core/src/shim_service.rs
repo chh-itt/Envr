@@ -351,7 +351,7 @@ impl ShimService {
             serde_json::Value::String(rel) => {
                 let stem = pkg_name
                     .split('/')
-                    .last()
+                    .next_back()
                     .unwrap_or(&pkg_name)
                     .to_ascii_lowercase();
                 self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, node_exe, seen)?;

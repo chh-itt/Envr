@@ -1,6 +1,7 @@
 //! `envr bundle` — portable offline bundle create/apply.
 
 use crate::cli::{BundleCmd, GlobalArgs};
+use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output;
 
@@ -20,7 +21,7 @@ use zip::ZipArchive;
 use zip::ZipWriter;
 
 pub fn run(g: &GlobalArgs, cmd: BundleCmd) -> i32 {
-    match cmd {
+    CommandOutcome::from_result(match cmd {
         BundleCmd::Create {
             output,
             path,
@@ -29,7 +30,7 @@ pub fn run(g: &GlobalArgs, cmd: BundleCmd) -> i32 {
             include_shims,
             full,
             no_current,
-        } => create(
+        } => create_inner(
             g,
             output,
             path,
@@ -43,8 +44,9 @@ pub fn run(g: &GlobalArgs, cmd: BundleCmd) -> i32 {
             file,
             runtime_root,
             index_cache_dir,
-        } => apply(g, file, runtime_root, index_cache_dir),
-    }
+        } => apply_inner(g, file, runtime_root, index_cache_dir),
+    })
+    .finish(g)
 }
 
 fn default_bundle_zip_path() -> PathBuf {
@@ -57,7 +59,8 @@ fn default_bundle_zip_path() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(format!("envr-bundle-{secs}.zip")))
 }
 
-fn create(
+#[allow(clippy::too_many_arguments)]
+fn create_inner(
     g: &GlobalArgs,
     output_path: Option<PathBuf>,
     working_dir: PathBuf,
@@ -66,31 +69,22 @@ fn create(
     include_shims: bool,
     full: bool,
     no_current: bool,
-) -> i32 {
+) -> EnvrResult<i32> {
     if full && no_current {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation("`--full` cannot be combined with `--no-current`".to_string()),
-        );
+        return Err(EnvrError::Validation(
+            "`--full` cannot be combined with `--no-current`".to_string(),
+        ));
     }
 
-    let runtime_root = match common::effective_runtime_root() {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let runtime_root = common::effective_runtime_root()?;
 
     let bundle_zip = output_path.unwrap_or_else(default_bundle_zip_path);
     if let Some(parent) = bundle_zip.parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            return common::print_envr_error(g, EnvrError::from(e));
-        }
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
 
     // Project config discovery (optional).
-    let loaded = match load_project_config_profile(&working_dir, profile.as_deref()) {
-        Ok(v) => v,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let loaded = load_project_config_profile(&working_dir, profile.as_deref())?;
     let (cfg_loc, pinned_specs): (Option<PathBuf>, Vec<(String, String)>) = match loaded {
         Some((cfg, loc)) => {
             let mut pins: Vec<(String, String)> = Vec::new();
@@ -110,21 +104,15 @@ fn create(
         None => (None, Vec::new()),
     };
 
-    let service = match RuntimeService::with_runtime_root(runtime_root.clone()) {
-        Ok(s) => s,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let service = common::runtime_service()?;
 
     let mut included_versions: Vec<(RuntimeKind, String)> = Vec::new();
     for (k, spec) in &pinned_specs {
-        let kind = match parse_runtime_kind(k) {
-            Ok(v) => v,
-            Err(e) => return common::print_envr_error(g, e),
-        };
-        let resolved = match service.resolve(kind, &VersionSpec(spec.clone())) {
-            Ok(r) => r.version.0,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        let kind = parse_runtime_kind(k)?;
+        let resolved = service
+            .resolve(kind, &VersionSpec(spec.clone()))?
+            .version
+            .0;
         included_versions.push((kind, resolved));
     }
     included_versions.sort_by(|a, b| {
@@ -153,10 +141,7 @@ fn create(
     }
     // Ensure current versions are included in payload.
     for (k, v) in &global_current {
-        let kind = match parse_runtime_kind(k) {
-            Ok(v) => v,
-            Err(e) => return common::print_envr_error(g, e),
-        };
+        let kind = parse_runtime_kind(k)?;
         included_versions.push((kind, v.clone()));
     }
     included_versions.sort_by(|a, b| {
@@ -166,13 +151,8 @@ fn create(
     });
     included_versions.dedup();
 
-    let index_cache_dir = {
-        let platform = match envr_platform::paths::current_platform_paths() {
-            Ok(p) => p,
-            Err(e) => return common::print_envr_error(g, e),
-        };
-        envr_platform::paths::index_cache_dir_from_platform(&platform)
-    };
+    let platform = envr_platform::paths::current_platform_paths()?;
+    let index_cache_dir = envr_platform::paths::index_cache_dir_from_platform(&platform);
 
     let included_versions_manifest: Vec<(String, String)> = included_versions
         .iter()
@@ -194,12 +174,10 @@ fn create(
         "global_current": global_current,
         "included_versions": included_versions_manifest,
     });
-    let manifest_json = match serde_json::to_string_pretty(&manifest) {
-        Ok(s) => s,
-        Err(e) => return common::print_envr_error(g, EnvrError::Runtime(format!("manifest: {e}"))),
-    };
+    let manifest_json = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| EnvrError::Runtime(format!("manifest: {e}")))?;
 
-    match write_bundle_zip(
+    write_bundle_zip(
         &bundle_zip,
         &runtime_root,
         full,
@@ -210,60 +188,49 @@ fn create(
         include_indexes.then_some(index_cache_dir.as_path()),
         include_shims,
         &manifest_json,
-    ) {
-        Ok(()) => {
-            let data = serde_json::json!({ "path": bundle_zip.to_string_lossy() });
-            output::emit_ok(g, "bundle_created", data, || {
-                if !g.quiet {
-                    println!("{}", bundle_zip.display());
-                }
-            })
+    )?;
+
+    let data = serde_json::json!({ "path": bundle_zip.to_string_lossy() });
+    Ok(output::emit_ok(g, "bundle_created", data, || {
+        if !g.quiet {
+            println!("{}", bundle_zip.display());
         }
-        Err(e) => common::print_envr_error(g, e),
-    }
+    }))
 }
 
-fn apply(
+fn apply_inner(
     g: &GlobalArgs,
     file: PathBuf,
     runtime_root_override: Option<String>,
     index_cache_dir_override: Option<PathBuf>,
-) -> i32 {
+) -> EnvrResult<i32> {
     if !file.is_file() {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(format!("bundle file not found: {}", file.display())),
-        );
+        return Err(EnvrError::Validation(format!(
+            "bundle file not found: {}",
+            file.display()
+        )));
     }
 
-    let runtime_root = match runtime_root_override.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty())
+    let runtime_root = match runtime_root_override
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
     {
         Some(p) => PathBuf::from(p),
-        None => match common::effective_runtime_root() {
-            Ok(r) => r,
-            Err(e) => return common::print_envr_error(g, e),
-        },
+        None => common::effective_runtime_root()?,
     };
 
     let index_cache_dir = match index_cache_dir_override {
         Some(d) => d,
         None => {
-            let platform = match envr_platform::paths::current_platform_paths() {
-                Ok(p) => p,
-                Err(e) => return common::print_envr_error(g, e),
-            };
+            let platform = envr_platform::paths::current_platform_paths()?;
             envr_platform::paths::index_cache_dir_from_platform(&platform)
         }
     };
 
-    let tmp = match tempfile::tempdir() {
-        Ok(t) => t,
-        Err(e) => return common::print_envr_error(g, EnvrError::from(e)),
-    };
+    let tmp = tempfile::tempdir().map_err(EnvrError::from)?;
 
-    if let Err(e) = extract_bundle_zip(&file, tmp.path()) {
-        return common::print_envr_error(g, e);
-    }
+    extract_bundle_zip(&file, tmp.path())?;
 
     let manifest_path = tmp
         .path()
@@ -275,9 +242,7 @@ fn apply(
     let src_runtimes = tmp.path().join("envr-bundle").join("runtime_root").join("runtimes");
     if src_runtimes.is_dir() {
         let dst = runtime_root.join("runtimes");
-        if let Err(e) = copy_dir_merge(&src_runtimes, &dst) {
-            return common::print_envr_error(g, e);
-        }
+        copy_dir_merge(&src_runtimes, &dst)?;
     }
 
     // Copy indexes
@@ -287,25 +252,23 @@ fn apply(
         .join("index_cache")
         .join("indexes");
     if src_indexes.is_dir() {
-        if let Err(e) = copy_dir_merge(&src_indexes, &index_cache_dir) {
-            return common::print_envr_error(g, e);
-        }
+        copy_dir_merge(&src_indexes, &index_cache_dir)?;
     }
 
     // Copy shims
     let src_shims = tmp.path().join("envr-bundle").join("runtime_root").join("shims");
     if src_shims.is_dir() {
         let dst = runtime_root.join("shims");
-        if let Err(e) = copy_dir_merge(&src_shims, &dst) {
-            return common::print_envr_error(g, e);
-        }
+        copy_dir_merge(&src_shims, &dst)?;
     }
 
     // Restore global current pointers based on manifest (cross-platform safe).
-    if let Some(m) = manifest {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&m) {
-            if let Some(list) = v.get("global_current").and_then(|x| x.as_array()) {
-                if let Ok(svc) = RuntimeService::with_runtime_root(runtime_root.clone()) {
+    // `runtime_root` may come from `--runtime-root` (not the process default): must not use
+    // `CliRuntimeSession::connect` / `common::runtime_service` here.
+    if let Some(m) = manifest
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&m)
+            && let Some(list) = v.get("global_current").and_then(|x| x.as_array())
+                && let Ok(svc) = RuntimeService::with_runtime_root(runtime_root.clone()) {
                     for item in list {
                         let kind_str = item.get(0).and_then(|x| x.as_str()).unwrap_or("");
                         let ver = item.get(1).and_then(|x| x.as_str()).unwrap_or("");
@@ -317,21 +280,19 @@ fn apply(
                         }
                     }
                 }
-            }
-        }
-    }
 
     let data = serde_json::json!({
         "runtime_root": runtime_root.to_string_lossy(),
         "index_cache_dir": index_cache_dir.to_string_lossy(),
     });
-    output::emit_ok(g, "bundle_applied", data, || {
+    Ok(output::emit_ok(g, "bundle_applied", data, || {
         if !g.quiet {
             println!("{}", runtime_root.display());
         }
-    })
+    }))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_bundle_zip(
     zip_path: &Path,
     runtime_root: &Path,
@@ -401,11 +362,10 @@ fn write_bundle_zip(
     }
 
     // Index cache (offline indexes)
-    if let Some(idx) = index_cache_dir {
-        if idx.is_dir() {
+    if let Some(idx) = index_cache_dir
+        && idx.is_dir() {
             add_dir_to_zip(&mut zip, opts, idx, "envr-bundle/index_cache/indexes")?;
         }
-    }
 
     // Shims (optional)
     if include_shims {
@@ -478,6 +438,11 @@ fn add_dir_to_zip(
     rec(zip, opts, src_dir, src_dir, dest_prefix)
 }
 
+#[inline]
+fn bundle_zip_entry_name_unsafe(name: &str) -> bool {
+    name.contains("..") || name.starts_with('/') || name.contains('\\')
+}
+
 fn extract_bundle_zip(zip_path: &Path, dest: &Path) -> Result<(), EnvrError> {
     let file = File::open(zip_path).map_err(EnvrError::from)?;
     let mut zip = ZipArchive::new(file)
@@ -487,7 +452,7 @@ fn extract_bundle_zip(zip_path: &Path, dest: &Path) -> Result<(), EnvrError> {
             .by_index(i)
             .map_err(|e| EnvrError::Runtime(format!("read zip entry: {e}")))?;
         let name = f.name().to_string();
-        if name.contains("..") || name.starts_with('/') || name.contains('\\') {
+        if bundle_zip_entry_name_unsafe(&name) {
             return Err(EnvrError::Validation(format!("unsafe zip entry: {name}")));
         }
         let out_path = dest.join(&name);
@@ -523,5 +488,33 @@ fn copy_dir_merge(src: &Path, dst: &Path) -> EnvrResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod bundle_zip_path_proptests {
+    use super::bundle_zip_entry_name_unsafe;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn entry_with_dotdot_segment_is_unsafe(a in "[a-z0-9/]{0,12}", b in "[a-z0-9/]{0,12}") {
+            let name = format!("{a}..{b}");
+            prop_assert!(bundle_zip_entry_name_unsafe(&name));
+        }
+
+        #[test]
+        fn entry_with_leading_slash_is_unsafe(tail in "[a-z0-9._-]{0,20}") {
+            let name = format!("/{tail}");
+            prop_assert!(bundle_zip_entry_name_unsafe(&name));
+        }
+
+        #[test]
+        fn plain_segment_without_dotdot_or_slash_or_backslash_is_safe(
+            s in "[a-z0-9._-]{1,32}"
+        ) {
+            prop_assume!(!s.contains(".."));
+            prop_assert!(!bundle_zip_entry_name_unsafe(&s));
+        }
+    }
 }
 

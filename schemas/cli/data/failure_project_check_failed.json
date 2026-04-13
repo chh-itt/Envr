@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_project_check_failed.json",
+  "title": "envr check failure envelope.data (code: project_check_failed)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["config_dir", "issues"],
+  "properties": {
+    "config_dir": { "type": "string" },
+    "issues": { "type": "array", "items": { "type": "string" } }
+  }
+}

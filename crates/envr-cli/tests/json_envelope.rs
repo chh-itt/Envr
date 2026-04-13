@@ -36,6 +36,29 @@ fn json_stdout(args: &[&str], root: &std::path::Path) -> Value {
     parse_json_line(&out.stdout)
 }
 
+fn write_node_layout(runtime_root: &std::path::Path, version: &str) {
+    use std::fs;
+    let ver = runtime_root.join("runtimes/node/versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("bin");
+    #[cfg(windows)]
+    fs::write(bin.join("node.exe"), []).expect("node.exe");
+    #[cfg(not(windows))]
+    fs::write(bin.join("node"), []).expect("node");
+}
+
+fn narrow_path_for_envr_process() -> String {
+    #[cfg(windows)]
+    {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
+        format!("{root}\\System32;{root}")
+    }
+    #[cfg(not(windows))]
+    {
+        "/usr/bin:/bin".to_string()
+    }
+}
+
 fn assert_envelope_shape(v: &Value) {
     assert_eq!(
         v.get("schema_version"),
@@ -211,6 +234,98 @@ fn validation_error_json_has_code() {
 }
 
 #[test]
+fn current_invalid_runtime_json_validation_envelope() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .args(["--format", "json", "current", "not-a-lang"])
+        .output()
+        .expect("run");
+    assert!(!out.status.success());
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], false);
+    assert_eq!(v["code"], "validation");
+}
+
+#[test]
+fn quiet_validation_json_message_is_bracket_tag_only() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .args(["--quiet", "--format", "json", "which"])
+        .output()
+        .expect("run");
+    assert!(!out.status.success());
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["success"], false);
+    assert_eq!(v["code"], "validation");
+    assert_eq!(v["message"], "[E_VALIDATION]");
+    assert!(v["diagnostics"].as_array().is_some_and(|a| a.is_empty()));
+}
+
+#[test]
+fn exec_dry_run_json_envelope_message_dry_run() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "20.10.0");
+    std::fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"20.10.0\"\n",
+    )
+    .expect("envr.toml");
+
+    let args: &[&str] = if cfg!(windows) {
+        &[
+            "--format",
+            "json",
+            "exec",
+            "--lang",
+            "node",
+            "--dry-run",
+            "cmd",
+            "/c",
+            "echo",
+            "x",
+        ]
+    } else {
+        &[
+            "--format",
+            "json",
+            "exec",
+            "--lang",
+            "node",
+            "--dry-run",
+            "true",
+        ]
+    };
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .env("PATH", narrow_path_for_envr_process())
+        .args(args)
+        .output()
+        .expect("exec dry-run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["message"], "dry_run");
+    assert!(v["data"]["env"].is_object());
+    assert!(v["data"]["command"].is_string());
+}
+
+#[test]
 fn template_json_contract() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let tpl = tmp.path().join("x.tpl");
@@ -240,12 +355,34 @@ fn update_json_contract() {
 #[test]
 fn run_json_child_includes_install_metadata() {
     let tmp = tempfile::tempdir().expect("tempdir");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "20.10.0");
+    std::fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"20.10.0\"\n",
+    )
+    .expect("envr.toml");
     let args: Vec<&str> = if cfg!(windows) {
         vec!["--format", "json", "run", "cmd", "/c", "echo", "ok"]
     } else {
         vec!["--format", "json", "run", "sh", "-c", "echo ok"]
     };
-    let v = json_stdout(&args, tmp.path());
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .env("PATH", narrow_path_for_envr_process())
+        .args(&args)
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
     assert_envelope_shape(&v);
     assert_eq!(v["message"], "child_completed");
     let d = &v["data"];

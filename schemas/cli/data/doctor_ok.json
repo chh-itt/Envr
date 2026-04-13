@@ -1,7 +1,159 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://envr.dev/schemas/cli/data/doctor_ok.json",
-  "title": "envr doctor --format json data (message: doctor_ok)",
+  "title": "envr doctor --format json → envelope.data (message: doctor_ok)",
+  "description": "Same payload shape as doctor_issues failures; v2 uses kinds[].current_version (not current). Mirrors docs/schemas/data-doctor-v2.schema.json plus onboarding_checklist and optional --fix / --fix-path fields.",
   "type": "object",
-  "additionalProperties": true
+  "additionalProperties": true,
+  "required": [
+    "runtime_root",
+    "envr_runtime_root_env",
+    "kinds",
+    "issues",
+    "warnings",
+    "notes",
+    "recommendations",
+    "onboarding_checklist",
+    "path_shadowing",
+    "path_conflicts",
+    "path_analysis",
+    "findings",
+    "shims_dir_writable"
+  ],
+  "properties": {
+    "runtime_root": { "type": "string" },
+    "envr_runtime_root_env": {
+      "oneOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "installed_count", "current_version"],
+        "additionalProperties": true,
+        "properties": {
+          "kind": { "type": "string" },
+          "installed_count": { "type": "integer", "minimum": 0 },
+          "current_version": {
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "onboarding_checklist": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "string" }
+    },
+    "path_shadowing": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "tool",
+            "executable",
+            "first_path_directory",
+            "shims_directory"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "tool": { "type": "string" },
+            "executable": { "type": "string" },
+            "first_path_directory": { "type": "string" },
+            "shims_directory": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "path_conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "executable",
+          "first_path_directory",
+          "shims_directory"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "tool": { "type": "string" },
+          "executable": { "type": "string" },
+          "first_path_directory": { "type": "string" },
+          "shims_directory": { "type": "string" }
+        }
+      }
+    },
+    "path_analysis": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "path_directory_order",
+            "shims_path_index",
+            "shims_directory"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "path_directory_order": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "shims_path_index": {
+              "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+            },
+            "shims_directory": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "additionalProperties": true,
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"]
+          },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "shims_dir_writable": {
+      "oneOf": [{ "type": "boolean" }, { "type": "null" }]
+    },
+    "fixes_applied": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Present only when doctor is run with --fix."
+    },
+    "path_fix_suggestions": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Present when doctor is run with --fix-path and PATH needs attention."
+    }
+  }
 }

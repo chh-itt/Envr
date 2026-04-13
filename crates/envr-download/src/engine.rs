@@ -18,6 +18,20 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
+/// Default TCP connect timeout for [`DownloadEngine::default_client`] (each single request can still set its own total timeout via [`DownloadOptions::timeout`]).
+pub const DEFAULT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn http_connect_timeout_from_env() -> Duration {
+    const MAX_SECS: u64 = 600;
+    match std::env::var("ENVR_HTTP_CONNECT_TIMEOUT_SECS") {
+        Ok(s) => match s.trim().parse::<u64>() {
+            Ok(n) if (1..=MAX_SECS).contains(&n) => Duration::from_secs(n),
+            _ => DEFAULT_HTTP_CONNECT_TIMEOUT,
+        },
+        Err(_) => DEFAULT_HTTP_CONNECT_TIMEOUT,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DownloadOptions {
     pub timeout: Duration,
@@ -53,6 +67,7 @@ impl DownloadEngine {
     pub fn default_client() -> EnvrResult<Client> {
         Client::builder()
             .user_agent("envr/0.1")
+            .connect_timeout(http_connect_timeout_from_env())
             .build()
             .map_err(|e| EnvrError::Download(format!("reqwest client build failed: {e}")))
     }
@@ -62,6 +77,7 @@ impl DownloadEngine {
     /// `progress_total` is set from `Content-Length` when present (full file size ≈ resume + remainder).
     ///
     /// Optional `on_progress` is throttled (≈200ms or 256KiB) and invoked with current `(downloaded, total)`.
+    #[allow(clippy::too_many_arguments)]
     pub async fn download_to_file(
         &self,
         url: Url,
@@ -285,6 +301,11 @@ mod tests {
     #[test]
     fn default_client_can_be_built() {
         let _ = DownloadEngine::default_client().expect("client");
+    }
+
+    #[test]
+    fn default_http_connect_timeout_is_thirty_seconds() {
+        assert_eq!(DEFAULT_HTTP_CONNECT_TIMEOUT, Duration::from_secs(30));
     }
 
     #[test]

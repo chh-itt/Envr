@@ -1,10 +1,11 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::{GlobalArgs, OutputFormat, ProjectPathProfileArgs};
+use crate::CliPathProfile;
 use crate::commands::child_env;
-use crate::commands::common;
+use crate::CommandOutcome;
 use crate::commands::env_overrides;
 use crate::output;
 
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
@@ -42,36 +43,32 @@ fn render_template(input: &str, vars: &HashMap<String, String>) -> String {
 pub fn run(
     g: &GlobalArgs,
     file: PathBuf,
-    path: PathBuf,
-    profile: Option<String>,
+    project: ProjectPathProfileArgs,
     env_files: Vec<PathBuf>,
     env_pairs: Vec<String>,
 ) -> i32 {
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(run_inner(g, file, project, env_files, env_pairs)).finish(g)
+}
 
-    let mut vars = match child_env::collect_run_env_for_template(&ctx) {
-        Ok(m) => m,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    if let Err(e) = env_overrides::apply_env_overrides(&mut vars, &env_files, &env_pairs) {
-        return common::print_envr_error(g, e);
-    }
+fn run_inner(
+    g: &GlobalArgs,
+    file: PathBuf,
+    project: ProjectPathProfileArgs,
+    env_files: Vec<PathBuf>,
+    env_pairs: Vec<String>,
+) -> EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let mut vars =
+        child_env::collect_run_env_for_template(&session.ctx, session.project_config())?;
+    env_overrides::apply_env_overrides(&mut vars, &env_files, &env_pairs)?;
 
-    let raw = match fs::read_to_string(&file) {
-        Ok(s) => s,
-        Err(e) => {
-            return common::print_envr_error(
-                g,
-                EnvrError::Io(std::io::Error::new(
-                    e.kind(),
-                    format!("{}: {e}", file.display()),
-                )),
-            );
-        }
-    };
+    let raw = fs::read_to_string(&file).map_err(|e| {
+        EnvrError::Io(std::io::Error::new(
+            e.kind(),
+            format!("{}: {e}", file.display()),
+        ))
+    })?;
     let rendered = render_template(&raw, &vars);
     let file_s = file.display().to_string();
     let data = json!({
@@ -79,15 +76,16 @@ pub fn run(
         "rendered": rendered,
     });
 
-    match g.output_format.unwrap_or(OutputFormat::Text) {
+    match g.effective_output_format() {
         OutputFormat::Json => {
             output::write_envelope(true, None, "template_rendered", data, &[]);
+            Ok(0)
         }
         OutputFormat::Text => {
             print!("{rendered}");
+            Ok(0)
         }
     }
-    0
 }
 
 #[cfg(test)]

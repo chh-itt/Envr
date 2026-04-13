@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/project_synced.json",
+  "title": "envr project sync --format json → envelope.data (message: project_synced)",
+  "type": "object",
+  "additionalProperties": true
+}

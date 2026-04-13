@@ -1,12 +1,14 @@
 use crate::cli::GlobalArgs;
 use crate::commands::cli_install_progress;
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{
     RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind,
 };
+use envr_error::EnvrResult;
 
 pub fn run(
     g: &GlobalArgs,
@@ -14,10 +16,16 @@ pub fn run(
     runtime: String,
     runtime_version: String,
 ) -> i32 {
-    let kind = match parse_runtime_kind(runtime.trim()) {
-        Ok(k) => k,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(run_inner(g, service, runtime, runtime_version)).finish(g)
+}
+
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: String,
+    runtime_version: String,
+) -> EnvrResult<i32> {
+    let kind = parse_runtime_kind(runtime.trim())?;
 
     let rv = runtime_version.trim().to_string();
     let headline = fmt_template(
@@ -32,14 +40,11 @@ pub fn run(
         ],
     );
     let spec = VersionSpec(rv);
-    let (request, guard) =
-        cli_install_progress::install_request_with_progress(g, spec, headline);
+    let (request, guard) = cli_install_progress::install_request_with_progress(g, spec, headline);
     let res = service.install(kind, &request);
     guard.finish();
-    match res {
-        Ok(v) => print_success(g, kind, &v),
-        Err(e) => common::print_envr_error(g, e),
-    }
+    let v = res?;
+    Ok(print_success(g, kind, &v))
 }
 
 fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {

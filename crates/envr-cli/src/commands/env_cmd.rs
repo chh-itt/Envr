@@ -1,11 +1,11 @@
-use crate::cli::EnvShellKind;
-use crate::cli::GlobalArgs;
+use crate::cli::{EnvShellKind, GlobalArgs, ProjectPathProfileArgs};
+use crate::CliPathProfile;
 use crate::commands::child_env;
-use crate::commands::common;
+use crate::CommandOutcome;
 use crate::output;
 
+use envr_error::EnvrResult;
 use serde_json::{Map, Value, json};
-use std::path::PathBuf;
 
 fn posix_shell_quote(val: &str) -> String {
     format!("'{}'", val.replace('\'', "'\\''"))
@@ -25,16 +25,18 @@ fn emit_pair(shell: EnvShellKind, key: &str, val: &str) {
     }
 }
 
-pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>, shell: EnvShellKind) -> i32 {
-    let ctx = match common::shim_context_for(path, profile) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+pub fn run(g: &GlobalArgs, project: ProjectPathProfileArgs, shell: EnvShellKind) -> i32 {
+    CommandOutcome::from_result(run_inner(g, project, shell)).finish(g)
+}
 
-    let env_map = match child_env::collect_run_env(&ctx, false) {
-        Ok(m) => m,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+fn run_inner(
+    g: &GlobalArgs,
+    project: ProjectPathProfileArgs,
+    shell: EnvShellKind,
+) -> EnvrResult<i32> {
+    let ProjectPathProfileArgs { path, profile } = project;
+    let session = CliPathProfile::new(path, profile).load_project()?;
+    let env_map = child_env::collect_run_env(&session.ctx, false, session.project_config())?;
 
     let mut keys: Vec<_> = env_map.keys().cloned().collect();
     keys.sort();
@@ -56,7 +58,7 @@ pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>, shell: EnvShe
         "shell": shell_str,
         "vars": vars,
     });
-    output::emit_ok(g, "project_env", data, || {
+    Ok(output::emit_ok(g, "project_env", data, || {
         if !g.quiet {
             for k in &keys {
                 if let Some(v) = env_map.get(k) {
@@ -64,5 +66,5 @@ pub fn run(g: &GlobalArgs, path: PathBuf, profile: Option<String>, shell: EnvShe
                 }
             }
         }
-    })
+    }))
 }

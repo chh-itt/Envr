@@ -44,10 +44,10 @@ pub fn system_prefers_dark_cached() -> bool {
         .lock()
         .expect("theme scheme cache lock");
 
-    if let Some(prev) = g.last_check {
-        if now.duration_since(prev) < Duration::from_millis(900) {
-            return g.prefers_dark;
-        }
+    if let Some(prev) = g.last_check
+        && now.duration_since(prev) < Duration::from_millis(900)
+    {
+        return g.prefers_dark;
     }
 
     let v = detect_system_prefers_dark();

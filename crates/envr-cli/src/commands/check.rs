@@ -1,37 +1,33 @@
 use crate::cli::{GlobalArgs, OutputFormat};
+use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
+use crate::CliPathProfile;
 
-use envr_config::project_config::load_project_config;
 use envr_domain::runtime::parse_runtime_kind;
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
 pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
-    let loaded = match load_project_config(&path) {
-        Ok(l) => l,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-    let Some((cfg, loc)) = loaded else {
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.err.no_project_config",
-                    "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
-                    "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
-                ),
-                &[("path", &path.display().to_string())],
-            )),
-        );
+    CommandOutcome::from_result(run_inner(g, path)).finish(g)
+}
+
+fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+    let session = CliPathProfile::new(path, None).load_project()?;
+    let Some((cfg, loc)) = session.project.as_ref() else {
+        return Err(EnvrError::Validation(fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.err.no_project_config",
+                "自 {path} 向上未找到 `.envr.toml` 或 `.envr.local.toml`",
+                "no `.envr.toml` or `.envr.local.toml` found searching upward from {path}",
+            ),
+            &[("path", &session.ctx.working_dir.display().to_string())],
+        )));
     };
 
-    let runtime_root = match common::session_runtime_root() {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let runtime_root = common::session_runtime_root()?;
 
     let mut problems = Vec::new();
     for (key, rt) in &cfg.runtimes {
@@ -65,13 +61,12 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
             "issues": problems,
         });
         let code = output::emit_failure_envelope(g, "project_check_failed", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
-        {
+        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text) {
             for p in &problems {
                 eprintln!("envr:   - {p}");
             }
         }
-        return code;
+        return Ok(code);
     }
 
     let data = serde_json::json!({
@@ -80,7 +75,7 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
         "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "pinned_runtimes": cfg.runtimes.len(),
     });
-    output::emit_ok(g, "project_config_ok", data, || {
+    Ok(output::emit_ok(g, "project_config_ok", data, || {
         if !g.quiet {
             println!(
                 "{}",
@@ -94,5 +89,5 @@ pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
                 )
             );
         }
-    })
+    }))
 }

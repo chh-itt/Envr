@@ -352,7 +352,6 @@ impl RustManager {
             let installed = t.ends_with("(installed)");
             let name = t
                 .trim_end_matches("(installed)")
-                .trim()
                 .split_whitespace()
                 .next()
                 .unwrap_or("")
@@ -425,7 +424,6 @@ impl RustManager {
             let installed = t.ends_with("(installed)");
             let name = t
                 .trim_end_matches("(installed)")
-                .trim()
                 .split_whitespace()
                 .next()
                 .unwrap_or("")

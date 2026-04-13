@@ -19,19 +19,18 @@ use crate::view::env_center::RustStatus;
 use envr_config::settings::resolve_runtime_root;
 use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_managed};
 
+type RefreshRuntimesOk = (
+    Vec<RuntimeVersion>,
+    Option<RuntimeVersion>,
+    Option<bool>,
+);
+
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
             .spawn_blocking(
-                move || -> Result<
-                    (
-                        Vec<RuntimeVersion>,
-                        Option<RuntimeVersion>,
-                        Option<bool>,
-                    ),
-                    String,
-                > {
+                move || -> Result<RefreshRuntimesOk, String> {
                     let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
                     let installed = svc
                         .list_installed(kind)

@@ -1,10 +1,11 @@
 use crate::cli::{GlobalArgs, OutputFormat};
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind};
-use envr_error::EnvrError;
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::io::{self, IsTerminal, Write};
 
@@ -17,26 +18,36 @@ pub fn run(
     force: bool,
     yes: bool,
 ) -> i32 {
-    let kind = match parse_runtime_kind(runtime.trim()) {
-        Ok(k) => k,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    CommandOutcome::from_result(run_inner(
+        g,
+        service,
+        runtime,
+        runtime_version,
+        dry_run,
+        force,
+        yes,
+    ))
+    .finish(g)
+}
 
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: String,
+    runtime_version: String,
+    dry_run: bool,
+    force: bool,
+    yes: bool,
+) -> EnvrResult<i32> {
+    let kind = parse_runtime_kind(runtime.trim())?;
     let version = RuntimeVersion(runtime_version);
 
-    let current = match service.current(kind) {
-        Ok(c) => c,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-
+    let current = service.current(kind)?;
     let is_active = current
         .as_ref()
         .is_some_and(|c| c.0 == version.0);
 
-    let (paths, external) = match service.uninstall_dry_run_targets(kind, &version) {
-        Ok(p) => p,
-        Err(e) => return common::print_envr_error(g, e),
-    };
+    let (paths, external) = service.uninstall_dry_run_targets(kind, &version)?;
 
     if dry_run {
         let would_refuse = is_active && !force;
@@ -65,17 +76,24 @@ pub fn run(
                     ("version", &version.0),
                 ],
             );
-            if matches!(g.output_format.unwrap_or(OutputFormat::Text), OutputFormat::Text)
+            if matches!(g.effective_output_format(), OutputFormat::Text)
                 && !g.quiet
             {
                 print_dry_run_text(g, &paths, external.as_deref());
             }
-            return output::emit_failure_envelope(g, "validation", &refuse_msg, data, &[], 1);
+            return Ok(output::emit_failure_envelope(
+                g,
+                "validation",
+                &refuse_msg,
+                data,
+                &[],
+                1,
+            ));
         }
 
-        return output::emit_ok(g, &msg, data, || {
+        return Ok(output::emit_ok(g, &msg, data, || {
             print_dry_run_text(g, &paths, external.as_deref());
-        });
+        }));
     }
 
     if is_active && !force {
@@ -91,26 +109,23 @@ pub fn run(
                 ("version", &version.0),
             ],
         );
-        return common::print_envr_error(
-            g,
-            EnvrError::Validation(msg),
-        );
+        return Err(EnvrError::Validation(msg));
     }
 
     if !yes {
-        if matches!(g.output_format, Some(OutputFormat::Json)) {
-            return output::emit_validation(
+        if matches!(g.effective_output_format(), OutputFormat::Json) {
+            return Ok(output::emit_validation(
                 g,
                 "uninstall",
                 "envr uninstall --yes node 20.0.0",
-            );
+            ));
         }
         if !io::stdin().is_terminal() {
-            return output::emit_validation(
+            return Ok(output::emit_validation(
                 g,
                 "uninstall",
                 "envr uninstall --yes node 20.0.0",
-            );
+            ));
         }
         let prompt = fmt_template(
             &envr_core::i18n::tr_key(
@@ -128,14 +143,14 @@ pub fn run(
         let mut line = String::new();
         if io::stdin().read_line(&mut line).is_err() {
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
-            return output::emit_failure_envelope(
+            return Ok(output::emit_failure_envelope(
                 g,
                 "aborted",
                 &aborted,
                 json!(null),
                 &[],
                 1,
-            );
+            ));
         }
         let ok = matches!(
             line.trim().to_ascii_lowercase().as_str(),
@@ -143,14 +158,14 @@ pub fn run(
         );
         if !ok {
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
-            return output::emit_failure_envelope(
+            return Ok(output::emit_failure_envelope(
                 g,
                 "aborted",
                 &aborted,
                 json!(null),
                 &[],
                 1,
-            );
+            ));
         }
     }
 
@@ -169,10 +184,8 @@ pub fn run(
         let _ = writeln!(io::stderr(), "{msg}");
     }
 
-    match service.uninstall(kind, &version) {
-        Ok(()) => print_success(g, kind, &version),
-        Err(e) => common::print_envr_error(g, e),
-    }
+    service.uninstall(kind, &version)?;
+    Ok(print_success(g, kind, &version))
 }
 
 fn print_dry_run_text(

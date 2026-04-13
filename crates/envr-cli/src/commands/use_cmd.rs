@@ -1,9 +1,11 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::{self, kind_label};
+use crate::CommandOutcome;
+use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
+use envr_error::EnvrResult;
 
 pub fn run(
     g: &GlobalArgs,
@@ -11,24 +13,30 @@ pub fn run(
     runtime: String,
     runtime_version: String,
 ) -> i32 {
-    let kind = match parse_runtime_kind(runtime.trim()) {
-        Ok(k) => k,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-
-    let spec = VersionSpec(runtime_version.clone());
-    let resolved = match service.resolve(kind, &spec) {
-        Ok(r) => r,
-        Err(e) => return common::print_envr_error(g, e),
-    };
-
-    match service.set_current(kind, &resolved.version) {
-        Ok(()) => print_success(g, kind, &resolved.version),
-        Err(e) => common::print_envr_error(g, enrich_not_installed_error(e, kind, &resolved.version.0)),
-    }
+    CommandOutcome::from_result(run_inner(g, service, runtime, runtime_version)).finish(g)
 }
 
-fn enrich_not_installed_error(err: envr_error::EnvrError, kind: RuntimeKind, version: &str) -> envr_error::EnvrError {
+fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    runtime: String,
+    runtime_version: String,
+) -> EnvrResult<i32> {
+    let kind = parse_runtime_kind(runtime.trim())?;
+
+    let spec = VersionSpec(runtime_version.clone());
+    let resolved = service.resolve(kind, &spec)?;
+    service
+        .set_current(kind, &resolved.version)
+        .map_err(|e| enrich_not_installed_error(e, kind, &resolved.version.0))?;
+    Ok(print_success(g, kind, &resolved.version))
+}
+
+fn enrich_not_installed_error(
+    err: envr_error::EnvrError,
+    kind: RuntimeKind,
+    version: &str,
+) -> envr_error::EnvrError {
     let msg = err.to_string().to_ascii_lowercase();
     if msg.contains("not installed") {
         return envr_error::EnvrError::Validation(fmt_template(
