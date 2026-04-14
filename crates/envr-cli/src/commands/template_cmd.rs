@@ -1,7 +1,6 @@
 use crate::cli::{GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 use crate::CliPathProfile;
 use crate::commands::child_env;
-use crate::CommandOutcome;
 use crate::commands::env_overrides;
 use crate::output;
 
@@ -40,17 +39,8 @@ fn render_template(input: &str, vars: &HashMap<String, String>) -> String {
     out
 }
 
-pub fn run(
-    g: &GlobalArgs,
-    file: PathBuf,
-    project: ProjectPathProfileArgs,
-    env_files: Vec<PathBuf>,
-    env_pairs: Vec<String>,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, file, project, env_files, env_pairs)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     file: PathBuf,
     project: ProjectPathProfileArgs,

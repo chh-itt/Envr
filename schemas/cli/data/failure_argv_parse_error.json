@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_argv_parse_error.json",
+  "title": "argv parse error envelope.data (code: argv_parse_error)",
+  "anyOf": [
+    { "type": "null" },
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source", "kind", "error", "exit_code"],
+      "properties": {
+        "source": { "type": "string", "const": "clap" },
+        "kind": { "type": "string" },
+        "error": { "type": "string" },
+        "exit_code": { "type": "integer", "minimum": 1 }
+      }
+    }
+  ]
+}

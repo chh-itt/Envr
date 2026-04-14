@@ -1,7 +1,6 @@
 //! `envr status` — project + active runtime summary.
 
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
-use crate::CommandOutcome;
 use crate::commands::project_status::{
     build_project_status_from_loaded, format_prompt_segment, status_to_json,
 };
@@ -10,11 +9,8 @@ use crate::CliPathProfile;
 
 use envr_error::EnvrResult;
 use serde_json::json;
-pub fn run(g: &GlobalArgs, project: ProjectPathProfileArgs) -> i32 {
-    CommandOutcome::from_result(run_inner(g, project)).finish(g)
-}
-
-fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
@@ -147,12 +143,8 @@ fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32>
     }))
 }
 
-/// `envr hook prompt` — one line for PS1 (plain text); JSON envelope when `--format json`.
-pub fn run_hook_prompt(g: &GlobalArgs, project: ProjectPathProfileArgs) -> i32 {
-    CommandOutcome::from_result(run_hook_prompt_inner(g, project)).finish(g)
-}
-
-fn run_hook_prompt_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_hook_prompt_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;

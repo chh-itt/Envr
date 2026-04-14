@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::PROJECT_CONFIG_FILE;
@@ -191,17 +190,8 @@ fn interactive_toml() -> EnvrResult<String> {
     Ok(out)
 }
 
-pub fn run(
-    g: &GlobalArgs,
-    path: PathBuf,
-    force: bool,
-    full: bool,
-    interactive: bool,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, path, force, full, interactive)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     path: PathBuf,
     force: bool,

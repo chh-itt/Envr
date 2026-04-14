@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::{
@@ -11,11 +10,8 @@ use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 
-pub fn import_run(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> i32 {
-    CommandOutcome::from_result(import_run_inner(g, file, path)).finish(g)
-}
-
-fn import_run_inner(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn import_run_inner(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> EnvrResult<i32> {
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -60,11 +56,8 @@ fn import_run_inner(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> EnvrResult<
     }))
 }
 
-pub fn export_run(g: &GlobalArgs, path: PathBuf, output: Option<PathBuf>) -> i32 {
-    CommandOutcome::from_result(export_run_inner(g, path, output)).finish(g)
-}
-
-fn export_run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn export_run_inner(
     g: &GlobalArgs,
     path: PathBuf,
     output: Option<PathBuf>,

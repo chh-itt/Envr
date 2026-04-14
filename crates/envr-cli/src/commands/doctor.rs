@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common::{self, kind_label};
 use crate::commands::shim_cmd;
 use crate::output::{self, fmt_template};
@@ -1079,17 +1078,8 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
     }
 }
 
-pub fn run(
-    g: &GlobalArgs,
-    service: &RuntimeService,
-    fix: bool,
-    fix_path: bool,
-    fix_path_apply: bool,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, service, fix, fix_path, fix_path_apply)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     fix: bool,

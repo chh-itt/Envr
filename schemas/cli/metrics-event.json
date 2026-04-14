@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "envr CLI metrics event",
+  "type": "object",
+  "required": [
+    "phase",
+    "output_mode",
+    "success",
+    "exit_code",
+    "error_code"
+  ],
+  "properties": {
+    "phase": {
+      "type": "string",
+      "enum": [
+        "parse",
+        "dispatch",
+        "finish"
+      ]
+    },
+    "output_mode": {
+      "type": "string",
+      "enum": [
+        "text",
+        "json"
+      ]
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "error_code": {
+      "type": "string",
+      "description": "Stable error code token on failure; empty string on success."
+    },
+    "command": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "elapsed_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "quiet": {
+      "type": "boolean"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "parse"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "quiet"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "dispatch"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "command",
+          "elapsed_ms"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
@@ -19,11 +18,8 @@ const ALL_KINDS: [RuntimeKind; 8] = [
     RuntimeKind::Bun,
 ];
 
-pub fn run(g: &GlobalArgs, service: &RuntimeService, runtime: Option<String>) -> i32 {
-    CommandOutcome::from_result(run_inner(g, service, runtime)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     runtime: Option<String>,

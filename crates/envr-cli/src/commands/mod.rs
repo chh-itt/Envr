@@ -15,6 +15,11 @@ mod debug_cmd;
 mod deactivate_cmd;
 mod diagnostics;
 mod dispatch;
+mod dispatch_non_runtime;
+mod dispatch_runtime;
+mod dispatch_runtime_installation;
+mod dispatch_runtime_misc;
+mod dispatch_runtime_project;
 mod doctor;
 mod dry_run_env;
 mod env_cmd;
@@ -44,6 +49,6 @@ mod use_cmd;
 mod which;
 mod why_cmd;
 
-pub fn dispatch(cli: crate::cli::Cli) -> crate::CommandOutcome {
+pub fn dispatch(cli: crate::cli::Cli) -> (crate::CommandOutcome, crate::cli::GlobalArgs) {
     dispatch::dispatch(cli)
 }

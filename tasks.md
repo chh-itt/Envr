@@ -370,7 +370,7 @@
   - **描述**：建立命令入口和统一输出选择器。
   - **依赖**：T015
   - **输入文档**：`refactor docs/02-cli-设计.md`
-  - **输出文件**：`crates/envr-cli/src/cli.rs`
+  - **输出文件**：`crates/envr-cli/src/cli/`（`mod.rs`、`command/`、`global.rs`、`metadata.rs`）
   - **验收**：`envr --help` 完整可读。
   - **进度**：done
   - **实现记录**：

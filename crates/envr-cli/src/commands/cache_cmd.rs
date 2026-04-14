@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output;
 
@@ -8,18 +7,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-pub fn clean(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn clean_inner(
     g: &GlobalArgs,
     kind: Option<String>,
     all: bool,
     older_than: Option<String>,
     newer_than: Option<String>,
     dry_run: bool,
-) -> i32 {
-    CommandOutcome::from_result(clean_inner(g, kind, all, older_than, newer_than, dry_run)).finish(g)
+) -> EnvrResult<i32> {
+    clean_impl(g, kind, all, older_than, newer_than, dry_run)
 }
 
-fn clean_inner(
+fn clean_impl(
     g: &GlobalArgs,
     kind: Option<String>,
     all: bool,
@@ -513,14 +513,14 @@ fn dir_is_empty(path: &Path) -> EnvrResult<bool> {
         .is_none())
 }
 
-pub fn index(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> i32 {
-    CommandOutcome::from_result(match sub {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn index_inner(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> EnvrResult<i32> {
+    match sub {
         crate::cli::CacheIndexCmd::Sync { runtime, all, dir } => {
             index_sync_inner(g, runtime, all, dir)
         }
         crate::cli::CacheIndexCmd::Status { dir } => index_status_inner(g, dir),
-    })
-    .finish(g)
+    }
 }
 
 fn index_cache_dir(dir_override: Option<PathBuf>) -> Result<PathBuf, EnvrError> {

@@ -1,8 +1,7 @@
 //! `envr rust …` — helpers that bypass the generic `RuntimeService` install path.
 
-use crate::cli::{GlobalArgs, RustCmd};
+use crate::cli::GlobalArgs;
 use crate::commands::cli_install_progress;
-use crate::CommandOutcome;
 use crate::output;
 
 use envr_config::settings::resolve_runtime_root;
@@ -10,13 +9,8 @@ use envr_domain::runtime::VersionSpec;
 use envr_error::EnvrResult;
 use envr_runtime_rust::{RustChannel, install_rustup_managed};
 
-pub fn run(g: &GlobalArgs, sub: RustCmd) -> i32 {
-    match sub {
-        RustCmd::InstallManaged => CommandOutcome::from_result(install_managed_inner(g)).finish(g),
-    }
-}
-
-fn install_managed_inner(g: &GlobalArgs) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn install_managed_inner(g: &GlobalArgs) -> EnvrResult<i32> {
     let root = resolve_runtime_root()?;
     let headline = envr_core::i18n::tr_key(
         "cli.rust.install_managed.downloading",

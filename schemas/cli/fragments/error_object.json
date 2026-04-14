@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/fragments/error_object.json",
+  "title": "shared structured error object fragment",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["code", "message", "diagnostics_len"],
+  "properties": {
+    "code": { "type": "string" },
+    "kind": {
+      "type": "string",
+      "enum": ["validation", "runtime", "io", "network", "config", "platform", "unknown"]
+    },
+    "message": { "type": "string" },
+    "diagnostics_len": { "type": "integer", "minimum": 0 },
+    "source_chain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

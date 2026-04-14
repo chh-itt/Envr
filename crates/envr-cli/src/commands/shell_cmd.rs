@@ -3,7 +3,6 @@
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::CliPathProfile;
 use crate::commands::child_env;
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_error::EnvrResult;
@@ -12,11 +11,8 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub fn run(g: &GlobalArgs, project: ProjectPathProfileArgs, shell: Option<PathBuf>) -> i32 {
-    CommandOutcome::from_result(run_inner(g, project, shell)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     project: ProjectPathProfileArgs,
     shell: Option<PathBuf>,

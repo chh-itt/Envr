@@ -1,0 +1,29 @@
+{
+  "default": "unknown",
+  "kinds": [
+    "validation",
+    "runtime",
+    "io",
+    "network",
+    "config",
+    "platform",
+    "unknown"
+  ],
+  "map": {
+    "validation": "validation",
+    "argv_parse_error": "validation",
+    "project_check_failed": "validation",
+    "project_validate_failed": "validation",
+    "io": "io",
+    "diagnostics_export_failed": "io",
+    "download": "network",
+    "mirror": "network",
+    "runtime": "runtime",
+    "child_exit": "runtime",
+    "shell_exit": "runtime",
+    "aborted": "runtime",
+    "config": "config",
+    "project_sync_pending": "config",
+    "platform": "platform"
+  }
+}

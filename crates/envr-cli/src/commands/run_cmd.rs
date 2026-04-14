@@ -2,88 +2,15 @@ use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
 use crate::run_context::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
-use crate::CommandOutcome;
 use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
-use crate::output::{self, fmt_template};
+use crate::output;
+use crate::output::fmt_template;
 
-use envr_config::project_config::{ProjectConfig, RustEnforceMode};
+use envr_config::project_config::ProjectConfig;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
-use std::collections::HashMap;
-use std::process::Command;
-
-fn parse_rust_channel_from_toolchain(toolchain: &str) -> Option<String> {
-    let t = toolchain.trim();
-    if t.is_empty() {
-        return None;
-    }
-    let first = t.split_whitespace().next().unwrap_or("").trim();
-    let chan = first
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    match chan.as_str() {
-        "stable" | "beta" | "nightly" => Some(chan),
-        _ => None,
-    }
-}
-
-fn rustc_version_from_output(out: &str) -> Option<String> {
-    let s = out.trim();
-    let mut it = s.split_whitespace();
-    let _ = it.next()?; // "rustc"
-    let v = it.next()?.trim();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v.to_string())
-    }
-}
-
-fn emit_dry_run_run(
-    g: &GlobalArgs,
-    env_map: &HashMap<String, String>,
-    command: &str,
-    args: &[String],
-) -> i32 {
-    let mut keys: Vec<_> = env_map.keys().cloned().collect();
-    keys.sort();
-    let mut env_obj = serde_json::Map::new();
-    for k in &keys {
-        if let Some(v) = env_map.get(k) {
-            env_obj.insert(k.clone(), json!(v));
-        }
-    }
-    let data = json!({
-        "command": command,
-        "args": args,
-        "env": env_obj,
-    });
-    output::emit_ok(g, "dry_run", data, || {
-        if !g.quiet {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.dry_run.would_run",
-                    "将执行：",
-                    "Would run:",
-                )
-            );
-            println!("  {} {}", command, shell_words_join(args));
-            println!();
-            for k in &keys {
-                if let Some(v) = env_map.get(k) {
-                    println!("{k}={v}");
-                }
-            }
-        }
-    })
-}
-
 fn escape_windows_cmd_token(arg: &str) -> String {
     if arg.is_empty() {
         return "\"\"".to_string();
@@ -301,114 +228,8 @@ fn script_shell_invocation(script: &str, tail_args: &[String]) -> (String, Vec<S
     )
 }
 
-fn shell_words_join(args: &[String]) -> String {
-    args.iter()
-        .map(|a| {
-            if a.contains(char::is_whitespace) {
-                format!("{a:?}")
-            } else {
-                a.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn enforce_rust_constraints(
-    env_map: &std::collections::HashMap<String, String>,
-    cfg: &envr_config::project_config::ProjectConfig,
-    working_dir: &std::path::Path,
-) -> EnvrResult<()> {
-    let Some(r) = cfg.runtimes.get("rust") else {
-        return Ok(());
-    };
-    let want_channel = r
-        .channel
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    let want_prefix = r
-        .version_prefix
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    if want_channel.is_none() && want_prefix.is_none() {
-        return Ok(());
-    }
-    let mode = r.enforce.unwrap_or(RustEnforceMode::Warn);
-
-    let current_channel = (|| -> Option<String> {
-        let o = Command::new("rustup")
-            .args(["show", "active-toolchain"])
-            .env_clear()
-            .envs(env_map)
-            .current_dir(working_dir)
-            .output()
-            .ok()?;
-        if !o.status.success() {
-            return None;
-        }
-        let s = String::from_utf8_lossy(&o.stdout);
-        parse_rust_channel_from_toolchain(&s)
-    })();
-
-    let current_rustc = (|| -> Option<String> {
-        let o = Command::new("rustc")
-            .arg("-V")
-            .env_clear()
-            .envs(env_map)
-            .current_dir(working_dir)
-            .output()
-            .ok()?;
-        if !o.status.success() {
-            return None;
-        }
-        let s = String::from_utf8_lossy(&o.stdout);
-        rustc_version_from_output(&s)
-    })();
-
-    let mut problems = Vec::new();
-    if let Some(want) = want_channel
-        && current_channel.as_deref() != Some(&want.to_ascii_lowercase()) {
-            problems.push(format!(
-                "rust channel mismatch: want {want}, got {}",
-                current_channel.as_deref().unwrap_or("(unknown)")
-            ));
-        }
-    if let Some(pref) = want_prefix
-        && !current_rustc
-            .as_deref()
-            .is_some_and(|v| v.starts_with(pref))
-        {
-            problems.push(format!(
-                "rustc version mismatch: want prefix {pref}, got {}",
-                current_rustc.as_deref().unwrap_or("(unknown)")
-            ));
-        }
-    if problems.is_empty() {
-        return Ok(());
-    }
-
-    let msg = format!("Rust constraints not satisfied: {}", problems.join("; "));
-    match mode {
-        RustEnforceMode::Warn => {
-            eprintln!("envr: warning: {msg}");
-            Ok(())
-        }
-        RustEnforceMode::Error => Err(EnvrError::Validation(msg)),
-    }
-}
-
-pub fn run(
-    g: &GlobalArgs,
-    shared: ExecRunSharedArgs,
-    command: String,
-    args: Vec<String>,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, shared, command, args)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     shared: ExecRunSharedArgs,
     command: String,
@@ -489,20 +310,11 @@ fn run_inner(
         resolve_run_command(&command, &args, proj_loaded.as_ref().map(|(c, _)| c));
     maybe_emit_run_script_miss_hint(g, &command, pc, ran_as_script);
 
-    if verbose && !g.quiet && text_out
-        && let Ok(lines) = child_env::collect_run_verbose_lines(ctx, install_if_missing, pc) {
-            for line in lines {
-                let msg = fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.run.verbose_using",
-                        "Using {detail}",
-                        "Using {detail}",
-                    ),
-                    &[("detail", &line)],
-                );
-                eprintln!("envr: {msg}");
-            }
-        }
+    if verbose
+        && let Ok(lines) = child_env::collect_run_verbose_lines(ctx, install_if_missing, pc)
+    {
+        crate::commands::common::emit_verbose_lines(g, text_out, &lines, "cli.run.verbose_using");
+    }
 
     if dry_run_diff {
         let parent = dry_run_env::parent_env_snapshot();
@@ -511,20 +323,17 @@ fn run_inner(
         ));
     }
     if dry_run {
-        return Ok(emit_dry_run_run(g, &env_map, &exe, &exe_args));
+        return Ok(dry_run_env::emit_dry_run_snapshot(
+            g, &env_map, &exe, &exe_args,
+        ));
     }
 
     if let Some((cfg, _loc)) = proj_loaded {
-        enforce_rust_constraints(&env_map, cfg, &ctx.working_dir)?;
+        crate::commands::common::enforce_rust_constraints(&env_map, cfg, &ctx.working_dir)?;
     }
 
-    let mut child = Command::new(&exe);
-    child.args(&exe_args);
-    child.env_clear();
-    for (k, v) in &env_map {
-        child.env(k, v);
-    }
-    child.current_dir(&ctx.working_dir);
+    let mut child =
+        crate::commands::common::build_child_command(&exe, &exe_args, &env_map, &ctx.working_dir);
 
     let status = child.status().map_err(EnvrError::from)?;
     let exit = status.code().unwrap_or(1);
@@ -543,17 +352,5 @@ fn run_inner(
         "env_files": env_file_s,
         "env_overrides": env_pairs,
     });
-    Ok(if exit == 0 {
-        output::emit_ok(g, "child_completed", data, || {})
-    } else {
-        let msg = fmt_template(
-            &envr_core::i18n::tr_key(
-                "cli.child.exit_nonzero",
-                "子进程退出，代码 {exit}",
-                "child process exited with code {exit}",
-            ),
-            &[("exit", &exit.to_string())],
-        );
-        output::emit_failure_envelope(g, "child_exit", &msg, data, &[], exit)
-    })
+    Ok(crate::commands::common::emit_child_process_outcome(g, data, exit))
 }

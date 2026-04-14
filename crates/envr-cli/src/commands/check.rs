@@ -1,5 +1,4 @@
 use crate::cli::{GlobalArgs, OutputFormat};
-use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
@@ -10,11 +9,8 @@ use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
-pub fn run(g: &GlobalArgs, path: PathBuf) -> i32 {
-    CommandOutcome::from_result(run_inner(g, path)).finish(g)
-}
-
-fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let Some((cfg, loc)) = session.project.as_ref() else {
         return Err(EnvrError::Validation(fmt_template(

@@ -13,7 +13,9 @@ Human-readable default text output is not a stability target for parsers.
 
 ### CLI argument parse errors (before dispatch)
 
-If the process **exits while parsing argv** (unknown flag, missing required argument, invalid value type, etc.), **clap** prints a **human-oriented** help or error message to **stderr** and exits with a **non-zero** status. That path is **not** wrapped in the JSON envelope: there is **no** guarantee of a JSON line on stdout (stdout may be empty). Integrators and CI that always pass `--format json` should still treat **exit code + stderr** as the contract for parse failures, or pre-validate arguments before calling `envr`.
+- **Default behavior:** if the process **exits while parsing argv** (unknown flag, missing required argument, invalid value type, etc.), **clap** prints a **human-oriented** help or error message to **stderr** and exits with a **non-zero** status.
+- **When JSON is explicitly requested:** if `--format json` is present (or a supported legacy JSON shorthand such as `doctor --json`), `envr` emits a **single JSON envelope line on stdout** with `success: false` and stable `code: "argv_parse_error"`.
+  - `data` shape: `{ "source": "clap", "kind": "<clap ErrorKind>", "error": "<rendered parse error>", "exit_code": <int> }`.
 
 ## Precedence
 
@@ -23,8 +25,8 @@ If both flags are provided, JSON mode wins:
 
 ### Effective output format (implementation note)
 
-- Global default is **text** when `--format` is omitted ([`GlobalArgs::effective_output_format`](../../crates/envr-cli/src/cli.rs)).
-- **`doctor --json`** is treated like **`--format json` for that process**: it affects handler output and sets **`ENVR_OUTPUT_FORMAT=json`** the same way as the global flag (see [`Cli::resolved_output_format`](../../crates/envr-cli/src/cli.rs), [`apply_global`](../../crates/envr-cli/src/cli.rs)). If both `--format text` and `doctor --json` appear, the legacy `--json` shorthand wins for resolution.
+- Global default is **text** when `--format` is omitted ([`GlobalArgs::effective_output_format`](../../crates/envr-cli/src/cli/global.rs)).
+- Subcommand-local JSON shorthands (today: **`doctor --json`**) are listed in **`Command::legacy_json_shorthand`** in [`command/mod.rs`](../../crates/envr-cli/src/cli/command/mod.rs); [`Cli::resolved_output_format`](../../crates/envr-cli/src/cli/mod.rs) and [`apply_global`](../../crates/envr-cli/src/cli/mod.rs) use it so **`ENVR_OUTPUT_FORMAT`** and handler output stay aligned. If both `--format text` and `doctor --json` appear, the legacy `--json` shorthand wins for resolution.
 
 ## Output mode matrix (automation)
 
@@ -41,7 +43,29 @@ If both flags are provided, JSON mode wins:
 
 - The `envr` binary attaches a `tracing` console layer to **stderr** and a rolling file under `ENVR_LOG_DIR` or `<cwd>/.envr/logs`.
 - **`RUST_LOG`** (e.g. `info`, `debug`) therefore only affects **stderr**, so **stdout** stays a single JSON line (or porcelain lines) for automation. Regression: `crates/envr-cli/tests/json_stdout_with_rust_log.rs`.
-- Each dispatched subcommand runs under span **`envr.cli.command`** with field **`command`** = stable snake_case (see [`Command::trace_name`](../../crates/envr-cli/src/cli.rs) / `cli::command_trace_tests`).
+- Each dispatched subcommand runs under span **`envr.cli.command`** with field **`command`** = stable snake_case (see [`Command::trace_name`](../../crates/envr-cli/src/cli/command/mod.rs) / `cli::command_trace_tests`).
+- CLI metrics on target **`envr_cli_metrics`** include phase-level events:
+  - `phase=parse`: fields include `output_mode`, `quiet`, `success`, `exit_code`, `error_code`. Parse metrics are buffered during argv parsing and flushed after logging init; parse-failure early exits do a best-effort logging init + flush before process exit.
+  - `phase=dispatch`: fields include `command`, `output_mode`, `success`, `exit_code`, `error_code`, `elapsed_ms`.
+  - `phase=finish`: fields include `output_mode`, `success`, `exit_code`, `error_code`.
+- Machine-readable schema: [`schemas/cli/metrics-event.json`](../../schemas/cli/metrics-event.json). Regression test: `crates/envr-cli/tests/metrics_contract.rs`.
+- Metrics payload policy:
+  - `output_mode` uses stable lowercase tokens: `text` / `json`.
+  - `error_code` is a stable snake_case token on failures; on success it is an empty string (`""`), not `null`.
+  - For command paths that finish as `Done(non-zero)` without a typed `EnvrError`, metrics use fallback token `nonzero_exit`.
+- Metrics field dictionary (auditable):
+<!-- METRICS_FIELDS_TABLE_START -->
+| field | type | required | phases | allowed values / null policy |
+|-------|------|----------|--------|-------------------------------|
+| `phase` | string | yes | all | `parse` \| `dispatch` \| `finish` |
+| `output_mode` | string | yes | all | `text` \| `json` |
+| `success` | boolean | yes | all | `true` \| `false` |
+| `exit_code` | integer | yes | all | process exit code |
+| `error_code` | string | yes | all | snake_case token on failure; success uses empty string `""` |
+| `quiet` | boolean | yes | parse | omitted on non-`parse` phases |
+| `command` | string | yes | dispatch | snake_case `Command::trace_name`; omitted on non-`dispatch` phases |
+| `elapsed_ms` | integer >= 0 | yes | dispatch | non-negative elapsed milliseconds; omitted on non-`dispatch` phases |
+<!-- METRICS_FIELDS_TABLE_END -->
 - User-visible CLI failures routed through `emit_envr_error` also emit a **`tracing::error!`** event on target **`envr_cli`** with structured fields `cli_error_kind`, `cli_error_exit_code`, `cli_error_diagnostics_len` (message text stays on stderr / JSON envelope as before).
 
 ## HTTP timeouts (reqwest-based downloads)
@@ -223,9 +247,49 @@ Not part of the CLI JSON envelope; documented here because it affects automation
 - In **text** mode, errors on stderr use a single unified line: `envr: [E_<CODE>] <message>`, where `<CODE>` is the JSON `code` token in uppercase with underscores (for example `validation` → `[E_VALIDATION]`). This matches searchable codes in logs while JSON output keeps the original snake_case `code` field.
 - Process exit code remains non-zero on failure.
 
+#### Exit code mapping (stable policy)
+
+`envr` maps error classes to process exit codes with a centralized table in [`output::exit_code_for_error_code`](../../crates/envr-cli/src/output.rs):
+
+| Error class (`code`) | Exit code |
+|----------------------|-----------|
+| `io`, `download`, `mirror` | `2` |
+| `unknown`, `config`, `validation`, `runtime`, `platform` | `1` |
+
+This table applies to failures routed through [`emit_envr_error`](../../crates/envr-cli/src/output.rs) and is regression-tested in `output.rs`.
+
 #### Selected non-null failure `data` shapes (`code` → schema)
 
 These use the same envelope as other failures (`success: false`, string `code`). Repository mirrors for machine checks live under `schemas/cli/data/` where noted.
+
+#### Failure `data` tier policy (P33)
+
+To keep automation stable while allowing forward evolution, failure codes are grouped into tiers:
+
+- **Tier0 (strongly typed)**: `data` is a non-null object with a stable minimal required field set (schema has non-empty `required`).
+- **Tier1 (loose object)**: `data` is an object but fields may be best-effort / additive (schema may have empty `required`).
+- **Tier2 (nullable)**: `data` may be `null` (schema `type` includes `"null"`); scripts must not rely on `data` being present.
+
+Regression: `crates/envr-cli/tests/failure_data_tiers_contract.rs`.
+Machine-readable source of truth: `schemas/cli/governance-index.json` (`failure_tiers`).
+Index schema: `schemas/cli/governance-index.schema.json`.
+Capability-driven Phase A coverage scope is also indexed in `schemas/cli/governance-index.json` (`capability_test_rows`).
+
+<!-- FAILURE_DATA_TIERS_START -->
+Tier0 (strongly typed): `argv_parse_error`, `child_exit`, `project_check_failed`, `project_validate_failed`, `diagnostics_export_failed`
+
+Tier1 (loose object): `project_sync_pending`, `shell_exit`, `aborted`
+
+Tier2 (nullable): `validation`
+<!-- FAILURE_DATA_TIERS_END -->
+
+Shared fragment for structured error object (used by selected Tier0 failures):
+`schemas/cli/fragments/error_object.json` (`data.error` with `code`, optional `kind`, `message`, `diagnostics_len`, optional `source_chain[]`).
+When present, `kind` uses stable coarse categories: `validation` / `runtime` / `io` / `network` / `config` / `platform` / `unknown`.
+Single source for `code -> kind` mapping: `schemas/cli/error-kind-map.json` (consumed by Rust output layer and schema fragment gate).
+Mapping schema: `schemas/cli/error-kind-map.schema.json`.
+Consistency check: `python scripts/check_cli_schema_fragments.py`.
+Tier0 note: `argv_parse_error` is an explicit exception because `data.error` is already used as clap-rendered string payload.
 
 | `code` | When | `data` schema (repo mirror or doc) |
 |--------|------|-------------------------------------|
@@ -258,3 +322,7 @@ Scripts should treat unknown keys inside `data` as forward-compatible.
 - Existing envelope top-level keys will not be removed without a **`schema_version`** bump.
 - Breaking changes to a **specific** success `message`’s `data` shape: bump that command’s **`data-*-vN`** schema revision (see [schemas README](../schemas/README.md)); bump the envelope **`schema_version`** only if the outer envelope contract changes.
 - Porcelain line formats above are treated as stable and must remain backward compatible.
+
+## Migration notes
+
+- Add a line prefixed with `Migration note:` whenever a PR introduces a breaking JSON schema contract change.

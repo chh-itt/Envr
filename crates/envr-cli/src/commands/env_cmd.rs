@@ -1,7 +1,6 @@
 use crate::cli::{EnvShellKind, GlobalArgs, ProjectPathProfileArgs};
 use crate::CliPathProfile;
 use crate::commands::child_env;
-use crate::CommandOutcome;
 use crate::output;
 
 use envr_error::EnvrResult;
@@ -25,11 +24,8 @@ fn emit_pair(shell: EnvShellKind, key: &str, val: &str) {
     }
 }
 
-pub fn run(g: &GlobalArgs, project: ProjectPathProfileArgs, shell: EnvShellKind) -> i32 {
-    CommandOutcome::from_result(run_inner(g, project, shell)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     project: ProjectPathProfileArgs,
     shell: EnvShellKind,

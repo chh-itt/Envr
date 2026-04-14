@@ -1,5 +1,4 @@
 use crate::cli::{GlobalArgs, OutputFormat};
-use crate::CommandOutcome;
 use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
@@ -9,28 +8,8 @@ use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::io::{self, IsTerminal, Write};
 
-pub fn run(
-    g: &GlobalArgs,
-    service: &RuntimeService,
-    runtime: String,
-    runtime_version: String,
-    dry_run: bool,
-    force: bool,
-    yes: bool,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(
-        g,
-        service,
-        runtime,
-        runtime_version,
-        dry_run,
-        force,
-        yes,
-    ))
-    .finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     runtime: String,

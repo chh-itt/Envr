@@ -2,7 +2,6 @@ use crate::cli::{GlobalArgs, OutputFormat, ProjectCmd};
 use crate::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
-use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
@@ -19,17 +18,12 @@ use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
-pub fn run(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> i32 {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> EnvrResult<i32> {
     match cmd {
-        ProjectCmd::Add { spec, path } => {
-            CommandOutcome::from_result(add_inner(g, spec, path)).finish(g)
-        }
-        ProjectCmd::Sync { path, install } => {
-            CommandOutcome::from_result(sync_inner(g, service, path, install)).finish(g)
-        }
-        ProjectCmd::Validate { path, check_remote } => {
-            CommandOutcome::from_result(validate_inner(g, service, path, check_remote)).finish(g)
-        }
+        ProjectCmd::Add { spec, path } => add_inner(g, spec, path),
+        ProjectCmd::Sync { path, install } => sync_inner(g, service, path, install),
+        ProjectCmd::Validate { path, check_remote } => validate_inner(g, service, path, check_remote),
     }
 }
 

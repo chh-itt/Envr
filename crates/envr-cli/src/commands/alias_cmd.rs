@@ -1,18 +1,14 @@
 //! `envr alias` — persist name → target strings in `config/aliases.toml`.
 
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::aliases::AliasesFile;
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
 
-pub fn run(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> i32 {
-    CommandOutcome::from_result(run_inner(g, sub)).finish(g)
-}
-
-fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult<i32> {
     let paths = current_platform_paths()?;
     let path = AliasesFile::path_from(&paths);
 

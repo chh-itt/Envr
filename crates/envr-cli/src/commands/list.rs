@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common::{kind_label, session_runtime_root};
 use crate::output::{self, fmt_template};
 
@@ -231,16 +230,8 @@ fn format_version_text_line(
     format!("  {mark} {ver_display}{tags}")
 }
 
-pub fn run(
-    g: &GlobalArgs,
-    service: &RuntimeService,
-    runtime: Option<String>,
-    outdated: bool,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, service, runtime, outdated)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     runtime: Option<String>,

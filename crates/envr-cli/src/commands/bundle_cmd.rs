@@ -1,7 +1,6 @@
 //! `envr bundle` — portable offline bundle create/apply.
 
 use crate::cli::{BundleCmd, GlobalArgs};
-use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output;
 
@@ -20,8 +19,9 @@ use zip::write::FileOptions;
 use zip::ZipArchive;
 use zip::ZipWriter;
 
-pub fn run(g: &GlobalArgs, cmd: BundleCmd) -> i32 {
-    CommandOutcome::from_result(match cmd {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, cmd: BundleCmd) -> EnvrResult<i32> {
+    match cmd {
         BundleCmd::Create {
             output,
             path,
@@ -45,8 +45,7 @@ pub fn run(g: &GlobalArgs, cmd: BundleCmd) -> i32 {
             runtime_root,
             index_cache_dir,
         } => apply_inner(g, file, runtime_root, index_cache_dir),
-    })
-    .finish(g)
+    }
 }
 
 fn default_bundle_zip_path() -> PathBuf {

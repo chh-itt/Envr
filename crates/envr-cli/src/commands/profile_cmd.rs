@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::load_project_config_disk_only;
@@ -7,11 +6,8 @@ use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::path::PathBuf;
 
-pub fn list(g: &GlobalArgs, path: PathBuf) -> i32 {
-    CommandOutcome::from_result(list_inner(g, path)).finish(g)
-}
-
-fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(
@@ -53,11 +49,8 @@ fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
     }))
 }
 
-pub fn show(g: &GlobalArgs, path: PathBuf, name: String) -> i32 {
-    CommandOutcome::from_result(show_inner(g, path, name)).finish(g)
-}
-
-fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrResult<i32> {
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(

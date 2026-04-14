@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_child_exit.json",
+  "title": "child process non-zero envelope.data (code: child_exit)",
+  "anyOf": [
+    { "type": "null" },
+    {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "exit_code",
+        "command",
+        "args",
+        "install_if_missing",
+        "dry_run",
+        "verbose",
+        "auto_installed",
+        "env_files",
+        "env_overrides"
+      ],
+      "properties": {
+        "exit_code": { "type": "integer", "minimum": 1 },
+        "command": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "lang": { "type": "string" },
+        "install_if_missing": { "type": "boolean" },
+        "dry_run": { "type": "boolean", "const": false },
+        "verbose": { "type": "boolean" },
+        "auto_installed": { "type": "array" },
+        "env_files": { "type": "array", "items": { "type": "string" } },
+        "env_overrides": { "type": "array", "items": { "type": "string" } },
+        "output_file": { "type": ["string", "null"] },
+        "error": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["code", "message", "diagnostics_len"],
+          "properties": {
+            "code": { "type": "string" },
+            "kind": {
+              "type": "string",
+              "enum": ["validation", "runtime", "io", "network", "config", "platform", "unknown"]
+            },
+            "message": { "type": "string" },
+            "diagnostics_len": { "type": "integer", "minimum": 0 },
+            "source_chain": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["message"],
+                "properties": {
+                  "message": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

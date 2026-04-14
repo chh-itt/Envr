@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
@@ -84,16 +83,8 @@ fn format_remote_node_line(g: &GlobalArgs, row: &NodeRemoteRow) -> String {
     format!("  {}{tags}", row.version)
 }
 
-pub fn run(
-    g: &GlobalArgs,
-    service: &RuntimeService,
-    runtime: Option<String>,
-    prefix: Option<String>,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, service, runtime, prefix)).finish(g)
-}
-
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     runtime: Option<String>,

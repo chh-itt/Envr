@@ -1,0 +1,491 @@
+{
+  "report_version": 1,
+  "commands": [
+    {
+      "key": "AliasAdd",
+      "trace_name": "alias_add",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "AliasList",
+      "trace_name": "alias_list",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "AliasRemove",
+      "trace_name": "alias_remove",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "BundleApply",
+      "trace_name": "bundle_apply",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "BundleCreate",
+      "trace_name": "bundle_create",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "CacheClean",
+      "trace_name": "cache_clean",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "CacheIndexStatus",
+      "trace_name": "cache_index_status",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "CacheIndexSync",
+      "trace_name": "cache_index_sync",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Check",
+      "trace_name": "check",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Completion",
+      "trace_name": "completion",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "none"
+    },
+    {
+      "key": "ConfigEdit",
+      "trace_name": "config_edit",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigGet",
+      "trace_name": "config_get",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigKeys",
+      "trace_name": "config_keys",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigPath",
+      "trace_name": "config_path",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigSchema",
+      "trace_name": "config_schema",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigSet",
+      "trace_name": "config_set",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigShow",
+      "trace_name": "config_show",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ConfigValidate",
+      "trace_name": "config_validate",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Current",
+      "trace_name": "current",
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "both"
+    },
+    {
+      "key": "Deactivate",
+      "trace_name": "deactivate",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "DebugInfo",
+      "trace_name": "debug_info",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "DiagnosticsExport",
+      "trace_name": "diagnostics_export",
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Doctor",
+      "trace_name": "doctor",
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Env",
+      "trace_name": "env",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Exec",
+      "trace_name": "exec",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Export",
+      "trace_name": "export",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "HelpShortcuts",
+      "trace_name": "help_shortcuts",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "none"
+    },
+    {
+      "key": "HookBash",
+      "trace_name": "hook_bash",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "HookKeys",
+      "trace_name": "hook_keys",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "HookPrompt",
+      "trace_name": "hook_prompt",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "HookZsh",
+      "trace_name": "hook_zsh",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Import",
+      "trace_name": "import",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Init",
+      "trace_name": "init",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Install",
+      "trace_name": "install",
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "List",
+      "trace_name": "list",
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "both"
+    },
+    {
+      "key": "ProfileList",
+      "trace_name": "profile_list",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ProfileShow",
+      "trace_name": "profile_show",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ProjectAdd",
+      "trace_name": "project_add",
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ProjectSync",
+      "trace_name": "project_sync",
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ProjectValidate",
+      "trace_name": "project_validate",
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Prune",
+      "trace_name": "prune",
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Remote",
+      "trace_name": "remote",
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Resolve",
+      "trace_name": "resolve",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "both"
+    },
+    {
+      "key": "Run",
+      "trace_name": "run",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "RustInstallManaged",
+      "trace_name": "rust_install_managed",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Shell",
+      "trace_name": "shell",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "ShimSync",
+      "trace_name": "shim_sync",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Status",
+      "trace_name": "status",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Template",
+      "trace_name": "template",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Uninstall",
+      "trace_name": "uninstall",
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Update",
+      "trace_name": "update",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Use",
+      "trace_name": "use",
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "may_network": true,
+      "offline_safe": false,
+      "contract_surface": "json"
+    },
+    {
+      "key": "Which",
+      "trace_name": "which",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "both"
+    },
+    {
+      "key": "Why",
+      "trace_name": "why",
+      "runtime_required": false,
+      "runtime_group": null,
+      "may_network": false,
+      "offline_safe": true,
+      "contract_surface": "json"
+    }
+  ]
+}

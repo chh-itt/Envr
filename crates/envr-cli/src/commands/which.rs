@@ -1,5 +1,4 @@
 use crate::cli::GlobalArgs;
-use crate::CommandOutcome;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
@@ -10,11 +9,8 @@ use envr_shim_core::{
     resolve_core_shim_command, which_runtime_detail,
 };
 
-pub fn run(g: &GlobalArgs, name: Option<String>) -> i32 {
-    CommandOutcome::from_result(run_inner(g, name)).finish(g)
-}
-
-fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<i32> {
     let Some(name) = name else {
         return Ok(common::missing_positional(g, "which", "envr which node"));
     };

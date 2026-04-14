@@ -92,6 +92,46 @@ pub fn shell_words_join(args: &[String]) -> String {
         .join(" ")
 }
 
+pub fn emit_dry_run_snapshot(
+    g: &GlobalArgs,
+    env_map: &HashMap<String, String>,
+    command: &str,
+    args: &[String],
+) -> i32 {
+    let mut keys: Vec<_> = env_map.keys().cloned().collect();
+    keys.sort();
+    let mut env_obj = serde_json::Map::new();
+    for k in &keys {
+        if let Some(v) = env_map.get(k) {
+            env_obj.insert(k.clone(), json!(v));
+        }
+    }
+    let data = json!({
+        "command": command,
+        "args": args,
+        "env": env_obj,
+    });
+    output::emit_ok(g, "dry_run", data, || {
+        if !g.quiet {
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.dry_run.would_run",
+                    "将执行：",
+                    "Would run:",
+                )
+            );
+            println!("  {} {}", command, shell_words_join(args));
+            println!();
+            for k in &keys {
+                if let Some(v) = env_map.get(k) {
+                    println!("{k}={v}");
+                }
+            }
+        }
+    })
+}
+
 pub fn emit_dry_run_diff(
     g: &GlobalArgs,
     parent: &HashMap<String, String>,

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/governance-index.schema.json",
+  "title": "cli governance index contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "$id",
+    "version",
+    "failure_tiers",
+    "porcelain_matrix_rows",
+    "offline_coverage_rows",
+    "capability_test_rows"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "$id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "failure_tiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier0", "tier1", "tier2"],
+      "properties": {
+        "tier0": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$" },
+          "uniqueItems": true
+        },
+        "tier1": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$" },
+          "uniqueItems": true
+        },
+        "tier2": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "porcelain_matrix_rows": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["row_key", "porcelain_expected"],
+        "properties": {
+          "row_key": { "type": "string", "minLength": 1 },
+          "porcelain_expected": { "type": "boolean" }
+        }
+      }
+    },
+    "offline_coverage_rows": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["row_key", "network_skip_allowed"],
+        "properties": {
+          "row_key": { "type": "string", "minLength": 1 },
+          "network_skip_allowed": { "type": "boolean" }
+        }
+      }
+    },
+    "offline_coverage_exempt": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "owner", "due", "exit_criteria"],
+        "properties": {
+          "reason": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string", "minLength": 1 },
+          "due": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "exit_criteria": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "capability_test_rows": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase_a_row_key", "json_ok_required", "porcelain_required"],
+        "properties": {
+          "phase_a_row_key": { "type": "string", "minLength": 1 },
+          "json_ok_required": { "type": "boolean" },
+          "porcelain_required": { "type": "boolean" }
+        }
+      }
+    },
+    "capability_test_exempt": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "owner", "due", "exit_criteria"],
+        "properties": {
+          "reason": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string", "minLength": 1 },
+          "due": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "exit_criteria": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

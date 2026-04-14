@@ -1,7 +1,6 @@
 //! `envr debug` — quick introspection for bug reports.
 
-use crate::cli::{DebugCmd, GlobalArgs};
-use crate::CommandOutcome;
+use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output;
 
@@ -23,13 +22,8 @@ fn summarize_dir(path: &std::path::Path, max_entries: usize) -> Vec<String> {
     names
 }
 
-pub fn run(g: &GlobalArgs, sub: DebugCmd) -> i32 {
-    match sub {
-        DebugCmd::Info => CommandOutcome::from_result(info_inner(g)).finish(g),
-    }
-}
-
-fn info_inner(g: &GlobalArgs) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<i32> {
     let mut envr_vars: Vec<(String, String)> = std::env::vars()
         .filter(|(k, _)| k.starts_with("ENVR_"))
         .collect();

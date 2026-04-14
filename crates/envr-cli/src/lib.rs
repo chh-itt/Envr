@@ -1,6 +1,21 @@
 //! Library surface for `envr` CLI logic (binary stays a thin `main` + logging bootstrap).
 //!
 //! Downstream tests and tools can depend on this crate without linking the full binary.
+//!
+//! # API stability (semver)
+//!
+//! Treat as **stable** for embedding and follow semver when changing:
+//!
+//! | Area | Symbols |
+//! |------|---------|
+//! | Process entry | [`bootstrap_i18n`], [`run_cli_with_logging`] |
+//! | Parsed argv / globals | [`cli::Cli`], [`cli::GlobalArgs`], [`cli::apply_global`], [`cli::run`], [`commands::dispatch`] → `(CommandOutcome, GlobalArgs)` |
+//! | Command results | [`CommandOutcome`], [`finish_cli_cmd`] |
+//! | Runtime / project helpers | [`CliRuntimeSession`], [`CliPathProfile`], [`CliProjectContext`], [`RunExecContext`] |
+//!
+//! The [`commands`] module is a **large, mostly internal** handler surface: prefer the items above.
+//! New subcommands can land under `commands` without a major version if stable entry types and JSON
+//! contracts are unchanged; changing [`cli::Cli`] shape or documented output contracts is **breaking**.
 
 pub mod cli;
 pub mod cli_help;
@@ -52,6 +67,22 @@ pub fn run_cli_with_logging(cli: cli::Cli, debug_enabled: bool) -> i32 {
         }
     };
 
+    cli::emit_pending_parse_metrics();
     tracing::info!(debug_enabled, "envr-cli started");
     cli::run(cli)
+}
+
+/// Best-effort flush of parse-phase metrics when argv parsing failed before normal CLI run.
+///
+/// This initializes logging with default options, emits pending parse metrics if present,
+/// and ignores logging-init failures so process exit behavior remains unchanged.
+pub fn flush_parse_metrics_on_early_exit() {
+    if let Ok(_guard) = envr_core::logging::init_logging_with(
+        "envr-cli",
+        envr_core::logging::LoggingInitOptions {
+            log_to_stderr: true,
+        },
+    ) {
+        cli::emit_pending_parse_metrics();
+    }
 }

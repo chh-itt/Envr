@@ -1,21 +1,13 @@
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
-use crate::CommandOutcome;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
 
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
-pub fn run(
-    g: &GlobalArgs,
-    lang: String,
-    spec: Option<String>,
-    project: ProjectPathProfileArgs,
-) -> i32 {
-    CommandOutcome::from_result(run_inner(g, lang, spec, project)).finish(g)
-}
 
-fn run_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(
     g: &GlobalArgs,
     lang: String,
     spec: Option<String>,

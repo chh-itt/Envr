@@ -1,7 +1,6 @@
 //! `envr diagnostics export` — zip bundle for bug reports (doctor JSON, system/env summary, recent logs).
 
-use crate::cli::{DiagnosticsCmd, GlobalArgs};
-use crate::CommandOutcome;
+use crate::cli::GlobalArgs;
 use crate::commands::doctor::{self, DoctorReport};
 use crate::output;
 
@@ -20,15 +19,8 @@ use zip::write::FileOptions;
 const MAX_LOG_FILES: usize = 8;
 const MAX_LOG_BYTES_PER_FILE: usize = 512 * 1024;
 
-pub fn run(g: &GlobalArgs, service: &RuntimeService, cmd: DiagnosticsCmd) -> i32 {
-    match cmd {
-        DiagnosticsCmd::Export { output } => {
-            CommandOutcome::from_result(export_zip_inner(g, service, output)).finish(g)
-        }
-    }
-}
-
-fn export_zip_inner(
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn export_zip_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     output: Option<PathBuf>,

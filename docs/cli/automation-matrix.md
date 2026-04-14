@@ -14,17 +14,21 @@ This matrix is the **maintainer checklist** for script-facing behavior. It compl
 
 When adding or materially changing a subcommand that scripts might drive (`--format json` and/or `--porcelain`):
 
-1. Add or update a stable entry in [`Command::trace_name`](../../crates/envr-cli/src/cli.rs) and keep `cli::command_trace_tests` passing.
+1. Add or update a stable entry in [`Command::trace_name`](../../crates/envr-cli/src/cli/command/mod.rs) (registry in [`metadata.rs`](../../crates/envr-cli/src/cli/metadata.rs)) and keep `cli::command_trace_tests` passing.
 2. Add a row (or extend notes) in this matrix under **Matrix** / **Phase A coverage map**.
 3. For each new success `emit_ok` / `write_envelope` **`message`** id, add `schemas/cli/data/<message>.json` (enforced by `json_emit_ok_message_schema_files`).
 4. Extend or add an integration test in `json_schema_contract`, `json_envelope`, and/or `automation_matrix` for the JSON and porcelain paths you claim.
 5. Document porcelain line shapes or JSON `data` fields in [output-contract.md](./output-contract.md) if they are stability targets.
 
+6. If the command adds a **`--json`** (or equivalent) shorthand: extend [`Command::legacy_json_shorthand`](../../crates/envr-cli/src/cli/command/mod.rs), wire [`cloned_with_legacy_json`](../../crates/envr-cli/src/cli/global.rs) in dispatch/handler, and add a `cli` module test in [`mod.rs`](../../crates/envr-cli/src/cli/mod.rs) (see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
+
 **JSON parsing:** rely on `success`, `schema_version`, `code` (failures), success `message` as a stable id, and typed **`data`** per schema — not on localized failure `message` text (see [output-contract § JSON envelope](./output-contract.md#json-envelope-contract)).
 
 ## Parse errors (clap)
 
-If the user invokes `envr` with **invalid flags or missing required positional arguments**, **clap** prints a usage/error message to **stderr** and a non-zero exit code. That path is **not** guaranteed to emit the JSON envelope. Automation should pass valid argv; integration tests focus on **post-parse** dispatch paths.
+If the user invokes `envr` with **invalid flags or missing required positional arguments**, default clap behavior prints a usage/error message to **stderr** with non-zero exit.
+
+When JSON is explicitly requested (`--format json`, or supported legacy shorthand such as `doctor --json`), `envr` emits a JSON failure envelope on stdout with `code = "argv_parse_error"`; see `argv_parse_json.rs` and [output-contract.md](./output-contract.md).
 
 ## Matrix (high-traffic commands)
 
@@ -54,9 +58,28 @@ If the user invokes `envr` with **invalid flags or missing required positional a
 
 ## Regression tests
 
-- **Command result pipeline (Phase C):** [`CommandOutcome`](../../crates/envr-cli/src/command_outcome.rs) on all `EnvrResult<i32>` handlers; optional one-liner [`finish_cli_cmd`](../../crates/envr-cli/src/command_outcome.rs) is re-exported as [`envr_cli::finish_cli_cmd`](../../crates/envr-cli/src/lib.rs) for embedders.
+- **Command result pipeline (Phase C):** dispatch builds [`CommandOutcome`](../../crates/envr-cli/src/command_outcome.rs) with [`from_result`](../../crates/envr-cli/src/command_outcome.rs) (`EnvrResult<i32>`) or [`from_exit_code`](../../crates/envr-cli/src/command_outcome.rs) (bare `i32`); optional one-liner [`finish_cli_cmd`](../../crates/envr-cli/src/command_outcome.rs) is re-exported as [`envr_cli::finish_cli_cmd`](../../crates/envr-cli/src/lib.rs) for embedders.
+- **Metadata registry invariants:** `cargo test -p envr-cli --lib` runs [`cli::metadata::registry_alignment_tests`](../../crates/envr-cli/src/cli/metadata.rs) (unique `CommandKey` / `trace_name`, fixed row count, [`metadata_for_key`](../../crates/envr-cli/src/cli/metadata.rs) matches each static row) and extends [`command_key_mapping_round_trips_against_registry`](../../crates/envr-cli/src/cli/mod.rs) so the argv sample table length matches the registry.
 - Envelope shape and selected payloads: `crates/envr-cli/tests/json_envelope.rs`, `json_schema_contract.rs`.
 - **Every `emit_ok` / success `write_envelope` message** has `schemas/cli/data/<message>.json`: `crates/envr-cli/tests/json_emit_ok_message_schema_files.rs`.
+- **Every `emit_failure_envelope` code literal** has `schemas/cli/data/failure_<code>.json`: `crates/envr-cli/tests/failure_contract_guards.rs`.
+- `schemas/cli/index.json` stays aligned with source literals and schema files (message ids + failure codes): `crates/envr-cli/tests/schema_index_contract.rs` + `python scripts/generate_cli_schema_index.py --check`.
+- Shared schema fragments (e.g. `schemas/cli/fragments/error_object.json`) stay aligned with selected failure schemas: `python scripts/check_cli_schema_fragments.py`.
+- Governance index schema validation: `python scripts/check_cli_governance_index_schema.py`.
+- Governance index/docs sync: `python scripts/check_cli_governance_index_sync.py` keeps `schemas/cli/governance-index.json` aligned with this markdown matrix and `output-contract.md` tier block.
+- PR gate for schema/index diffs: `python scripts/check_cli_contract_gate.py` (fail-closed on unreadable changed schema JSON; breaking-like changes require `Migration note` in `docs/cli/output-contract.md` and mention changed ids/codes; use `--explain` for first breaking reason per file).
+- Migration note draft helper: `python scripts/generate_cli_contract_migration_note.py`.
+- CI contract artifact: `python scripts/generate_cli_contract_report.py` outputs `artifacts/cli-contract-report.json` and uploads `cli-contract-report`.
+- Contract report now includes semantic summaries/hints for `error-kind-map.json` and `governance-index.json` when changed.
+- CI review-note artifact: `python scripts/generate_cli_contract_review_note.py --report artifacts/cli-contract-report.json --output artifacts/cli-contract-review-note.md` outputs reviewer/release markdown and uploads `cli-contract-review-note`.
+- CI capabilities artifact: `python scripts/generate_cli_capabilities_report.py` outputs `artifacts/cli-capabilities-report.json` and uploads `cli-capabilities-report`.
+- Capabilities vs governance index alignment: `python scripts/check_cli_capabilities_alignment.py --report artifacts/cli-capabilities-report.json` (ensures `contract_surface=both` commands are explicitly marked porcelain-stable in `governance-index.json`).
+- Offline coverage governance audit: `python scripts/check_cli_offline_coverage_alignment.py --report artifacts/cli-capabilities-report.json` (ensures offline-safe script-facing commands map to owned coverage rows in `governance-index.json`).
+- Capability-driven test coverage audit: `python scripts/check_cli_capability_test_coverage.py --report artifacts/cli-capabilities-report.json` (ensures `governance-index.json` capability scope maps to concrete Phase A JSON/porcelain regression rows).
+- Governance exemptions are structured and temporary: each `offline_coverage_exempt` / `capability_test_exempt` entry must include `reason`, `owner`, `due` (`YYYY-MM-DD`), and `exit_criteria`.
+- Contract gate script unit tests: `python -m unittest scripts/test_cli_contract_gate.py`.
+- Metrics phase-event schema contract: `cargo test -p envr-cli --test metrics_contract` validates `schemas/cli/metrics-event.json`.
+- Metrics dictionary consistency: `cargo test -p envr-cli --test metrics_dictionary_contract` keeps `output-contract.md` field table aligned with `schemas/cli/metrics-event.json`.
 - Porcelain / shared flags / i18n structure: `crates/envr-cli/tests/automation_matrix.rs`, `help_i18n_structure.rs`.
 - JSON line with `RUST_LOG`: `json_stdout_with_rust_log.rs`.
 

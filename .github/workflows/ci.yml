@@ -57,6 +57,76 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  cli-contract:
+    name: CLI Contract Governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch for contract gate
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+      - name: CLI schema index check (P13)
+        run: python scripts/generate_cli_schema_index.py --check
+
+      - name: CLI error kind map schema check (P40.5)
+        run: python scripts/check_cli_error_kind_map_schema.py
+
+      - name: CLI governance index schema check (Phase2)
+        run: python scripts/check_cli_governance_index_schema.py
+
+      - name: CLI schema fragments check (P37)
+        run: python scripts/check_cli_schema_fragments.py
+
+      - name: CLI governance index sync check (Phase2)
+        run: python scripts/check_cli_governance_index_sync.py
+
+      - name: CLI contract gate (P15)
+        run: python scripts/check_cli_contract_gate.py
+
+      - name: CLI contract gate unit tests (P27)
+        run: python scripts/test_cli_contract_gate.py
+
+      - name: Generate CLI contract report (P22)
+        run: python scripts/generate_cli_contract_report.py --output artifacts/cli-contract-report.json
+
+      - name: Generate CLI contract review note (P41)
+        run: python scripts/generate_cli_contract_review_note.py --report artifacts/cli-contract-report.json --output artifacts/cli-contract-review-note.md
+
+      - name: Generate CLI capabilities report (P38)
+        run: python scripts/generate_cli_capabilities_report.py --output artifacts/cli-capabilities-report.json
+
+      - name: Check CLI capabilities alignment (P38.1)
+        run: python scripts/check_cli_capabilities_alignment.py --report artifacts/cli-capabilities-report.json
+
+      - name: Check CLI offline coverage alignment (P38.2)
+        run: python scripts/check_cli_offline_coverage_alignment.py --report artifacts/cli-capabilities-report.json
+
+      - name: Check CLI capability test coverage (Phase3)
+        run: python scripts/check_cli_capability_test_coverage.py --report artifacts/cli-capabilities-report.json
+
+      - name: Upload CLI contract report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-contract-report
+          path: artifacts/cli-contract-report.json
+
+      - name: Upload CLI contract review note artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-contract-review-note
+          path: artifacts/cli-contract-review-note.md
+
+      - name: Upload CLI capabilities report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-capabilities-report
+          path: artifacts/cli-capabilities-report.json
+
   test:
     name: Workspace Tests
     runs-on: ubuntu-latest

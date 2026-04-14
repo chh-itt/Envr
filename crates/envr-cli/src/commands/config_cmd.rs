@@ -2,7 +2,6 @@
 
 use crate::cli::{ConfigValueType, GlobalArgs, OutputFormat};
 use crate::output;
-use crate::CommandOutcome;
 
 use envr_config::settings::{Settings, validate_settings_file};
 use envr_config::settings_toml_schema_template_zh;
@@ -13,11 +12,8 @@ use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::process::Command;
 
-pub fn run(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> i32 {
-    CommandOutcome::from_result(run_inner(g, sub)).finish(g)
-}
-
-fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResult<i32> {
+/// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
+pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResult<i32> {
     let paths = current_platform_paths()?;
     let settings_path = envr_config::settings::settings_path_from_platform(&paths);
 

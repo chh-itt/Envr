@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_project_sync_pending.json",
+  "title": "project sync pending envelope.data (code: project_sync_pending)",
+  "type": "object",
+  "additionalProperties": true
+}

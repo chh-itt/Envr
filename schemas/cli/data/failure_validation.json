@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_validation.json",
+  "title": "validation envelope.data (code: validation)",
+  "type": ["object", "null"],
+  "additionalProperties": true
+}

@@ -48,6 +48,18 @@ const FAILURE_PROJECT_CHECK_FAILED_SCHEMA: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../schemas/cli/data/failure_project_check_failed.json"
 ));
+const FAILURE_CHILD_EXIT_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/failure_child_exit.json"
+));
+const FAILURE_PROJECT_VALIDATE_FAILED_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/failure_project_validate_failed.json"
+));
+const FAILURE_DIAGNOSTICS_EXPORT_FAILED_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/failure_diagnostics_export_failed.json"
+));
 const RUNTIME_RESOLVED_SCHEMA: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../schemas/cli/data/runtime_resolved.json"
@@ -313,6 +325,101 @@ version = "0.0.0-envr-schema-contract-nonexistent"
     assert_eq!(v.get("code"), Some(&serde_json::json!("project_check_failed")));
     assert_valid(
         FAILURE_PROJECT_CHECK_FAILED_SCHEMA,
+        v.get("data").expect("data"),
+    );
+}
+
+#[test]
+fn run_child_exit_failure_matches_schema() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    let cwd = tmp.path().join("cwd");
+    fs::create_dir_all(&cwd).expect("cwd");
+
+    let args: &[&str] = if cfg!(windows) {
+        &["--format", "json", "run", "cmd", "/c", "exit", "7"]
+    } else {
+        &["--format", "json", "run", "sh", "-c", "exit 7"]
+    };
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&cwd)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(args)
+        .output()
+        .expect("run child_exit");
+    assert!(!out.status.success(), "expected non-zero child exit");
+
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(v.get("code"), Some(&serde_json::json!("child_exit")));
+    assert_valid(FAILURE_CHILD_EXIT_SCHEMA, v.get("data").expect("data"));
+}
+
+#[test]
+fn project_validate_failure_matches_schema() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    let project = tmp.path().join("proj");
+    fs::create_dir_all(&project).expect("proj");
+    fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"0.0.0-nonexistent-envr\"\n",
+    )
+    .expect("envr.toml");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(["--format", "json", "project", "validate"])
+        .output()
+        .expect("project validate failure");
+    assert!(!out.status.success(), "expected validation failure");
+
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("project_validate_failed"))
+    );
+    assert_valid(
+        FAILURE_PROJECT_VALIDATE_FAILED_SCHEMA,
+        v.get("data").expect("data"),
+    );
+}
+
+#[test]
+fn diagnostics_export_failure_matches_schema() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    let output_dir = tmp.path().join("already-dir");
+    fs::create_dir_all(&output_dir).expect("output dir");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args([
+            "--format",
+            "json",
+            "diagnostics",
+            "export",
+            "--output",
+            output_dir.to_str().expect("utf8"),
+        ])
+        .output()
+        .expect("diagnostics export failure");
+    assert!(!out.status.success(), "expected diagnostics export failure");
+
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("diagnostics_export_failed"))
+    );
+    assert_valid(
+        FAILURE_DIAGNOSTICS_EXPORT_FAILED_SCHEMA,
         v.get("data").expect("data"),
     );
 }

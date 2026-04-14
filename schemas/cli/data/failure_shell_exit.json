@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_shell_exit.json",
+  "title": "shell exited envelope.data (code: shell_exit)",
+  "type": "object",
+  "additionalProperties": true
+}
