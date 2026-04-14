@@ -200,13 +200,13 @@ pub enum Message {
 }
 
 pub fn run() -> iced::Result {
-    // Ensure wgpu uses the GL backend when available.
-    // This helps keep the baseline memory stable on some systems.
+    // Prefer native Windows GPU APIs first, keep GL as final fallback.
+    // This avoids forcing software OpenGL paths on some VM drivers.
     #[cfg(target_os = "windows")]
     {
         if std::env::var_os("WGPU_BACKEND").is_none() {
             // Safe to do early during startup, before wgpu/iced are initialized.
-            unsafe { std::env::set_var("WGPU_BACKEND", "gl") };
+            unsafe { std::env::set_var("WGPU_BACKEND", "dx12,dx11,vulkan,gl") };
         }
     }
 
@@ -1459,6 +1459,7 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
         label: label.to_string(),
         url: url_str.to_string(),
         state: JobState::Running,
+        cancellable: true,
         downloaded: downloaded.clone(),
         total: total.clone(),
         cancel: cancel.clone(),
@@ -1473,6 +1474,7 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
 fn enqueue_runtime_install_job(
     state: &mut AppState,
     label: String,
+    cancellable: bool,
 ) -> (u64, Arc<AtomicU64>, Arc<AtomicU64>, CancelToken) {
     let id = state.downloads.next_id;
     state.downloads.next_id += 1;
@@ -1485,6 +1487,7 @@ fn enqueue_runtime_install_job(
         label,
         url: String::new(),
         state: JobState::Running,
+        cancellable,
         downloaded: downloaded.clone(),
         total: total.clone(),
         cancel: cancel.clone(),
@@ -1515,6 +1518,19 @@ fn runtime_install_task_label(
         format!("正在安装并切换为 {k} {spec}")
     } else {
         format!("正在安装 {k} {spec}")
+    }
+}
+
+fn rust_runtime_task_label(action: &str, detail: &str) -> String {
+    match action {
+        "channel" => format!("Rust 正在安装/切换工具链 {detail}"),
+        "update" => "Rust 正在更新当前工具链".to_string(),
+        "managed_uninstall" => "Rust 正在卸载托管 rustup".to_string(),
+        "component_install" => format!("Rust 正在安装组件 {detail}"),
+        "component_uninstall" => format!("Rust 正在卸载组件 {detail}"),
+        "target_install" => format!("Rust 正在安装目标 {detail}"),
+        "target_uninstall" => format!("Rust 正在卸载目标 {detail}"),
+        _ => "Rust 正在执行任务".to_string(),
     }
 }
 
@@ -1898,6 +1914,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
+                true,
             );
             state.env_center.op_job_id = Some(id);
             gui_ops::install_version_with_resolve_precheck(
@@ -1937,6 +1954,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
+                true,
             );
             state.env_center.op_job_id = Some(id);
             gui_ops::install_then_use_with_resolve_precheck(
@@ -1959,6 +1977,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
+                true,
             );
             state.env_center.op_job_id = Some(id);
             gui_ops::install_version(state.env_center.kind, spec, downloaded, total, cancel)
@@ -1975,6 +1994,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
+                true,
             );
             state.env_center.op_job_id = Some(id);
             gui_ops::install_then_use(state.env_center.kind, spec, downloaded, total, cancel)
@@ -2398,6 +2418,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
+            let label = rust_runtime_task_label("channel", &channel);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_runtime_install_job(state, label, false);
+            state.env_center.op_job_id = Some(id);
             gui_ops::rust_channel_install_or_switch(channel)
         }
         EnvCenterMsg::RustUpdateCurrent => {
@@ -2406,6 +2430,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
+            let label = rust_runtime_task_label("update", "");
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_runtime_install_job(state, label, false);
+            state.env_center.op_job_id = Some(id);
             gui_ops::rust_update_current()
         }
         EnvCenterMsg::RustManagedInstallStable => {
@@ -2420,7 +2448,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 "Installing managed rustup (stable)…",
             );
             let (id, downloaded, total, cancel) =
-                enqueue_runtime_install_job(state, label);
+                enqueue_runtime_install_job(state, label, true);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_install_stable(downloaded, total, cancel)
         }
@@ -2430,6 +2458,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
+            let label = rust_runtime_task_label("managed_uninstall", "");
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_runtime_install_job(state, label, false);
+            state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_uninstall()
         }
         EnvCenterMsg::RustComponentToggle(name, install) => {
@@ -2438,6 +2470,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
+            let label = if install {
+                rust_runtime_task_label("component_install", &name)
+            } else {
+                rust_runtime_task_label("component_uninstall", &name)
+            };
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_runtime_install_job(state, label, false);
+            state.env_center.op_job_id = Some(id);
             gui_ops::rust_component_toggle(name, install)
         }
         EnvCenterMsg::RustTargetToggle(name, install) => {
@@ -2446,6 +2486,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.busy = true;
             state.error = None;
+            let label = if install {
+                rust_runtime_task_label("target_install", &name)
+            } else {
+                rust_runtime_task_label("target_uninstall", &name)
+            };
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_runtime_install_job(state, label, false);
+            state.env_center.op_job_id = Some(id);
             gui_ops::rust_target_toggle(name, install)
         }
         EnvCenterMsg::RustOpFinished(res) => {

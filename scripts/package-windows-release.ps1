@@ -14,11 +14,11 @@ $destName = "envr-windows-x86_64-$Version"
 $dest = Join-Path $OutRoot $destName
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
-Write-Host "Building release (envr, envr-gui, envr-shim)..."
+Write-Host "Building release (envr, er, envr-gui, envr-shim)..."
 cargo build --release -p envr-cli -p envr-gui -p envr-shim
 
 $bin = Join-Path $root "target\release"
-$exes = @("envr.exe", "envr-gui.exe", "envr-shim.exe")
+$exes = @("envr.exe", "er.exe", "envr-gui.exe", "envr-shim.exe")
 foreach ($e in $exes) {
     $p = Join-Path $bin $e
     if (-not (Test-Path -LiteralPath $p)) {

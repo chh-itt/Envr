@@ -16,11 +16,19 @@ pub struct LoggingInitOptions {
 }
 
 fn default_log_dir() -> EnvrResult<PathBuf> {
+    if let Ok(paths) = envr_platform::paths::current_platform_paths() {
+        return Ok(paths.log_dir);
+    }
     let cwd = env::current_dir().map_err(EnvrError::from)?;
     Ok(cwd.join(".envr").join("logs"))
 }
 
-/// Directory used by [`init_logging`] for rolling files (`ENVR_LOG_DIR` or `<cwd>/.envr/logs`).
+/// Directory used by [`init_logging`] for rolling files.
+///
+/// Resolution:
+/// - `ENVR_LOG_DIR` (when set)
+/// - platform default log dir (for example `%APPDATA%\envr\logs` on Windows)
+/// - fallback: `<cwd>/.envr/logs` when platform path discovery fails
 pub fn resolve_log_dir() -> EnvrResult<PathBuf> {
     match env::var("ENVR_LOG_DIR") {
         Ok(path) => Ok(PathBuf::from(path)),

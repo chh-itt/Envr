@@ -12,7 +12,9 @@
 
 ### 产物
 
-- `envr-windows-x86_64-0.1.0.zip`：内含 `envr.exe`、`envr-gui.exe`、`envr-shim.exe` 及 `SHA256SUMS.txt`。
+- `envr-windows-x86_64-0.1.0.zip`：内含 `envr.exe`、`er.exe`、`envr-gui.exe`、`envr-shim.exe` 及 `SHA256SUMS.txt`。
+- `envr-windows-x64-0.1.0.msi`：安装包，内含同一组可执行文件并自动写入安装路径到机器 PATH。
+- `envr-setup-x64-0.1.0.exe`：引导安装器，优先处理 VC++ Runtime，再执行 MSI 安装流程。
 
 ### 升级说明
 

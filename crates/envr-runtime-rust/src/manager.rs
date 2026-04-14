@@ -330,7 +330,7 @@ impl RustManager {
     pub fn list_components(
         &self,
         toolchain: Option<&RuntimeVersion>,
-    ) -> EnvrResult<Vec<(String, bool)>> {
+    ) -> EnvrResult<Vec<(String, bool, bool)>> {
         let mut args: Vec<String> = vec!["component".into(), "list".into()];
         if let Some(tc) = toolchain {
             args.push("--toolchain".into());
@@ -350,14 +350,16 @@ impl RustManager {
                 continue;
             }
             let installed = t.ends_with("(installed)");
+            let available = !t.contains("(unavailable)");
             let name = t
                 .trim_end_matches("(installed)")
+                .trim_end_matches("(unavailable)")
                 .split_whitespace()
                 .next()
                 .unwrap_or("")
                 .trim();
             if !name.is_empty() {
-                out.push((name.to_string(), installed));
+                out.push((name.to_string(), installed, available));
             }
         }
         Ok(out)
@@ -402,7 +404,7 @@ impl RustManager {
     pub fn list_targets(
         &self,
         toolchain: Option<&RuntimeVersion>,
-    ) -> EnvrResult<Vec<(String, bool)>> {
+    ) -> EnvrResult<Vec<(String, bool, bool)>> {
         let mut args: Vec<String> = vec!["target".into(), "list".into()];
         if let Some(tc) = toolchain {
             args.push("--toolchain".into());
@@ -422,14 +424,16 @@ impl RustManager {
                 continue;
             }
             let installed = t.ends_with("(installed)");
+            let available = !t.contains("(unavailable)");
             let name = t
                 .trim_end_matches("(installed)")
+                .trim_end_matches("(unavailable)")
                 .split_whitespace()
                 .next()
                 .unwrap_or("")
                 .trim();
             if !name.is_empty() {
-                out.push((name.to_string(), installed));
+                out.push((name.to_string(), installed, available));
             }
         }
         Ok(out)

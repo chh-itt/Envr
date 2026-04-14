@@ -41,7 +41,7 @@ If both flags are provided, JSON mode wins:
 
 ## Observability (tracing)
 
-- The `envr` binary attaches a `tracing` console layer to **stderr** and a rolling file under `ENVR_LOG_DIR` or `<cwd>/.envr/logs`.
+- The `envr` binary attaches a `tracing` console layer to **stderr** and a rolling file under `ENVR_LOG_DIR` or the platform default log dir (for example `%APPDATA%\envr\logs` on Windows).
 - **`RUST_LOG`** (e.g. `info`, `debug`) therefore only affects **stderr**, so **stdout** stays a single JSON line (or porcelain lines) for automation. Regression: `crates/envr-cli/tests/json_stdout_with_rust_log.rs`.
 - Each dispatched subcommand runs under span **`envr.cli.command`** with field **`command`** = stable snake_case (see [`Command::trace_name`](../../crates/envr-cli/src/cli/command/mod.rs) / `cli::command_trace_tests`).
 - CLI metrics on target **`envr_cli_metrics`** include phase-level events:

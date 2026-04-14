@@ -78,8 +78,8 @@ pub enum EnvCenterMsg {
     RustUpdateCurrent,
     RustManagedInstallStable,
     RustManagedUninstall,
-    RustComponentsLoaded(Result<Vec<(String, bool)>, String>),
-    RustTargetsLoaded(Result<Vec<(String, bool)>, String>),
+    RustComponentsLoaded(Result<Vec<(String, bool, bool)>, String>),
+    RustTargetsLoaded(Result<Vec<(String, bool, bool)>, String>),
     RustComponentToggle(String, bool),
     RustTargetToggle(String, bool),
     RustOpFinished(Result<(), String>),
@@ -154,8 +154,8 @@ pub struct EnvCenterState {
     // Rust page state.
     pub rust_status: Option<RustStatus>,
     pub rust_tab: RustTab,
-    pub rust_components: Vec<(String, bool)>,
-    pub rust_targets: Vec<(String, bool)>,
+    pub rust_components: Vec<(String, bool, bool)>,
+    pub rust_targets: Vec<(String, bool, bool)>,
 }
 
 impl Default for EnvCenterState {
@@ -2169,6 +2169,23 @@ fn rust_env_center_view(
     let active = status
         .and_then(|s| s.active_toolchain.clone())
         .unwrap_or_else(|| envr_core::i18n::tr_key("gui.runtime.rust.none", "(无)", "(none)"));
+    let mode_hint = match mode {
+        "system" => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode_hint.system",
+            "检测到系统 rustup。可以安装/切换工具链，并管理组件与目标。",
+            "System rustup detected. You can install/switch toolchains and manage components/targets.",
+        ),
+        "managed" => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode_hint.managed",
+            "当前使用 envr 托管 rustup。可在此更新工具链，或卸载托管安装。",
+            "Using envr-managed rustup. You can update toolchains here or uninstall the managed installation.",
+        ),
+        _ => envr_core::i18n::tr_key(
+            "gui.runtime.rust.mode_hint.none",
+            "未检测到可用 rustup。先点击“安装 stable”完成托管安装，再管理组件/目标。",
+            "No rustup detected. Click \"Install stable\" first, then manage components/targets.",
+        ),
+    };
     let rustc = status
         .and_then(|s| s.rustc_version.clone())
         .unwrap_or_else(|| envr_core::i18n::tr_key("gui.runtime.rust.unknown", "未知", "unknown"));
@@ -2184,6 +2201,7 @@ fn rust_env_center_view(
             .size(ty.caption)
             .color(muted),
             text(format!("rustc {rustc}")).size(ty.caption).color(muted),
+            text(mode_hint).size(ty.micro).color(muted),
         ]
         .spacing(sp.xs as f32),
     )
@@ -2236,11 +2254,24 @@ fn rust_env_center_view(
                 .style(button_style(tokens, variant)),
         );
     }
-    let settings_card = container(ds_row)
+    let settings_card = container(
+        column![
+            ds_row,
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.rust.download_source_hint",
+                "下载源同时影响 rustup-init 与 Rust 工具链下载。",
+                "Download source affects both rustup-init and Rust toolchain downloads.",
+            ))
+            .size(ty.micro)
+            .color(muted),
+        ]
+        .spacing(sp.xs as f32),
+    )
         .padding(sp.md)
         .style(card_container_style(tokens, 1));
 
-    let managed_install_btn = if status.is_some_and(|s| s.managed_install_available) {
+    let show_managed_install = mode == "none" || status.is_some_and(|s| s.managed_install_available);
+    let managed_install_btn = if show_managed_install {
         Some(
             button(button_content_centered(
                 row![
@@ -2256,6 +2287,12 @@ fn rust_env_center_view(
                 .into(),
             ))
             .on_press(Message::EnvCenter(EnvCenterMsg::RustManagedInstallStable))
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([sp.sm as f32, sp.md as f32])
             .style(button_style(tokens, ButtonVariant::Primary)),
         )
     } else {
@@ -2279,45 +2316,76 @@ fn rust_env_center_view(
                 .into(),
             ))
             .on_press(Message::EnvCenter(EnvCenterMsg::RustManagedUninstall))
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([sp.sm as f32, sp.md as f32])
             .style(button_style(tokens, ButtonVariant::Danger)),
         )
     } else {
         None
     };
 
-    let channel_row = row![
-        rust_channel_btn(tokens, "stable"),
-        rust_channel_btn(tokens, "beta"),
-        rust_channel_btn(tokens, "nightly"),
-        button(button_content_centered(
-            row![
-                Lucide::RefreshCw.view(14.0, txt),
-                text(envr_core::i18n::tr_key(
-                    "gui.runtime.rust.update",
-                    "更新",
-                    "Update"
-                )),
-            ]
-            .spacing(sp.xs as f32)
-            .align_y(Alignment::Center)
-            .into(),
-        ))
-        .on_press(Message::EnvCenter(EnvCenterMsg::RustUpdateCurrent))
-        .style(button_style(tokens, ButtonVariant::Secondary)),
-    ]
-    .spacing(sp.sm as f32)
-    .align_y(Alignment::Center);
-
-    let mut ops_row = row![channel_row]
+    let mut ops_col = column![].spacing(sp.sm as f32).width(Length::Fill);
+    if mode != "none" {
+        let channel_row = row![
+            rust_channel_btn(tokens, "stable"),
+            rust_channel_btn(tokens, "beta"),
+            rust_channel_btn(tokens, "nightly"),
+            button(button_content_centered(
+                row![
+                    Lucide::RefreshCw.view(14.0, txt),
+                    text(envr_core::i18n::tr_key(
+                        "gui.runtime.rust.update",
+                        "更新",
+                        "Update"
+                    )),
+                ]
+                .spacing(sp.xs as f32)
+                .align_y(Alignment::Center)
+                .into(),
+            ))
+            .on_press(Message::EnvCenter(EnvCenterMsg::RustUpdateCurrent))
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([sp.sm as f32, sp.sm as f32])
+            .style(button_style(tokens, ButtonVariant::Secondary)),
+        ]
         .spacing(sp.sm as f32)
         .align_y(Alignment::Center);
+        ops_col = ops_col.push(channel_row);
+    }
+
+    let mut managed_row = row![].spacing(sp.sm as f32).align_y(Alignment::Center);
+    let mut managed_row_has_actions = false;
     if let Some(b) = managed_install_btn {
-        ops_row = ops_row.push(b);
+        managed_row_has_actions = true;
+        managed_row = managed_row.push(b);
     }
     if let Some(b) = managed_uninstall_btn {
-        ops_row = ops_row.push(b);
+        managed_row_has_actions = true;
+        managed_row = managed_row.push(b);
     }
-    let ops_card = container(ops_row)
+    if managed_row_has_actions {
+        ops_col = ops_col.push(managed_row);
+    }
+    if mode == "none" {
+        ops_col = ops_col.push(
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.rust.install_hint",
+                "安装后会默认使用 stable 工具链；你仍可切换到 beta/nightly。",
+                "Install uses stable by default; you can still switch to beta/nightly later.",
+            ))
+            .size(ty.micro)
+            .color(muted),
+        );
+    }
+    let ops_card = container(ops_col)
         .padding(sp.md)
         .style(card_container_style(tokens, 1));
 
@@ -2328,9 +2396,9 @@ fn rust_env_center_view(
     .spacing(sp.sm as f32);
 
     let list = if state.rust_tab == RustTab::Components {
-        rust_kv_list(tokens, &state.rust_components, true)
+        rust_kv_list(tokens, &state.rust_components, true, state.busy)
     } else {
-        rust_kv_list(tokens, &state.rust_targets, false)
+        rust_kv_list(tokens, &state.rust_targets, false, state.busy)
     };
 
     column![header, status_card, settings_card, ops_card, tab_row, list]
@@ -2388,8 +2456,9 @@ fn rust_tab_btn(tokens: ThemeTokens, tab: RustTab, active: RustTab) -> Element<'
 
 fn rust_kv_list(
     tokens: ThemeTokens,
-    items: &[(String, bool)],
+    items: &[(String, bool, bool)],
     is_component: bool,
+    busy: bool,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
@@ -2414,10 +2483,10 @@ fn rust_kv_list(
         .into();
     }
 
-    let owned: Vec<(String, bool)> = items.to_vec();
+    let owned: Vec<(String, bool, bool)> = items.to_vec();
     let mut col = column![].spacing(0).width(Length::Fill);
-    for (name, installed) in owned.into_iter() {
-        let action = if installed {
+    for (name, installed, available) in owned.into_iter() {
+        let action: Element<'static, Message> = if installed {
             button(button_content_centered(
                 row![
                     Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
@@ -2431,13 +2500,20 @@ fn rust_kv_list(
                 .align_y(Alignment::Center)
                 .into(),
             ))
-            .on_press(Message::EnvCenter(if is_component {
+            .on_press_maybe((!busy).then_some(Message::EnvCenter(if is_component {
                 EnvCenterMsg::RustComponentToggle(name.clone(), false)
             } else {
                 EnvCenterMsg::RustTargetToggle(name.clone(), false)
-            }))
+            })))
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([sp.sm as f32, sp.sm as f32])
             .style(button_style(tokens, ButtonVariant::Danger))
-        } else {
+            .into()
+        } else if available {
             button(button_content_centered(
                 row![
                     Lucide::Download.view(14.0, txt),
@@ -2451,17 +2527,43 @@ fn rust_kv_list(
                 .align_y(Alignment::Center)
                 .into(),
             ))
-            .on_press(Message::EnvCenter(if is_component {
+            .on_press_maybe((!busy).then_some(Message::EnvCenter(if is_component {
                 EnvCenterMsg::RustComponentToggle(name.clone(), true)
             } else {
                 EnvCenterMsg::RustTargetToggle(name.clone(), true)
-            }))
+            })))
+            .height(Length::Fixed(
+                tokens
+                    .control_height_secondary
+                    .max(tokens.min_click_target_px()),
+            ))
+            .padding([sp.sm as f32, sp.sm as f32])
             .style(button_style(tokens, ButtonVariant::Primary))
+            .into()
+        } else {
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.rust.unavailable",
+                "当前不可用",
+                "Unavailable",
+            ))
+            .size(ty.micro)
+            .color(muted)
+            .into()
         };
         let row_el = row![
             column![
                 text(name).size(ty.body_small),
-                text(if installed { "(installed)" } else { "" })
+                text(if installed {
+                    envr_core::i18n::tr_key("gui.runtime.installed", "已安装", "Installed")
+                } else if !available {
+                    envr_core::i18n::tr_key(
+                        "gui.runtime.rust.unavailable_hint",
+                        "当前工具链/平台下不可安装。",
+                        "Not installable for current toolchain/platform.",
+                    )
+                } else {
+                    String::new()
+                })
             .size(ty.micro)
             .color(muted),
             ]

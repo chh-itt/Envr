@@ -120,7 +120,7 @@ pub fn rust_load_components() -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Result<Vec<(String, bool)>, String> {
+            .spawn_blocking(move || -> Result<Vec<(String, bool, bool)>, String> {
                 let root = resolve_runtime_root().map_err(|e| e.to_string())?;
                 let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
                 if !mgr.rustup_available() {
@@ -141,7 +141,7 @@ pub fn rust_load_targets() -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Result<Vec<(String, bool)>, String> {
+            .spawn_blocking(move || -> Result<Vec<(String, bool, bool)>, String> {
                 let root = resolve_runtime_root().map_err(|e| e.to_string())?;
                 let mgr = RustManager::try_new(root).map_err(|e| e.to_string())?;
                 if !mgr.rustup_available() {

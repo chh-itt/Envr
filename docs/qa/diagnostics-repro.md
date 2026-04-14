@@ -2,7 +2,7 @@
 
 ## One-command export
 
-From a shell in any directory (logs default to `./.envr/logs` unless `ENVR_LOG_DIR` is set):
+From a shell in any directory (logs default to the platform log dir, e.g. `%APPDATA%\envr\logs` on Windows, unless `ENVR_LOG_DIR` is set):
 
 ```bash
 envr diagnostics export
@@ -48,4 +48,4 @@ Attach the zip to the issue (remove sensitive paths first if needed).
 ## Related
 
 - Unified CLI errors: `crates/envr-cli/src/output.rs` (JSON envelope).
-- Logging directory: `envr_core::logging::resolve_log_dir` (`ENVR_LOG_DIR` or `<cwd>/.envr/logs`).
+- Logging directory: `envr_core::logging::resolve_log_dir` (`ENVR_LOG_DIR` or platform default log dir).

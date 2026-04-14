@@ -2,7 +2,12 @@
 未完成的重构项目/
 
 /target/
+/dist/
+/DIST/
 .envr/
 **/*.rs.bk
 **/proptest-regressions/
 experiments/
+
+# Windows packaging artifacts
+*.wixpdb

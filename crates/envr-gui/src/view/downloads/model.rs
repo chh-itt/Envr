@@ -18,6 +18,7 @@ pub struct DownloadJob {
     /// HTTP(S) source, or empty for GUI runtime **install** tasks (no URL line; see panel UI).
     pub url: String,
     pub state: JobState,
+    pub cancellable: bool,
     pub downloaded: Arc<AtomicU64>,
     pub total: Arc<AtomicU64>,
     pub cancel: CancelToken,

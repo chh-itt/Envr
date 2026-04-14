@@ -20,15 +20,37 @@ pub enum DownloadMsg {
 pub fn format_job_state_line(job: &DownloadJob) -> String {
     match job.state {
         JobState::Running => {
-            if job.is_install_warmup_phase() {
-                return format!(
-                    "{} · {}",
-                    envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
+            if job.is_runtime_install_row() {
+                let d = job.downloaded_display();
+                let t = job.total_display();
+                let phase = if t == 0 && d == 0 {
                     envr_core::i18n::tr_key(
-                        "gui.downloads.install_working",
-                        "正在安装处理中…",
-                        "Installing…",
-                    ),
+                        "gui.downloads.install_preparing",
+                        "准备中…",
+                        "Preparing…",
+                    )
+                } else if t > 0 && d < t {
+                    envr_core::i18n::tr_key(
+                        "gui.downloads.install_downloading",
+                        "下载中…",
+                        "Downloading…",
+                    )
+                } else {
+                    envr_core::i18n::tr_key(
+                        "gui.downloads.install_finalizing",
+                        "下载完成，正在安装…",
+                        "Download complete, installing…",
+                    )
+                };
+                let spd = format_speed(job.speed_bps);
+                let sz = if t > 0 {
+                    format!("{} / {}", format_transfer_size(d), format_transfer_size(t))
+                } else {
+                    format_transfer_size(d)
+                };
+                return format!(
+                    "{} · {phase} · {sz} · {spd}",
+                    envr_core::i18n::tr_key("gui.job.running", "进行中", "Running"),
                 );
             }
             let spd = format_speed(job.speed_bps);

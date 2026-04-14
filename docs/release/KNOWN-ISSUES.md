@@ -4,7 +4,9 @@
 
 ## 通用
 
-- **无安装程序**：当前 Windows 首发为 **zip 便携包**，不含 MSI/安装向导；PATH 需用户自行配置。
+- **MSI 依赖 WiX 构建环境**：仓库提供了手动 MSI 脚本，发布机需预装 WiX v4 CLI。
+- **setup 依赖联网或本地 redist 文件**：默认会下载 `vc_redist.x64.exe`；离线发布机需通过 `-VcRedistPath` 提供本地文件。
+- **VC++ 运行库前置**：若目标机器缺少 `VCRUNTIME140.dll` 等，`envr-gui` 仍会启动失败；当前需先安装 Microsoft VC++ Redistributable。
 - **网络与镜像**：安装/列表依赖网络与镜像可达性；受限网络环境需配置镜像或离线准备运行时包（能力随版本演进）。
 
 ## GUI

@@ -135,7 +135,7 @@ pub fn floating_download_panel(
                 let ratio = j.progress_ratio();
                 let line = format_job_state_line(j);
                 let mut actions = row![].spacing(sp.sm as f32);
-                if j.state == JobState::Running {
+                if j.state == JobState::Running && j.cancellable {
                     actions = actions.push(
                         button(text(envr_core::i18n::tr_key(
                             "gui.action.cancel",
