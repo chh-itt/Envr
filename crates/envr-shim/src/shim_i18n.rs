@@ -10,6 +10,14 @@ pub fn bootstrap() {
     let _ = prefer_zh();
 }
 
+pub fn bootstrap_with_locale(locale: LocaleMode) {
+    let _ = PREFER_ZH.get_or_init(|| match locale {
+        LocaleMode::ZhCn => true,
+        LocaleMode::EnUs => false,
+        LocaleMode::FollowSystem => envr_config::settings::system_locale_suggests_chinese(),
+    });
+}
+
 fn prefer_zh() -> bool {
     *PREFER_ZH.get_or_init(|| {
         let Ok(paths) = envr_platform::paths::current_platform_paths() else {
@@ -27,21 +35,16 @@ fn prefer_zh() -> bool {
     })
 }
 
-pub fn tr_key(zh_cn: &str, en_us: &str) -> String {
-    if prefer_zh() {
-        zh_cn.to_string()
-    } else {
-        en_us.to_string()
-    }
-}
-
 pub fn node_engines_hint(spec: &str, active: &str) -> String {
-    tr_key(
-        "envr 提示：package.json 中 engines.node（{spec}）不满足当前 Node（{active}）。可用 `envr project add node@…` 对齐版本，或修改 package.json。",
-        "envr hint: package.json engines.node ({spec}) does not include the active Node ({active}). Align with: envr project add node@… or adjust engines in package.json.",
-    )
-    .replace("{spec}", spec)
-    .replace("{active}", active)
+    if prefer_zh() {
+        format!(
+            "envr 提示：package.json 中 engines.node（{spec}）不满足当前 Node（{active}）。可用 `envr project add node@…` 对齐版本，或修改 package.json。"
+        )
+    } else {
+        format!(
+            "envr hint: package.json engines.node ({spec}) does not include the active Node ({active}). Align with: envr project add node@… or adjust engines in package.json."
+        )
+    }
 }
 
 #[cfg(test)]

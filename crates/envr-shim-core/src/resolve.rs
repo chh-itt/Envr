@@ -9,7 +9,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
-struct ShimSettingsSnapshot {
+pub struct ShimSettingsSnapshot {
     node_path_proxy_enabled: bool,
     python_path_proxy_enabled: bool,
     java_path_proxy_enabled: bool,
@@ -40,14 +40,7 @@ impl Default for ShimSettingsSnapshot {
 }
 
 impl ShimSettingsSnapshot {
-    fn from_disk() -> Self {
-        let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-            return Self::default();
-        };
-        let path = settings_path_from_platform(&platform);
-        let Ok(settings) = Settings::load_or_default_from(&path) else {
-            return Self::default();
-        };
+    pub fn from_settings(settings: &Settings) -> Self {
         Self {
             node_path_proxy_enabled: settings.runtime.node.path_proxy_enabled,
             python_path_proxy_enabled: settings.runtime.python.path_proxy_enabled,
@@ -60,10 +53,25 @@ impl ShimSettingsSnapshot {
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
             ),
-            deno_registry_env: deno_package_registry_env(&settings),
-            bun_registry_env: bun_package_registry_env(&settings),
+            deno_registry_env: deno_package_registry_env(settings),
+            bun_registry_env: bun_package_registry_env(settings),
         }
     }
+
+    pub fn from_disk() -> Self {
+        let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+            return Self::default();
+        };
+        let path = settings_path_from_platform(&platform);
+        let Ok(settings) = Settings::load_or_default_from(&path) else {
+            return Self::default();
+        };
+        Self::from_settings(&settings)
+    }
+}
+
+pub fn load_shim_settings_snapshot() -> ShimSettingsSnapshot {
+    ShimSettingsSnapshot::from_disk()
 }
 
 fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> bool {
@@ -201,7 +209,7 @@ pub struct WhichRuntimeDetail {
 
 /// `true` when [`resolve_core_shim_command`] would use the PATH-proxy-bypass branch.
 pub fn core_command_uses_path_proxy_bypass(cmd: CoreCommand) -> bool {
-    let settings = ShimSettingsSnapshot::from_disk();
+    let settings = load_shim_settings_snapshot();
     uses_path_proxy_bypass(cmd, &settings)
 }
 
@@ -214,6 +222,10 @@ fn envr_version_dir_from_executable(executable: &Path) -> Option<String> {
         }
         cur = parent;
     }
+}
+
+pub fn runtime_version_label_from_executable(executable: &Path) -> Option<String> {
+    envr_version_dir_from_executable(executable)
 }
 
 /// Metadata for `envr which` (no subprocess; aligns with [`resolve_core_shim_command`] routing).
@@ -243,7 +255,6 @@ pub fn which_runtime_detail(
         .unwrap_or(false);
 
     let home = resolve_runtime_home_for_lang(ctx, key, None)?;
-    let home = std::fs::canonicalize(&home).unwrap_or(home);
     let version = home
         .file_name()
         .and_then(|s| s.to_str())
@@ -592,7 +603,19 @@ pub fn resolve_runtime_home_for_lang_with_project(
     spec_override: Option<&str>,
     project_config: Option<&ProjectConfig>,
 ) -> EnvrResult<PathBuf> {
-    let settings = ShimSettingsSnapshot::from_disk();
+    let settings = load_shim_settings_snapshot();
+    runtime_home_for_key(ctx, lang_key, project_config, spec_override, &settings)
+}
+
+/// Like [`resolve_runtime_home_for_lang_with_project`], but reuses a preloaded
+/// [`ShimSettingsSnapshot`] to avoid duplicate settings reads in a shim invocation.
+pub fn resolve_runtime_home_for_lang_with_project_and_settings(
+    ctx: &ShimContext,
+    lang_key: &str,
+    spec_override: Option<&str>,
+    project_config: Option<&ProjectConfig>,
+    settings: &ShimSettingsSnapshot,
+) -> EnvrResult<PathBuf> {
     runtime_home_for_key(ctx, lang_key, project_config, spec_override, &settings)
 }
 
@@ -788,19 +811,15 @@ fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
     let suffixes: &[&str] = &[""];
 
     for dir in std::env::split_paths(&path_os) {
-        if !dir.is_dir() {
-            continue;
-        }
         if is_likely_envr_shims_dir(&dir) {
             continue;
         }
         for suf in suffixes {
-            let fname = if suf.is_empty() {
-                tool_stem.to_string()
+            let candidate = if suf.is_empty() {
+                dir.join(tool_stem)
             } else {
-                format!("{tool_stem}{suf}")
+                dir.join(format!("{tool_stem}{suf}"))
             };
-            let candidate = dir.join(fname);
             if candidate.is_file() {
                 return Ok(candidate);
             }
@@ -931,38 +950,24 @@ fn resolve_bun_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
 
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
-    let settings = ShimSettingsSnapshot::from_disk();
-    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
-        && !settings.node_path_proxy_enabled
-    {
-        return resolve_node_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !settings.python_path_proxy_enabled
-    {
-        return resolve_python_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !settings.java_path_proxy_enabled {
-        return resolve_java_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !settings.go_path_proxy_enabled {
-        return resolve_go_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Php) && !settings.php_path_proxy_enabled {
-        return resolve_php_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Deno) && !settings.deno_path_proxy_enabled {
-        return resolve_deno_tool_bypass_envr(cmd);
-    }
-    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !settings.bun_path_proxy_enabled {
-        return resolve_bun_tool_bypass_envr(cmd);
-    }
+    let settings = load_shim_settings_snapshot();
+    resolve_core_shim_command_with_settings(cmd, ctx, &settings)
+}
 
+/// Resolve a core tool to an executable path using a preloaded settings snapshot.
+pub fn resolve_core_shim_command_with_settings(
+    cmd: CoreCommand,
+    ctx: &ShimContext,
+    settings: &ShimSettingsSnapshot,
+) -> EnvrResult<ResolvedShim> {
+    if uses_path_proxy_bypass(cmd, settings) {
+        return resolve_core_tool_bypass_envr(cmd);
+    }
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, &settings)?;
-    let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
 
     let mut extra_env = Vec::new();
 
@@ -993,6 +998,20 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
         executable,
         extra_env,
     })
+}
+
+fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    match cmd {
+        CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => {
+            resolve_node_tool_bypass_envr(cmd)
+        }
+        CoreCommand::Python | CoreCommand::Pip => resolve_python_tool_bypass_envr(cmd),
+        CoreCommand::Java | CoreCommand::Javac => resolve_java_tool_bypass_envr(cmd),
+        CoreCommand::Go | CoreCommand::Gofmt => resolve_go_tool_bypass_envr(cmd),
+        CoreCommand::Php => resolve_php_tool_bypass_envr(cmd),
+        CoreCommand::Deno => resolve_deno_tool_bypass_envr(cmd),
+        CoreCommand::Bun | CoreCommand::Bunx => resolve_bun_tool_bypass_envr(cmd),
+    }
 }
 
 /// Resolve from argv0 basename only (when the shim binary is a copy named `node`, etc.).

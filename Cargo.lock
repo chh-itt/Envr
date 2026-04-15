@@ -1186,6 +1186,7 @@ name = "envr-shim"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "criterion",
  "envr-config",
  "envr-error",
  "envr-platform",

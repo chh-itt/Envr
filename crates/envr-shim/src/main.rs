@@ -3,27 +3,60 @@
 mod node_engines_hint;
 mod shim_i18n;
 
+use envr_config::settings::{Settings, settings_path_from_platform};
 use envr_error::EnvrError;
 use envr_shim_core::{
-    CoreCommand, ResolvedShim, ShimContext, parse_shim_invocation, resolve_core_shim_command,
+    CoreCommand, ResolvedShim, ShimContext, ShimSettingsSnapshot, parse_shim_invocation,
+    resolve_core_shim_command_with_settings, runtime_version_label_from_executable,
 };
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-fn prepare(
-    args: &[OsString],
-) -> Result<(CoreCommand, ShimContext, ResolvedShim, Vec<OsString>), EnvrError> {
-    let ctx = ShimContext::from_process_env()?;
-    let (cmd, forward) = parse_shim_invocation(args)?;
-    let resolved = resolve_core_shim_command(cmd, &ctx)?;
-    Ok((cmd, ctx, resolved, forward))
+fn load_settings_for_invocation() -> Option<Settings> {
+    let platform = envr_platform::paths::current_platform_paths().ok()?;
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path).ok()
 }
 
-fn maybe_node_engines_hint(cmd: CoreCommand, ctx: &ShimContext) {
+fn prepare(
+    args: &[OsString],
+) -> Result<
+    (
+        CoreCommand,
+        ShimContext,
+        ShimSettingsSnapshot,
+        ResolvedShim,
+        Vec<OsString>,
+    ),
+    EnvrError,
+> {
+    let settings = load_settings_for_invocation();
+    if let Some(st) = settings.as_ref() {
+        shim_i18n::bootstrap_with_locale(st.i18n.locale);
+    } else {
+        shim_i18n::bootstrap();
+    }
+    let snapshot = settings
+        .as_ref()
+        .map(ShimSettingsSnapshot::from_settings)
+        .unwrap_or_else(ShimSettingsSnapshot::from_disk);
+    let ctx = ShimContext::from_process_env()?;
+    let (cmd, forward) = parse_shim_invocation(args)?;
+    let resolved = resolve_core_shim_command_with_settings(cmd, &ctx, &snapshot)?;
+    Ok((cmd, ctx, snapshot, resolved, forward))
+}
+
+fn maybe_node_engines_hint(
+    cmd: CoreCommand,
+    ctx: &ShimContext,
+    active_label: Option<&str>,
+) {
     if matches!(cmd, CoreCommand::Node) {
-        node_engines_hint::maybe_emit(ctx);
+        if let Some(label) = active_label {
+            node_engines_hint::maybe_emit(ctx, label);
+        }
     }
 }
 
@@ -118,16 +151,16 @@ fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Pa
 
 #[cfg(unix)]
 fn main() {
-    shim_i18n::bootstrap();
     let args: Vec<OsString> = std::env::args_os().collect();
-    let (core_cmd, ctx, resolved, forward) = match prepare(&args) {
+    let (core_cmd, ctx, _settings, resolved, forward) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);
         }
     };
-    maybe_node_engines_hint(core_cmd, &ctx);
+    let active_label = runtime_version_label_from_executable(&resolved.executable);
+    maybe_node_engines_hint(core_cmd, &ctx, active_label.as_deref());
 
     use std::os::unix::process::CommandExt;
     let mut cmd = Command::new(&resolved.executable);
@@ -142,16 +175,16 @@ fn main() {
 
 #[cfg(windows)]
 fn main() {
-    shim_i18n::bootstrap();
     let args: Vec<OsString> = std::env::args_os().collect();
-    let (core_cmd, ctx, resolved, forward) = match prepare(&args) {
+    let (core_cmd, ctx, _settings, resolved, forward) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);
         }
     };
-    maybe_node_engines_hint(core_cmd, &ctx);
+    let active_label = runtime_version_label_from_executable(&resolved.executable);
+    maybe_node_engines_hint(core_cmd, &ctx, active_label.as_deref());
 
     let mut cmd = Command::new(&resolved.executable);
     cmd.args(&forward);

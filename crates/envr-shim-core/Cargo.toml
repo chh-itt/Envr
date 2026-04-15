@@ -20,3 +20,7 @@ harness = false
 [[bench]]
 name = "shim_settings_snapshot"
 harness = false
+
+[[bench]]
+name = "resolve_core_shim_command"
+harness = false

@@ -1,6 +1,6 @@
 //! Optional stderr hint when `package.json` `engines.node` does not match the active Node.
 
-use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
+use envr_shim_core::ShimContext;
 use std::fs;
 use std::io::IsTerminal;
 use std::io::{Read, Write};
@@ -35,6 +35,9 @@ fn find_package_json(mut dir: PathBuf) -> Option<PathBuf> {
 fn read_engines_node(pkg: &Path) -> Option<String> {
     let mut s = String::new();
     fs::File::open(pkg).ok()?.read_to_string(&mut s).ok()?;
+    if !(s.contains("\"engines\"") && s.contains("\"node\"")) {
+        return None;
+    }
     let v: serde_json::Value = serde_json::from_str(&s).ok()?;
     let eng = v.get("engines")?;
     let n = eng.get("node")?;
@@ -77,19 +80,8 @@ fn throttle_allows_emit(cache_dir: &Path, key: &str) -> bool {
     true
 }
 
-fn active_node_semver(ctx: &ShimContext) -> Option<(semver::Version, String)> {
-    let home = resolve_runtime_home_for_lang(ctx, "node", None).ok()?;
-    let label = home
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("?")
-        .to_string();
-    let v = parse_version_triple_dir(&label)?;
-    Some((v, label))
-}
-
 /// Best-effort: print one stderr line when `engines.node` rejects the active version.
-pub fn maybe_emit(ctx: &ShimContext) {
+pub fn maybe_emit(ctx: &ShimContext, active_label: &str) {
     if std::env::var_os("ENVR_NO_NODE_ENGINES_HINT").is_some_and(|v| !v.is_empty()) {
         return;
     }
@@ -110,7 +102,7 @@ pub fn maybe_emit(ctx: &ShimContext) {
     let Ok(req) = semver::VersionReq::parse(&spec) else {
         return;
     };
-    let Some((active_ver, active_label)) = active_node_semver(ctx) else {
+    let Some(active_ver) = parse_version_triple_dir(active_label) else {
         return;
     };
     if req.matches(&active_ver) {
@@ -119,7 +111,7 @@ pub fn maybe_emit(ctx: &ShimContext) {
     let cache_dir = ctx.runtime_root.join("cache");
     let key = format!(
         "{}|{}|{}",
-        fs::canonicalize(&pkg).unwrap_or(pkg.clone()).display(),
+        pkg.display(),
         spec,
         active_label
     );
