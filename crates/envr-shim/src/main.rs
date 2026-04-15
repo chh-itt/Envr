@@ -13,6 +13,38 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, Default)]
+struct ShimTimings {
+    prepare_total: Duration,
+    settings_i18n: Duration,
+    parse_invocation: Duration,
+    resolve_core: Duration,
+    node_hint: Duration,
+    child_wait: Duration,
+    pip_sync: Duration,
+}
+
+fn timings_enabled() -> bool {
+    std::env::var_os("ENVR_SHIM_TRACE_TIMING").is_some_and(|v| !v.is_empty())
+}
+
+fn emit_timing_report(core_cmd: CoreCommand, timings: &ShimTimings) {
+    if !timings_enabled() {
+        return;
+    }
+    eprintln!(
+        "envr-shim timing: cmd={core_cmd:?} prepare_total_us={} settings_i18n_us={} parse_us={} resolve_us={} node_hint_us={} child_wait_us={} pip_sync_us={}",
+        timings.prepare_total.as_micros(),
+        timings.settings_i18n.as_micros(),
+        timings.parse_invocation.as_micros(),
+        timings.resolve_core.as_micros(),
+        timings.node_hint.as_micros(),
+        timings.child_wait.as_micros(),
+        timings.pip_sync.as_micros(),
+    );
+}
 
 fn load_settings_for_invocation() -> Option<Settings> {
     let platform = envr_platform::paths::current_platform_paths().ok()?;
@@ -29,9 +61,13 @@ fn prepare(
         ShimSettingsSnapshot,
         ResolvedShim,
         Vec<OsString>,
+        ShimTimings,
     ),
     EnvrError,
 > {
+    let mut timings = ShimTimings::default();
+    let prepare_started = Instant::now();
+    let settings_started = Instant::now();
     let settings = load_settings_for_invocation();
     if let Some(st) = settings.as_ref() {
         shim_i18n::bootstrap_with_locale(st.i18n.locale);
@@ -42,17 +78,19 @@ fn prepare(
         .as_ref()
         .map(ShimSettingsSnapshot::from_settings)
         .unwrap_or_else(ShimSettingsSnapshot::from_disk);
+    timings.settings_i18n = settings_started.elapsed();
     let ctx = ShimContext::from_process_env()?;
+    let parse_started = Instant::now();
     let (cmd, forward) = parse_shim_invocation(args)?;
+    timings.parse_invocation = parse_started.elapsed();
+    let resolve_started = Instant::now();
     let resolved = resolve_core_shim_command_with_settings(cmd, &ctx, &snapshot)?;
-    Ok((cmd, ctx, snapshot, resolved, forward))
+    timings.resolve_core = resolve_started.elapsed();
+    timings.prepare_total = prepare_started.elapsed();
+    Ok((cmd, ctx, snapshot, resolved, forward, timings))
 }
 
-fn maybe_node_engines_hint(
-    cmd: CoreCommand,
-    ctx: &ShimContext,
-    active_label: Option<&str>,
-) {
+fn maybe_node_engines_hint(cmd: CoreCommand, ctx: &ShimContext, active_label: Option<&str>) {
     if matches!(cmd, CoreCommand::Node) {
         if let Some(label) = active_label {
             node_engines_hint::maybe_emit(ctx, label);
@@ -152,7 +190,7 @@ fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Pa
 #[cfg(unix)]
 fn main() {
     let args: Vec<OsString> = std::env::args_os().collect();
-    let (core_cmd, ctx, _settings, resolved, forward) = match prepare(&args) {
+    let (core_cmd, ctx, _settings, resolved, forward, mut timings) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
@@ -160,7 +198,10 @@ fn main() {
         }
     };
     let active_label = runtime_version_label_from_executable(&resolved.executable);
+    let node_hint_started = Instant::now();
     maybe_node_engines_hint(core_cmd, &ctx, active_label.as_deref());
+    timings.node_hint = node_hint_started.elapsed();
+    emit_timing_report(core_cmd, &timings);
 
     use std::os::unix::process::CommandExt;
     let mut cmd = Command::new(&resolved.executable);
@@ -176,7 +217,7 @@ fn main() {
 #[cfg(windows)]
 fn main() {
     let args: Vec<OsString> = std::env::args_os().collect();
-    let (core_cmd, ctx, _settings, resolved, forward) = match prepare(&args) {
+    let (core_cmd, ctx, _settings, resolved, forward, mut timings) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
@@ -184,13 +225,16 @@ fn main() {
         }
     };
     let active_label = runtime_version_label_from_executable(&resolved.executable);
+    let node_hint_started = Instant::now();
     maybe_node_engines_hint(core_cmd, &ctx, active_label.as_deref());
+    timings.node_hint = node_hint_started.elapsed();
 
     let mut cmd = Command::new(&resolved.executable);
     cmd.args(&forward);
     for (k, v) in &resolved.extra_env {
         cmd.env(k, v);
     }
+    let child_started = Instant::now();
     let status = match cmd.status() {
         Ok(s) => s,
         Err(e) => {
@@ -198,8 +242,12 @@ fn main() {
             std::process::exit(1);
         }
     };
+    timings.child_wait = child_started.elapsed();
     if status.success() && matches!(core_cmd, CoreCommand::Pip) {
+        let pip_sync_started = Instant::now();
         sync_python_script_shims_best_effort(&ctx.runtime_root, &resolved.executable);
+        timings.pip_sync = pip_sync_started.elapsed();
     }
+    emit_timing_report(core_cmd, &timings);
     std::process::exit(status.code().unwrap_or(0xFF));
 }

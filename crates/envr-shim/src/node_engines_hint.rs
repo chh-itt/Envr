@@ -1,7 +1,9 @@
 //! Optional stderr hint when `package.json` `engines.node` does not match the active Node.
 
 use envr_shim_core::ShimContext;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::IsTerminal;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -10,6 +12,52 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::shim_i18n;
 
 const THROTTLE_SECS: u64 = 2 * 3600;
+const NEGATIVE_CACHE_VERSION: &str = "v1";
+
+fn negative_cache_enabled() -> bool {
+    std::env::var_os("ENVR_SHIM_NODE_ENGINES_HINT_CACHE")
+        .is_none_or(|v| v.to_string_lossy().trim() != "0")
+}
+
+fn pkg_mtime_epoch_secs(pkg: &Path) -> u64 {
+    fs::metadata(pkg)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn negative_cache_key(pkg: &Path, active_label: &str) -> String {
+    format!(
+        "{NEGATIVE_CACHE_VERSION}|{}|{}|{}",
+        pkg.display(),
+        active_label,
+        pkg_mtime_epoch_secs(pkg),
+    )
+}
+
+fn negative_cache_path(cache_dir: &Path, key: &str) -> PathBuf {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    let filename = format!("{:016x}.cache", hasher.finish());
+    cache_dir.join("node-engines-negative").join(filename)
+}
+
+fn negative_cache_allows_skip(cache_dir: &Path, key: &str) -> bool {
+    let path = negative_cache_path(cache_dir, key);
+    fs::read_to_string(path)
+        .ok()
+        .is_some_and(|s| s.trim() == key)
+}
+
+fn write_negative_cache(cache_dir: &Path, key: &str) {
+    let path = negative_cache_path(cache_dir, key);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, key);
+}
 
 fn parse_version_triple_dir(name: &str) -> Option<semver::Version> {
     let s = name.strip_prefix('v').unwrap_or(name);
@@ -95,26 +143,39 @@ pub fn maybe_emit(ctx: &ShimContext, active_label: &str) {
         Some(p) => p,
         None => return,
     };
+    let cache_dir = ctx.runtime_root.join("cache");
+    let negative_key = negative_cache_key(&pkg, active_label);
+    if negative_cache_enabled() && negative_cache_allows_skip(&cache_dir, &negative_key) {
+        return;
+    }
     let spec = match read_engines_node(&pkg) {
         Some(s) => s,
-        None => return,
+        None => {
+            if negative_cache_enabled() {
+                write_negative_cache(&cache_dir, &negative_key);
+            }
+            return;
+        }
     };
     let Ok(req) = semver::VersionReq::parse(&spec) else {
+        if negative_cache_enabled() {
+            write_negative_cache(&cache_dir, &negative_key);
+        }
         return;
     };
     let Some(active_ver) = parse_version_triple_dir(active_label) else {
+        if negative_cache_enabled() {
+            write_negative_cache(&cache_dir, &negative_key);
+        }
         return;
     };
     if req.matches(&active_ver) {
+        if negative_cache_enabled() {
+            write_negative_cache(&cache_dir, &negative_key);
+        }
         return;
     }
-    let cache_dir = ctx.runtime_root.join("cache");
-    let key = format!(
-        "{}|{}|{}",
-        pkg.display(),
-        spec,
-        active_label
-    );
+    let key = format!("{}|{}|{}", pkg.display(), spec, active_label);
     if !throttle_allows_emit(&cache_dir, &key) {
         return;
     }
