@@ -1,13 +1,15 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::app;
-use crate::commands::common::{emit_verbose_step, kind_label, runtime_service, session_runtime_root};
+use crate::cli::GlobalArgs;
+use crate::commands::common::{
+    emit_verbose_step, kind_label, runtime_service, session_runtime_root,
+};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_error::EnvrResult;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
+use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodePaths, normalize_node_version, parse_node_index};
 use serde_json::{Value, json};
@@ -53,11 +55,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
                 t.to_string()
             }
         }
-        _ => t
-            .split(['.', '-', '+'])
-            .next()
-            .unwrap_or(t)
-            .to_string(),
+        _ => t.split(['.', '-', '+']).next().unwrap_or(t).to_string(),
     }
 }
 
@@ -99,7 +97,11 @@ fn try_node_lts_map() -> Option<HashMap<String, String>> {
     for r in releases {
         if let Some(cn) = &r.lts_codename {
             let k = normalize_node_version(&r.version);
-            let v = if cn == "true" { String::new() } else { cn.clone() };
+            let v = if cn == "true" {
+                String::new()
+            } else {
+                cn.clone()
+            };
             m.insert(k, v);
         }
     }
@@ -153,12 +155,13 @@ fn version_json_entries(
             if kind == RuntimeKind::Node {
                 let norm = normalize_node_version(&ver.0);
                 if let Some(map) = node_lts
-                    && let Some(cn) = map.get(&norm) {
-                        row["lts"] = json!(true);
-                        if !cn.is_empty() {
-                            row["lts_codename"] = json!(cn);
-                        }
+                    && let Some(cn) = map.get(&norm)
+                {
+                    row["lts"] = json!(true);
+                    if !cn.is_empty() {
+                        row["lts_codename"] = json!(cn);
                     }
+                }
                 if let Some(np) = &node_paths {
                     let home = np.version_dir(&ver.0);
                     if let Some(npm) = try_read_bundled_npm_version(&home) {
@@ -199,9 +202,10 @@ fn format_version_text_line(
         }
         tags.push_str(&lts_tag);
         if let Some(c) = lts_codename
-            && !c.is_empty() {
-                tags.push_str(&format!(" {c}"));
-            }
+            && !c.is_empty()
+        {
+            tags.push_str(&format!(" {c}"));
+        }
         if styles {
             tags.push_str("\x1b[0m");
         }
@@ -283,8 +287,7 @@ pub(crate) fn run_inner(
     let mut stale_remote_index = false;
     let kinds_for_refresh: Vec<RuntimeKind> = rows.iter().map(|(k, _)| *k).collect();
     let remote_maps: Vec<Option<HashMap<String, String>>> = if outdated {
-        rows
-            .iter()
+        rows.iter()
             .map(|(kind, _)| {
                 let cached = service.try_load_remote_latest_per_major_from_disk(*kind);
                 if cached.is_empty() {
@@ -335,97 +338,94 @@ pub(crate) fn run_inner(
     let mut data = json!({ "installed_runtimes": runtimes });
     data = output::with_next_steps(data, next_steps_for_list(outdated, stale_remote_index));
 
-    Ok(output::emit_ok(g, crate::codes::ok::LIST_INSTALLED, data, || {
-        if CliUxPolicy::from_global(g).wants_porcelain_lines() {
-            if rows.len() == 1 {
-                for v in &rows[0].1 {
-                    println!("{}", v.0);
-                }
-            } else {
-                for (kind, versions) in &rows {
-                    for v in versions {
-                        println!("{}\t{}", kind_label(*kind), v.0);
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::LIST_INSTALLED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).wants_porcelain_lines() {
+                if rows.len() == 1 {
+                    for v in &rows[0].1 {
+                        println!("{}", v.0);
+                    }
+                } else {
+                    for (kind, versions) in &rows {
+                        for v in versions {
+                            println!("{}\t{}", kind_label(*kind), v.0);
+                        }
                     }
                 }
+                return;
             }
-            return;
-        }
-        let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
-        let np = runtime_root
-            .as_ref()
-            .map(|r| NodePaths::new(r.clone()));
-        for (((kind, versions), cur), rmap) in rows
-            .iter()
-            .zip(currents.iter())
-            .zip(remote_maps.iter())
-        {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key("cli.list.header", "{kind}：", "{kind}:",),
-                    &[("kind", kind_label(*kind))],
-                )
-            );
-            if versions.is_empty() {
-                println!("{none_line}");
-            } else {
-                for ver in versions {
-                    let is_cur = cur.as_ref().is_some_and(|c| c.0 == ver.0);
-                    let (is_lts, lts_cn, npm_str) = if *kind == RuntimeKind::Node {
-                        let norm = normalize_node_version(&ver.0);
-                        let cn = node_lts.as_ref().and_then(|m| m.get(&norm));
-                        let is_lts = cn.is_some();
-                        let lts_cn = cn.and_then(|s| {
-                            if s.is_empty() {
-                                None
-                            } else {
-                                Some(s.as_str())
-                            }
-                        });
-                        let npm = np
-                            .as_ref()
-                            .and_then(|p| try_read_bundled_npm_version(&p.version_dir(&ver.0)));
-                        (is_lts, lts_cn, npm)
-                    } else {
-                        (false, None, None)
-                    };
-                    let outdated_hint = rmap.as_ref().and_then(|map| {
-                        let key = major_line_key(*kind, &ver.0);
-                        map.get(&key).and_then(|latest| {
-                            (cmp_version_labels(&ver.0, latest) == Ordering::Less).then(|| {
-                                fmt_template(
+            let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
+            let np = runtime_root.as_ref().map(|r| NodePaths::new(r.clone()));
+            for (((kind, versions), cur), rmap) in
+                rows.iter().zip(currents.iter()).zip(remote_maps.iter())
+            {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key("cli.list.header", "{kind}：", "{kind}:",),
+                        &[("kind", kind_label(*kind))],
+                    )
+                );
+                if versions.is_empty() {
+                    println!("{none_line}");
+                } else {
+                    for ver in versions {
+                        let is_cur = cur.as_ref().is_some_and(|c| c.0 == ver.0);
+                        let (is_lts, lts_cn, npm_str) = if *kind == RuntimeKind::Node {
+                            let norm = normalize_node_version(&ver.0);
+                            let cn = node_lts.as_ref().and_then(|m| m.get(&norm));
+                            let is_lts = cn.is_some();
+                            let lts_cn =
+                                cn.and_then(|s| if s.is_empty() { None } else { Some(s.as_str()) });
+                            let npm = np
+                                .as_ref()
+                                .and_then(|p| try_read_bundled_npm_version(&p.version_dir(&ver.0)));
+                            (is_lts, lts_cn, npm)
+                        } else {
+                            (false, None, None)
+                        };
+                        let outdated_hint = rmap.as_ref().and_then(|map| {
+                            let key = major_line_key(*kind, &ver.0);
+                            map.get(&key).and_then(|latest| {
+                                (cmp_version_labels(&ver.0, latest) == Ordering::Less).then(|| {
+                                    fmt_template(
                                         &envr_core::i18n::tr_key(
                                             "cli.list.outdated_hint",
                                             "（可升级至 {latest}）",
                                             "(upgrade to {latest})",
                                         ),
                                         &[("latest", latest.as_str())],
-                                    ).to_string()
+                                    )
+                                    .to_string()
+                                })
                             })
-                        })
-                    });
-                    let line = format_version_text_line(
-                        g,
-                        &ver.0,
-                        is_cur,
-                        is_lts,
-                        lts_cn,
-                        npm_str.as_deref(),
-                        outdated_hint.as_deref(),
+                        });
+                        let line = format_version_text_line(
+                            g,
+                            &ver.0,
+                            is_cur,
+                            is_lts,
+                            lts_cn,
+                            npm_str.as_deref(),
+                            outdated_hint.as_deref(),
+                        );
+                        println!("{line}");
+                    }
+                }
+                if outdated && stale_remote_index {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.list.outdated_refresh_notice",
+                            "  远程索引更新中，本次结果可能暂不含最新可升级信息（下次命令生效）。",
+                            "  Remote index is refreshing; upgrade hints may be incomplete this run (available next command).",
+                        )
                     );
-                    println!("{line}");
                 }
             }
-            if outdated && stale_remote_index {
-                println!(
-                    "{}",
-                    envr_core::i18n::tr_key(
-                        "cli.list.outdated_refresh_notice",
-                        "  远程索引更新中，本次结果可能暂不含最新可升级信息（下次命令生效）。",
-                        "  Remote index is refreshing; upgrade hints may be incomplete this run (available next command).",
-                    )
-                );
-            }
-        }
-    }))
+        },
+    ))
 }

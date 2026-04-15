@@ -11,27 +11,26 @@ pub(crate) mod help_registry;
 mod metadata;
 
 pub use command::{
-    AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, Command, ConfigCmd, ConfigValueType,
-    DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd, ProjectCmd, RustCmd,
-    ShimCmd,
+    AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, Command, ConfigCmd, ConfigValueType, DebugCmd,
+    DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd, ProjectCmd, RustCmd, ShimCmd,
 };
 pub use global::{ExecRunSharedArgs, GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 
 #[allow(unused_imports)]
+pub(crate) use metadata::metadata_for_key;
+#[allow(unused_imports)]
 pub(crate) use metadata::{
     CommandCapabilities, CommandKey, ContractSurface, RuntimeHandlerGroup, command_specs,
 };
-#[allow(unused_imports)]
-pub(crate) use metadata::metadata_for_key;
 
 #[cfg(test)]
 #[allow(unused_imports)]
 pub(crate) use metadata::{all_command_keys, metadata_registry_entries};
 
+use crate::presenter::CliPersona;
 use clap::{FromArgMatches, Parser};
 use envr_config::aliases::AliasesFile;
 use envr_platform::paths::current_platform_paths;
-use crate::presenter::CliPersona;
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -264,12 +263,16 @@ fn argv_requests_json_and_quiet(argv: &[OsString]) -> (bool, bool) {
             quiet = true;
         }
         if s == "--format" {
-            if let Some(v) = argv.get(i + 1).map(|x| x.to_string_lossy()) && v == "json" {
+            if let Some(v) = argv.get(i + 1).map(|x| x.to_string_lossy())
+                && v == "json"
+            {
                 wants_json = true;
             }
             i += 1;
         }
-        if let Some(rest) = s.strip_prefix("--format=") && rest == "json" {
+        if let Some(rest) = s.strip_prefix("--format=")
+            && rest == "json"
+        {
             wants_json = true;
         }
         i += 1;
@@ -281,7 +284,8 @@ fn argv_requests_json_and_quiet(argv: &[OsString]) -> (bool, bool) {
 }
 
 fn argv_requests_legacy_json_shorthand(argv: &[OsString], command_idx: usize) -> bool {
-    let Some((matched_path_len, legacy_flag)) = legacy_json_path_and_flag_for_argv(argv, command_idx)
+    let Some((matched_path_len, legacy_flag)) =
+        legacy_json_path_and_flag_for_argv(argv, command_idx)
     else {
         return false;
     };
@@ -444,7 +448,11 @@ pub fn first_command_token_index(args: &[OsString]) -> usize {
             return i;
         };
         if s == "--" {
-            return if i + 1 < args.len() { i + 1 } else { args.len() };
+            return if i + 1 < args.len() {
+                i + 1
+            } else {
+                args.len()
+            };
         }
         if !s.starts_with('-') {
             return i;
@@ -611,8 +619,8 @@ pub fn run(cli: Cli) -> i32 {
 #[cfg(test)]
 mod command_trace_tests {
     use super::{
-        CommandKey, ContractSurface, all_command_keys, command_specs, metadata_for_key,
-        metadata_registry_entries, Cli, Command, HookCmd, Parser,
+        Cli, Command, CommandKey, ContractSurface, HookCmd, Parser, all_command_keys,
+        command_specs, metadata_for_key, metadata_registry_entries,
     };
     use std::collections::HashSet;
 
@@ -653,7 +661,10 @@ mod command_trace_tests {
         for argv in samples {
             let cli = Cli::try_parse_from(argv).expect("parse");
             let trace = cli.command.trace_name();
-            assert!(seen.insert(trace), "duplicate trace_name in sample set: {trace}");
+            assert!(
+                seen.insert(trace),
+                "duplicate trace_name in sample set: {trace}"
+            );
         }
     }
 
@@ -691,7 +702,10 @@ mod command_trace_tests {
         let mut seen = HashSet::new();
         for key in all_command_keys() {
             let trace = metadata_for_key(key).trace_name;
-            assert!(seen.insert(trace), "duplicate trace name in registry: {trace}");
+            assert!(
+                seen.insert(trace),
+                "duplicate trace name in registry: {trace}"
+            );
         }
     }
 
@@ -728,7 +742,10 @@ mod command_trace_tests {
             ),
             (CommandKey::Why, &["envr", "why", "node"]),
             (CommandKey::Resolve, &["envr", "resolve", "node"]),
-            (CommandKey::Exec, &["envr", "exec", "--lang", "node", "echo", "ok"]),
+            (
+                CommandKey::Exec,
+                &["envr", "exec", "--lang", "node", "echo", "ok"],
+            ),
             (CommandKey::Run, &["envr", "run", "echo", "ok"]),
             (CommandKey::Env, &["envr", "env"]),
             (CommandKey::Template, &["envr", "template", "Cargo.toml"]),
@@ -741,9 +758,15 @@ mod command_trace_tests {
             (CommandKey::Init, &["envr", "init"]),
             (CommandKey::Check, &["envr", "check"]),
             (CommandKey::Status, &["envr", "status"]),
-            (CommandKey::ProjectAdd, &["envr", "project", "add", "node@20"]),
+            (
+                CommandKey::ProjectAdd,
+                &["envr", "project", "add", "node@20"],
+            ),
             (CommandKey::ProjectSync, &["envr", "project", "sync"]),
-            (CommandKey::ProjectValidate, &["envr", "project", "validate"]),
+            (
+                CommandKey::ProjectValidate,
+                &["envr", "project", "validate"],
+            ),
             (CommandKey::Import, &["envr", "import", "Cargo.toml"]),
             (CommandKey::Export, &["envr", "export"]),
             (CommandKey::ProfileList, &["envr", "profile", "list"]),
@@ -754,7 +777,10 @@ mod command_trace_tests {
             (CommandKey::ConfigPath, &["envr", "config", "path"]),
             (CommandKey::ConfigShow, &["envr", "config", "show"]),
             (CommandKey::ConfigKeys, &["envr", "config", "keys"]),
-            (CommandKey::ConfigGet, &["envr", "config", "get", "mirror.mode"]),
+            (
+                CommandKey::ConfigGet,
+                &["envr", "config", "get", "mirror.mode"],
+            ),
             (
                 CommandKey::ConfigSet,
                 &["envr", "config", "set", "mirror.mode", "auto"],
@@ -773,7 +799,10 @@ mod command_trace_tests {
                 &["envr", "cache", "index", "status"],
             ),
             (CommandKey::BundleCreate, &["envr", "bundle", "create"]),
-            (CommandKey::BundleApply, &["envr", "bundle", "apply", "x.zip"]),
+            (
+                CommandKey::BundleApply,
+                &["envr", "bundle", "apply", "x.zip"],
+            ),
             (CommandKey::Doctor, &["envr", "doctor"]),
             (CommandKey::Deactivate, &["envr", "deactivate"]),
             (CommandKey::DebugInfo, &["envr", "debug", "info"]),
@@ -796,10 +825,7 @@ mod command_trace_tests {
         for (expected, argv) in samples {
             let cli = Cli::try_parse_from(*argv).expect("parse");
             let key = cli.command.key();
-            assert_eq!(
-                key, *expected,
-                "command key mismatch for argv={argv:?}"
-            );
+            assert_eq!(key, *expected, "command key mismatch for argv={argv:?}");
             let m = metadata_for_key(key);
             assert!(!m.trace_name.is_empty());
             seen.insert(key);
@@ -1157,4 +1183,3 @@ mod argv_parse_stage_tests {
         assert!(super::parse_cli_from_argv(argv).is_err());
     }
 }
-

@@ -62,33 +62,38 @@ pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
         "log_dir": log_dir,
     });
 
-    Ok(output::emit_ok(g, crate::codes::ok::DEBUG_INFO, data, || {
-        if !CliUxPolicy::from_global(g).human_text_primary() {
-            return;
-        }
-        println!("cwd: {cwd}");
-        if let Some(ref sp) = settings_path {
-            println!("settings.toml: {}", sp.display(),);
-            match settings_ok {
-                Some(true) => println!("  (validate: ok)"),
-                Some(false) => println!("  (validate: FAILED — run `envr config validate`)"),
-                None => println!("  (validate: skipped)"),
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::DEBUG_INFO,
+        data,
+        || {
+            if !CliUxPolicy::from_global(g).human_text_primary() {
+                return;
             }
-        }
-        if let Some(ref root) = runtime_root {
-            println!("runtime root: {}", root.display());
-            if !runtime_children.is_empty() {
-                println!("  top entries: {}", runtime_children.join(", "));
+            println!("cwd: {cwd}");
+            if let Some(ref sp) = settings_path {
+                println!("settings.toml: {}", sp.display(),);
+                match settings_ok {
+                    Some(true) => println!("  (validate: ok)"),
+                    Some(false) => println!("  (validate: FAILED — run `envr config validate`)"),
+                    None => println!("  (validate: skipped)"),
+                }
             }
-        }
-        println!("log dir: {log_dir}");
-        let rl = std::env::var("RUST_LOG").unwrap_or_default();
-        if !rl.is_empty() {
-            println!("RUST_LOG: {rl}");
-        }
-        println!("ENVR_* ({}):", envr_vars.len());
-        for (k, v) in &envr_vars {
-            println!("  {k}={v}");
-        }
-    }))
+            if let Some(ref root) = runtime_root {
+                println!("runtime root: {}", root.display());
+                if !runtime_children.is_empty() {
+                    println!("  top entries: {}", runtime_children.join(", "));
+                }
+            }
+            println!("log dir: {log_dir}");
+            let rl = std::env::var("RUST_LOG").unwrap_or_default();
+            if !rl.is_empty() {
+                println!("RUST_LOG: {rl}");
+            }
+            println!("ENVR_* ({}):", envr_vars.len());
+            for (k, v) in &envr_vars {
+                println!("  {k}={v}");
+            }
+        },
+    ))
 }

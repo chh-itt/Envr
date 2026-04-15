@@ -88,7 +88,9 @@ dx = "diagnostics export"
         .as_array()
         .expect("alias_list data.aliases should be array");
     assert!(
-        aliases.iter().any(|e| e["name"] == "n" && e["target"] == "node"),
+        aliases
+            .iter()
+            .any(|e| e["name"] == "n" && e["target"] == "node"),
         "expected alias n->node in JSON data: {v}"
     );
     assert!(

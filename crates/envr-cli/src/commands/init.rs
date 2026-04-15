@@ -236,15 +236,20 @@ pub(crate) fn run_inner(
         "path": target.to_string_lossy(),
         "interactive": interactive,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_CONFIG_INIT, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key("cli.init.wrote", "已写入 {path}", "wrote {path}",),
-                    &[("path", &target.display().to_string())],
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_CONFIG_INIT,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key("cli.init.wrote", "已写入 {path}", "wrote {path}",),
+                        &[("path", &target.display().to_string())],
+                    )
+                );
+            }
+        },
+    ))
 }

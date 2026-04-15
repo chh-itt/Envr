@@ -56,13 +56,18 @@ pub(crate) fn run_inner(
         "shell": shell_str,
         "vars": vars,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_ENV, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            for k in &keys {
-                if let Some(v) = env_map.get(k) {
-                    emit_pair(shell, k, v);
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_ENV,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                for k in &keys {
+                    if let Some(v) = env_map.get(k) {
+                        emit_pair(shell, k, v);
+                    }
                 }
             }
-        }
-    }))
+        },
+    ))
 }

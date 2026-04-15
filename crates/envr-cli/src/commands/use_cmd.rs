@@ -1,7 +1,7 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::app;
+use crate::cli::GlobalArgs;
 use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::output::{self, fmt_template};
 
@@ -52,7 +52,10 @@ pub(crate) fn run_inner(
                 "[verbose] 正在解析 current 目标：{kind} {version}",
                 "[verbose] resolving current target: {kind} {version}",
             ),
-            &[("kind", kind_label(kind)), ("version", runtime_version.trim())],
+            &[
+                ("kind", kind_label(kind)),
+                ("version", runtime_version.trim()),
+            ],
         ),
     );
 

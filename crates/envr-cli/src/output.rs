@@ -39,8 +39,8 @@ struct ErrorKindSpec {
 fn error_kind_spec() -> &'static ErrorKindSpec {
     static SPEC: OnceLock<ErrorKindSpec> = OnceLock::new();
     SPEC.get_or_init(|| {
-        let parsed: Value =
-            serde_json::from_str(ERROR_KIND_MAP_JSON).expect("error-kind-map.json must be valid JSON");
+        let parsed: Value = serde_json::from_str(ERROR_KIND_MAP_JSON)
+            .expect("error-kind-map.json must be valid JSON");
         let default_raw = parsed
             .get("default")
             .and_then(Value::as_str)
@@ -148,7 +148,12 @@ fn trim_failure_for_quiet_json(
     (error_bracket_label(code), Value::Null, vec![])
 }
 
-fn add_error_object_if_possible(code: &str, message: &str, mut data: Value, diagnostics: &[String]) -> Value {
+fn add_error_object_if_possible(
+    code: &str,
+    message: &str,
+    mut data: Value,
+    diagnostics: &[String],
+) -> Value {
     let Value::Object(ref mut m) = data else {
         return data;
     };
@@ -199,7 +204,10 @@ pub fn emit_failure_envelope(
     match policy.format {
         OutputFormat::Json => {
             let v = build_failure_envelope_value(g, code, message, data, diagnostics);
-            println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
+            println!(
+                "{}",
+                serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string())
+            );
         }
         OutputFormat::Text => {
             if policy.quiet {
@@ -307,10 +315,7 @@ pub(crate) fn build_envelope_value(
     diagnostics: &[String],
 ) -> Value {
     let mut m = Map::new();
-    m.insert(
-        "schema_version".into(),
-        json!(CLI_JSON_SCHEMA_VERSION),
-    );
+    m.insert("schema_version".into(), json!(CLI_JSON_SCHEMA_VERSION));
     m.insert("success".into(), json!(success));
     m.insert("code".into(), json!(code));
     m.insert("message".into(), json!(message));
@@ -333,7 +338,10 @@ pub fn write_envelope(
     diagnostics: &[String],
 ) -> Option<&'static str> {
     let v = build_envelope_value(success, code, message, data, diagnostics);
-    println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
+    println!(
+        "{}",
+        serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string())
+    );
     (!success).then_some(code)
 }
 
@@ -348,7 +356,10 @@ pub fn emit_validation(g: &GlobalArgs, cmd: &str, example: &str) -> CliExit {
     match policy.format {
         OutputFormat::Json => {
             let v = build_failure_envelope_value(g, codes::err::VALIDATION, &msg, Value::Null, &[]);
-            println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
+            println!(
+                "{}",
+                serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string())
+            );
         }
         OutputFormat::Text => {
             if policy.quiet {
@@ -395,8 +406,12 @@ pub fn emit_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
     };
     match policy.format {
         OutputFormat::Json => {
-            let v = build_failure_envelope_value(g, code, &payload.message, json_error_data, &diags);
-            println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
+            let v =
+                build_failure_envelope_value(g, code, &payload.message, json_error_data, &diags);
+            println!(
+                "{}",
+                serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string())
+            );
         }
         OutputFormat::Text => {
             if policy.quiet {
@@ -409,7 +424,12 @@ pub fn emit_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
     exit
 }
 
-pub fn emit_ok<F: FnOnce()>(g: &GlobalArgs, message: &'static str, data: Value, text: F) -> CliExit {
+pub fn emit_ok<F: FnOnce()>(
+    g: &GlobalArgs,
+    message: &'static str,
+    data: Value,
+    text: F,
+) -> CliExit {
     let policy = CliUxPolicy::from_global(g);
     match policy.format {
         OutputFormat::Json => {
@@ -498,7 +518,8 @@ fn next_step_persona_rank(id: &str, persona: CliPersona) -> i32 {
                 30
             } else if id.starts_with("sync_") || id.starts_with("set_") {
                 20
-            } else if id.starts_with("check_") || id.starts_with("verify_") || id.contains("status") {
+            } else if id.starts_with("check_") || id.starts_with("verify_") || id.contains("status")
+            {
                 10
             } else {
                 0
@@ -857,7 +878,10 @@ mod tests {
             .iter()
             .filter_map(|s| s.get("id").and_then(Value::as_str))
             .collect();
-        assert_eq!(ids, vec!["fix_project_config", "init_project_config", "check_status"]);
+        assert_eq!(
+            ids,
+            vec!["fix_project_config", "init_project_config", "check_status"]
+        );
     }
 
     proptest! {

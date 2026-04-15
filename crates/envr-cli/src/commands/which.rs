@@ -1,9 +1,9 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
+use crate::CliPathProfile;
 use crate::CliUxPolicy;
+use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
-use crate::CliPathProfile;
 
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{
@@ -70,22 +70,27 @@ pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<CliE
         }).collect::<Vec<_>>(),
     });
     data = output::with_next_steps(data, next_steps_for_which(&base, detail.source));
-    Ok(output::emit_ok(g, crate::codes::ok::RESOLVED_EXECUTABLE, data, || {
-        let ux = CliUxPolicy::from_global(g);
-        println!("{}", shim.executable.display());
-        if ux.wants_porcelain_lines() {
-            return;
-        }
-        let meta = format_which_meta_line(&detail);
-        if ux.use_rich_text_styles() {
-            println!("\x1b[2m{meta}\x1b[0m");
-        } else {
-            println!("{meta}");
-        }
-        for (k, v) in &shim.extra_env {
-            eprintln!("{k}={v}");
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::RESOLVED_EXECUTABLE,
+        data,
+        || {
+            let ux = CliUxPolicy::from_global(g);
+            println!("{}", shim.executable.display());
+            if ux.wants_porcelain_lines() {
+                return;
+            }
+            let meta = format_which_meta_line(&detail);
+            if ux.use_rich_text_styles() {
+                println!("\x1b[2m{meta}\x1b[0m");
+            } else {
+                println!("{meta}");
+            }
+            for (k, v) in &shim.extra_env {
+                eprintln!("{k}={v}");
+            }
+        },
+    ))
 }
 
 fn which_selection_json(src: &WhichRuntimeSource) -> &'static str {

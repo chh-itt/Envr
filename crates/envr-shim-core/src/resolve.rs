@@ -1,15 +1,98 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
-    Settings, bun_package_registry_env, bun_path_proxy_enabled_from_disk,
-    deno_package_registry_env, deno_path_proxy_enabled_from_disk, go_path_proxy_enabled_from_disk,
-    java_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
-    php_path_proxy_enabled_from_disk, php_windows_build_want_ts_from_disk,
-    python_path_proxy_enabled_from_disk, resolve_runtime_root, settings_path_from_platform,
+    Settings, bun_package_registry_env, deno_package_registry_env, resolve_runtime_root,
+    settings_path_from_platform,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone)]
+struct ShimSettingsSnapshot {
+    node_path_proxy_enabled: bool,
+    python_path_proxy_enabled: bool,
+    java_path_proxy_enabled: bool,
+    go_path_proxy_enabled: bool,
+    php_path_proxy_enabled: bool,
+    deno_path_proxy_enabled: bool,
+    bun_path_proxy_enabled: bool,
+    php_windows_build_want_ts: bool,
+    deno_registry_env: Vec<(String, String)>,
+    bun_registry_env: Vec<(String, String)>,
+}
+
+impl Default for ShimSettingsSnapshot {
+    fn default() -> Self {
+        Self {
+            node_path_proxy_enabled: true,
+            python_path_proxy_enabled: true,
+            java_path_proxy_enabled: true,
+            go_path_proxy_enabled: true,
+            php_path_proxy_enabled: true,
+            deno_path_proxy_enabled: true,
+            bun_path_proxy_enabled: true,
+            php_windows_build_want_ts: false,
+            deno_registry_env: Vec::new(),
+            bun_registry_env: Vec::new(),
+        }
+    }
+}
+
+impl ShimSettingsSnapshot {
+    fn from_disk() -> Self {
+        let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+            return Self::default();
+        };
+        let path = settings_path_from_platform(&platform);
+        let Ok(settings) = Settings::load_or_default_from(&path) else {
+            return Self::default();
+        };
+        Self {
+            node_path_proxy_enabled: settings.runtime.node.path_proxy_enabled,
+            python_path_proxy_enabled: settings.runtime.python.path_proxy_enabled,
+            java_path_proxy_enabled: settings.runtime.java.path_proxy_enabled,
+            go_path_proxy_enabled: settings.runtime.go.path_proxy_enabled,
+            php_path_proxy_enabled: settings.runtime.php.path_proxy_enabled,
+            deno_path_proxy_enabled: settings.runtime.deno.path_proxy_enabled,
+            bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
+            php_windows_build_want_ts: matches!(
+                settings.runtime.php.windows_build,
+                envr_config::settings::PhpWindowsBuildFlavor::Ts
+            ),
+            deno_registry_env: deno_package_registry_env(&settings),
+            bun_registry_env: bun_package_registry_env(&settings),
+        }
+    }
+}
+
+fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> bool {
+    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
+        && !settings.node_path_proxy_enabled
+    {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !settings.python_path_proxy_enabled
+    {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !settings.java_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !settings.go_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Php) && !settings.php_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Deno) && !settings.deno_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !settings.bun_path_proxy_enabled {
+        return true;
+    }
+    false
+}
 
 /// Process context for resolving a shim (runtime data root + config search directory).
 #[derive(Debug, Clone)]
@@ -118,33 +201,8 @@ pub struct WhichRuntimeDetail {
 
 /// `true` when [`resolve_core_shim_command`] would use the PATH-proxy-bypass branch.
 pub fn core_command_uses_path_proxy_bypass(cmd: CoreCommand) -> bool {
-    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
-        && !node_path_proxy_enabled_from_disk()
-    {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip)
-        && !python_path_proxy_enabled_from_disk()
-    {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk()
-    {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Php) && !php_path_proxy_enabled_from_disk() {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Deno) && !deno_path_proxy_enabled_from_disk() {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !bun_path_proxy_enabled_from_disk() {
-        return true;
-    }
-    false
+    let settings = ShimSettingsSnapshot::from_disk();
+    uses_path_proxy_bypass(cmd, &settings)
 }
 
 fn envr_version_dir_from_executable(executable: &Path) -> Option<String> {
@@ -455,8 +513,9 @@ fn runtime_home_for_php(
     ctx: &ShimContext,
     config: Option<&ProjectConfig>,
     spec_override: Option<&str>,
+    settings: &ShimSettingsSnapshot,
 ) -> EnvrResult<PathBuf> {
-    let want_ts = php_windows_build_want_ts_from_disk();
+    let want_ts = settings.php_windows_build_want_ts;
     let versions_dir = ctx
         .runtime_root
         .join("runtimes")
@@ -494,9 +553,10 @@ fn runtime_home_for_key(
     key: &str,
     config: Option<&ProjectConfig>,
     spec_override: Option<&str>,
+    settings: &ShimSettingsSnapshot,
 ) -> EnvrResult<PathBuf> {
     if key == "php" {
-        return runtime_home_for_php(ctx, config, spec_override);
+        return runtime_home_for_php(ctx, config, spec_override, settings);
     }
 
     let versions_dir = ctx.runtime_root.join("runtimes").join(key).join("versions");
@@ -532,7 +592,8 @@ pub fn resolve_runtime_home_for_lang_with_project(
     spec_override: Option<&str>,
     project_config: Option<&ProjectConfig>,
 ) -> EnvrResult<PathBuf> {
-    runtime_home_for_key(ctx, lang_key, project_config, spec_override)
+    let settings = ShimSettingsSnapshot::from_disk();
+    runtime_home_for_key(ctx, lang_key, project_config, spec_override, &settings)
 }
 
 /// Runtime installation directory for `lang_key` (`node` / `python` / `java`), matching shim routing:
@@ -641,28 +702,6 @@ fn deno_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
         .ok_or_else(|| EnvrError::Runtime(format!("deno missing under {}", home.display())))?),
         _ => Err(EnvrError::Runtime("internal: not a deno tool".into())),
     }
-}
-
-fn deno_registry_env_from_disk() -> Vec<(String, String)> {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return Vec::new();
-    };
-    let path = settings_path_from_platform(&platform);
-    let Ok(settings) = Settings::load_or_default_from(&path) else {
-        return Vec::new();
-    };
-    deno_package_registry_env(&settings)
-}
-
-fn bun_registry_env_from_disk() -> Vec<(String, String)> {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return Vec::new();
-    };
-    let path = settings_path_from_platform(&platform);
-    let Ok(settings) = Settings::load_or_default_from(&path) else {
-        return Vec::new();
-    };
-    bun_package_registry_env(&settings)
 }
 
 fn go_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
@@ -892,30 +931,29 @@ fn resolve_bun_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
 
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
+    let settings = ShimSettingsSnapshot::from_disk();
     if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
-        && !node_path_proxy_enabled_from_disk()
+        && !settings.node_path_proxy_enabled
     {
         return resolve_node_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip)
-        && !python_path_proxy_enabled_from_disk()
+    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !settings.python_path_proxy_enabled
     {
         return resolve_python_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk()
-    {
+    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !settings.java_path_proxy_enabled {
         return resolve_java_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
+    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !settings.go_path_proxy_enabled {
         return resolve_go_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Php) && !php_path_proxy_enabled_from_disk() {
+    if matches!(cmd, CoreCommand::Php) && !settings.php_path_proxy_enabled {
         return resolve_php_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Deno) && !deno_path_proxy_enabled_from_disk() {
+    if matches!(cmd, CoreCommand::Deno) && !settings.deno_path_proxy_enabled {
         return resolve_deno_tool_bypass_envr(cmd);
     }
-    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !bun_path_proxy_enabled_from_disk() {
+    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !settings.bun_path_proxy_enabled {
         return resolve_bun_tool_bypass_envr(cmd);
     }
 
@@ -923,7 +961,7 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
-    let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None)?;
+    let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, &settings)?;
     let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
 
     let mut extra_env = Vec::new();
@@ -942,11 +980,11 @@ pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrRes
         }
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {
-            extra_env.extend(deno_registry_env_from_disk());
+            extra_env.extend(settings.deno_registry_env.clone());
             deno_tool_path(&home, cmd)?
         }
         CoreCommand::Bun | CoreCommand::Bunx => {
-            extra_env.extend(bun_registry_env_from_disk());
+            extra_env.extend(settings.bun_registry_env.clone());
             bun_tool_path(&home, cmd)?
         }
     };
@@ -1139,6 +1177,30 @@ mod tests {
         let home = tmp.path();
         let err = core_tool_executable(home, CoreCommand::Bun).expect_err("missing bun");
         assert!(err.to_string().contains("bun missing under"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_runtime_home_uses_current_pointer_file() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let home = root.join("runtimes/node/versions/20.10.0");
+        fs::create_dir_all(&home).expect("home");
+        fs::create_dir_all(root.join("runtimes/node")).expect("node root");
+        fs::create_dir_all(root.join("prj")).expect("prj");
+        fs::write(
+            root.join("runtimes/node/current"),
+            home.display().to_string(),
+        )
+        .expect("current");
+
+        let ctx = ShimContext {
+            runtime_root: root.to_path_buf(),
+            working_dir: root.join("prj"),
+            profile: None,
+        };
+        let got = resolve_runtime_home_for_lang(&ctx, "node", None).expect("resolve");
+        assert!(got.ends_with("20.10.0"), "{got:?}");
     }
 
     #[cfg(unix)]

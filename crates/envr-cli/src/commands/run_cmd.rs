@@ -1,12 +1,12 @@
-use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
 use crate::CliExit;
 use crate::CliUxPolicy;
-use crate::run_context::CliPathProfile;
+use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
 use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
 use crate::output::fmt_template;
+use crate::run_context::CliPathProfile;
 
 use envr_config::project_config::ProjectConfig;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
@@ -33,10 +33,11 @@ fn resolve_run_command(
     cfg: Option<&ProjectConfig>,
 ) -> (String, Vec<String>, bool) {
     if let Some(cfg) = cfg
-        && let Some(script) = cfg.scripts.get(command) {
-            let (exe, a) = script_shell_invocation(script, args);
-            return (exe, a, true);
-        }
+        && let Some(script) = cfg.scripts.get(command)
+    {
+        let (exe, a) = script_shell_invocation(script, args);
+        return (exe, a, true);
+    }
     (command.to_string(), args.to_vec(), false)
 }
 
@@ -246,10 +247,7 @@ pub(crate) fn run_inner(
     let ctx = rex.ctx();
     let pc = rex.project_config();
 
-    let text_out = matches!(
-        g.effective_output_format(),
-        OutputFormat::Text
-    );
+    let text_out = matches!(g.effective_output_format(), OutputFormat::Text);
 
     let mut auto_installed: Vec<serde_json::Value> = Vec::new();
     if install_if_missing && !dry_run && !dry_run_diff {
@@ -300,8 +298,7 @@ pub(crate) fn run_inner(
         resolve_run_command(&command, &args, proj_loaded.as_ref().map(|(c, _)| c));
     maybe_emit_run_script_miss_hint(g, &command, pc, ran_as_script);
 
-    if verbose
-        && let Ok(lines) = child_env::collect_run_verbose_lines(ctx, install_if_missing, pc)
+    if verbose && let Ok(lines) = child_env::collect_run_verbose_lines(ctx, install_if_missing, pc)
     {
         crate::commands::common::emit_verbose_lines(g, text_out, &lines, "cli.run.verbose_using");
     }
@@ -327,10 +324,7 @@ pub(crate) fn run_inner(
 
     let status = child.status().map_err(EnvrError::from)?;
     let exit = status.code().unwrap_or(1);
-    let env_file_s: Vec<String> = env_files
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect();
+    let env_file_s: Vec<String> = env_files.iter().map(|p| p.display().to_string()).collect();
     let data = json!({
         "exit_code": exit,
         "command": exe,
@@ -342,5 +336,7 @@ pub(crate) fn run_inner(
         "env_files": env_file_s,
         "env_overrides": env_pairs,
     });
-    Ok(crate::commands::common::emit_child_process_outcome(g, data, exit))
+    Ok(crate::commands::common::emit_child_process_outcome(
+        g, data, exit,
+    ))
 }

@@ -1,9 +1,9 @@
 use envr_error::{EnvrError, EnvrResult};
 use std::{env, error::Error, fs, path::PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::Layer;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
-use tracing_subscriber::Layer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub struct LoggingGuard {
@@ -61,7 +61,9 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
     //
     // Note: we build the layer inside each branch so type inference stays consistent for the
     // chosen console writer (stdout vs stderr).
-    let metrics_path = env::var("ENVR_CLI_METRICS_JSONL").ok().filter(|p| !p.trim().is_empty());
+    let metrics_path = env::var("ENVR_CLI_METRICS_JSONL")
+        .ok()
+        .filter(|p| !p.trim().is_empty());
 
     if opts.log_to_stderr {
         let (metrics_layer, metrics_guard) = if let Some(ref p) = metrics_path {

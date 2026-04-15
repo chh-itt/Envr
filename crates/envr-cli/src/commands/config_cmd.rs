@@ -29,9 +29,14 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "template": tpl,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SCHEMA, data, || {
-                print!("{tpl}");
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_SCHEMA,
+                data,
+                || {
+                    print!("{tpl}");
+                },
+            ))
         }
         crate::cli::ConfigCmd::Validate => match validate_settings_file(&settings_path) {
             Ok(()) => {
@@ -40,19 +45,24 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                     "valid": true,
                     "migrated": migrated,
                 });
-                Ok(output::emit_ok(g, crate::codes::ok::CONFIG_VALIDATE_OK, data, || {
-                    if CliUxPolicy::from_global(g).human_text_primary() {
-                        println!(
-                            "{}",
-                            envr_core::i18n::tr_key(
-                                "cli.config.validate_ok",
-                                "settings.toml 校验通过",
-                                "`settings.toml` is valid",
-                            )
-                        );
-                        println!("{}", settings_path.display());
-                    }
-                }))
+                Ok(output::emit_ok(
+                    g,
+                    crate::codes::ok::CONFIG_VALIDATE_OK,
+                    data,
+                    || {
+                        if CliUxPolicy::from_global(g).human_text_primary() {
+                            println!(
+                                "{}",
+                                envr_core::i18n::tr_key(
+                                    "cli.config.validate_ok",
+                                    "settings.toml 校验通过",
+                                    "`settings.toml` is valid",
+                                )
+                            );
+                            println!("{}", settings_path.display());
+                        }
+                    },
+                ))
             }
             Err(e) => Err(e),
         },
@@ -62,13 +72,23 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "path": settings_path.to_string_lossy(),
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EDIT_OK, data, || {}))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_EDIT_OK,
+                data,
+                || {},
+            ))
         }
         crate::cli::ConfigCmd::Path => {
             let data = serde_json::json!({ "path": settings_path.to_string_lossy() });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_PATH, data, || {
-                println!("{}", settings_path.display());
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_PATH,
+                data,
+                || {
+                    println!("{}", settings_path.display());
+                },
+            ))
         }
         crate::cli::ConfigCmd::Keys => {
             let keys = config_writable_keys();
@@ -77,11 +97,16 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "keys": keys,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_KEYS, data, || {
-                for k in keys {
-                    println!("{k}");
-                }
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_KEYS,
+                data,
+                || {
+                    for k in keys {
+                        println!("{k}");
+                    }
+                },
+            ))
         }
         crate::cli::ConfigCmd::Get { key } => {
             match Settings::load_or_default_from(&settings_path) {
@@ -95,15 +120,20 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                         "value": got.cloned().unwrap_or(serde_json::Value::Null),
                         "migrated": migrated,
                     });
-                    Ok(output::emit_ok(g, crate::codes::ok::CONFIG_GET, data, || {
-                        if let Some(val) = got {
-                            if val.is_string() {
-                                println!("{}", val.as_str().unwrap_or(""));
-                            } else {
-                                println!("{val}");
+                    Ok(output::emit_ok(
+                        g,
+                        crate::codes::ok::CONFIG_GET,
+                        data,
+                        || {
+                            if let Some(val) = got {
+                                if val.is_string() {
+                                    println!("{}", val.as_str().unwrap_or(""));
+                                } else {
+                                    println!("{val}");
+                                }
                             }
-                        }
-                    }))
+                        },
+                    ))
                 }
                 Err(e) => Err(e),
             }
@@ -137,9 +167,14 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "value": parsed,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SET, data, || {
-                println!("{}", settings_path.display());
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_SET,
+                data,
+                || {
+                    println!("{}", settings_path.display());
+                },
+            ))
         }
         crate::cli::ConfigCmd::Show => {
             let st = Settings::load_or_default_from(&settings_path)?;
@@ -150,11 +185,16 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "settings": serde_json::to_value(&st).unwrap_or(serde_json::Value::Null),
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SHOW, data, || {
-                println!("{}", settings_path.display());
-                println!();
-                print!("{pretty}");
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CONFIG_SHOW,
+                data,
+                || {
+                    println!("{}", settings_path.display());
+                    println!();
+                    print!("{pretty}");
+                },
+            ))
         }
     }
 }

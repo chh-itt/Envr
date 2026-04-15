@@ -1,8 +1,8 @@
 //! Dry-run helpers: full env dump vs diff against the parent process.
 
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
+use crate::cli::GlobalArgs;
 use crate::output;
 
 use serde_json::{Value, json};
@@ -117,11 +117,7 @@ pub fn emit_dry_run_snapshot(
         if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
-                envr_core::i18n::tr_key(
-                    "cli.dry_run.would_run",
-                    "将执行：",
-                    "Would run:",
-                )
+                envr_core::i18n::tr_key("cli.dry_run.would_run", "将执行：", "Would run:",)
             );
             println!("  {} {}", command, shell_words_join(args));
             println!();
@@ -153,11 +149,7 @@ pub fn emit_dry_run_diff(
         }
         println!(
             "{}",
-            envr_core::i18n::tr_key(
-                "cli.dry_run.would_run",
-                "将执行：",
-                "Would run:",
-            )
+            envr_core::i18n::tr_key("cli.dry_run.would_run", "将执行：", "Would run:",)
         );
         println!("  {} {}", command, shell_words_join(args));
         println!();
@@ -171,10 +163,9 @@ pub fn emit_dry_run_diff(
             }
         };
 
-        let pe_added: Vec<String> = serde_json::from_value(
-            diff.get("path_entries_added").cloned().unwrap_or(json!([])),
-        )
-        .unwrap_or_default();
+        let pe_added: Vec<String> =
+            serde_json::from_value(diff.get("path_entries_added").cloned().unwrap_or(json!([])))
+                .unwrap_or_default();
         if !pe_added.is_empty() {
             println!(
                 "{}",
@@ -212,50 +203,52 @@ pub fn emit_dry_run_diff(
         }
 
         if let Some(obj) = diff.get("added").and_then(|v| v.as_object())
-            && !obj.is_empty() {
-                println!(
-                    "{}",
-                    envr_core::i18n::tr_key(
-                        "cli.dry_run.env_added_heading",
-                        "新增环境变量：",
-                        "New environment variables:",
-                    )
-                );
-                let mut keys: Vec<_> = obj.keys().cloned().collect();
-                keys.sort();
-                for k in keys {
-                    if k == "PATH" || k == "Path" {
-                        continue;
-                    }
-                    if let Some(v) = obj.get(&k) {
-                        println!("  + {k}={}", v.as_str().unwrap_or(""));
-                    }
+            && !obj.is_empty()
+        {
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.dry_run.env_added_heading",
+                    "新增环境变量：",
+                    "New environment variables:",
+                )
+            );
+            let mut keys: Vec<_> = obj.keys().cloned().collect();
+            keys.sort();
+            for k in keys {
+                if k == "PATH" || k == "Path" {
+                    continue;
                 }
-                println!();
+                if let Some(v) = obj.get(&k) {
+                    println!("  + {k}={}", v.as_str().unwrap_or(""));
+                }
             }
+            println!();
+        }
 
         if let Some(obj) = diff.get("changed").and_then(|v| v.as_object())
-            && !obj.is_empty() {
-                println!(
-                    "{}",
-                    envr_core::i18n::tr_key(
-                        "cli.dry_run.env_changed_heading",
-                        "变更的环境变量：",
-                        "Changed environment variables:",
-                    )
-                );
-                let mut keys: Vec<_> = obj.keys().cloned().collect();
-                keys.sort();
-                for k in keys {
-                    if k == "PATH" || k == "Path" {
-                        continue;
-                    }
-                    if let Some(entry) = obj.get(&k).and_then(|v| v.as_object()) {
-                        let from = entry.get("from").and_then(|v| v.as_str()).unwrap_or("");
-                        let to = entry.get("to").and_then(|v| v.as_str()).unwrap_or("");
-                        println!("  ~ {k}: {from} -> {to}");
-                    }
+            && !obj.is_empty()
+        {
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.dry_run.env_changed_heading",
+                    "变更的环境变量：",
+                    "Changed environment variables:",
+                )
+            );
+            let mut keys: Vec<_> = obj.keys().cloned().collect();
+            keys.sort();
+            for k in keys {
+                if k == "PATH" || k == "Path" {
+                    continue;
+                }
+                if let Some(entry) = obj.get(&k).and_then(|v| v.as_object()) {
+                    let from = entry.get("from").and_then(|v| v.as_str()).unwrap_or("");
+                    let to = entry.get("to").and_then(|v| v.as_str()).unwrap_or("");
+                    println!("  ~ {k}: {from} -> {to}");
                 }
             }
+        }
     })
 }

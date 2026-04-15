@@ -16,3 +16,7 @@ criterion = { workspace = true }
 [[bench]]
 name = "resolve_runtime_home"
 harness = false
+
+[[bench]]
+name = "shim_settings_snapshot"
+harness = false

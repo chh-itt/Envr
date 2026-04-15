@@ -1,9 +1,9 @@
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::commands::doctor::{
     DoctorReport, onboarding_checklist_lines, powershell_append_user_path_snippet,
 };
 use crate::output::fmt_template;
-use crate::CliUxPolicy;
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -368,7 +368,11 @@ pub(crate) fn print_doctor_human_sections(
     if !fixes_for_text.is_empty() && CliUxPolicy::from_global(g).human_text_primary() {
         println!(
             "\n{}",
-            envr_core::i18n::tr_key("cli.doctor.fixes_heading", "已执行的修复：", "Fixes applied:")
+            envr_core::i18n::tr_key(
+                "cli.doctor.fixes_heading",
+                "已执行的修复：",
+                "Fixes applied:"
+            )
         );
         for f in fixes_for_text {
             println!("  - {f}");
@@ -388,10 +392,7 @@ pub(crate) fn shell_add_path_command(shims: &Path) -> (&'static str, String) {
     let shell = detect_shell_kind();
     let p = shims.display().to_string();
     match shell {
-        "powershell" => (
-            "powershell",
-            format!("$env:PATH = \"{p};\" + $env:PATH"),
-        ),
+        "powershell" => ("powershell", format!("$env:PATH = \"{p};\" + $env:PATH")),
         "cmd" => ("cmd", format!("set PATH={p};%PATH%")),
         _ => ("posix", format!("export PATH=\"{p}:$PATH\"")),
     }

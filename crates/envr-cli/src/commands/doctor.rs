@@ -1,5 +1,5 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
+use crate::cli::GlobalArgs;
 use crate::commands::doctor_analyzer;
 use crate::commands::doctor_fixer;
 use crate::commands::doctor_presenter;
@@ -233,7 +233,11 @@ fn merge_path_fix_json(data: &mut Value, fix_path: bool, report: &DoctorReport) 
     }
 }
 
-fn next_steps_for_doctor(report: &DoctorReport, fix: bool, fix_path: bool) -> Vec<(&'static str, String)> {
+fn next_steps_for_doctor(
+    report: &DoctorReport,
+    fix: bool,
+    fix_path: bool,
+) -> Vec<(&'static str, String)> {
     let mut steps = Vec::new();
     if report.ok() {
         steps.push((
@@ -290,21 +294,23 @@ pub(crate) fn run_inner(
     }
 
     let mut data = report.to_json();
-    if fix
-        && let Some(obj) = data.as_object_mut() {
-            obj.insert(
-                "fixes_applied".into(),
-                serde_json::to_value(&fixes_applied).unwrap_or_else(|_| json!([])),
-            );
-        }
+    if fix && let Some(obj) = data.as_object_mut() {
+        obj.insert(
+            "fixes_applied".into(),
+            serde_json::to_value(&fixes_applied).unwrap_or_else(|_| json!([])),
+        );
+    }
     data = output::with_next_steps(data, next_steps_for_doctor(&report, fix, fix_path));
     merge_path_fix_json(&mut data, fix_path, &report);
     let ok = report.ok();
     let fixes_for_text = fixes_applied.clone();
 
     if ok {
-        let ok_msg =
-            envr_core::i18n::tr_key("cli.ok.doctor_ok", "环境检查通过", "environment checks passed");
+        let ok_msg = envr_core::i18n::tr_key(
+            "cli.ok.doctor_ok",
+            "环境检查通过",
+            "environment checks passed",
+        );
         Ok(output::emit_doctor(
             g,
             ok,
@@ -335,4 +341,3 @@ pub(crate) fn run_inner(
         ))
     }
 }
-

@@ -48,7 +48,13 @@ fn init_json_emits_project_config_init_and_writes_file() {
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_ROOT", root.path())
-        .args(["--format", "json", "init", "--path", &project.to_string_lossy()])
+        .args([
+            "--format",
+            "json",
+            "init",
+            "--path",
+            &project.to_string_lossy(),
+        ])
         .output()
         .expect("run");
     assert!(
@@ -62,7 +68,10 @@ fn init_json_emits_project_config_init_and_writes_file() {
     assert_eq!(v["code"], "project_config_init", "{v}");
     assert_eq!(v["data"]["interactive"], false, "{v}");
     assert!(v["data"]["path"].is_string(), "{v}");
-    assert!(project.join(".envr.toml").is_file(), "init should write .envr.toml");
+    assert!(
+        project.join(".envr.toml").is_file(),
+        "init should write .envr.toml"
+    );
 }
 
 #[test]

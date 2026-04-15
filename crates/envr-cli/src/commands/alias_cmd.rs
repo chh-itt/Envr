@@ -22,18 +22,23 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult
                 .map(|(k, v)| serde_json::json!({ "name": k, "target": v }))
                 .collect();
             let data = serde_json::json!({ "aliases": entries });
-            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_LIST, data, || {
-                if file.aliases.is_empty() {
-                    println!(
-                        "{}",
-                        envr_core::i18n::tr_key("cli.alias.none", "（无别名）", "(no aliases)",)
-                    );
-                    return;
-                }
-                for (name, target) in &file.aliases {
-                    println!("{name} -> {target}");
-                }
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::ALIAS_LIST,
+                data,
+                || {
+                    if file.aliases.is_empty() {
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key("cli.alias.none", "（无别名）", "(no aliases)",)
+                        );
+                        return;
+                    }
+                    for (name, target) in &file.aliases {
+                        println!("{name} -> {target}");
+                    }
+                },
+            ))
         }
         crate::cli::AliasCmd::Add { name, target } => {
             let name = name.trim().to_string();
@@ -50,19 +55,24 @@ envr alias add mydiag "diagnostics export""#,
             file.aliases.insert(name.clone(), target.clone());
             file.save_to(&path)?;
             let data = serde_json::json!({ "name": name, "target": target });
-            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_ADDED, data, || {
-                println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.alias.added",
-                            "别名 `{name}` -> `{target}`",
-                            "alias `{name}` -> `{target}`",
-                        ),
-                        &[("name", &name), ("target", &target)],
-                    )
-                );
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::ALIAS_ADDED,
+                data,
+                || {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.alias.added",
+                                "别名 `{name}` -> `{target}`",
+                                "alias `{name}` -> `{target}`",
+                            ),
+                            &[("name", &name), ("target", &target)],
+                        )
+                    );
+                },
+            ))
         }
         crate::cli::AliasCmd::Remove { name } => {
             let name = name.trim().to_string();
@@ -80,33 +90,38 @@ envr alias add mydiag "diagnostics export""#,
                 "name": name,
                 "removed": removed.is_some(),
             });
-            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_REMOVED, data, || {
-                if removed.is_some() {
-                    println!(
-                        "{}",
-                        fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.alias.removed",
-                                "已移除别名 `{name}`",
-                                "removed alias `{name}`",
-                            ),
-                            &[("name", &name)],
-                        )
-                    );
-                } else {
-                    println!(
-                        "{}",
-                        fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.alias.not_found",
-                                "没有名为 `{name}` 的别名",
-                                "no alias named `{name}`",
-                            ),
-                            &[("name", &name)],
-                        )
-                    );
-                }
-            }))
+            Ok(output::emit_ok(
+                g,
+                crate::codes::ok::ALIAS_REMOVED,
+                data,
+                || {
+                    if removed.is_some() {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.alias.removed",
+                                    "已移除别名 `{name}`",
+                                    "removed alias `{name}`",
+                                ),
+                                &[("name", &name)],
+                            )
+                        );
+                    } else {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.alias.not_found",
+                                    "没有名为 `{name}` 的别名",
+                                    "no alias named `{name}`",
+                                ),
+                                &[("name", &name)],
+                            )
+                        );
+                    }
+                },
+            ))
         }
     }
 }

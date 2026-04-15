@@ -83,18 +83,23 @@ fn clean_impl(
 
         if !target.exists() {
             let data = prune_missing_json(&target, spec, newer_raw.as_deref(), dry_run);
-            return Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
-                if CliUxPolicy::from_global(g).human_text_primary() {
-                    println!(
-                        "{}",
-                        envr_core::i18n::tr_key(
-                            "cli.cache.prune_none_missing",
-                            "缓存路径不存在，无需清理。",
-                            "cache path does not exist; nothing to do.",
-                        )
-                    );
-                }
-            }));
+            return Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CACHE_CLEANED,
+                data,
+                || {
+                    if CliUxPolicy::from_global(g).human_text_primary() {
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.cache.prune_none_missing",
+                                "缓存路径不存在，无需清理。",
+                                "cache path does not exist; nothing to do.",
+                            )
+                        );
+                    }
+                },
+            ));
         }
 
         if target.is_file() {
@@ -110,11 +115,16 @@ fn clean_impl(
 
         let (n, b) = prune_cache_by_age(&target, cutoff_old, cutoff_new, dry_run)?;
         let data = prune_result_json(&target, spec, newer_raw.as_deref(), dry_run, n, b);
-        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                print_prune_human(&target, spec, newer_raw.as_deref(), dry_run, n, b);
-            }
-        }))
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::CACHE_CLEANED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    print_prune_human(&target, spec, newer_raw.as_deref(), dry_run, n, b);
+                }
+            },
+        ))
     } else if dry_run {
         if !target.exists() {
             let data = serde_json::json!({
@@ -124,18 +134,23 @@ fn clean_impl(
                 "files_would_remove": 0u64,
                 "bytes_would_free": 0u64,
             });
-            return Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
-                if CliUxPolicy::from_global(g).human_text_primary() {
-                    println!(
-                        "{}",
-                        envr_core::i18n::tr_key(
-                            "cli.cache.remove_tree_dry_none",
-                            "[dry-run] 缓存路径不存在，无需操作。",
-                            "[dry-run] cache path does not exist; nothing to do.",
-                        )
-                    );
-                }
-            }));
+            return Ok(output::emit_ok(
+                g,
+                crate::codes::ok::CACHE_CLEANED,
+                data,
+                || {
+                    if CliUxPolicy::from_global(g).human_text_primary() {
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.cache.remove_tree_dry_none",
+                                "[dry-run] 缓存路径不存在，无需操作。",
+                                "[dry-run] cache path does not exist; nothing to do.",
+                            )
+                        );
+                    }
+                },
+            ));
         }
         if target.is_file() {
             return Err(EnvrError::Validation(crate::output::fmt_template(
@@ -155,46 +170,56 @@ fn clean_impl(
             "files_would_remove": files,
             "bytes_would_free": bytes,
         });
-        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                println!(
-                    "{}",
-                    crate::output::fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.cache.remove_tree_dry",
-                            "[dry-run] 将整棵删除缓存目录 {path}（约 {files} 个文件，{bytes} 字节）",
-                            "[dry-run] would remove entire cache tree {path} (~{files} file(s), {bytes} byte(s))",
-                        ),
-                        &[
-                            ("path", &target.display().to_string()),
-                            ("files", &files.to_string()),
-                            ("bytes", &bytes.to_string()),
-                        ],
-                    )
-                );
-            }
-        }))
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::CACHE_CLEANED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    println!(
+                        "{}",
+                        crate::output::fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.cache.remove_tree_dry",
+                                "[dry-run] 将整棵删除缓存目录 {path}（约 {files} 个文件，{bytes} 字节）",
+                                "[dry-run] would remove entire cache tree {path} (~{files} file(s), {bytes} byte(s))",
+                            ),
+                            &[
+                                ("path", &target.display().to_string()),
+                                ("files", &files.to_string()),
+                                ("bytes", &bytes.to_string()),
+                            ],
+                        )
+                    );
+                }
+            },
+        ))
     } else {
         remove_dir_if_exists(&target)?;
         let data = serde_json::json!({
             "removed": target.to_string_lossy(),
             "mode": "remove_tree",
         });
-        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                println!(
-                    "{}",
-                    crate::output::fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.cache.removed",
-                            "已移除缓存：{path}",
-                            "cache removed: {path}",
-                        ),
-                        &[("path", &target.display().to_string())],
-                    )
-                );
-            }
-        }))
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::CACHE_CLEANED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    println!(
+                        "{}",
+                        crate::output::fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.cache.removed",
+                                "已移除缓存：{path}",
+                                "cache removed: {path}",
+                            ),
+                            &[("path", &target.display().to_string())],
+                        )
+                    );
+                }
+            },
+        ))
     }
 }
 
@@ -586,29 +611,37 @@ fn index_sync_inner(
         "dir": cache_dir.to_string_lossy(),
         "synced": synced,
     });
-    data = output::with_next_steps(data, vec![(
-        "check_index_status",
-        envr_core::i18n::tr_key(
-            "cli.next_step.cache_index.check_status",
-            "可执行 `envr cache index status` 查看各运行时索引文件状态。",
-            "Run `envr cache index status` to inspect per-runtime index cache status.",
-        ),
-    )]);
-    Ok(output::emit_ok(g, crate::codes::ok::CACHE_INDEX_SYNCED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                crate::output::fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.cache.index.synced",
-                        "已预缓存远程索引：{dir}",
-                        "remote indexes cached: {dir}",
-                    ),
-                    &[("dir", &cache_dir.display().to_string())],
-                )
-            );
-        }
-    }))
+    data = output::with_next_steps(
+        data,
+        vec![(
+            "check_index_status",
+            envr_core::i18n::tr_key(
+                "cli.next_step.cache_index.check_status",
+                "可执行 `envr cache index status` 查看各运行时索引文件状态。",
+                "Run `envr cache index status` to inspect per-runtime index cache status.",
+            ),
+        )],
+    );
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::CACHE_INDEX_SYNCED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    crate::output::fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.cache.index.synced",
+                            "已预缓存远程索引：{dir}",
+                            "remote indexes cached: {dir}",
+                        ),
+                        &[("dir", &cache_dir.display().to_string())],
+                    )
+                );
+            }
+        },
+    ))
 }
 
 fn cli_test_mock_index_sync_enabled() -> bool {
@@ -621,7 +654,10 @@ fn cli_test_mock_index_sync_enabled() -> bool {
     )
 }
 
-fn write_mock_index_cache_entry(dir: &Path, kind: envr_domain::runtime::RuntimeKind) -> EnvrResult<()> {
+fn write_mock_index_cache_entry(
+    dir: &Path,
+    kind: envr_domain::runtime::RuntimeKind,
+) -> EnvrResult<()> {
     let kind_dir_name = match kind {
         envr_domain::runtime::RuntimeKind::Node => "node",
         envr_domain::runtime::RuntimeKind::Deno => "deno",
@@ -656,19 +692,24 @@ fn index_status_inner(g: &GlobalArgs, dir: Option<PathBuf>) -> EnvrResult<CliExi
         "dir": cache_dir.to_string_lossy(),
         "entries": entries_json,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::CACHE_INDEX_STATUS, data, || {
-        println!("{}", cache_dir.display());
-        for r in report {
-            println!(
-                "{}\t{}\t{}",
-                r.runtime,
-                r.files,
-                r.newest_mtime_unix_secs
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| "-".to_string())
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::CACHE_INDEX_STATUS,
+        data,
+        || {
+            println!("{}", cache_dir.display());
+            for r in report {
+                println!(
+                    "{}\t{}\t{}",
+                    r.runtime,
+                    r.files,
+                    r.newest_mtime_unix_secs
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "-".to_string())
+                );
+            }
+        },
+    ))
 }
 
 #[derive(Clone)]

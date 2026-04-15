@@ -1,10 +1,10 @@
 //! `envr hook` — shell snippets for direnv-style directory activation.
 use crate::CliExit;
 
+use crate::CliPathProfile;
 use crate::cli::GlobalArgs;
 use crate::commands::child_env;
 use crate::output;
-use crate::CliPathProfile;
 
 use envr_error::EnvrResult;
 
@@ -32,10 +32,15 @@ pub(crate) fn run_keys_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExi
         "path": session.ctx.working_dir.to_string_lossy(),
         "keys": keys,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::HOOK_KEYS, data, || {
-        // Always print one key per line on stdout (used by eval'd hooks); ignore --quiet.
-        for k in &keys {
-            println!("{k}");
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::HOOK_KEYS,
+        data,
+        || {
+            // Always print one key per line on stdout (used by eval'd hooks); ignore --quiet.
+            for k in &keys {
+                println!("{k}");
+            }
+        },
+    ))
 }

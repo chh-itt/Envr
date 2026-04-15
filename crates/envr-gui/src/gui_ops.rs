@@ -778,11 +778,17 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
         let runtime_svc = ShimService::new(runtime_root.clone(), shim_exe.clone());
         let t_sync = Instant::now();
         if kind == RuntimeKind::Python {
-            let _ = runtime_svc.sync_python_global_package_shims_fast();
+            if let Err(err) = runtime_svc.sync_python_global_package_shims_fast() {
+                tracing::warn!(kind = ?kind, error = %err, "best-effort python global shim sync failed");
+            }
         } else if kind == RuntimeKind::Java {
-            let _ = runtime_svc.sync_java_global_package_shims_fast();
+            if let Err(err) = runtime_svc.sync_java_global_package_shims_fast() {
+                tracing::warn!(kind = ?kind, error = %err, "best-effort java global shim sync failed");
+            }
         } else {
-            let _ = runtime_svc.sync_all_global_package_shims();
+            if let Err(err) = runtime_svc.sync_all_global_package_shims() {
+                tracing::warn!(kind = ?kind, error = %err, "best-effort global shim sync failed");
+            }
         }
         let sync_ms = t_sync.elapsed().as_millis();
         tracing::info!(kind = ?kind, sync_globals_ms = sync_ms, "shim global sync timing");
@@ -800,8 +806,12 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
                     continue;
                 }
                 let to_dir = to_root.join("shims");
-                let _ = std::fs::create_dir_all(&to_dir);
+                if let Err(err) = std::fs::create_dir_all(&to_dir) {
+                    tracing::warn!(to_dir = %to_dir.display(), error = %err, "failed to create shim mirror directory");
+                    continue;
+                }
                 let Ok(entries) = std::fs::read_dir(&from_dir) else {
+                    tracing::warn!(from_dir = %from_dir.display(), "failed to read source shim directory");
                     continue;
                 };
                 for e in entries.flatten() {
@@ -818,7 +828,14 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
                         continue;
                     }
                     let dst = to_dir.join(path.file_name().unwrap_or_default());
-                    let _ = std::fs::copy(&path, &dst);
+                    if let Err(err) = std::fs::copy(&path, &dst) {
+                        tracing::warn!(
+                            src = %path.display(),
+                            dst = %dst.display(),
+                            error = %err,
+                            "failed to copy non-core shim"
+                        );
+                    }
                 }
             }
             let copy_ms = t_copy.elapsed().as_millis();

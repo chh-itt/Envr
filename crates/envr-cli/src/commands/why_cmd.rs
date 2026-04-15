@@ -79,112 +79,121 @@ pub(crate) fn run_inner(
         "resolved_home": home.to_string_lossy(),
     });
 
-    Ok(output::emit_ok(g, crate::codes::ok::WHY_RUNTIME, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.why.working_dir",
-                        "工作目录：{path}",
-                        "Working directory: {path}",
-                    ),
-                    &[("path", &session.ctx.working_dir.display().to_string())],
-                )
-            );
-            if let Some((_, loc)) = loaded {
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::WHY_RUNTIME,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 println!(
                     "{}",
                     fmt_template(
                         &envr_core::i18n::tr_key(
-                            "cli.why.config_dir",
-                            "项目配置目录：{path}",
-                            "Project config directory: {path}",
+                            "cli.why.working_dir",
+                            "工作目录：{path}",
+                            "Working directory: {path}",
                         ),
-                        &[("path", &loc.dir.display().to_string())],
+                        &[("path", &session.ctx.working_dir.display().to_string())],
                     )
                 );
-                if let Some(p) = &loc.base_file {
-                    println!(
-                        "{} {}",
-                        envr_core::i18n::tr_key("cli.why.base_file", "  base", "  base"),
-                        p.display()
-                    );
-                }
-                if let Some(p) = &loc.local_file {
-                    println!(
-                        "{} {}",
-                        envr_core::i18n::tr_key("cli.why.local_file", "  local", "  local"),
-                        p.display()
-                    );
-                }
-            } else {
-                println!(
-                    "{}",
-                    envr_core::i18n::tr_key(
-                        "cli.why.no_project_config",
-                        "未找到 `.envr.toml` / `.envr.local.toml`（自工作目录向上搜索）。",
-                        "No `.envr.toml` / `.envr.local.toml` found (searching upward from the working directory).",
-                    )
-                );
-            }
-            if let Some(ref s) = spec_trim {
-                println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.why.spec_override",
-                            "`--spec {spec}`：本次解析忽略项目 pin，按该 spec 在 `versions` 下选择目录。",
-                            "`--spec {spec}`: this resolution ignores the project pin and picks under `versions` from this spec.",
-                        ),
-                        &[("spec", s.as_str())],
-                    )
-                );
-            }
-            if let Some(ref p) = pin {
-                if spec_trim.is_some() {
+                if let Some((_, loc)) = loaded {
                     println!(
                         "{}",
                         fmt_template(
                             &envr_core::i18n::tr_key(
-                                "cli.why.pin_shadowed",
-                                "（项目 pin 为 `{spec}`，已被 `--spec` 覆盖）",
-                                "(project pin is `{spec}`, overridden by `--spec`)",
+                                "cli.why.config_dir",
+                                "项目配置目录：{path}",
+                                "Project config directory: {path}",
                             ),
-                            &[("spec", p.as_str())],
+                            &[("path", &loc.dir.display().to_string())],
                         )
                     );
+                    if let Some(p) = &loc.base_file {
+                        println!(
+                            "{} {}",
+                            envr_core::i18n::tr_key("cli.why.base_file", "  base", "  base"),
+                            p.display()
+                        );
+                    }
+                    if let Some(p) = &loc.local_file {
+                        println!(
+                            "{} {}",
+                            envr_core::i18n::tr_key("cli.why.local_file", "  local", "  local"),
+                            p.display()
+                        );
+                    }
                 } else {
                     println!(
                         "{}",
-                        fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.why.pin",
-                                "项目 pin：`{spec}` → 使用 `versions` 下匹配该 spec 的目录。",
-                                "Project pin: `{spec}` → pick matching directory under `versions`.",
-                            ),
-                            &[("spec", p.as_str())],
+                        envr_core::i18n::tr_key(
+                            "cli.why.no_project_config",
+                            "未找到 `.envr.toml` / `.envr.local.toml`（自工作目录向上搜索）。",
+                            "No `.envr.toml` / `.envr.local.toml` found (searching upward from the working directory).",
                         )
                     );
                 }
-            } else if spec_trim.is_none() {
+                if let Some(ref s) = spec_trim {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.why.spec_override",
+                                "`--spec {spec}`：本次解析忽略项目 pin，按该 spec 在 `versions` 下选择目录。",
+                                "`--spec {spec}`: this resolution ignores the project pin and picks under `versions` from this spec.",
+                            ),
+                            &[("spec", s.as_str())],
+                        )
+                    );
+                }
+                if let Some(ref p) = pin {
+                    if spec_trim.is_some() {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.why.pin_shadowed",
+                                    "（项目 pin 为 `{spec}`，已被 `--spec` 覆盖）",
+                                    "(project pin is `{spec}`, overridden by `--spec`)",
+                                ),
+                                &[("spec", p.as_str())],
+                            )
+                        );
+                    } else {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.why.pin",
+                                    "项目 pin：`{spec}` → 使用 `versions` 下匹配该 spec 的目录。",
+                                    "Project pin: `{spec}` → pick matching directory under `versions`.",
+                                ),
+                                &[("spec", p.as_str())],
+                            )
+                        );
+                    }
+                } else if spec_trim.is_none() {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.why.global_current",
+                                "无项目 pin：使用全局 `runtimes/{lang}/current` 指向的安装目录。",
+                                "No project pin: using global `runtimes/{lang}/current`.",
+                            ),
+                            &[("lang", lang.as_str())],
+                        )
+                    );
+                }
                 println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.why.global_current",
-                            "无项目 pin：使用全局 `runtimes/{lang}/current` 指向的安装目录。",
-                            "No project pin: using global `runtimes/{lang}/current`.",
-                        ),
-                        &[("lang", lang.as_str())],
-                    )
+                    "{} {}",
+                    envr_core::i18n::tr_key(
+                        "cli.why.resolved_home",
+                        "解析结果：",
+                        "Resolved home:"
+                    ),
+                    home.display()
                 );
             }
-            println!(
-                "{} {}",
-                envr_core::i18n::tr_key("cli.why.resolved_home", "解析结果：", "Resolved home:"),
-                home.display()
-            );
-        }
-    }))
+        },
+    ))
 }

@@ -38,6 +38,7 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<Cl
 
     let svc = ShimService::new(root.clone(), shim_exe);
     let mut ensured: Vec<&'static str> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
 
     for kind in [
         RuntimeKind::Node,
@@ -49,36 +50,52 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<Cl
         RuntimeKind::Deno,
         RuntimeKind::Bun,
     ] {
-        if svc.ensure_shims(kind).is_ok() {
-            ensured.push(common::kind_label(kind));
+        match svc.ensure_shims(kind) {
+            Ok(()) => ensured.push(common::kind_label(kind)),
+            Err(err) => warnings.push(format!(
+                "failed to ensure {} shims: {}",
+                common::kind_label(kind),
+                err
+            )),
         }
     }
 
     if include_globals {
-        let _ = svc.sync_all_global_package_shims();
+        if let Err(err) = svc.sync_all_global_package_shims() {
+            warnings.push(format!("failed to sync global package shims: {err}"));
+        }
     }
 
     let data = serde_json::json!({
         "runtime_root": root.to_string_lossy(),
         "ensured_core_kinds": ensured,
         "globals_synced": include_globals,
+        "warnings": warnings,
     });
 
-    Ok(output::emit_ok(g, crate::codes::ok::SHIMS_SYNCED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                crate::output::fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.shim.sync_ok",
-                        "已在 {path} 下刷新 shims",
-                        "shims refreshed under {path}",
-                    ),
-                    &[("path", &root.join("shims").display().to_string())],
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::SHIMS_SYNCED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    crate::output::fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.shim.sync_ok",
+                            "已在 {path} 下刷新 shims",
+                            "shims refreshed under {path}",
+                        ),
+                        &[("path", &root.join("shims").display().to_string())],
+                    )
+                );
+                for warning in &warnings {
+                    eprintln!("warning: {warning}");
+                }
+            }
+        },
+    ))
 }
 
 fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {

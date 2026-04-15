@@ -42,7 +42,12 @@ pub(crate) fn run_inner(
     let status = cmd.status()?;
     let code = status.code().unwrap_or(1);
     if code == 0 {
-        Ok(output::emit_ok(g, crate::codes::ok::SHELL_EXITED, base_data, || {}))
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::SHELL_EXITED,
+            base_data,
+            || {},
+        ))
     } else {
         let msg = fmt_template(
             &envr_core::i18n::tr_key(

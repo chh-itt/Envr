@@ -22,30 +22,35 @@ pub(crate) fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
         "builtin_shorthands": rows,
         "note": note,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::HELP_SHORTCUTS, data, || {
-        if !CliUxPolicy::from_global(g).human_text_primary() {
-            return;
-        }
-        println!(
-            "{}",
-            envr_core::i18n::tr_key(
-                "cli.help.shortcuts.title",
-                "内置 argv 简写（preprocess_cli_args）",
-                "Built-in argv shorthands (preprocess_cli_args)",
-            )
-        );
-        for (from, to) in crate::cli::BUILTIN_ARGV_SHORTHANDS {
-            println!("  {from:<28} → {to}");
-        }
-        println!();
-        println!("{note}");
-        println!(
-            "{}",
-            envr_core::i18n::tr_key(
-                "cli.help.shortcuts.completion_hint",
-                "补全脚本在文件头注释中指向本主题：`envr completion <shell>`",
-                "Completion scripts include a header comment pointing here: `envr completion <shell>`",
-            )
-        );
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::HELP_SHORTCUTS,
+        data,
+        || {
+            if !CliUxPolicy::from_global(g).human_text_primary() {
+                return;
+            }
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.help.shortcuts.title",
+                    "内置 argv 简写（preprocess_cli_args）",
+                    "Built-in argv shorthands (preprocess_cli_args)",
+                )
+            );
+            for (from, to) in crate::cli::BUILTIN_ARGV_SHORTHANDS {
+                println!("  {from:<28} → {to}");
+            }
+            println!();
+            println!("{note}");
+            println!(
+                "{}",
+                envr_core::i18n::tr_key(
+                    "cli.help.shortcuts.completion_hint",
+                    "补全脚本在文件头注释中指向本主题：`envr completion <shell>`",
+                    "Completion scripts include a header comment pointing here: `envr completion <shell>`",
+                )
+            );
+        },
+    ))
 }

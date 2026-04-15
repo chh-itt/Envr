@@ -1,8 +1,8 @@
-use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::CliExit;
-use crate::CliUxPolicy;
-use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
+use crate::CliUxPolicy;
+use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
+use crate::output::{self, fmt_template};
 
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
@@ -78,44 +78,49 @@ pub(crate) fn run_inner(
         "version_dir": version_label,
     });
     data = output::with_next_steps(data, next_steps_for_resolve(&lang, source));
-    Ok(output::emit_ok(g, crate::codes::ok::RUNTIME_RESOLVED, data, || {
-        let ux = CliUxPolicy::from_global(g);
-        if ux.wants_porcelain_lines() {
-            println!("{}", home.display());
-            return;
-        }
-        if ux.human_text_primary() {
-            let source_label = match source {
-                "cli_override" => envr_core::i18n::tr_key(
-                    "cli.resolve.source.cli_override",
-                    "命令行覆盖",
-                    "CLI override",
-                ),
-                "project" => {
-                    envr_core::i18n::tr_key("cli.resolve.source.project", "项目", "project")
-                }
-                "global_current" => envr_core::i18n::tr_key(
-                    "cli.resolve.source.global_current",
-                    "全局 current",
-                    "global current",
-                ),
-                other => other.to_string(),
-            };
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.resolve.line",
-                        "{lang}：{path}（来源：{source}）",
-                        "{lang}: {path} (from {source})",
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::RUNTIME_RESOLVED,
+        data,
+        || {
+            let ux = CliUxPolicy::from_global(g);
+            if ux.wants_porcelain_lines() {
+                println!("{}", home.display());
+                return;
+            }
+            if ux.human_text_primary() {
+                let source_label = match source {
+                    "cli_override" => envr_core::i18n::tr_key(
+                        "cli.resolve.source.cli_override",
+                        "命令行覆盖",
+                        "CLI override",
                     ),
-                    &[
-                        ("lang", &lang),
-                        ("path", &home.display().to_string()),
-                        ("source", &source_label),
-                    ],
-                )
-            );
-        }
-    }))
+                    "project" => {
+                        envr_core::i18n::tr_key("cli.resolve.source.project", "项目", "project")
+                    }
+                    "global_current" => envr_core::i18n::tr_key(
+                        "cli.resolve.source.global_current",
+                        "全局 current",
+                        "global current",
+                    ),
+                    other => other.to_string(),
+                };
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.resolve.line",
+                            "{lang}：{path}（来源：{source}）",
+                            "{lang}: {path} (from {source})",
+                        ),
+                        &[
+                            ("lang", &lang),
+                            ("path", &home.display().to_string()),
+                            ("source", &source_label),
+                        ],
+                    )
+                );
+            }
+        },
+    ))
 }

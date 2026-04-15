@@ -1,19 +1,15 @@
-use crate::cli::{GlobalArgs, ProjectCmd};
 use crate::CliExit;
-use crate::CliUxPolicy;
 use crate::CliPathProfile;
+use crate::CliUxPolicy;
+use crate::cli::{GlobalArgs, ProjectCmd};
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
-use envr_config::project_config::{
-    load_project_config_profile, reset_project_config_load_cache,
-};
+use envr_config::project_config::{load_project_config_profile, reset_project_config_load_cache};
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{
-    RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind,
-};
+use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use envr_resolver::{parse_runtime_pin_spec, runtime_kind_toml_key, upsert_runtime_pin};
 use envr_shim_core::pick_version_home;
@@ -65,11 +61,17 @@ fn next_steps_for_project_validate_failure() -> Vec<(&'static str, String)> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> EnvrResult<CliExit> {
+pub(crate) fn run_inner(
+    g: &GlobalArgs,
+    service: &RuntimeService,
+    cmd: ProjectCmd,
+) -> EnvrResult<CliExit> {
     match cmd {
         ProjectCmd::Add { spec, path } => add_inner(g, spec, path),
         ProjectCmd::Sync { path, install } => sync_inner(g, service, path, install),
-        ProjectCmd::Validate { path, check_remote } => validate_inner(g, service, path, check_remote),
+        ProjectCmd::Validate { path, check_remote } => {
+            validate_inner(g, service, path, check_remote)
+        }
     }
 }
 
@@ -83,7 +85,10 @@ fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<CliExit>
                 "[verbose] 正在写入项目 pin：{kind} {version}",
                 "[verbose] writing project pin: {kind} {version}",
             ),
-            &[("kind", runtime_kind_toml_key(pin.kind)), ("version", &pin.version)],
+            &[
+                ("kind", runtime_kind_toml_key(pin.kind)),
+                ("version", &pin.version),
+            ],
         ),
     );
     let dir = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
@@ -103,25 +108,30 @@ fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<CliExit>
         "version": version,
     });
     let path_s = written.display().to_string();
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_PIN_ADDED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.project.add_ok",
-                        "已写入 {path}：{kind} = {version}",
-                        "wrote {path}: {kind} = {version}",
-                    ),
-                    &[
-                        ("path", &path_s),
-                        ("kind", kind_s),
-                        ("version", &pin.version),
-                    ],
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_PIN_ADDED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.project.add_ok",
+                            "已写入 {path}：{kind} = {version}",
+                            "wrote {path}: {kind} = {version}",
+                        ),
+                        &[
+                            ("path", &path_s),
+                            ("kind", kind_s),
+                            ("version", &pin.version),
+                        ],
+                    )
+                );
+            }
+        },
+    ))
 }
 
 fn sync_inner(
@@ -132,25 +142,29 @@ fn sync_inner(
 ) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let ctx = &session.ctx;
-    let pending =
-        child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
+    let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
         let data = json!({
             "missing": Vec::<serde_json::Value>::new(),
             "installed": Vec::<serde_json::Value>::new(),
         });
-        return Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                println!(
-                    "{}",
-                    envr_core::i18n::tr_key(
-                        "cli.project.sync_nothing",
-                        "所有已 pin 的运行时均已可用。",
-                        "All pinned runtimes are already available.",
-                    )
-                );
-            }
-        }));
+        return Ok(output::emit_ok(
+            g,
+            crate::codes::ok::PROJECT_SYNCED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.project.sync_nothing",
+                            "所有已 pin 的运行时均已可用。",
+                            "All pinned runtimes are already available.",
+                        )
+                    );
+                }
+            },
+        ));
     }
     if !install {
         let msg = envr_core::i18n::tr_key(
@@ -207,8 +221,11 @@ fn sync_inner(
             &[("kind", lang.as_str()), ("version", spec.as_str())],
         );
         let use_prog = cli_install_progress::wants_cli_download_progress(g);
-        let (request, guard) =
-            cli_install_progress::install_request_with_progress(g, VersionSpec(spec.clone()), headline.clone());
+        let (request, guard) = cli_install_progress::install_request_with_progress(
+            g,
+            VersionSpec(spec.clone()),
+            headline.clone(),
+        );
         if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
             eprintln!("{headline}");
         }
@@ -230,18 +247,23 @@ fn sync_inner(
             .collect::<Vec<_>>(),
         "installed": installed,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.project.sync_done",
-                    "已安装缺失的 pin。",
-                    "Installed missing pinned runtimes.",
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_SYNCED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.project.sync_done",
+                        "已安装缺失的 pin。",
+                        "Installed missing pinned runtimes.",
+                    )
+                );
+            }
+        },
+    ))
 }
 
 fn validate_inner(
@@ -303,9 +325,12 @@ fn validate_inner(
                 continue;
             }
             let prefix = spec.chars().take(32).collect::<String>();
-            match service.list_remote(kind, &RemoteFilter {
-                prefix: Some(prefix),
-            }) {
+            match service.list_remote(
+                kind,
+                &RemoteFilter {
+                    prefix: Some(prefix),
+                },
+            ) {
                 Ok(vers) if vers.is_empty() => {
                     remote_warnings.push(format!(
                         "{key}@{spec}: remote index returned no rows (offline or empty cache?)"
@@ -366,22 +391,27 @@ fn validate_inner(
     });
     data = output::with_next_steps(data, next_steps_for_project_validate_ok(check_remote));
     let root_s = loc.dir.display().to_string();
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_VALIDATED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.project.validate_ok",
-                        "项目配置校验通过（根 {path}）",
-                        "project validation ok (root {path})",
-                    ),
-                    &[("path", &root_s)],
-                )
-            );
-            for w in &remote_warnings {
-                eprintln!("envr: warning: {w}");
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_VALIDATED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.project.validate_ok",
+                            "项目配置校验通过（根 {path}）",
+                            "project validation ok (root {path})",
+                        ),
+                        &[("path", &root_s)],
+                    )
+                );
+                for w in &remote_warnings {
+                    eprintln!("envr: warning: {w}");
+                }
             }
-        }
-    }))
+        },
+    ))
 }

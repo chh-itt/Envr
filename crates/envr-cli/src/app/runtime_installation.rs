@@ -35,10 +35,7 @@ fn enrich_not_installed_error(err: EnvrError, kind: RuntimeKind, version: &str) 
                 "{kind} {version} 未安装。可先执行：envr install {kind} {version}",
                 "{kind} {version} is not installed. Try: envr install {kind} {version}",
             ),
-            &[
-                ("kind", kind_label(kind)),
-                ("version", version),
-            ],
+            &[("kind", kind_label(kind)), ("version", version)],
         ));
     }
     err

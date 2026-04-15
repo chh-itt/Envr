@@ -2,9 +2,9 @@
 
 use super::{dispatch_non_runtime, dispatch_runtime};
 
+use crate::CommandOutcome;
 use crate::cli::{CliContext, GlobalArgs};
 use crate::presenter::CliPersona;
-use crate::CommandOutcome;
 use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -94,8 +94,8 @@ fn dispatch_metrics_fields(outcome: &CommandOutcome) -> (bool, i32, Option<&str>
 #[cfg(test)]
 mod tests {
     use super::dispatch_metrics_fields;
-    use crate::cli::{self, Command, RuntimeHandlerGroup, metadata_for_key};
     use crate::CommandOutcome;
+    use crate::cli::{self, Command, RuntimeHandlerGroup, metadata_for_key};
     use envr_error::EnvrError;
     use std::ffi::OsString;
 
@@ -209,10 +209,16 @@ mod tests {
         );
 
         let project = parse_command_and_global(&["envr", "project", "validate"]).0;
-        assert_eq!(project.runtime_handler_group(), Some(RuntimeHandlerGroup::Project));
+        assert_eq!(
+            project.runtime_handler_group(),
+            Some(RuntimeHandlerGroup::Project)
+        );
 
         let misc = parse_command_and_global(&["envr", "doctor"]).0;
-        assert_eq!(misc.runtime_handler_group(), Some(RuntimeHandlerGroup::Misc));
+        assert_eq!(
+            misc.runtime_handler_group(),
+            Some(RuntimeHandlerGroup::Misc)
+        );
 
         let non_runtime = parse_command_and_global(&["envr", "status"]).0;
         assert_eq!(non_runtime.runtime_handler_group(), None);

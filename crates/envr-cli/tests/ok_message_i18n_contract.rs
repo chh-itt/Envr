@@ -31,7 +31,11 @@ fn flatten_messages_toml(raw: &str) -> HashMap<String, String> {
         .and_then(|x| x.as_table())
         .expect("[messages] table");
     let mut out = HashMap::new();
-    fn walk(prefix: &str, t: &toml::map::Map<String, toml::Value>, out: &mut HashMap<String, String>) {
+    fn walk(
+        prefix: &str,
+        t: &toml::map::Map<String, toml::Value>,
+        out: &mut HashMap<String, String>,
+    ) {
         for (k, v) in t {
             let full = if prefix.is_empty() {
                 k.clone()
@@ -80,11 +84,7 @@ fn every_success_code_has_cli_ok_message_in_both_locales() {
             let v = map
                 .get(&key)
                 .unwrap_or_else(|| panic!("{name} missing key {key}"));
-            assert!(
-                !v.trim().is_empty(),
-                "{name} key {key} must be non-empty"
-            );
+            assert!(!v.trim().is_empty(), "{name} key {key} must be non-empty");
         }
     }
 }
-

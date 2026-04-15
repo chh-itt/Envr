@@ -194,11 +194,16 @@ fn create_inner(
     )?;
 
     let data = serde_json::json!({ "path": bundle_zip.to_string_lossy() });
-    Ok(output::emit_ok(g, crate::codes::ok::BUNDLE_CREATED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!("{}", bundle_zip.display());
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::BUNDLE_CREATED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!("{}", bundle_zip.display());
+            }
+        },
+    ))
 }
 
 fn apply_inner(
@@ -294,11 +299,16 @@ fn apply_inner(
         "runtime_root": runtime_root.to_string_lossy(),
         "index_cache_dir": index_cache_dir.to_string_lossy(),
     });
-    Ok(output::emit_ok(g, crate::codes::ok::BUNDLE_APPLIED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!("{}", runtime_root.display());
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::BUNDLE_APPLIED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!("{}", runtime_root.display());
+            }
+        },
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]

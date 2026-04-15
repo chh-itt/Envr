@@ -43,9 +43,10 @@ pub(crate) fn export_zip_inner(
     };
 
     if let Some(parent) = zip_path.parent()
-        && let Err(e) = fs::create_dir_all(parent) {
-            return Ok(emit_export_error(g, EnvrError::from(e), zip_path.as_path()));
-        }
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        return Ok(emit_export_error(g, EnvrError::from(e), zip_path.as_path()));
+    }
 
     let doctor_json = match serde_json::to_string_pretty(&report.to_json()) {
         Ok(s) => s,

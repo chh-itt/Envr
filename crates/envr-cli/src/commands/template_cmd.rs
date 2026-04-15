@@ -1,6 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 use crate::CliExit;
 use crate::CliPathProfile;
+use crate::cli::{GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 use crate::commands::child_env;
 use crate::commands::env_overrides;
 use crate::output;
@@ -24,10 +24,7 @@ fn render_template(input: &str, vars: &HashMap<String, String>) -> String {
         };
         let name = &rest[..end];
         rest = &rest[end + 1..];
-        let ok = !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_');
+        let ok = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
         if ok {
             out.push_str(vars.get(name).map(|s| s.as_str()).unwrap_or(""));
         } else {
@@ -50,8 +47,7 @@ pub(crate) fn run_inner(
 ) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
-    let mut vars =
-        child_env::collect_run_env_for_template(&session.ctx, session.project_config())?;
+    let mut vars = child_env::collect_run_env_for_template(&session.ctx, session.project_config())?;
     env_overrides::apply_env_overrides(&mut vars, &env_files, &env_pairs)?;
 
     let raw = fs::read_to_string(&file).map_err(|e| {

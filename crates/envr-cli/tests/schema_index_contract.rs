@@ -96,7 +96,13 @@ fn code_from_literal_or_const(
     }
 }
 
-fn success_messages_from_source(src: &str, emit_ok: &Regex, write_env: &Regex, emit_doctor_ok: &Regex, ok_codes: &BTreeMap<String, String>) -> BTreeSet<String> {
+fn success_messages_from_source(
+    src: &str,
+    emit_ok: &Regex,
+    write_env: &Regex,
+    emit_doctor_ok: &Regex,
+    ok_codes: &BTreeMap<String, String>,
+) -> BTreeSet<String> {
     let mut s = BTreeSet::new();
     for c in emit_ok.captures_iter(src) {
         if let Some(code) = code_from_literal_or_const(&c[1], ok_codes) {
@@ -116,7 +122,11 @@ fn success_messages_from_source(src: &str, emit_ok: &Regex, write_env: &Regex, e
     s
 }
 
-fn failure_codes_from_source(src: &str, emit_fail: &Regex, err_codes: &BTreeMap<String, String>) -> BTreeSet<String> {
+fn failure_codes_from_source(
+    src: &str,
+    emit_fail: &Regex,
+    err_codes: &BTreeMap<String, String>,
+) -> BTreeSet<String> {
     let mut s = BTreeSet::new();
     for c in emit_fail.captures_iter(src) {
         if let Some(code) = code_from_literal_or_const(&c[1], err_codes) {
@@ -151,25 +161,21 @@ fn schema_index_matches_source_literals_and_schema_files() {
 
     let (ok_codes, err_codes) = parse_code_registry(&manifest.join("src/codes.rs"));
 
-    let emit_ok = Regex::new(
-        r#"emit_ok\([^,]+,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#,
+    let emit_ok =
+        Regex::new(r#"emit_ok\([^,]+,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#)
+            .expect("regex");
+    let write_env = Regex::new(
+        r#"write_envelope\(\s*true\s*,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#,
     )
     .expect("regex");
-    let write_env =
-        Regex::new(
-            r#"write_envelope\(\s*true\s*,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#,
-        )
-            .expect("regex");
-    let emit_doctor_ok =
-        Regex::new(
-            r#"emit_doctor\(\s*g\s*,\s*ok\s*,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#,
-        )
-            .expect("regex");
-    let emit_fail =
-        Regex::new(
-            r#"emit_failure_envelope\([^,]+,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::err::[A-Z0-9_]+)"#,
-        )
-            .expect("regex");
+    let emit_doctor_ok = Regex::new(
+        r#"emit_doctor\(\s*g\s*,\s*ok\s*,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::ok::[A-Z0-9_]+)"#,
+    )
+    .expect("regex");
+    let emit_fail = Regex::new(
+        r#"emit_failure_envelope\([^,]+,\s*("([a-zA-Z0-9_]+)"|(?:crate::)?codes::err::[A-Z0-9_]+)"#,
+    )
+    .expect("regex");
 
     let mut files = Vec::new();
     collect_rs_files(&manifest.join("src"), &mut files);
@@ -189,13 +195,11 @@ fn schema_index_matches_source_literals_and_schema_files() {
     }
 
     assert_eq!(
-        idx_messages,
-        src_messages,
+        idx_messages, src_messages,
         "index success_codes mismatch; regenerate via `python scripts/generate_cli_schema_index.py`"
     );
     assert_eq!(
-        idx_failures,
-        src_failures,
+        idx_failures, src_failures,
         "index failure_codes mismatch; regenerate via `python scripts/generate_cli_schema_index.py`"
     );
 
@@ -294,4 +298,3 @@ fn success_registry_constants_match_command_spec_success_messages() {
         "codes::ok constants must match CommandSpec.success_messages union"
     );
 }
-

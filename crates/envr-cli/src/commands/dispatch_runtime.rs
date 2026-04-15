@@ -1,6 +1,6 @@
+use crate::CommandOutcome;
 use crate::cli::{Command, GlobalArgs, RuntimeHandlerGroup};
 use crate::command_outcome::CliExit;
-use crate::CommandOutcome;
 use envr_core::runtime::service::RuntimeService;
 
 pub(super) struct DispatchCtx<'a> {

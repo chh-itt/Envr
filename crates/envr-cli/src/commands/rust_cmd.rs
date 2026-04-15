@@ -25,16 +25,21 @@ pub(crate) fn install_managed_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     guard.finish();
     res?;
     let data = serde_json::json!({ "channel": "stable" });
-    Ok(output::emit_ok(g, crate::codes::ok::RUST_MANAGED_INSTALLED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.rust.install_managed.ok",
-                    "已安装托管 rustup（stable 默认工具链）",
-                    "Managed rustup installed (stable default toolchain)",
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::RUST_MANAGED_INSTALLED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.rust.install_managed.ok",
+                        "已安装托管 rustup（stable 默认工具链）",
+                        "Managed rustup installed (stable default toolchain)",
+                    )
+                );
+            }
+        },
+    ))
 }

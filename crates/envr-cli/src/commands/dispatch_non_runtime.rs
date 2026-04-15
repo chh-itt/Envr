@@ -1,10 +1,10 @@
 use super::{
-    alias_cmd, bundle_cmd, cache_cmd, check, completion_cmd, config_cmd, debug_cmd, deactivate_cmd,
+    alias_cmd, bundle_cmd, cache_cmd, check, completion_cmd, config_cmd, deactivate_cmd, debug_cmd,
     env_cmd, exec, help_cmd, hook_cmd, import_export, init, profile_cmd, resolve_cmd, run_cmd,
     rust_cmd, shell_cmd, shim_cmd, status_cmd, template_cmd, update, which, why_cmd,
 };
-use crate::cli::{Command, GlobalArgs};
 use crate::CommandOutcome;
+use crate::cli::{Command, GlobalArgs};
 
 /// Route commands that do not require a live runtime service.
 pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
@@ -96,20 +96,16 @@ fn route_help(sub: crate::cli::HelpCmd, global: &GlobalArgs) -> CommandOutcome {
 
 fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
     match sub {
-        crate::cli::HookCmd::Bash => {
-            CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
-                global,
-                "bash",
-                hook_cmd::HOOK_BASH,
-            ))
-        }
-        crate::cli::HookCmd::Zsh => {
-            CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
-                global,
-                "zsh",
-                hook_cmd::HOOK_ZSH,
-            ))
-        }
+        crate::cli::HookCmd::Bash => CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
+            global,
+            "bash",
+            hook_cmd::HOOK_BASH,
+        )),
+        crate::cli::HookCmd::Zsh => CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
+            global,
+            "zsh",
+            hook_cmd::HOOK_ZSH,
+        )),
         crate::cli::HookCmd::Keys { path } => {
             CommandOutcome::from_result(hook_cmd::run_keys_inner(global, path))
         }

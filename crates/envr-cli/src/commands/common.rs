@@ -1,7 +1,7 @@
-use crate::cli::GlobalArgs;
-use crate::command_outcome::CliExit;
 use crate::CliUxPolicy;
 use crate::CommandOutcome;
+use crate::cli::GlobalArgs;
+use crate::command_outcome::CliExit;
 use crate::runtime_session::CliRuntimeSession;
 
 use envr_config::project_config::{ProjectConfig, RustEnforceMode};
@@ -36,7 +36,11 @@ pub fn shim_context_for(path: PathBuf, profile_cli: Option<String>) -> EnvrResul
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
         });
-    Ok(ShimContext::with_runtime_root(runtime_root, working_dir, profile))
+    Ok(ShimContext::with_runtime_root(
+        runtime_root,
+        working_dir,
+        profile,
+    ))
 }
 
 pub fn kind_label(kind: RuntimeKind) -> &'static str {
@@ -97,7 +101,14 @@ pub fn emit_child_process_outcome(g: &GlobalArgs, data: Value, exit: i32) -> Cli
             ),
             &[("exit", &exit.to_string())],
         );
-        crate::output::emit_failure_envelope(g, crate::codes::err::CHILD_EXIT, &msg, data, &[], exit)
+        crate::output::emit_failure_envelope(
+            g,
+            crate::codes::err::CHILD_EXIT,
+            &msg,
+            data,
+            &[],
+            exit,
+        )
     }
 }
 

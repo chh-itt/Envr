@@ -1,8 +1,8 @@
 //! Text-mode install feedback: `InstallRequest` progress atomics plus a stderr line / live byte counter.
 //! JS runtimes (node / deno / bun) download with blocking HTTP and already update these atomics.
 
-use crate::cli::GlobalArgs;
 use crate::CliUxPolicy;
+use crate::cli::GlobalArgs;
 use envr_domain::runtime::{InstallRequest, VersionSpec};
 use std::io::{IsTerminal, Write};
 use std::sync::Arc;
@@ -88,10 +88,7 @@ pub fn install_request_with_progress(
         let dl = d2.load(Ordering::Relaxed);
         let tot = t2.load(Ordering::Relaxed);
         if tot > 0 {
-            let _ = writeln!(
-                std::io::stderr(),
-                "\r    100%  {dl} / {tot} bytes    "
-            );
+            let _ = writeln!(std::io::stderr(), "\r    100%  {dl} / {tot} bytes    ");
         } else if dl > 0 {
             let _ = writeln!(std::io::stderr(), "\r    {dl} bytes    ");
         } else {

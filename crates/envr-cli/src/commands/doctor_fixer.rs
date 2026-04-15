@@ -1,6 +1,6 @@
 use crate::cli::GlobalArgs;
 use crate::commands::common::{self, kind_label};
-use crate::commands::doctor::{DoctorReport, ALL_KINDS};
+use crate::commands::doctor::{ALL_KINDS, DoctorReport};
 use crate::commands::doctor_analyzer::{current_is_broken, runtime_root_writable};
 use crate::commands::shim_cmd;
 use crate::output::fmt_template;

@@ -1,7 +1,7 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::app;
+use crate::cli::GlobalArgs;
 use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
@@ -75,70 +75,75 @@ pub(crate) fn run_inner(
     let mut data = serde_json::json!({ "active_versions": runtimes });
     data = output::with_next_steps(data, next_steps_for_current());
 
-    Ok(output::emit_ok(g, crate::codes::ok::SHOW_CURRENT, data, || {
-        let ux = CliUxPolicy::from_global(g);
-        if ux.wants_porcelain_lines() {
-            if rows.len() == 1 {
-                if let Some(v) = rows[0].1.as_deref() {
-                    println!("{v}");
-                }
-            } else {
-                for (kind, version) in &rows {
-                    if let Some(v) = version.as_deref() {
-                        println!("{}\t{}", kind_label(*kind), v);
-                    } else {
-                        println!("{}\t", kind_label(*kind));
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::SHOW_CURRENT,
+        data,
+        || {
+            let ux = CliUxPolicy::from_global(g);
+            if ux.wants_porcelain_lines() {
+                if rows.len() == 1 {
+                    if let Some(v) = rows[0].1.as_deref() {
+                        println!("{v}");
+                    }
+                } else {
+                    for (kind, version) in &rows {
+                        if let Some(v) = version.as_deref() {
+                            println!("{}\t{}", kind_label(*kind), v);
+                        } else {
+                            println!("{}\t", kind_label(*kind));
+                        }
                     }
                 }
+                return;
             }
-            return;
-        }
-        let none = envr_core::i18n::tr_key("cli.common.none", "（无）", "(none)");
-        for (kind, version) in rows {
-            let k = kind_label(kind);
-            match version {
-                Some(v) => {
-                    let line = fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.current.line",
-                            "{kind}：{version}",
-                            "{kind}: {version}",
-                        ),
-                        &[("kind", k), ("version", v.as_str())],
-                    );
-                    if ux.use_rich_text_styles() {
-                        println!("\x1b[2m{k}\x1b[0m: \x1b[32;1m{v}\x1b[0m");
-                    } else {
-                        println!("{line}");
-                    }
-                }
-                None => {
-                    println!(
-                        "{}",
-                        fmt_template(
+            let none = envr_core::i18n::tr_key("cli.common.none", "（无）", "(none)");
+            for (kind, version) in rows {
+                let k = kind_label(kind);
+                match version {
+                    Some(v) => {
+                        let line = fmt_template(
                             &envr_core::i18n::tr_key(
-                                "cli.current.none_line",
-                                "{kind}：{none}",
-                                "{kind}: {none}",
+                                "cli.current.line",
+                                "{kind}：{version}",
+                                "{kind}: {version}",
                             ),
-                            &[("kind", k), ("none", &none)],
-                        )
-                    );
-                    let hint = fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.current.none_hint",
-                            "使用 `envr use {kind} <version>` 设置全局当前版本。",
-                            "None selected. Run `envr use {kind} <version>` to set a global current.",
-                        ),
-                        &[("kind", k)],
-                    );
-                    if ux.use_rich_text_styles() {
-                        println!("\x1b[2m  {hint}\x1b[0m");
-                    } else {
-                        println!("  {hint}");
+                            &[("kind", k), ("version", v.as_str())],
+                        );
+                        if ux.use_rich_text_styles() {
+                            println!("\x1b[2m{k}\x1b[0m: \x1b[32;1m{v}\x1b[0m");
+                        } else {
+                            println!("{line}");
+                        }
+                    }
+                    None => {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.current.none_line",
+                                    "{kind}：{none}",
+                                    "{kind}: {none}",
+                                ),
+                                &[("kind", k), ("none", &none)],
+                            )
+                        );
+                        let hint = fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.current.none_hint",
+                                "使用 `envr use {kind} <version>` 设置全局当前版本。",
+                                "None selected. Run `envr use {kind} <version>` to set a global current.",
+                            ),
+                            &[("kind", k)],
+                        );
+                        if ux.use_rich_text_styles() {
+                            println!("\x1b[2m  {hint}\x1b[0m");
+                        } else {
+                            println!("  {hint}");
+                        }
                     }
                 }
             }
-        }
-    }))
+        },
+    ))
 }

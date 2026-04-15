@@ -1,9 +1,9 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
+use crate::CliPathProfile;
 use crate::CliUxPolicy;
+use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
-use crate::CliPathProfile;
 
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
@@ -114,19 +114,24 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
         "pinned_runtimes": cfg.runtimes.len(),
     });
     data = output::with_next_steps(data, next_steps_for_check_ok());
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_CONFIG_OK, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.check.ok",
-                        "项目配置正常（根目录 {path}）",
-                        "project config ok (root {path})",
-                    ),
-                    &[("path", &loc.dir.display().to_string())],
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_CONFIG_OK,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.check.ok",
+                            "项目配置正常（根目录 {path}）",
+                            "project config ok (root {path})",
+                        ),
+                        &[("path", &loc.dir.display().to_string())],
+                    )
+                );
+            }
+        },
+    ))
 }

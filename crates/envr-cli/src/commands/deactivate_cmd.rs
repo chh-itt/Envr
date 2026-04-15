@@ -18,30 +18,35 @@ pub(crate) fn run_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
         "hint": "hook_shell_only",
         "docs": "After eval \"$(envr hook bash)\" or eval \"$(envr hook zsh)\", run `envr deactivate` or `envr off` to restore saved variables. You can also call `envr_deactivate` if defined.",
     });
-    Ok(output::emit_ok(g, crate::codes::ok::DEACTIVATE_HINT, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            eprintln!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.deactivate.hint",
-                    "此命令在已加载 envr hook 的 shell 中生效：请先执行 eval \"$(envr hook bash)\"（或 zsh），再运行 envr deactivate / envr off，或调用 envr_deactivate。",
-                    "Use this in a shell where the envr hook is loaded: run eval \"$(envr hook bash)\" (or zsh), then `envr deactivate` / `envr off`, or call `envr_deactivate`.",
-                )
-            );
-            if let Ok(root) = common::effective_runtime_root() {
-                let p = root.display().to_string();
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::DEACTIVATE_HINT,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 eprintln!(
                     "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.deactivate.runtime_root",
-                            "当前运行时根目录：{path}",
-                            "Runtime root: {path}",
-                        ),
-                        &[("path", &p)],
+                    envr_core::i18n::tr_key(
+                        "cli.deactivate.hint",
+                        "此命令在已加载 envr hook 的 shell 中生效：请先执行 eval \"$(envr hook bash)\"（或 zsh），再运行 envr deactivate / envr off，或调用 envr_deactivate。",
+                        "Use this in a shell where the envr hook is loaded: run eval \"$(envr hook bash)\" (or zsh), then `envr deactivate` / `envr off`, or call `envr_deactivate`.",
                     )
                 );
+                if let Ok(root) = common::effective_runtime_root() {
+                    let p = root.display().to_string();
+                    eprintln!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.deactivate.runtime_root",
+                                "当前运行时根目录：{path}",
+                                "Runtime root: {path}",
+                            ),
+                            &[("path", &p)],
+                        )
+                    );
+                }
             }
-        }
-    }))
+        },
+    ))
 }

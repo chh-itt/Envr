@@ -547,7 +547,11 @@ fn check_success_json_includes_next_steps() {
         .args(["--format", "json", "check"])
         .output()
         .expect("check");
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(v.get("code"), Some(&serde_json::json!("project_config_ok")));
@@ -740,10 +744,7 @@ fn resolve_json_matches_schemas_with_project_pin() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(
-        v.get("code"),
-        Some(&serde_json::json!("runtime_resolved"))
-    );
+    assert_eq!(v.get("code"), Some(&serde_json::json!("runtime_resolved")));
     assert_valid(RUNTIME_RESOLVED_SCHEMA, v.get("data").expect("data"));
     let next_steps = v
         .get("data")
@@ -1151,10 +1152,7 @@ fn project_validated_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(
-        v.get("code"),
-        Some(&serde_json::json!("project_validated"))
-    );
+    assert_eq!(v.get("code"), Some(&serde_json::json!("project_validated")));
     assert_valid(PROJECT_VALIDATED_SCHEMA, v.get("data").expect("data"));
     let next_steps = v
         .get("data")
@@ -1257,10 +1255,7 @@ fn run_child_completed_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(
-        v.get("code"),
-        Some(&serde_json::json!("child_completed"))
-    );
+    assert_eq!(v.get("code"), Some(&serde_json::json!("child_completed")));
     assert_valid(CHILD_COMPLETED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -1302,10 +1297,7 @@ fn exec_child_completed_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(
-        v.get("code"),
-        Some(&serde_json::json!("child_completed"))
-    );
+    assert_eq!(v.get("code"), Some(&serde_json::json!("child_completed")));
     assert_valid(CHILD_COMPLETED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -1331,10 +1323,7 @@ fn project_add_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(
-        v.get("code"),
-        Some(&serde_json::json!("project_pin_added"))
-    );
+    assert_eq!(v.get("code"), Some(&serde_json::json!("project_pin_added")));
     assert_valid(PROJECT_PIN_ADDED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -1487,7 +1476,11 @@ fn shim_sync_json_matches_schemas() {
     assert_valid(SHIMS_SYNCED_SCHEMA, v.get("data").expect("data"));
     let data = v.get("data").expect("data");
     assert!(data.get("runtime_root").and_then(Value::as_str).is_some());
-    assert!(data.get("ensured_core_kinds").and_then(Value::as_array).is_some());
+    assert!(
+        data.get("ensured_core_kinds")
+            .and_then(Value::as_array)
+            .is_some()
+    );
     assert!(
         data.get("globals_synced")
             .and_then(Value::as_bool)

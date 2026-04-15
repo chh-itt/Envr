@@ -1,7 +1,7 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::app;
+use crate::cli::GlobalArgs;
 use crate::commands::common::{emit_verbose_step, kind_label, runtime_service};
 use crate::output::{self, fmt_template};
 
@@ -9,7 +9,7 @@ use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind};
 use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
-use envr_runtime_node::{list_node_remote_rows, parse_node_index, NodeRemoteRow};
+use envr_runtime_node::{NodeRemoteRow, list_node_remote_rows, parse_node_index};
 use serde_json::{Value, json};
 use std::sync::mpsc;
 use std::thread;
@@ -114,7 +114,11 @@ fn next_steps_for_remote(refreshing: bool, prefix_fallback: bool) -> Vec<(&'stat
     steps
 }
 
-fn filtered_cached_snapshot(service: &RuntimeService, kind: RuntimeKind, filter: &RemoteFilter) -> Vec<String> {
+fn filtered_cached_snapshot(
+    service: &RuntimeService,
+    kind: RuntimeKind,
+    filter: &RemoteFilter,
+) -> Vec<String> {
     let mut versions: Vec<String> = service
         .try_load_remote_latest_per_major_from_disk(kind)
         .into_iter()
@@ -129,7 +133,11 @@ fn filtered_cached_snapshot(service: &RuntimeService, kind: RuntimeKind, filter:
     versions
 }
 
-fn try_fetch_remote_with_timeout(kind: RuntimeKind, filter: RemoteFilter, timeout: Duration) -> Option<Vec<String>> {
+fn try_fetch_remote_with_timeout(
+    kind: RuntimeKind,
+    filter: RemoteFilter,
+    timeout: Duration,
+) -> Option<Vec<String>> {
     let (tx, rx) = mpsc::channel();
     let _ = thread::Builder::new()
         .name(format!("envr-remote-fast-{kind:?}").to_ascii_lowercase())
@@ -171,7 +179,10 @@ pub(crate) fn run_inner(
             let cached = service.try_load_remote_latest_per_major_from_disk(kind);
             if !cached.is_empty() {
                 used_cached_snapshot = true;
-                rows.push((kind, RemoteRow::Plain(cached.into_iter().map(|v| v.0).collect())));
+                rows.push((
+                    kind,
+                    RemoteRow::Plain(cached.into_iter().map(|v| v.0).collect()),
+                ));
                 continue;
             }
             missing_cached_snapshot = true;
@@ -179,8 +190,8 @@ pub(crate) fn run_inner(
             continue;
         }
         let timeout = Duration::from_millis(900);
-        let vers = try_fetch_remote_with_timeout(kind, filter.clone(), timeout)
-            .unwrap_or_else(|| {
+        let vers =
+            try_fetch_remote_with_timeout(kind, filter.clone(), timeout).unwrap_or_else(|| {
                 prefix_fallback = true;
                 filtered_cached_snapshot(service, kind, &filter)
             });
@@ -195,7 +206,8 @@ pub(crate) fn run_inner(
         };
         rows.push((kind, payload));
     }
-    let remote_refreshing = (filter.prefix.is_none() && (used_cached_snapshot || missing_cached_snapshot))
+    let remote_refreshing = (filter.prefix.is_none()
+        && (used_cached_snapshot || missing_cached_snapshot))
         || (filter.prefix.is_some() && prefix_fallback);
     if remote_refreshing {
         emit_verbose_step(
@@ -241,89 +253,97 @@ pub(crate) fn run_inner(
         "remote_refreshing": remote_refreshing,
         "prefix_fallback": prefix_fallback,
     });
-    data = output::with_next_steps(data, next_steps_for_remote(remote_refreshing, prefix_fallback));
+    data = output::with_next_steps(
+        data,
+        next_steps_for_remote(remote_refreshing, prefix_fallback),
+    );
 
-    Ok(output::emit_ok(g, crate::codes::ok::LIST_REMOTE, data, || {
-        if CliUxPolicy::from_global(g).wants_porcelain_lines() {
-            let multi_kind = rows.len() > 1;
-            for (kind, payload) in &rows {
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::LIST_REMOTE,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).wants_porcelain_lines() {
+                let multi_kind = rows.len() > 1;
+                for (kind, payload) in &rows {
+                    match payload {
+                        RemoteRow::Plain(vers) => {
+                            for v in vers {
+                                if multi_kind {
+                                    println!("{}\t{}", kind_label(*kind), v);
+                                } else {
+                                    println!("{v}");
+                                }
+                            }
+                        }
+                        RemoteRow::Node(node_rows) => {
+                            for r in node_rows {
+                                if multi_kind {
+                                    println!("{}\t{}", kind_label(*kind), r.version);
+                                } else {
+                                    println!("{}", r.version);
+                                }
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+            if remote_refreshing && filter.prefix.is_none() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.remote.refresh_notice",
+                        "远程索引更新中，本次先展示本地快照（或空结果）；稍后再次执行可获得最新数据。",
+                        "Remote index is refreshing; this run shows a local snapshot (or empty rows). Re-run shortly for latest results.",
+                    )
+                );
+            }
+            if prefix_fallback {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.remote.prefix_fallback_notice",
+                        "前缀查询在短时间内未完成，已降级为本地快照过滤结果（可能不完整），稍后重试可获取最新。",
+                        "Prefix query did not complete quickly; showing filtered local snapshot (may be incomplete). Re-run shortly for latest data.",
+                    )
+                );
+            }
+
+            let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
+            for (kind, payload) in rows {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.remote.header",
+                            "{kind}（远程）：",
+                            "{kind} (remote):",
+                        ),
+                        &[("kind", kind_label(kind))],
+                    )
+                );
                 match payload {
-                    RemoteRow::Plain(vers) => {
-                        for v in vers {
-                            if multi_kind {
-                                println!("{}\t{}", kind_label(*kind), v);
-                            } else {
-                                println!("{v}");
+                    RemoteRow::Plain(versions) => {
+                        if versions.is_empty() {
+                            println!("{none_line}");
+                        } else {
+                            for v in versions {
+                                println!("  {v}");
                             }
                         }
                     }
                     RemoteRow::Node(node_rows) => {
-                        for r in node_rows {
-                            if multi_kind {
-                                println!("{}\t{}", kind_label(*kind), r.version);
-                            } else {
-                                println!("{}", r.version);
+                        if node_rows.is_empty() {
+                            println!("{none_line}");
+                        } else {
+                            for r in &node_rows {
+                                println!("{}", format_remote_node_line(g, r));
                             }
                         }
                     }
                 }
             }
-            return;
-        }
-        if remote_refreshing && filter.prefix.is_none() {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.remote.refresh_notice",
-                    "远程索引更新中，本次先展示本地快照（或空结果）；稍后再次执行可获得最新数据。",
-                    "Remote index is refreshing; this run shows a local snapshot (or empty rows). Re-run shortly for latest results.",
-                )
-            );
-        }
-        if prefix_fallback {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.remote.prefix_fallback_notice",
-                    "前缀查询在短时间内未完成，已降级为本地快照过滤结果（可能不完整），稍后重试可获取最新。",
-                    "Prefix query did not complete quickly; showing filtered local snapshot (may be incomplete). Re-run shortly for latest data.",
-                )
-            );
-        }
-
-        let none_line = envr_core::i18n::tr_key("cli.list.indent_none", "  （无）", "  (none)");
-        for (kind, payload) in rows {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.remote.header",
-                        "{kind}（远程）：",
-                        "{kind} (remote):",
-                    ),
-                    &[("kind", kind_label(kind))],
-                )
-            );
-            match payload {
-                RemoteRow::Plain(versions) => {
-                    if versions.is_empty() {
-                        println!("{none_line}");
-                    } else {
-                        for v in versions {
-                            println!("  {v}");
-                        }
-                    }
-                }
-                RemoteRow::Node(node_rows) => {
-                    if node_rows.is_empty() {
-                        println!("{none_line}");
-                    } else {
-                        for r in &node_rows {
-                            println!("{}", format_remote_node_line(g, r));
-                        }
-                    }
-                }
-            }
-        }
-    }))
+        },
+    ))
 }

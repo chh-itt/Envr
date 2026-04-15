@@ -1,6 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
 use crate::CliExit;
 use crate::CliUxPolicy;
+use crate::cli::{GlobalArgs, OutputFormat};
 use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::output::{self, fmt_template};
 
@@ -49,9 +49,7 @@ pub(crate) fn run_inner(
     );
 
     let current = service.current(kind)?;
-    let is_active = current
-        .as_ref()
-        .is_some_and(|c| c.0 == version.0);
+    let is_active = current.as_ref().is_some_and(|c| c.0 == version.0);
 
     let (paths, external) = service.uninstall_dry_run_targets(kind, &version)?;
 
@@ -73,10 +71,7 @@ pub(crate) fn run_inner(
             );
             let refuse_msg = fmt_template(
                 &refuse_msg,
-                &[
-                    ("kind", kind_label(kind)),
-                    ("version", &version.0),
-                ],
+                &[("kind", kind_label(kind)), ("version", &version.0)],
             );
             if CliUxPolicy::from_global(g).human_text_primary() {
                 print_dry_run_text(g, &paths, external.as_deref());
@@ -91,9 +86,14 @@ pub(crate) fn run_inner(
             ));
         }
 
-        return Ok(output::emit_ok(g, crate::codes::ok::UNINSTALLED, data, || {
-            print_dry_run_text(g, &paths, external.as_deref());
-        }));
+        return Ok(output::emit_ok(
+            g,
+            crate::codes::ok::UNINSTALLED,
+            data,
+            || {
+                print_dry_run_text(g, &paths, external.as_deref());
+            },
+        ));
     }
 
     if is_active && !force {
@@ -102,13 +102,7 @@ pub(crate) fn run_inner(
             "无法卸载当前全局激活版本 {kind} {version}。请先 `envr use` 切换到其他版本，或添加 `--force`。",
             "refusing to uninstall active {kind} {version}: switch away with `envr use`, or pass `--force`.",
         );
-        let msg = fmt_template(
-            &msg,
-            &[
-                ("kind", kind_label(kind)),
-                ("version", &version.0),
-            ],
-        );
+        let msg = fmt_template(&msg, &[("kind", kind_label(kind)), ("version", &version.0)]);
         return Err(EnvrError::Validation(msg));
     }
 
@@ -133,10 +127,7 @@ pub(crate) fn run_inner(
                 "确定要卸载 {kind} {version} 吗？ [y/N] ",
                 "Remove {kind} {version}? [y/N] ",
             ),
-            &[
-                ("kind", kind_label(kind)),
-                ("version", &version.0),
-            ],
+            &[("kind", kind_label(kind)), ("version", &version.0)],
         );
         let _ = io::stderr().write_all(prompt.as_bytes());
         let _ = io::stderr().flush();
@@ -152,10 +143,7 @@ pub(crate) fn run_inner(
                 1,
             ));
         }
-        let ok = matches!(
-            line.trim().to_ascii_lowercase().as_str(),
-            "y" | "yes"
-        );
+        let ok = matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes");
         if !ok {
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
             return Ok(output::emit_failure_envelope(
@@ -176,10 +164,7 @@ pub(crate) fn run_inner(
                 "正在卸载 {kind} {version}…",
                 "Removing {kind} {version}…",
             ),
-            &[
-                ("kind", kind_label(kind)),
-                ("version", &version.0),
-            ],
+            &[("kind", kind_label(kind)), ("version", &version.0)],
         );
         let _ = writeln!(io::stderr(), "{msg}");
     }
@@ -199,11 +184,7 @@ pub(crate) fn run_inner(
     Ok(print_success(g, kind, &version))
 }
 
-fn print_dry_run_text(
-    g: &GlobalArgs,
-    paths: &[std::path::PathBuf],
-    external: Option<&str>,
-) {
+fn print_dry_run_text(g: &GlobalArgs, paths: &[std::path::PathBuf], external: Option<&str>) {
     let header = envr_core::i18n::tr_key(
         "cli.uninstall.dry_run_header",
         "将删除以下内容：",

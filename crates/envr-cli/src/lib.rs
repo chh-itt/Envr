@@ -18,10 +18,10 @@
 //! New subcommands can land under `commands` without a major version if stable entry types and JSON
 //! contracts are unchanged; changing [`cli::Cli`] shape or documented output contracts is **breaking**.
 
+mod app;
 pub mod cli;
 pub mod cli_help;
 pub mod codes;
-mod app;
 pub mod command_outcome;
 pub mod commands;
 pub mod output;

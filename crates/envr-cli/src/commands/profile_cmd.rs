@@ -28,27 +28,32 @@ pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
         "config_dir": loc.dir.to_string_lossy(),
         "profiles": names,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROFILES_LIST, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            if names.is_empty() {
-                println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.profile.none_in_dir",
-                            "（在 {path} 中无 profile）",
-                            "(no profiles in {path})",
-                        ),
-                        &[("path", &loc.dir.display().to_string())],
-                    )
-                );
-            } else {
-                for n in names {
-                    println!("{n}");
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROFILES_LIST,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                if names.is_empty() {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.profile.none_in_dir",
+                                "（在 {path} 中无 profile）",
+                                "(no profiles in {path})",
+                            ),
+                            &[("path", &loc.dir.display().to_string())],
+                        )
+                    );
+                } else {
+                    for n in names {
+                        println!("{n}");
+                    }
                 }
             }
-        }
-    }))
+        },
+    ))
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
@@ -85,23 +90,28 @@ pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrRes
         "runtimes": p.runtimes,
         "env": p.env,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROFILE_SHOW, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.profile.show_header",
-                        "profile `{name}`（根 {path}）",
-                        "profile `{name}` (root {path})",
-                    ),
-                    &[
-                        ("name", name.as_str()),
-                        ("path", &loc.dir.display().to_string()),
-                    ],
-                )
-            );
-            println!("{}", serde_json::to_string_pretty(p).unwrap_or_default());
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROFILE_SHOW,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.profile.show_header",
+                            "profile `{name}`（根 {path}）",
+                            "profile `{name}` (root {path})",
+                        ),
+                        &[
+                            ("name", name.as_str()),
+                            ("path", &loc.dir.display().to_string()),
+                        ],
+                    )
+                );
+                println!("{}", serde_json::to_string_pretty(p).unwrap_or_default());
+            }
+        },
+    ))
 }

@@ -254,7 +254,10 @@ mod tests {
 
     #[test]
     fn persona_parse_accepts_aliases() {
-        assert_eq!(CliPersona::parse("automation"), Some(CliPersona::Automation));
+        assert_eq!(
+            CliPersona::parse("automation"),
+            Some(CliPersona::Automation)
+        );
         assert_eq!(CliPersona::parse("auto"), Some(CliPersona::Automation));
         assert_eq!(CliPersona::parse("ops"), Some(CliPersona::Operator));
         assert_eq!(CliPersona::parse("guide"), Some(CliPersona::Onboarding));

@@ -180,7 +180,10 @@ FOO = "bar"
     let iv = parse_json_line(&import_out.stdout);
     assert_eq!(iv["success"], true, "{iv}");
     assert_eq!(iv["code"], "config_imported", "{iv}");
-    assert!(project.join(".envr.toml").is_file(), "import should write .envr.toml");
+    assert!(
+        project.join(".envr.toml").is_file(),
+        "import should write .envr.toml"
+    );
 
     let export_out = Command::cargo_bin("envr")
         .expect("envr")

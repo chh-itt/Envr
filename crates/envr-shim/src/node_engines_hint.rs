@@ -2,6 +2,7 @@
 
 use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
 use std::fs;
+use std::io::IsTerminal;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -88,6 +89,12 @@ fn active_node_semver(ctx: &ShimContext) -> Option<(semver::Version, String)> {
 /// Best-effort: print one stderr line when `engines.node` rejects the active version.
 pub fn maybe_emit(ctx: &ShimContext) {
     if std::env::var_os("ENVR_NO_NODE_ENGINES_HINT").is_some_and(|v| !v.is_empty()) {
+        return;
+    }
+    // Default to interactive terminals only; CI/non-interactive tools can opt in explicitly.
+    if std::env::var_os("ENVR_SHIM_NODE_ENGINES_HINT").is_some_and(|v| !v.is_empty()) {
+        // Explicitly enabled.
+    } else if !std::io::stderr().is_terminal() {
         return;
     }
     let pkg = match find_package_json(ctx.working_dir.clone()) {

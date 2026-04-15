@@ -1,15 +1,13 @@
-use crate::cli::GlobalArgs;
 use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::app;
+use crate::cli::GlobalArgs;
 use crate::commands::cli_install_progress;
 use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{
-    RuntimeKind, RuntimeVersion, VersionSpec,
-};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
 
 fn next_steps_for_install(kind: RuntimeKind) -> Vec<(&'static str, String)> {
@@ -55,7 +53,10 @@ pub(crate) fn run_inner(
                 "[verbose] 正在解析版本：{kind} {version}",
                 "[verbose] resolving version: {kind} {version}",
             ),
-            &[("kind", kind_label(kind)), ("version", runtime_version.trim())],
+            &[
+                ("kind", kind_label(kind)),
+                ("version", runtime_version.trim()),
+            ],
         ),
     );
 
@@ -66,10 +67,7 @@ pub(crate) fn run_inner(
             "正在下载 {kind} {version}…",
             "Downloading {kind} {version}…",
         ),
-        &[
-            ("kind", kind_label(kind)),
-            ("version", rv.as_str()),
-        ],
+        &[("kind", kind_label(kind)), ("version", rv.as_str())],
     );
     let spec = VersionSpec(rv);
     let (request, guard) = cli_install_progress::install_request_with_progress(g, spec, headline);

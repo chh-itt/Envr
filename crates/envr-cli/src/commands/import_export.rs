@@ -45,21 +45,26 @@ pub(crate) fn import_run_inner(
         "dest": dest.to_string_lossy(),
         "source": file.to_string_lossy(),
     });
-    Ok(output::emit_ok(g, crate::codes::ok::CONFIG_IMPORTED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!(
-                "{}",
-                fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.import.merged",
-                        "已合并到 {path}",
-                        "merged into {path}",
-                    ),
-                    &[("path", &dest.display().to_string())],
-                )
-            );
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::CONFIG_IMPORTED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.import.merged",
+                            "已合并到 {path}",
+                            "merged into {path}",
+                        ),
+                        &[("path", &dest.display().to_string())],
+                    )
+                );
+            }
+        },
+    ))
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
@@ -89,33 +94,43 @@ pub(crate) fn export_run_inner(
             "written": out_path.to_string_lossy(),
             "toml": toml,
         });
-        Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EXPORTED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.export.wrote",
-                            "已写入 {path}",
-                            "wrote {path}",
-                        ),
-                        &[("path", &out_path.display().to_string())],
-                    )
-                );
-            }
-        }))
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::CONFIG_EXPORTED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.export.wrote",
+                                "已写入 {path}",
+                                "wrote {path}",
+                            ),
+                            &[("path", &out_path.display().to_string())],
+                        )
+                    );
+                }
+            },
+        ))
     } else {
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "toml": toml,
         });
-        Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EXPORTED, data, || {
-            if CliUxPolicy::from_global(g).human_text_primary() {
-                print!("{toml}");
-                if !toml.ends_with('\n') {
-                    println!();
+        Ok(output::emit_ok(
+            g,
+            crate::codes::ok::CONFIG_EXPORTED,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    print!("{toml}");
+                    if !toml.ends_with('\n') {
+                        println!();
+                    }
                 }
-            }
-        }))
+            },
+        ))
     }
 }

@@ -32,16 +32,38 @@ fn is_python_core_stem(stem: &str) -> bool {
 }
 
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
+    let warn = |msg: String| {
+        eprintln!("envr-shim: warning: {msg}");
+    };
     let Some(script_dir) = pip_executable.parent() else {
+        warn(format!(
+            "skip python script shim sync: invalid pip path {}",
+            pip_executable.display()
+        ));
         return;
     };
     if !script_dir.is_dir() {
+        warn(format!(
+            "skip python script shim sync: scripts directory not found at {}",
+            script_dir.display()
+        ));
         return;
     }
     let shims_dir = runtime_root.join("shims");
-    let _ = fs::create_dir_all(&shims_dir);
+    if let Err(err) = fs::create_dir_all(&shims_dir) {
+        warn(format!(
+            "failed to create shims directory {}: {}",
+            shims_dir.display(),
+            err
+        ));
+        return;
+    }
 
     let Ok(entries) = fs::read_dir(script_dir) else {
+        warn(format!(
+            "failed to read python scripts directory {}",
+            script_dir.display()
+        ));
         return;
     };
     for e in entries.flatten() {
@@ -61,15 +83,35 @@ fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Pa
         {
             let dst = shims_dir.join(format!("{stem}.cmd"));
             let body = format!("@echo off\r\ncall \"{}\" %*\r\n", path.display());
-            let _ = fs::write(dst, body);
+            if let Err(err) = fs::write(&dst, body) {
+                warn(format!(
+                    "failed to write python script shim {}: {}",
+                    dst.display(),
+                    err
+                ));
+            }
         }
         #[cfg(not(windows))]
         {
             let dst = shims_dir.join(&stem);
             if dst.exists() {
-                let _ = fs::remove_file(&dst);
+                if let Err(err) = fs::remove_file(&dst) {
+                    warn(format!(
+                        "failed to replace python script shim {}: {}",
+                        dst.display(),
+                        err
+                    ));
+                    continue;
+                }
             }
-            let _ = std::os::unix::fs::symlink(&path, &dst);
+            if let Err(err) = std::os::unix::fs::symlink(&path, &dst) {
+                warn(format!(
+                    "failed to link python script shim {} -> {}: {}",
+                    dst.display(),
+                    path.display(),
+                    err
+                ));
+            }
         }
     }
 }

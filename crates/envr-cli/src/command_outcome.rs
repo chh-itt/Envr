@@ -166,7 +166,8 @@ mod tests {
     fn from_result_ok_matches_from_cli_exit() {
         let from_res =
             CommandOutcome::from_result(Ok(CliExit::failure(1, crate::codes::err::VALIDATION)));
-        let from_st = CommandOutcome::from_cli_exit(CliExit::failure(1, crate::codes::err::VALIDATION));
+        let from_st =
+            CommandOutcome::from_cli_exit(CliExit::failure(1, crate::codes::err::VALIDATION));
         assert!(matches!(
             (&from_res, &from_st),
             (

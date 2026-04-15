@@ -1,6 +1,6 @@
 use crate::commands::common::{self, kind_label};
 use crate::commands::doctor::{
-    DoctorFinding, DoctorReport, PathAnalysis, PathShadowingInfo, ALL_KINDS,
+    ALL_KINDS, DoctorFinding, DoctorReport, PathAnalysis, PathShadowingInfo,
 };
 use crate::commands::doctor_presenter;
 use crate::output::fmt_template;
@@ -217,7 +217,10 @@ pub(crate) fn build_doctor_report(service: &RuntimeService) -> Result<DoctorRepo
     })
 }
 
-pub(crate) fn current_is_broken(current: &Option<RuntimeVersion>, installed: &[RuntimeVersion]) -> bool {
+pub(crate) fn current_is_broken(
+    current: &Option<RuntimeVersion>,
+    installed: &[RuntimeVersion],
+) -> bool {
     current
         .as_ref()
         .is_some_and(|c| !installed.iter().any(|i| i.0 == c.0))
@@ -326,7 +329,11 @@ fn first_executable_on_path(names: &[&str]) -> Option<PathBuf> {
     None
 }
 
-fn detect_tool_path_shadowing(shims: &Path, tool: &str, names: &[&str]) -> Option<PathShadowingInfo> {
+fn detect_tool_path_shadowing(
+    shims: &Path,
+    tool: &str,
+    names: &[&str],
+) -> Option<PathShadowingInfo> {
     let shims_canon = std::fs::canonicalize(shims).ok()?;
     let exe = first_executable_on_path(names)?;
     let parent = exe.parent()?;

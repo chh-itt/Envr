@@ -14,35 +14,40 @@ pub(crate) fn run_inner(g: &GlobalArgs, check: bool) -> EnvrResult<CliExit> {
         "check_requested": check,
         "self_update": "not_implemented",
     });
-    Ok(output::emit_ok(g, crate::codes::ok::UPDATE_INFO, data, || {
-        println!(
-            "{}",
-            fmt_template(
-                &envr_core::i18n::tr_key(
-                    "cli.update.version_line",
-                    "envr {version}",
-                    "envr {version}",
-                ),
-                &[("version", version)],
-            )
-        );
-        if check {
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::UPDATE_INFO,
+        data,
+        || {
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.update.version_line",
+                        "envr {version}",
+                        "envr {version}",
+                    ),
+                    &[("version", version)],
+                )
+            );
+            if check {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.update.release_check_pending",
+                        "（版本检查尚未实现）",
+                        "(release check is not implemented yet)",
+                    )
+                );
+            }
             println!(
                 "{}",
                 envr_core::i18n::tr_key(
-                    "cli.update.release_check_pending",
-                    "（版本检查尚未实现）",
-                    "(release check is not implemented yet)",
+                    "cli.update.self_update_hint",
+                    "暂不支持自更新；有升级时请从软件包来源重新安装。",
+                    "Self-update is not implemented; reinstall from your package source when upgrades are available.",
                 )
             );
-        }
-        println!(
-            "{}",
-            envr_core::i18n::tr_key(
-                "cli.update.self_update_hint",
-                "暂不支持自更新；有升级时请从软件包来源重新安装。",
-                "Self-update is not implemented; reinstall from your package source when upgrades are available.",
-            )
-        );
-    }))
+        },
+    ))
 }
