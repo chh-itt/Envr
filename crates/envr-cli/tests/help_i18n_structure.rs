@@ -57,8 +57,14 @@ fn zh_and_en_help_share_subcommand_tokens() {
         en.contains("Command groups"),
         "en help expected Command groups section; got:\n{en}"
     );
-    assert!(zh.contains("L1"), "zh help expected L1 tier line; got:\n{zh}");
-    assert!(en.contains("L1"), "en help expected L1 tier line; got:\n{en}");
+    assert!(
+        zh.contains("L1"),
+        "zh help expected L1 tier line; got:\n{zh}"
+    );
+    assert!(
+        en.contains("L1"),
+        "en help expected L1 tier line; got:\n{en}"
+    );
 
     for token in SHARED_SUBCOMMAND_TOKENS {
         assert!(

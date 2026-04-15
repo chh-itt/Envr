@@ -1,4 +1,5 @@
 //! `envr alias` — persist name → target strings in `config/aliases.toml`.
+use crate::CliExit;
 
 use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
@@ -8,7 +9,7 @@ use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult<CliExit> {
     let paths = current_platform_paths()?;
     let path = AliasesFile::path_from(&paths);
 
@@ -21,7 +22,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::AliasCmd) -> EnvrResult
                 .map(|(k, v)| serde_json::json!({ "name": k, "target": v }))
                 .collect();
             let data = serde_json::json!({ "aliases": entries });
-            Ok(output::emit_ok(g, "alias_list", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_LIST, data, || {
                 if file.aliases.is_empty() {
                     println!(
                         "{}",
@@ -49,7 +50,7 @@ envr alias add mydiag "diagnostics export""#,
             file.aliases.insert(name.clone(), target.clone());
             file.save_to(&path)?;
             let data = serde_json::json!({ "name": name, "target": target });
-            Ok(output::emit_ok(g, "alias_added", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_ADDED, data, || {
                 println!(
                     "{}",
                     fmt_template(
@@ -79,7 +80,7 @@ envr alias add mydiag "diagnostics export""#,
                 "name": name,
                 "removed": removed.is_some(),
             });
-            Ok(output::emit_ok(g, "alias_removed", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::ALIAS_REMOVED, data, || {
                 if removed.is_some() {
                     println!(
                         "{}",

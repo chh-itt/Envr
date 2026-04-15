@@ -1,21 +1,34 @@
 //! Unified CLI output: JSON envelope (`schema_version`, `success`, `code`, `message`, `data`, `diagnostics`) and exit codes.
 //! Envelope vs per-`message` `data` versioning: `docs/cli/output-contract.md` and `docs/schemas/README.md`.
+//!
+//! Human vs machine and quiet/porcelain/color rules live in [`crate::presenter::CliUxPolicy`]; this module implements
+//! envelope builders and emitters using that policy.
 
 use crate::cli::{GlobalArgs, OutputFormat};
+use crate::codes;
+use crate::command_outcome::CliExit;
+use crate::presenter::CliUxPolicy;
 
 use envr_error::{EnvrError, ErrorCode};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
-use std::cell::RefCell;
 use std::sync::OnceLock;
-thread_local! {
-    static RECORDED_FAILURE_CODE: RefCell<Option<String>> = const { RefCell::new(None) };
+
+fn ok_message_for_code(code: &str) -> String {
+    // Message is human-facing text. Automation must use `code`.
+    let key = format!("cli.ok.{code}");
+    let s = envr_core::i18n::tr_key(&key, "", "");
+    if s.is_empty() {
+        envr_core::i18n::tr_key("cli.ok._default", "ok", "ok")
+    } else {
+        s
+    }
 }
 
 /// Top-level `schema_version` integer for every `--format json` envelope line.
 /// Bump when making breaking changes to the envelope or documented `data` shapes.
 /// JSON Schema sources for the envelope and selected `data` blobs: `schemas/cli/` (see integration tests).
-pub const CLI_JSON_SCHEMA_VERSION: u32 = 2;
+pub const CLI_JSON_SCHEMA_VERSION: u32 = 3;
 const ERROR_KIND_MAP_JSON: &str = include_str!("../../../schemas/cli/error-kind-map.json");
 
 struct ErrorKindSpec {
@@ -90,26 +103,6 @@ pub fn metrics_error_code_for_exit(exit_code: i32) -> Option<&'static str> {
     }
 }
 
-/// Stores the last stable JSON failure `code` on this thread for [`crate::CommandOutcome::from_exit_code`].
-#[inline]
-pub(crate) fn record_failure_code_for_metrics(code: &str) {
-    RECORDED_FAILURE_CODE.with(|slot| {
-        *slot.borrow_mut() = Some(code.to_string());
-    });
-}
-
-#[inline]
-pub(crate) fn take_recorded_failure_code_for_exit(exit_code: i32) -> Option<String> {
-    RECORDED_FAILURE_CODE.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        if exit_code == 0 {
-            *slot = None;
-            return None;
-        }
-        slot.take()
-    })
-}
-
 /// Human-oriented primary detail for stderr (no `validation error:`-style wrapper; the bracket tag carries the class).
 pub fn envr_error_line_message(err: &EnvrError) -> String {
     match err {
@@ -142,8 +135,14 @@ pub fn print_error_text(json_code: &str, message: &str) {
     eprintln!("envr: {tag} {message}");
 }
 
-fn trim_failure_for_quiet_json(g: &GlobalArgs, code: &str, message: &str, data: Value, diagnostics: &[String]) -> (String, Value, Vec<String>) {
-    if !g.quiet || !matches!(g.effective_output_format(), OutputFormat::Json) {
+fn trim_failure_for_quiet_json(
+    policy: CliUxPolicy,
+    code: &str,
+    message: &str,
+    data: Value,
+    diagnostics: &[String],
+) -> (String, Value, Vec<String>) {
+    if !policy.quiet_json_failure_trim() {
         return (message.to_string(), data, diagnostics.to_vec());
     }
     (error_bracket_label(code), Value::Null, vec![])
@@ -176,40 +175,44 @@ pub(crate) fn build_failure_envelope_value(
     data: Value,
     diagnostics: &[String],
 ) -> Value {
-    let data = if g.quiet {
+    let policy = CliUxPolicy::from_global(g);
+    let data = if policy.quiet {
         data
     } else {
         add_error_object_if_possible(code, message, data, diagnostics)
     };
-    let (msg, data, diags) = trim_failure_for_quiet_json(g, code, message, data, diagnostics);
-    build_envelope_value(false, Some(code), &msg, data, &diags)
+    let (msg, data, diags) = trim_failure_for_quiet_json(policy, code, message, data, diagnostics);
+    build_envelope_value(false, code, &msg, data, &diags)
 }
 
 /// Failure with a stable string `code` (child exit, project checks, etc.): same envelope shape as other CLI errors.
 /// With `--quiet`, `message` is replaced by `[E_CODE]` and `diagnostics` are omitted from JSON.
 pub fn emit_failure_envelope(
     g: &GlobalArgs,
-    code: &str,
+    code: &'static str,
     message: &str,
     data: Value,
     diagnostics: &[String],
     exit_code: i32,
-) -> i32 {
-    record_failure_code_for_metrics(code);
-    match g.effective_output_format() {
+) -> CliExit {
+    let policy = CliUxPolicy::from_global(g);
+    match policy.format {
         OutputFormat::Json => {
             let v = build_failure_envelope_value(g, code, message, data, diagnostics);
             println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
         }
         OutputFormat::Text => {
-            if g.quiet {
+            if policy.quiet {
                 eprintln!("envr: {}", error_bracket_label(code));
             } else {
                 print_error_text(code, message);
             }
         }
     }
-    exit_code
+    CliExit {
+        exit_code,
+        error_code: Some(code),
+    }
 }
 
 /// Exit-code policy table keyed by stable [`ErrorCode`] class.
@@ -252,7 +255,7 @@ fn mirror_network_hint_message(err: &EnvrError) -> Option<String> {
 }
 
 fn mirror_network_json_error_data(g: &GlobalArgs, err: &EnvrError) -> Value {
-    if g.quiet {
+    if CliUxPolicy::from_global(g).quiet {
         return Value::Null;
     }
     mirror_network_hint_message(err)
@@ -260,10 +263,45 @@ fn mirror_network_json_error_data(g: &GlobalArgs, err: &EnvrError) -> Value {
         .unwrap_or(Value::Null)
 }
 
+fn common_error_hints(err: &EnvrError) -> Vec<String> {
+    let line = envr_error_line_message(err).to_ascii_lowercase();
+    let mut hints = Vec::new();
+    if line.contains("timed out")
+        || line.contains("timeout")
+        || line.contains("connection refused")
+        || line.contains("dns")
+        || line.contains("tls")
+    {
+        hints.push(envr_core::i18n::tr_key(
+            "cli.hint.network_retry_or_mirror",
+            "网络请求失败：请检查网络/代理，或稍后重试；若在中国大陆可尝试镜像模式。",
+            "Network request failed: check network/proxy and retry; mirror mode may help in restricted regions.",
+        ));
+    }
+    if line.contains("permission denied") || line.contains("access is denied") {
+        hints.push(envr_core::i18n::tr_key(
+            "cli.hint.permission",
+            "权限不足：请检查 ENVR_RUNTIME_ROOT 目录可写性，必要时切换到用户可写路径。",
+            "Permission denied: ensure ENVR_RUNTIME_ROOT is writable, or switch to a user-writable path.",
+        ));
+    }
+    if line.contains("not found")
+        || line.contains("no such file")
+        || line.contains("cannot find the path")
+    {
+        hints.push(envr_core::i18n::tr_key(
+            "cli.hint.missing_file",
+            "文件或目录不存在：可先执行 `envr doctor` 与 `envr cache index sync` 进行修复与预热。",
+            "File/directory not found: run `envr doctor` and `envr cache index sync` to repair and warm caches.",
+        ));
+    }
+    hints
+}
+
 /// Build the JSON object emitted by [`write_envelope`] (compact `serde_json` is one line).
 pub(crate) fn build_envelope_value(
     success: bool,
-    code: Option<&str>,
+    code: &str,
     message: &str,
     data: Value,
     diagnostics: &[String],
@@ -274,7 +312,7 @@ pub(crate) fn build_envelope_value(
         json!(CLI_JSON_SCHEMA_VERSION),
     );
     m.insert("success".into(), json!(success));
-    m.insert("code".into(), code.map(|c| json!(c)).unwrap_or(Value::Null));
+    m.insert("code".into(), json!(code));
     m.insert("message".into(), json!(message));
     m.insert("data".into(), data);
     m.insert(
@@ -286,52 +324,49 @@ pub(crate) fn build_envelope_value(
 
 /// Print one JSON line with the standard envelope (design doc §4).
 ///
-/// When `success` is false and `code` is [`Some`], registers that code for
-/// [`take_recorded_failure_code_for_exit`] so dispatch/finish metrics match the envelope.
+/// Returns the envelope `code` when `success` is false and `code` is [`Some`] (for embedding in [`CliExit`]).
 pub fn write_envelope(
     success: bool,
-    code: Option<&str>,
+    code: &'static str,
     message: &str,
     data: Value,
     diagnostics: &[String],
-) {
-    if !success && let Some(c) = code {
-        record_failure_code_for_metrics(c);
-    }
-    println!(
-        "{}",
-        build_envelope_value(success, code, message, data, diagnostics)
-    );
+) -> Option<&'static str> {
+    let v = build_envelope_value(success, code, message, data, diagnostics);
+    println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
+    (!success).then_some(code)
 }
 
-pub fn emit_validation(g: &GlobalArgs, cmd: &str, example: &str) -> i32 {
-    record_failure_code_for_metrics("validation");
+pub fn emit_validation(g: &GlobalArgs, cmd: &str, example: &str) -> CliExit {
     let tmpl = envr_core::i18n::tr_key(
         "cli.validation.missing_args",
         "`{cmd}` 缺少参数（示例：{example}）",
         "missing arguments for `{cmd}` (example: {example})",
     );
     let msg = fmt_template(&tmpl, &[("cmd", cmd), ("example", example)]);
-    match g.effective_output_format() {
+    let policy = CliUxPolicy::from_global(g);
+    match policy.format {
         OutputFormat::Json => {
-            let v = build_failure_envelope_value(g, "validation", &msg, Value::Null, &[]);
+            let v = build_failure_envelope_value(g, codes::err::VALIDATION, &msg, Value::Null, &[]);
             println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
         }
         OutputFormat::Text => {
-            if g.quiet {
-                eprintln!("envr: {}", error_bracket_label("validation"));
+            if policy.quiet {
+                eprintln!("envr: {}", error_bracket_label(codes::err::VALIDATION));
             } else {
-                print_error_text("validation", &msg);
+                print_error_text(codes::err::VALIDATION, &msg);
             }
         }
     }
-    1
+    CliExit::failure(1, codes::err::VALIDATION)
 }
 
 pub fn emit_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
     let code = error_code_token(err.code());
     let payload = err.to_payload();
-    let diags = payload.chain;
+    let mut diags = payload.chain;
+    let hint_lines = common_error_hints(&err);
+    diags.extend(hint_lines.iter().cloned());
     let exit = exit_code_for_error(&err);
     tracing::error!(
         target: "envr_cli",
@@ -340,24 +375,31 @@ pub fn emit_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
         cli_error_diagnostics_len = diags.len(),
         "cli error"
     );
+    let policy = CliUxPolicy::from_global(g);
     let mut line = envr_error_line_message(&err);
-    if !g.quiet
-        && matches!(
-            g.effective_output_format(),
-            OutputFormat::Text
-        )
-        && let Some(ref h) = mirror_network_hint_message(&err) {
-            line.push('\n');
-            line.push_str(h);
-        }
+    if policy.human_text_primary()
+        && let Some(ref h) = mirror_network_hint_message(&err)
+    {
+        line.push('\n');
+        line.push_str(h);
+    }
     let json_error_data = mirror_network_json_error_data(g, &err);
-    match g.effective_output_format() {
+    let json_error_data = if policy.quiet || hint_lines.is_empty() {
+        json_error_data
+    } else if json_error_data.is_null() {
+        json!({ "hints": hint_lines })
+    } else {
+        let mut obj = json_error_data.as_object().cloned().unwrap_or_default();
+        obj.insert("hints".into(), json!(hint_lines));
+        Value::Object(obj)
+    };
+    match policy.format {
         OutputFormat::Json => {
             let v = build_failure_envelope_value(g, code, &payload.message, json_error_data, &diags);
             println!("{}", serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string()));
         }
         OutputFormat::Text => {
-            if g.quiet {
+            if policy.quiet {
                 eprintln!("envr: {}", error_bracket_label(code));
             } else {
                 print_error_text(code, &line);
@@ -367,48 +409,52 @@ pub fn emit_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
     exit
 }
 
-pub fn emit_ok<F: FnOnce()>(g: &GlobalArgs, message: &str, data: Value, text: F) -> i32 {
-    match g.effective_output_format() {
+pub fn emit_ok<F: FnOnce()>(g: &GlobalArgs, message: &'static str, data: Value, text: F) -> CliExit {
+    let policy = CliUxPolicy::from_global(g);
+    match policy.format {
         OutputFormat::Json => {
-            write_envelope(true, None, message, data, &[]);
+            let human = ok_message_for_code(message);
+            write_envelope(true, message, &human, data, &[]);
         }
         OutputFormat::Text => {
             text();
         }
     }
-    0
+    CliExit::ok()
 }
 
+/// Script-friendly plain lines (`--porcelain`); see [`CliUxPolicy::wants_porcelain_lines`].
+#[inline]
 pub fn wants_porcelain(g: &GlobalArgs) -> bool {
-    g.porcelain && !matches!(g.effective_output_format(), OutputFormat::Json)
+    CliUxPolicy::from_global(g).wants_porcelain_lines()
 }
 
-/// Whether stdout may use ANSI styles (honours `--no-color` and a tty).
+/// Whether stdout may use ANSI styles; see [`CliUxPolicy::use_ansi_stdout`].
+#[inline]
 pub fn use_terminal_styles(g: &GlobalArgs) -> bool {
-    use std::io::{self, IsTerminal};
-    !g.no_color && io::stdout().is_terminal()
+    CliUxPolicy::from_global(g).use_ansi_stdout()
 }
 
 pub fn emit_doctor(
     g: &GlobalArgs,
     success: bool,
+    code: &'static str,
     message: &str,
-    code_if_fail: Option<&str>,
     data: Value,
     text: impl FnOnce(),
-) -> i32 {
-    match g.effective_output_format() {
-        OutputFormat::Json => {
-            write_envelope(success, code_if_fail, message, data, &[]);
-        }
+) -> CliExit {
+    let policy = CliUxPolicy::from_global(g);
+    let err_code = match policy.format {
+        OutputFormat::Json => write_envelope(success, code, message, data, &[]),
         OutputFormat::Text => {
             text();
-            if !success && let Some(code) = code_if_fail {
-                record_failure_code_for_metrics(code);
-            }
+            (!success).then_some(code)
         }
+    };
+    CliExit {
+        exit_code: if success { 0 } else { 1 },
+        error_code: err_code,
     }
-    if success { 0 } else { 1 }
 }
 
 #[cfg(test)]
@@ -433,6 +479,7 @@ mod tests {
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let code = emit_envr_error(&g, EnvrError::Download("example failure".into()));
@@ -447,6 +494,7 @@ mod tests {
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let code = emit_envr_error(&g, EnvrError::Mirror("bad mirror".into()));
@@ -461,6 +509,7 @@ mod tests {
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let v = build_failure_envelope_value(
@@ -483,6 +532,7 @@ mod tests {
             quiet: false,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let v = build_failure_envelope_value(
@@ -533,6 +583,7 @@ mod tests {
             quiet: false,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let v = mirror_network_json_error_data(&g, &EnvrError::Mirror("m".into()));
@@ -549,6 +600,7 @@ mod tests {
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let v = mirror_network_json_error_data(&g, &EnvrError::Mirror("m".into()));
@@ -575,72 +627,73 @@ mod tests {
     }
 
     #[test]
-    fn recorded_failure_code_is_taken_for_nonzero_exit_and_cleared() {
-        record_failure_code_for_metrics("child_exit");
-        assert_eq!(take_recorded_failure_code_for_exit(1), Some("child_exit".to_string()));
-        assert_eq!(take_recorded_failure_code_for_exit(1), None);
-    }
-
-    #[test]
-    fn emit_validation_records_code_for_metrics() {
+    fn emit_validation_returns_cli_exit_with_validation_code() {
         let g = GlobalArgs {
             output_format: Some(OutputFormat::Text),
             porcelain: false,
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let exit = emit_validation(&g, "which", "envr which node");
-        assert_eq!(exit, 1);
         assert_eq!(
-            take_recorded_failure_code_for_exit(1),
-            Some("validation".to_string())
+            exit,
+            CliExit {
+                exit_code: 1,
+                error_code: Some(codes::err::VALIDATION),
+            }
         );
     }
 
     #[test]
-    fn emit_doctor_failure_records_code_for_metrics() {
+    fn emit_doctor_failure_returns_cli_exit_with_issue_code() {
         let g = GlobalArgs {
             output_format: Some(OutputFormat::Text),
             porcelain: false,
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
-        let exit = emit_doctor(&g, false, "x", Some("doctor_issues"), Value::Null, || {});
-        assert_eq!(exit, 1);
+        let exit = emit_doctor(&g, false, codes::ok::DOCTOR_ISSUES, "x", Value::Null, || {});
         assert_eq!(
-            take_recorded_failure_code_for_exit(1),
-            Some("doctor_issues".to_string())
+            exit,
+            CliExit {
+                exit_code: 1,
+                error_code: Some(codes::ok::DOCTOR_ISSUES),
+            }
         );
     }
 
     #[test]
-    fn emit_doctor_json_failure_records_code_via_write_envelope() {
+    fn emit_doctor_json_failure_returns_same_cli_exit_code() {
         let g = GlobalArgs {
             output_format: Some(OutputFormat::Json),
             porcelain: false,
             quiet: true,
             no_color: true,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
-        let exit = emit_doctor(&g, false, "x", Some("doctor_issues"), Value::Null, || {});
-        assert_eq!(exit, 1);
+        let exit = emit_doctor(&g, false, codes::ok::DOCTOR_ISSUES, "x", Value::Null, || {});
         assert_eq!(
-            take_recorded_failure_code_for_exit(1),
-            Some("doctor_issues".to_string())
+            exit,
+            CliExit {
+                exit_code: 1,
+                error_code: Some(codes::ok::DOCTOR_ISSUES),
+            }
         );
     }
 
     #[test]
-    fn write_envelope_failure_with_code_records_for_metrics() {
-        write_envelope(false, Some("envelope_fail"), "m", Value::Null, &[]);
+    fn write_envelope_failure_returns_envelope_code() {
         assert_eq!(
-            take_recorded_failure_code_for_exit(1),
-            Some("envelope_fail".to_string())
+            write_envelope(false, "envelope_fail", "m", Value::Null, &[]),
+            Some("envelope_fail")
         );
     }
 
@@ -650,7 +703,7 @@ mod tests {
             success in proptest::bool::ANY,
             msg in "[a-zA-Z0-9._ -]{0,40}"
         ) {
-            let v = build_envelope_value(success, None, &msg, Value::Null, &[]);
+            let v = build_envelope_value(success, "ok", &msg, Value::Null, &[]);
             let line = serde_json::to_string(&v).expect("serde");
             prop_assert!(
                 line.lines().count() == 1,

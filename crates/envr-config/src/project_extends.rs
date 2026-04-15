@@ -26,7 +26,8 @@ pub fn normalize_extend_url(raw: &str) -> EnvrResult<String> {
         return Ok(s.to_string());
     }
     let t = s.trim_start_matches('/');
-    if t.len() >= "github.com/".len() && t[.. "github.com/".len()].eq_ignore_ascii_case("github.com/")
+    if t.len() >= "github.com/".len()
+        && t[.."github.com/".len()].eq_ignore_ascii_case("github.com/")
     {
         return github_shorthand_to_raw_url(s);
     }
@@ -43,7 +44,11 @@ fn github_shorthand_to_raw_url(s: &str) -> EnvrResult<String> {
             "invalid GitHub extends shorthand (expected github.com/owner/repo/ref[/path]): {s}"
         )));
     };
-    let parts: Vec<&str> = rest.split('/').map(str::trim).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = rest
+        .split('/')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.len() < 3 {
         return Err(EnvrError::Config(format!(
             "GitHub extends needs owner/repo/ref (and optional path): {s}"
@@ -68,7 +73,10 @@ fn url_cache_path(url: &str) -> EnvrResult<PathBuf> {
     h.update(url.as_bytes());
     let digest = h.finalize();
     let name: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-    Ok(root.join("cache").join("project-extends").join(format!("{name}.toml")))
+    Ok(root
+        .join("cache")
+        .join("project-extends")
+        .join(format!("{name}.toml")))
 }
 
 fn read_cache_if_fresh(path: &PathBuf) -> Option<String> {
@@ -239,13 +247,11 @@ mod tests {
 
         let mut fetch = |url: &str| -> EnvrResult<String> {
             assert_eq!(url, "https://example.com/base.toml");
-            Ok(
-                r#"
+            Ok(r#"
 [env]
 A = "from-remote"
 "#
-                .to_string(),
-            )
+            .to_string())
         };
         let got = resolve_extends_with_fetch(top, &mut fetch).expect("resolve");
         assert_eq!(got.env.get("A").map(String::as_str), Some("from-remote"));

@@ -10,10 +10,10 @@ use std::error::Error;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::Duration;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::thread;
+use std::time::Duration;
 
 fn error_chain_message(err: &dyn Error) -> String {
     let mut s = err.to_string();
@@ -286,11 +286,7 @@ fn download_to_path(
             progress_total,
             cancel,
         )
-        .map_err(|e2| {
-            EnvrError::Download(format!(
-                "{e} (retried official URL {fb}: {e2})"
-            ))
-        })
+        .map_err(|e2| EnvrError::Download(format!("{e} (retried official URL {fb}: {e2})")))
     })
 }
 
@@ -323,9 +319,7 @@ fn get_text_with_official_fallback(
     }
     first.or_else(|e| {
         get_text(client, official).map_err(|e2| {
-            EnvrError::Download(format!(
-                "{e} (retried official URL {official}: {e2})"
-            ))
+            EnvrError::Download(format!("{e} (retried official URL {official}: {e2})"))
         })
     })
 }
@@ -452,15 +446,16 @@ impl BunManager {
         let settings = load_settings()?;
         let direct_shasums = format!("{base}/SHASUMS256.txt");
         let shasums_url = maybe_mirror_url(&settings, &direct_shasums)?;
-        let expected_sha = get_text_with_official_fallback(&self.client, &shasums_url, &direct_shasums)
-            .ok()
-            .and_then(|text| parse_shasums256(&text).ok())
-            .and_then(|entries| {
-                entries
-                    .into_iter()
-                    .find(|(_, n)| n == asset)
-                    .map(|(sha, _)| sha)
-            });
+        let expected_sha =
+            get_text_with_official_fallback(&self.client, &shasums_url, &direct_shasums)
+                .ok()
+                .and_then(|text| parse_shasums256(&text).ok())
+                .and_then(|entries| {
+                    entries
+                        .into_iter()
+                        .find(|(_, n)| n == asset)
+                        .map(|(sha, _)| sha)
+                });
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(asset);

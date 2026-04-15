@@ -103,7 +103,7 @@ pub fn format_error_chain(err: &(dyn Error + 'static)) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_error_chain, init_logging, init_logging_with, LoggingInitOptions};
+    use super::{LoggingInitOptions, format_error_chain, init_logging, init_logging_with};
     use std::{error::Error, fmt};
     use tempfile::TempDir;
 
@@ -156,7 +156,8 @@ mod tests {
         let old = std::env::current_dir().expect("cwd");
         std::env::set_current_dir(tmp.path()).expect("chdir");
 
-        let _guard = init_logging_with("envr-core-test", LoggingInitOptions::default()).expect("first init");
+        let _guard =
+            init_logging_with("envr-core-test", LoggingInitOptions::default()).expect("first init");
         let err = match init_logging("envr-core-test") {
             Ok(_) => panic!("second init should fail"),
             Err(e) => e,

@@ -1,7 +1,8 @@
 //! Interactive subshell with the same merged environment as `envr env` / `collect_run_env`.
+use crate::CliExit;
 
-use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::CliPathProfile;
+use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::child_env;
 use crate::output::{self, fmt_template};
 
@@ -16,7 +17,7 @@ pub(crate) fn run_inner(
     g: &GlobalArgs,
     project: ProjectPathProfileArgs,
     shell: Option<PathBuf>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let ctx = &session.ctx;
@@ -41,7 +42,7 @@ pub(crate) fn run_inner(
     let status = cmd.status()?;
     let code = status.code().unwrap_or(1);
     if code == 0 {
-        Ok(output::emit_ok(g, "shell_exited", base_data, || {}))
+        Ok(output::emit_ok(g, crate::codes::ok::SHELL_EXITED, base_data, || {}))
     } else {
         let msg = fmt_template(
             &envr_core::i18n::tr_key(
@@ -57,7 +58,12 @@ pub(crate) fn run_inner(
             "exit_code": code,
         });
         Ok(output::emit_failure_envelope(
-            g, "shell_exit", &msg, fail_data, &[], code,
+            g,
+            crate::codes::err::SHELL_EXIT,
+            &msg,
+            fail_data,
+            &[],
+            code,
         ))
     }
 }

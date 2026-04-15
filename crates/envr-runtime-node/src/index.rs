@@ -521,7 +521,10 @@ mod tests {
         assert_eq!(top.version, "30.0.0");
         assert!(!top.lts);
         assert_eq!(top.date.as_deref(), Some("2026-01-01"));
-        let lts = rows.iter().find(|r| r.version == "24.2.0").expect("lts row");
+        let lts = rows
+            .iter()
+            .find(|r| r.version == "24.2.0")
+            .expect("lts row");
         assert!(lts.lts);
         assert_eq!(lts.lts_codename.as_deref(), Some("Krypton"));
     }

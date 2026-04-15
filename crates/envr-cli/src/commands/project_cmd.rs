@@ -1,4 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat, ProjectCmd};
+use crate::cli::{GlobalArgs, ProjectCmd};
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
@@ -19,7 +21,7 @@ use serde_json::json;
 use std::path::PathBuf;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> EnvrResult<CliExit> {
     match cmd {
         ProjectCmd::Add { spec, path } => add_inner(g, spec, path),
         ProjectCmd::Sync { path, install } => sync_inner(g, service, path, install),
@@ -27,8 +29,19 @@ pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCm
     }
 }
 
-fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<i32> {
+fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<CliExit> {
     let pin = parse_runtime_pin_spec(&spec)?;
+    common::emit_verbose_step(
+        g,
+        &fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.verbose.project.add",
+                "[verbose] 正在写入项目 pin：{kind} {version}",
+                "[verbose] writing project pin: {kind} {version}",
+            ),
+            &[("kind", runtime_kind_toml_key(pin.kind)), ("version", &pin.version)],
+        ),
+    );
     let dir = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
     if !dir.is_dir() {
         return Err(EnvrError::Validation(format!(
@@ -46,8 +59,8 @@ fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<i32> {
         "version": version,
     });
     let path_s = written.display().to_string();
-    Ok(output::emit_ok(g, "project_pin_added", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_PIN_ADDED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(
@@ -72,7 +85,7 @@ fn sync_inner(
     service: &RuntimeService,
     path: PathBuf,
     install: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let ctx = &session.ctx;
     let pending =
@@ -82,8 +95,8 @@ fn sync_inner(
             "missing": Vec::<serde_json::Value>::new(),
             "installed": Vec::<serde_json::Value>::new(),
         });
-        return Ok(output::emit_ok(g, "project_synced", data, || {
-            if !g.quiet {
+        return Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 println!(
                     "{}",
                     envr_core::i18n::tr_key(
@@ -106,9 +119,15 @@ fn sync_inner(
             .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
             .collect();
         let data = json!({ "missing": rows, "installed": [] });
-        let code = output::emit_failure_envelope(g, "project_sync_pending", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text)
-        {
+        let code = output::emit_failure_envelope(
+            g,
+            crate::codes::err::PROJECT_SYNC_PENDING,
+            &msg,
+            data,
+            &[],
+            1,
+        );
+        if CliUxPolicy::from_global(g).human_text_primary() {
             for (k, v) in &pending {
                 eprintln!("envr:   - {k} {v}");
             }
@@ -119,6 +138,17 @@ fn sync_inner(
     let mut installed = Vec::new();
     for (lang, spec) in &pending {
         let kind = parse_runtime_kind(lang)?;
+        common::emit_verbose_step(
+            g,
+            &fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.verbose.project.sync.install",
+                    "[verbose] 正在安装项目 pin：{kind} {version}",
+                    "[verbose] installing pinned runtime: {kind} {version}",
+                ),
+                &[("kind", lang.as_str()), ("version", spec.as_str())],
+            ),
+        );
         if kind == RuntimeKind::Rust {
             return Err(EnvrError::Validation(
                 "rust pin sync is not automated here; use `envr rust` / rustup".into(),
@@ -135,13 +165,7 @@ fn sync_inner(
         let use_prog = cli_install_progress::wants_cli_download_progress(g);
         let (request, guard) =
             cli_install_progress::install_request_with_progress(g, VersionSpec(spec.clone()), headline.clone());
-        if !use_prog
-            && !g.quiet
-            && matches!(
-                g.effective_output_format(),
-                OutputFormat::Text
-            )
-        {
+        if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
             eprintln!("{headline}");
         }
         let version = match service.install(kind, &request) {
@@ -162,8 +186,8 @@ fn sync_inner(
             .collect::<Vec<_>>(),
         "installed": installed,
     });
-    Ok(output::emit_ok(g, "project_synced", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 envr_core::i18n::tr_key(
@@ -181,7 +205,7 @@ fn validate_inner(
     service: &RuntimeService,
     path: PathBuf,
     check_remote: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let runtime_root = common::session_runtime_root()?;
     let loaded = load_project_config_profile(&path, None)?;
     let Some((cfg, loc)) = loaded else {
@@ -273,9 +297,15 @@ fn validate_inner(
             "issues": issues,
             "remote_warnings": remote_warnings,
         });
-        let code = output::emit_failure_envelope(g, "project_validate_failed", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text)
-        {
+        let code = output::emit_failure_envelope(
+            g,
+            crate::codes::err::PROJECT_VALIDATE_FAILED,
+            &msg,
+            data,
+            &[],
+            1,
+        );
+        if CliUxPolicy::from_global(g).human_text_primary() {
             for p in &issues {
                 eprintln!("envr:   - {p}");
             }
@@ -290,8 +320,8 @@ fn validate_inner(
         "check_remote": check_remote,
     });
     let root_s = loc.dir.display().to_string();
-    Ok(output::emit_ok(g, "project_validated", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_VALIDATED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

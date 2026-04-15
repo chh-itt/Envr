@@ -230,11 +230,7 @@ fn download_to_path_with_fallback(
             progress_total,
             cancel,
         )
-        .map_err(|e2| {
-            EnvrError::Download(format!(
-                "{e} (retried official URL {fallback}: {e2})"
-            ))
-        })
+        .map_err(|e2| EnvrError::Download(format!("{e} (retried official URL {fallback}: {e2})")))
     })
 }
 

@@ -33,10 +33,9 @@ fn dispatch_ctx(ctx: CliContext) -> (CommandOutcome, GlobalArgs) {
     );
     let _guard = span.enter();
     let started_at = Instant::now();
-    let outcome = if command.is_runtime_command() {
-        dispatch_runtime::route(command, &dctx)
-    } else {
-        dispatch_non_runtime::route(command, &global)
+    let outcome = match command.runtime_handler_group() {
+        Some(_) => dispatch_runtime::route(command, &dctx),
+        None => dispatch_non_runtime::route(command, &global),
     };
     emit_dispatch_metrics(trace_name, output_format, &outcome, started_at.elapsed());
     (outcome, global)
@@ -87,8 +86,7 @@ fn dispatch_metrics_fields(outcome: &CommandOutcome) -> (bool, i32, Option<&str>
 #[cfg(test)]
 mod tests {
     use super::dispatch_metrics_fields;
-    use crate::cli::{self, Command};
-    use crate::commands::dispatch_runtime;
+    use crate::cli::{self, Command, RuntimeHandlerGroup, metadata_for_key};
     use crate::CommandOutcome;
     use envr_error::EnvrError;
     use std::ffi::OsString;
@@ -112,9 +110,9 @@ mod tests {
         assert_eq!(
             dispatch_metrics_fields(&CommandOutcome::Done {
                 exit_code: 1,
-                error_code: Some("project_check_failed".to_string())
+                error_code: Some(crate::codes::err::PROJECT_CHECK_FAILED)
             }),
-            (false, 1, Some("project_check_failed"))
+            (false, 1, Some(crate::codes::err::PROJECT_CHECK_FAILED))
         );
 
         let err = CommandOutcome::Err(EnvrError::Validation("bad".into()));
@@ -125,17 +123,20 @@ mod tests {
     }
 
     #[test]
-    fn metrics_fields_prefer_recorded_business_failure_code_over_fallback() {
-        crate::output::record_failure_code_for_metrics("project_check_failed");
-        let out = CommandOutcome::from_result(Ok(1));
+    fn metrics_fields_use_explicit_business_failure_code_over_fallback() {
+        use crate::CliExit;
+        let out = CommandOutcome::from_result(Ok(CliExit::failure(
+            1,
+            crate::codes::err::PROJECT_CHECK_FAILED,
+        )));
         assert_eq!(
             dispatch_metrics_fields(&out),
-            (false, 1, Some("project_check_failed"))
+            (false, 1, Some(crate::codes::err::PROJECT_CHECK_FAILED))
         );
     }
 
     #[test]
-    fn runtime_classifier_matches_direct_dispatch_boundary() {
+    fn runtime_classifier_matches_runtime_group_presence() {
         let runtime_argv: [&[&str]; 10] = [
             &["envr", "install", "node", "20.0.0"],
             &["envr", "use", "node", "20.0.0"],
@@ -150,12 +151,12 @@ mod tests {
         ];
         for argv in runtime_argv {
             let (cmd, _) = parse_command_and_global(argv);
-            assert!(dispatch_runtime::is_runtime_command(&cmd));
+            assert!(cmd.runtime_handler_group().is_some());
         }
     }
 
     #[test]
-    fn runtime_classifier_rejects_non_runtime_commands() {
+    fn runtime_classifier_rejects_commands_without_runtime_group() {
         let non_runtime_argv: [&[&str]; 27] = [
             &["envr", "completion", "bash"],
             &["envr", "help", "shortcuts"],
@@ -187,7 +188,45 @@ mod tests {
         ];
         for argv in non_runtime_argv {
             let (cmd, _) = parse_command_and_global(argv);
-            assert!(!dispatch_runtime::is_runtime_command(&cmd));
+            assert!(cmd.runtime_handler_group().is_none());
+        }
+    }
+
+    #[test]
+    fn runtime_group_values_match_expected_subsystems() {
+        let installation = parse_command_and_global(&["envr", "install", "node", "20.0.0"]).0;
+        assert_eq!(
+            installation.runtime_handler_group(),
+            Some(RuntimeHandlerGroup::Installation)
+        );
+
+        let project = parse_command_and_global(&["envr", "project", "validate"]).0;
+        assert_eq!(project.runtime_handler_group(), Some(RuntimeHandlerGroup::Project));
+
+        let misc = parse_command_and_global(&["envr", "doctor"]).0;
+        assert_eq!(misc.runtime_handler_group(), Some(RuntimeHandlerGroup::Misc));
+
+        let non_runtime = parse_command_and_global(&["envr", "status"]).0;
+        assert_eq!(non_runtime.runtime_handler_group(), None);
+    }
+
+    #[test]
+    fn runtime_group_presence_is_runtime_classifier() {
+        let samples: [&[&str]; 6] = [
+            &["envr", "doctor"],
+            &["envr", "remote"],
+            &["envr", "prune"],
+            &["envr", "status"],
+            &["envr", "which"],
+            &["envr", "help", "shortcuts"],
+        ];
+        for argv in samples {
+            let (cmd, _) = parse_command_and_global(argv);
+            assert_eq!(
+                metadata_for_key(cmd.key()).runtime_required,
+                cmd.runtime_handler_group().is_some(),
+                "runtime_required and runtime_group must stay aligned for argv={argv:?}"
+            );
         }
     }
 

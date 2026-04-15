@@ -1,3 +1,5 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
 
@@ -7,7 +9,7 @@ use serde_json::json;
 use std::path::PathBuf;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(
@@ -26,8 +28,8 @@ pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
         "config_dir": loc.dir.to_string_lossy(),
         "profiles": names,
     });
-    Ok(output::emit_ok(g, "profiles_list", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROFILES_LIST, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             if names.is_empty() {
                 println!(
                     "{}",
@@ -50,7 +52,7 @@ pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrResult<i32> {
+pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrResult<CliExit> {
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(
@@ -83,8 +85,8 @@ pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrRes
         "runtimes": p.runtimes,
         "env": p.env,
     });
-    Ok(output::emit_ok(g, "profile_show", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROFILE_SHOW, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

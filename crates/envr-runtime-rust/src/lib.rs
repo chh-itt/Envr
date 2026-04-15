@@ -9,8 +9,8 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult};
-use std::path::PathBuf;
 use envr_platform::paths::current_platform_paths;
+use std::path::PathBuf;
 
 pub struct RustRuntimeProvider {
     runtime_root_override: Option<std::path::PathBuf>,

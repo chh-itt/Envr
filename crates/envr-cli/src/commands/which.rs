@@ -1,4 +1,6 @@
 use crate::cli::GlobalArgs;
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
@@ -10,7 +12,7 @@ use envr_shim_core::{
 };
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<CliExit> {
     let Some(name) = name else {
         return Ok(common::missing_positional(g, "which", "envr which node"));
     };
@@ -41,13 +43,14 @@ pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<i32>
             serde_json::json!({ "key": k, "value": v })
         }).collect::<Vec<_>>(),
     });
-    Ok(output::emit_ok(g, "resolved_executable", data, || {
+    Ok(output::emit_ok(g, crate::codes::ok::RESOLVED_EXECUTABLE, data, || {
+        let ux = CliUxPolicy::from_global(g);
         println!("{}", shim.executable.display());
-        if output::wants_porcelain(g) {
+        if ux.wants_porcelain_lines() {
             return;
         }
         let meta = format_which_meta_line(&detail);
-        if output::use_terminal_styles(g) {
+        if ux.use_rich_text_styles() {
             println!("\x1b[2m{meta}\x1b[0m");
         } else {
             println!("{meta}");

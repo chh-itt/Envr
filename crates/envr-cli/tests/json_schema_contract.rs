@@ -6,8 +6,10 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 
-const ENVELOPE_SCHEMA: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schemas/cli/envelope.json"));
+const ENVELOPE_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/envelope.json"
+));
 const LIST_DATA_SCHEMA: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../schemas/cli/data/list_installed.json"
@@ -263,7 +265,9 @@ fn doctor_issues_json_matches_schema_when_runtime_root_missing() {
     assert_eq!(v.get("success"), Some(&serde_json::json!(false)));
     assert_eq!(v.get("code"), Some(&serde_json::json!("doctor_issues")));
     assert!(
-        v.get("message").and_then(|m| m.as_str()).is_some_and(|s| !s.is_empty()),
+        v.get("message")
+            .and_then(|m| m.as_str())
+            .is_some_and(|s| !s.is_empty()),
         "failure message is localized text, not a stable token: {:?}",
         v.get("message")
     );
@@ -293,10 +297,7 @@ fn template_rendered_json_matches_schemas() {
     let tpl = tmp.path().join("ct.tpl");
     std::fs::write(&tpl, "x${PATH}").expect("write tpl");
     let p = tpl.to_string_lossy();
-    let v = json_stdout(
-        &["--format", "json", "template", p.as_ref()],
-        tmp.path(),
-    );
+    let v = json_stdout(&["--format", "json", "template", p.as_ref()], tmp.path());
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(TEMPLATE_RENDERED_DATA_SCHEMA, v.get("data").expect("data"));
 }
@@ -322,7 +323,10 @@ version = "0.0.0-envr-schema-contract-nonexistent"
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(v.get("success"), Some(&serde_json::json!(false)));
-    assert_eq!(v.get("code"), Some(&serde_json::json!("project_check_failed")));
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("project_check_failed"))
+    );
     assert_valid(
         FAILURE_PROJECT_CHECK_FAILED_SCHEMA,
         v.get("data").expect("data"),
@@ -478,7 +482,10 @@ fn resolve_json_matches_schemas_with_project_pin() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("runtime_resolved")));
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("runtime_resolved"))
+    );
     assert_valid(RUNTIME_RESOLVED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -510,7 +517,7 @@ fn which_json_matches_schemas_with_project_pin() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("resolved_executable"))
     );
     assert_valid(RESOLVED_EXECUTABLE_SCHEMA, v.get("data").expect("data"));
@@ -594,7 +601,11 @@ fn config_keys_get_show_set_json_match_schemas_under_envr_root() {
         .args(["--format", "json", "config", "get", "mirror.mode"])
         .output()
         .expect("config get");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(CONFIG_GET_SCHEMA, v.get("data").expect("data"));
@@ -605,7 +616,11 @@ fn config_keys_get_show_set_json_match_schemas_under_envr_root() {
         .args(["--format", "json", "config", "show"])
         .output()
         .expect("config show");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(CONFIG_SHOW_SCHEMA, v.get("data").expect("data"));
@@ -616,7 +631,11 @@ fn config_keys_get_show_set_json_match_schemas_under_envr_root() {
         .args(["--format", "json", "config", "set", "mirror.mode", "auto"])
         .output()
         .expect("config set");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(CONFIG_SET_SCHEMA, v.get("data").expect("data"));
@@ -675,7 +694,7 @@ fn exec_dry_run_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("dry_run")));
+    assert_eq!(v.get("code"), Some(&serde_json::json!("dry_run")));
     assert_valid(DRY_RUN_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -724,7 +743,7 @@ fn cache_clean_dry_run_prune_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("cache_cleaned")));
+    assert_eq!(v.get("code"), Some(&serde_json::json!("cache_cleaned")));
     assert_valid(CACHE_CLEANED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -755,7 +774,7 @@ fn cache_index_status_json_matches_schemas() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("cache_index_status"))
     );
     assert_valid(CACHE_INDEX_STATUS_SCHEMA, v.get("data").expect("data"));
@@ -792,7 +811,7 @@ fn bundle_created_and_applied_json_match_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("bundle_created")));
+    assert_eq!(v.get("code"), Some(&serde_json::json!("bundle_created")));
     assert_valid(BUNDLE_CREATED_SCHEMA, v.get("data").expect("data"));
     assert!(zip_path.is_file(), "zip missing");
 
@@ -818,7 +837,7 @@ fn bundle_created_and_applied_json_match_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("bundle_applied")));
+    assert_eq!(v.get("code"), Some(&serde_json::json!("bundle_applied")));
     assert_valid(BUNDLE_APPLIED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -849,7 +868,7 @@ fn project_validated_json_matches_schemas() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("project_validated"))
     );
     assert_valid(PROJECT_VALIDATED_SCHEMA, v.get("data").expect("data"));
@@ -861,7 +880,7 @@ fn prune_dry_run_json_matches_schemas() {
     // `prune` defaults to dry-run unless `--execute`.
     let v = json_stdout(&["--format", "json", "prune", "node"], tmp.path());
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("prune_dry_run")));
+    assert_eq!(v.get("code"), Some(&serde_json::json!("prune_dry_run")));
     assert_valid(PRUNE_DRY_RUN_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -888,7 +907,7 @@ fn use_sets_current_json_matches_schemas() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("current_runtime_set"))
     );
     assert_valid(CURRENT_RUNTIME_SET_SCHEMA, v.get("data").expect("data"));
@@ -908,15 +927,7 @@ fn run_child_completed_json_matches_schemas() {
     .expect("envr.toml");
 
     let args: &[&str] = if cfg!(windows) {
-        &[
-            "--format",
-            "json",
-            "run",
-            "cmd",
-            "/c",
-            "echo",
-            "ok",
-        ]
+        &["--format", "json", "run", "cmd", "/c", "echo", "ok"]
     } else {
         &["--format", "json", "run", "sh", "-c", "echo ok"]
     };
@@ -936,7 +947,10 @@ fn run_child_completed_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("child_completed")));
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("child_completed"))
+    );
     assert_valid(CHILD_COMPLETED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -955,26 +969,11 @@ fn exec_child_completed_json_matches_schemas() {
 
     let args: &[&str] = if cfg!(windows) {
         &[
-            "--format",
-            "json",
-            "exec",
-            "--lang",
-            "node",
-            "cmd",
-            "/c",
-            "echo",
-            "ok",
+            "--format", "json", "exec", "--lang", "node", "cmd", "/c", "echo", "ok",
         ]
     } else {
         &[
-            "--format",
-            "json",
-            "exec",
-            "--lang",
-            "node",
-            "sh",
-            "-c",
-            "echo ok",
+            "--format", "json", "exec", "--lang", "node", "sh", "-c", "echo ok",
         ]
     };
 
@@ -993,7 +992,10 @@ fn exec_child_completed_json_matches_schemas() {
     );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
-    assert_eq!(v.get("message"), Some(&serde_json::json!("child_completed")));
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("child_completed"))
+    );
     assert_valid(CHILD_COMPLETED_SCHEMA, v.get("data").expect("data"));
 }
 
@@ -1009,13 +1011,7 @@ fn project_add_json_matches_schemas() {
         .expect("envr binary")
         .current_dir(&cwd)
         .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-        .args([
-            "--format",
-            "json",
-            "project",
-            "add",
-            "node@22.1.0",
-        ])
+        .args(["--format", "json", "project", "add", "node@22.1.0"])
         .output()
         .expect("project add");
     assert!(
@@ -1026,7 +1022,7 @@ fn project_add_json_matches_schemas() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("project_pin_added"))
     );
     assert_valid(PROJECT_PIN_ADDED_SCHEMA, v.get("data").expect("data"));
@@ -1062,7 +1058,7 @@ fn cache_index_sync_json_matches_schemas_when_success() {
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
-        v.get("message"),
+        v.get("code"),
         Some(&serde_json::json!("cache_index_synced"))
     );
     assert_valid(CACHE_INDEX_SYNCED_SCHEMA, v.get("data").expect("data"));

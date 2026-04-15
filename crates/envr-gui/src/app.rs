@@ -225,7 +225,7 @@ pub fn run() -> iced::Result {
     .title("Envr")
     .default_font(configured_default_font(&startup))
     .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
-        .subscription(|state| {
+    .subscription(|state| {
         let runtime_skeleton = matches!(state.route(), Route::Runtime)
             && state.env_center.installed.is_empty()
             && (state.env_center.busy
@@ -235,57 +235,57 @@ pub fn run() -> iced::Result {
                 || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
                     && state.env_center.go_remote_refreshing
                     && state.env_center.go_remote_latest.is_empty()));
-            let need_motion = state.downloads.needs_motion_tick()
-                || state.downloads.title_drag_armed_since.is_some()
+        let need_motion = state.downloads.needs_motion_tick()
+            || state.downloads.title_drag_armed_since.is_some()
             || runtime_skeleton;
-            let maybe_motion = need_motion
-                .then(|| iced::time::every(Duration::from_millis(32)))
-                .map(|s| s.map(|_| Message::MotionTick));
+        let maybe_motion = need_motion
+            .then(|| iced::time::every(Duration::from_millis(32)))
+            .map(|s| s.map(|_| Message::MotionTick));
 
-            let progress_only = state.downloads.needs_tick() && !need_motion;
-            let maybe_tick = progress_only
-                .then(|| iced::time::every(Duration::from_millis(400)))
-                .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
+        let progress_only = state.downloads.needs_tick() && !need_motion;
+        let maybe_tick = progress_only
+            .then(|| iced::time::every(Duration::from_millis(400)))
+            .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
 
-            let need_pointer_events =
-                state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
-            let maybe_events = need_pointer_events
-                .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
+        let need_pointer_events =
+            state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
+        let maybe_events = need_pointer_events
+            .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
 
         let theme_poll = (state.settings.draft.appearance.theme_mode == ThemeMode::FollowSystem)
-                .then(|| iced::time::every(Duration::from_secs(1)))
-                .map(|s| s.map(|_| Message::ThemePollTick));
+            .then(|| iced::time::every(Duration::from_secs(1)))
+            .map(|s| s.map(|_| Message::ThemePollTick));
 
-            let mut subs = Vec::new();
-            if let Some(t) = maybe_motion {
-                subs.push(t);
-            }
-            if let Some(t) = maybe_tick {
-                subs.push(t);
-            }
-            if let Some(e) = maybe_events {
-                subs.push(e);
-            }
-            if let Some(t) = theme_poll {
-                subs.push(t);
-            }
-            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
-            subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
-            Subscription::batch(subs)
-        })
-        .window(iced::window::Settings {
-            size: Size::new(
-                layout_shell::WINDOW_DEFAULT_W,
-                layout_shell::WINDOW_DEFAULT_H,
-            ),
-            min_size: Some(Size::new(
-                layout_shell::WINDOW_MIN_W,
-                layout_shell::WINDOW_MIN_H,
-            )),
-            position: iced::window::Position::Centered,
-            ..iced::window::Settings::default()
-        })
-        .run()
+        let mut subs = Vec::new();
+        if let Some(t) = maybe_motion {
+            subs.push(t);
+        }
+        if let Some(t) = maybe_tick {
+            subs.push(t);
+        }
+        if let Some(e) = maybe_events {
+            subs.push(e);
+        }
+        if let Some(t) = theme_poll {
+            subs.push(t);
+        }
+        subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
+        subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
+        Subscription::batch(subs)
+    })
+    .window(iced::window::Settings {
+        size: Size::new(
+            layout_shell::WINDOW_DEFAULT_W,
+            layout_shell::WINDOW_DEFAULT_H,
+        ),
+        min_size: Some(Size::new(
+            layout_shell::WINDOW_MIN_W,
+            layout_shell::WINDOW_MIN_H,
+        )),
+        position: iced::window::Position::Centered,
+        ..iced::window::Settings::default()
+    })
+    .run()
 }
 
 static STARTUP_SETTINGS: OnceLock<Settings> = OnceLock::new();
@@ -523,9 +523,10 @@ async fn browse_runtime_root_folder(
     tokio::task::spawn_blocking(move || {
         let mut dlg = rfd::FileDialog::new();
         if let Some(p) = start
-            && p.is_dir() {
-                dlg = dlg.set_directory(p);
-            }
+            && p.is_dir()
+        {
+            dlg = dlg.set_directory(p);
+        }
         dlg.pick_folder()
     })
     .await
@@ -991,42 +992,45 @@ fn write_pip_user_ini(
         if skipping_duplicate_global {
             continue;
         }
-        if in_global && !trimmed.starts_with('#') && !trimmed.starts_with(';')
-            && let Some((k, _v)) = line.split_once('=') {
-                let key = k.trim().to_ascii_lowercase();
-                if key == "index-url" {
-                    if !wrote_index {
-                        out.push(format!("index-url = {index_url}"));
-                        wrote_index = true;
-                    }
-                    continue;
+        if in_global
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with(';')
+            && let Some((k, _v)) = line.split_once('=')
+        {
+            let key = k.trim().to_ascii_lowercase();
+            if key == "index-url" {
+                if !wrote_index {
+                    out.push(format!("index-url = {index_url}"));
+                    wrote_index = true;
                 }
-                if key == "trusted-host" {
-                    if !wrote_host {
-                        out.push(format!("trusted-host = {trusted_host}"));
-                        wrote_host = true;
-                    }
-                    continue;
-                }
-                if key == "timeout" {
-                    if !wrote_timeout {
-                        out.push("timeout = 120".to_string());
-                        wrote_timeout = true;
-                    }
-                    continue;
-                }
-                if key == "extra-index-url" {
-                    if !wrote_extra {
-                        if let Some(extra) = extra_index_url
-                            && !extra.trim().is_empty()
-                        {
-                            out.push(format!("extra-index-url = {extra}"));
-                        }
-                        wrote_extra = true;
-                    }
-                    continue;
-                }
+                continue;
             }
+            if key == "trusted-host" {
+                if !wrote_host {
+                    out.push(format!("trusted-host = {trusted_host}"));
+                    wrote_host = true;
+                }
+                continue;
+            }
+            if key == "timeout" {
+                if !wrote_timeout {
+                    out.push("timeout = 120".to_string());
+                    wrote_timeout = true;
+                }
+                continue;
+            }
+            if key == "extra-index-url" {
+                if !wrote_extra {
+                    if let Some(extra) = extra_index_url
+                        && !extra.trim().is_empty()
+                    {
+                        out.push(format!("extra-index-url = {extra}"));
+                    }
+                    wrote_extra = true;
+                }
+                continue;
+            }
+        }
         out.push(line);
     }
     if in_global {
@@ -1111,9 +1115,10 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
             settings.validate().map_err(|e| e.to_string())?;
             settings.save_to(&path).map_err(|e| e.to_string())?;
             if let Some(url) = envr_config::settings::npm_registry_url_to_apply(&settings)
-                && let Err(e) = apply_npm_registry_cli(url) {
-                    tracing::warn!(%e, "npm config set registry skipped after settings save");
-                }
+                && let Err(e) = apply_npm_registry_cli(url)
+            {
+                tracing::warn!(%e, "npm config set registry skipped after settings save");
+            }
             if let Err(e) = apply_pip_registry_config(&settings) {
                 tracing::warn!(%e, "pip user config update skipped after settings save");
             }
@@ -1167,12 +1172,14 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
     if let Some(since) = state.downloads.title_drag_armed_since
-        && !state.downloads.dragging && since.elapsed() >= TITLE_DRAG_HOLD {
-            state.downloads.dragging = true;
-            state.downloads.drag_from_cursor = None;
-            state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
-            state.downloads.title_drag_armed_since = None;
-        }
+        && !state.downloads.dragging
+        && since.elapsed() >= TITLE_DRAG_HOLD
+    {
+        state.downloads.dragging = true;
+        state.downloads.drag_from_cursor = None;
+        state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
+        state.downloads.title_drag_armed_since = None;
+    }
     let tokens = state.tokens();
     state.downloads.advance_reveal(tokens);
     if state.downloads.take_persist_after_hide() {
@@ -1350,13 +1357,12 @@ fn persist_download_panel_settings(state: &mut AppState) -> Result<(), envr_erro
         .runtime_root
         .as_deref()
         .is_none_or(|s| s.trim().is_empty());
-    if disk_rr_empty
-        && let Some(ref r) = mem.paths.runtime_root {
-            let t = r.trim();
-            if !t.is_empty() {
-                st.paths.runtime_root = Some(t.to_string());
-            }
+    if disk_rr_empty && let Some(ref r) = mem.paths.runtime_root {
+        let t = r.trim();
+        if !t.is_empty() {
+            st.paths.runtime_root = Some(t.to_string());
         }
+    }
 
     let panel = &state.downloads;
     st.gui.downloads_panel.visible = panel.visible;
@@ -1738,8 +1744,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         gui_ops::rust_load_targets(),
                     ])
                 } else {
-            Task::batch([gui_ops::refresh_runtimes(k)])
-        }
+                    Task::batch([gui_ops::refresh_runtimes(k)])
+                }
             }
         }
         EnvCenterMsg::InstallInput(s) => {
@@ -2144,7 +2150,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Python),
                 ])
-    } else {
+            } else {
                 persist_settings_clone_task(st)
             }
         }
@@ -2181,7 +2187,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Java),
                 ])
-    } else {
+            } else {
                 persist_settings_clone_task(st)
             }
         }
@@ -2447,8 +2453,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 "正在安装托管 rustup（stable）…",
                 "Installing managed rustup (stable)…",
             );
-            let (id, downloaded, total, cancel) =
-                enqueue_runtime_install_job(state, label, true);
+            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(state, label, true);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_install_stable(downloaded, total, cancel)
         }
@@ -2523,9 +2528,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
             }
             if let Err(e) = &res
-                && !looks_like_user_cancelled(e) {
-                    state.error = Some(e.clone());
-                }
+                && !looks_like_user_cancelled(e)
+            {
+                state.error = Some(e.clone());
+            }
             Task::batch([
                 gui_ops::rust_refresh(),
                 gui_ops::rust_load_components(),

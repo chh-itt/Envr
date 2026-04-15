@@ -1,10 +1,11 @@
 use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::run_context::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
 use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
-use crate::output;
 use crate::output::fmt_template;
 
 use envr_config::project_config::ProjectConfig;
@@ -175,13 +176,8 @@ fn maybe_emit_run_script_miss_hint(
     cfg: Option<&ProjectConfig>,
     ran_as_script: bool,
 ) {
-    if ran_as_script || g.quiet || output::wants_porcelain(g) {
-        return;
-    }
-    if !matches!(
-        g.effective_output_format(),
-        OutputFormat::Text
-    ) {
+    let ux = CliUxPolicy::from_global(g);
+    if ran_as_script || !ux.human_text_primary() || ux.wants_porcelain_lines() {
         return;
     }
     let Some(cfg) = cfg else {
@@ -234,7 +230,7 @@ pub(crate) fn run_inner(
     shared: ExecRunSharedArgs,
     command: String,
     args: Vec<String>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ExecRunSharedArgs {
         install_if_missing,
         dry_run,
@@ -283,13 +279,7 @@ pub(crate) fn run_inner(
                     VersionSpec(spec.clone()),
                     headline.clone(),
                 );
-                if !use_prog
-                    && !g.quiet
-                    && matches!(
-                        g.effective_output_format(),
-                        OutputFormat::Text
-                    )
-                {
+                if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
                     eprintln!("{headline}");
                 }
                 let installed: RuntimeVersion = service.install(kind, &request)?;

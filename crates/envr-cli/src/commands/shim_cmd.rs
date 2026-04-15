@@ -1,3 +1,5 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output;
@@ -30,7 +32,7 @@ pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<Str
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<i32> {
+pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<CliExit> {
     let root = common::effective_runtime_root()?;
     let shim_exe = find_envr_shim_executable()?;
 
@@ -62,8 +64,8 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<i3
         "globals_synced": include_globals,
     });
 
-    Ok(output::emit_ok(g, "shims_synced", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::SHIMS_SYNCED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 crate::output::fmt_template(

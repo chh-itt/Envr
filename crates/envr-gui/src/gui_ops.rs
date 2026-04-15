@@ -19,32 +19,26 @@ use crate::view::env_center::RustStatus;
 use envr_config::settings::resolve_runtime_root;
 use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_managed};
 
-type RefreshRuntimesOk = (
-    Vec<RuntimeVersion>,
-    Option<RuntimeVersion>,
-    Option<bool>,
-);
+type RefreshRuntimesOk = (Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>);
 
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(
-                move || -> Result<RefreshRuntimesOk, String> {
-                    let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                    let installed = svc
-                        .list_installed(kind)
-                        .map_err(|e: EnvrError| e.to_string())?;
-                    let current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
-                    let php_global_ts = if matches!(kind, RuntimeKind::Php) {
-                        svc.php_global_current_want_ts()
-                            .map_err(|e: EnvrError| e.to_string())?
-                    } else {
-                        None
-                    };
-                    Ok((installed, current, php_global_ts))
-                },
-            )
+            .spawn_blocking(move || -> Result<RefreshRuntimesOk, String> {
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                let installed = svc
+                    .list_installed(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                let current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                let php_global_ts = if matches!(kind, RuntimeKind::Php) {
+                    svc.php_global_current_want_ts()
+                        .map_err(|e: EnvrError| e.to_string())?
+                } else {
+                    None
+                };
+                Ok((installed, current, php_global_ts))
+            })
             .await;
         let msg = match res {
             Ok(Ok(data)) => EnvCenterMsg::DataLoaded(Ok(data)),

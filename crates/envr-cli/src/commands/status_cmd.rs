@@ -1,22 +1,24 @@
 //! `envr status` — project + active runtime summary.
+use crate::CliExit;
+use crate::CliUxPolicy;
 
+use crate::CliPathProfile;
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::project_status::{
     build_project_status_from_loaded, format_prompt_segment, status_to_json,
 };
 use crate::output::{self, fmt_template};
-use crate::CliPathProfile;
 
 use envr_error::EnvrResult;
 use serde_json::json;
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
     let data = status_to_json(&st);
-    Ok(output::emit_ok(g, "project_status", data, || {
-        if g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_STATUS, data, || {
+        if !CliUxPolicy::from_global(g).human_text_primary() {
             return;
         }
         println!(
@@ -105,7 +107,10 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
                         "  {kind}: {ver}（系统 PATH）",
                         "  {kind}: {ver} (system PATH)",
                     ),
-                    &[("kind", r.kind.as_str()), ("ver", r.active_version.as_str())],
+                    &[
+                        ("kind", r.kind.as_str()),
+                        ("ver", r.active_version.as_str()),
+                    ],
                 ),
                 envr_shim_core::WhichRuntimeSource::ProjectPin => match &r.pin {
                     Some(p) => fmt_template(
@@ -126,7 +131,10 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
                             "  {kind}: {ver}（项目配置）",
                             "  {kind}: {ver} (from project)",
                         ),
-                        &[("kind", r.kind.as_str()), ("ver", r.active_version.as_str())],
+                        &[
+                            ("kind", r.kind.as_str()),
+                            ("ver", r.active_version.as_str()),
+                        ],
                     ),
                 },
                 envr_shim_core::WhichRuntimeSource::GlobalCurrent => fmt_template(
@@ -135,7 +143,10 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
                         "  {kind}: {ver}（全局 current）",
                         "  {kind}: {ver} (global current)",
                     ),
-                    &[("kind", r.kind.as_str()), ("ver", r.active_version.as_str())],
+                    &[
+                        ("kind", r.kind.as_str()),
+                        ("ver", r.active_version.as_str()),
+                    ],
                 ),
             };
             println!("{line}");
@@ -144,13 +155,16 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_hook_prompt_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<i32> {
+pub(crate) fn run_hook_prompt_inner(
+    g: &GlobalArgs,
+    project: ProjectPathProfileArgs,
+) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
     let segment = format_prompt_segment(&st);
     let data = json!({ "segment": segment });
-    Ok(output::emit_ok(g, "hook_prompt", data, || {
+    Ok(output::emit_ok(g, crate::codes::ok::HOOK_PROMPT, data, || {
         print!("{segment}");
     }))
 }

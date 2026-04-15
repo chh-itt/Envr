@@ -71,4 +71,3 @@ fn every_emit_failure_envelope_code_has_failure_schema_stub() {
         missing.join("\n  ")
     );
 }
-

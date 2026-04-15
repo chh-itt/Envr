@@ -1,4 +1,6 @@
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
@@ -10,7 +12,7 @@ use serde_json::json;
 use std::path::PathBuf;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let Some((cfg, loc)) = session.project.as_ref() else {
         return Err(EnvrError::Validation(fmt_template(
@@ -56,8 +58,15 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
             "config_dir": loc.dir.to_string_lossy(),
             "issues": problems,
         });
-        let code = output::emit_failure_envelope(g, "project_check_failed", &msg, data, &[], 1);
-        if !g.quiet && matches!(g.effective_output_format(), OutputFormat::Text) {
+        let code = output::emit_failure_envelope(
+            g,
+            crate::codes::err::PROJECT_CHECK_FAILED,
+            &msg,
+            data,
+            &[],
+            1,
+        );
+        if CliUxPolicy::from_global(g).human_text_primary() {
             for p in &problems {
                 eprintln!("envr:   - {p}");
             }
@@ -71,8 +80,8 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<i32> {
         "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "pinned_runtimes": cfg.runtimes.len(),
     });
-    Ok(output::emit_ok(g, "project_config_ok", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_CONFIG_OK, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

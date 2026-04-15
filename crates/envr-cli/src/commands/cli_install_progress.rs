@@ -1,7 +1,8 @@
 //! Text-mode install feedback: `InstallRequest` progress atomics plus a stderr line / live byte counter.
 //! JS runtimes (node / deno / bun) download with blocking HTTP and already update these atomics.
 
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
+use crate::CliUxPolicy;
 use envr_domain::runtime::{InstallRequest, VersionSpec};
 use std::io::{IsTerminal, Write};
 use std::sync::Arc;
@@ -11,12 +12,7 @@ use std::time::Duration;
 
 /// Human-oriented stderr messages (no TTY requirement).
 pub fn wants_cli_text_feedback(g: &GlobalArgs) -> bool {
-    !g.quiet
-        && !g.porcelain
-        && matches!(
-            g.effective_output_format(),
-            OutputFormat::Text
-        )
+    CliUxPolicy::from_global(g).human_text_decorated()
 }
 
 /// Live download meter on stderr (TTY only so CI logs are not spammed with `\r`).

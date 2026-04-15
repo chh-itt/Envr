@@ -4,36 +4,23 @@
 //!
 //! After parsing, every command path must produce a [`CommandOutcome`] via exactly one of:
 //!
-//! - [`CommandOutcome::from_result`] — handler returned [`envr_error::EnvrResult`]`<i32>` (includes
-//!   `Ok(n)` after emitting stdout/stderr). For `Ok` with non-zero `n`, metrics `error_code` comes from
-//!   [`crate::output::take_recorded_failure_code_for_exit`] when the handler used
-//!   [`crate::output::emit_failure_envelope`], [`crate::output::write_envelope`] (failure),
-//!   [`crate::output::emit_validation`], etc.; otherwise the fallback token `nonzero_exit` applies.
-//! - [`CommandOutcome::from_exit_code`] — handler returned a bare `i32` (e.g. shell completion,
-//!   hook script emission). Same thread-local rule as `from_result(Ok(code))`.
+//! - [`CommandOutcome::from_result`] — handler returned [`envr_error::EnvrResult`]`<`[`CliExit`]`>` (includes
+//!   `Ok(status)` after emitting stdout/stderr). [`CliExit::error_code`] carries the stable metrics token
+//!   when the handler emitted a failure envelope (`emit_failure_envelope`, `emit_validation`, etc.);
+//!   for success, use [`CliExit::ok`]. If `exit_code != 0` and `error_code` is [`None`], finish metrics
+//!   use the fallback `nonzero_exit`.
 //! - [`CommandOutcome::Err`] — only via [`CommandOutcome::from_result`] on `Err` (including
 //!   [`crate::commands::common::with_runtime_service`], which ends in `from_result`).
 //!
 //! Do not construct [`CommandOutcome::Done`] manually outside this module; keep exit + metrics
 //! wiring in one place.
 //!
-//! # Migration (Phase C)
-//!
-//! - [`finish_cli_cmd`] is a thin alias for `CommandOutcome::from_result(..).finish(g)` (re-exported
-//!   from the crate root as [`crate::finish_cli_cmd`] for embedders).
-//! - Most `EnvrResult<i32>` handlers call [`CommandOutcome::from_result`] + [`CommandOutcome::finish`]
-//!   directly.
-//! - [`crate::commands::dispatch`] returns [`CommandOutcome`] and [`crate::cli::GlobalArgs`]; [`crate::cli::run`]
-//!   calls [`CommandOutcome::finish`] once at the boundary (no extra clone of globals).
-//! - Individual handlers still return `i32` (or `EnvrResult<i32>` + `finish` inside the handler body).
-//!
 //! # Handler inventory
 //!
 //! | Style | Examples |
 //! |-------|----------|
-//! | `EnvrResult<i32>` + `CommandOutcome::from_result(..).finish(g)` inside handler | `resolve`, `which`, `check`, `run`, `exec`, … |
-//! | `Ok(output::emit_validation(..))` / `Ok(output::emit_doctor(.., false, ..))` | Missing-args and `doctor` hard-fail paths record stable codes for metrics (same mechanism as [`crate::output::emit_failure_envelope`]; JSON `doctor` failures also go through [`crate::output::write_envelope`]) |
-//! | `i32` at handler boundary → [`CommandOutcome::from_exit_code`] in dispatch | `completion`, hook script emit |
+//! | `EnvrResult<CliExit>` + `CommandOutcome::from_result(..).finish(g)` inside handler | `resolve`, `which`, `check`, `run`, `exec`, … |
+//! | `Ok(output::emit_validation(..))` / `Ok(output::emit_doctor(..))` | Missing-args and `doctor` paths return [`CliExit`] with explicit `error_code` |
 //! | Runtime service → [`crate::commands::common::with_runtime_service`] → [`CommandOutcome::from_result`] | `install`, `list`, `doctor`, … |
 //! | Thin wrapper only | [`finish_cli_cmd`] / [`crate::finish_cli_cmd`] |
 
@@ -41,39 +28,60 @@ use crate::cli::GlobalArgs;
 use crate::commands::common;
 use envr_error::{EnvrError, EnvrResult};
 
+/// Process exit status with an optional **business** metrics token (JSON envelope `code`, not [`ErrorCode`](envr_error::ErrorCode)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliExit {
+    pub exit_code: i32,
+    pub error_code: Option<&'static str>,
+}
+
+impl CliExit {
+    #[inline]
+    pub fn ok() -> Self {
+        Self {
+            exit_code: 0,
+            error_code: None,
+        }
+    }
+
+    #[inline]
+    pub fn failure(exit_code: i32, error_code: &'static str) -> Self {
+        Self {
+            exit_code,
+            error_code: Some(error_code),
+        }
+    }
+}
+
 /// Result of a command body after business logic; user output may already be on stdout/stderr.
 #[derive(Debug)]
 pub enum CommandOutcome {
     /// Process exit code (may be non-zero when a failure envelope was already emitted).
     Done {
         exit_code: i32,
-        error_code: Option<String>,
+        error_code: Option<&'static str>,
     },
     /// Unhandled error: render with [`crate::output::emit_envr_error`].
     Err(EnvrError),
 }
 
 impl CommandOutcome {
-    /// Wrap a process exit code after the handler has written any user-visible output.
-    ///
-    /// Pairs with [`crate::output::take_recorded_failure_code_for_exit`]: stable failure `code`s
-    /// emitted through [`crate::output::emit_failure_envelope`], [`crate::output::write_envelope`],
-    /// etc. are picked up here for dispatch/finish metrics.
+    /// Handler returned an explicit exit + optional business metrics code.
     #[inline]
-    pub fn from_exit_code(exit_code: i32) -> Self {
+    pub fn from_cli_exit(status: CliExit) -> Self {
         CommandOutcome::Done {
-            exit_code,
-            error_code: crate::output::take_recorded_failure_code_for_exit(exit_code),
+            exit_code: status.exit_code,
+            error_code: status.error_code,
         }
     }
 
-    /// `Ok(code)` is equivalent to [`Self::from_exit_code`]. `Err` becomes [`CommandOutcome::Err`];
+    /// `Ok(status)` uses [`Self::from_cli_exit`]. `Err` becomes [`CommandOutcome::Err`];
     /// [`Self::finish`] renders it with [`crate::output::emit_envr_error`] and metrics use
-    /// [`crate::output::error_code_token`] (no thread-local recording).
+    /// [`crate::output::error_code_token`] (no envelope `code`).
     #[inline]
-    pub fn from_result(r: EnvrResult<i32>) -> Self {
+    pub fn from_result(r: EnvrResult<CliExit>) -> Self {
         match r {
-            Ok(code) => Self::from_exit_code(code),
+            Ok(status) => Self::from_cli_exit(status),
             Err(e) => CommandOutcome::Err(e),
         }
     }
@@ -87,13 +95,12 @@ impl CommandOutcome {
             } => (
                 exit_code == 0,
                 exit_code,
-                error_code
-                    .or_else(|| crate::output::metrics_error_code_for_exit(exit_code).map(str::to_string)),
+                error_code.or_else(|| crate::output::metrics_error_code_for_exit(exit_code)),
             ),
             CommandOutcome::Err(e) => {
                 let code = crate::output::error_code_token(e.code());
                 let exit = common::print_envr_error(g, e);
-                (false, exit, Some(code.to_string()))
+                (false, exit, Some(code))
             }
         };
         tracing::info!(
@@ -102,28 +109,27 @@ impl CommandOutcome {
             output_mode = crate::output::output_mode_token(g.effective_output_format()),
             success = success,
             exit_code = exit_code,
-            error_code = error_code.as_deref().unwrap_or(""),
+            error_code = error_code.unwrap_or(""),
             "cli finish completed"
         );
         exit_code
     }
 }
 
-/// Maps [`EnvrResult`]`<i32>` to process exit code (same as [`CommandOutcome::from_result`] + [`CommandOutcome::finish`]).
+/// Maps [`EnvrResult<CliExit>`] to process exit code (same as [`CommandOutcome::from_result`] + [`CommandOutcome::finish`]).
 #[inline]
-pub fn finish_cli_cmd(g: &GlobalArgs, result: EnvrResult<i32>) -> i32 {
+pub fn finish_cli_cmd(g: &GlobalArgs, result: EnvrResult<CliExit>) -> i32 {
     CommandOutcome::from_result(result).finish(g)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::CommandOutcome;
+    use super::{CliExit, CommandOutcome};
     use envr_error::EnvrError;
 
     #[test]
-    fn from_exit_code_zero_clears_recorded_metrics_code() {
-        crate::output::record_failure_code_for_metrics("should_not_leak");
-        let o = CommandOutcome::from_exit_code(0);
+    fn from_cli_exit_zero_has_no_error_code() {
+        let o = CommandOutcome::from_cli_exit(CliExit::ok());
         assert!(matches!(
             o,
             CommandOutcome::Done {
@@ -134,29 +140,27 @@ mod tests {
     }
 
     #[test]
-    fn from_exit_code_nonzero_picks_up_recorded_failure_code() {
-        crate::output::record_failure_code_for_metrics("child_exit");
-        let o = CommandOutcome::from_exit_code(1);
+    fn from_cli_exit_nonzero_keeps_explicit_code() {
+        let o = CommandOutcome::from_cli_exit(CliExit::failure(1, crate::codes::err::CHILD_EXIT));
         match o {
             CommandOutcome::Done {
                 exit_code,
                 error_code,
             } => {
                 assert_eq!(exit_code, 1);
-                assert_eq!(error_code.as_deref(), Some("child_exit"));
+                assert_eq!(error_code.as_deref(), Some(crate::codes::err::CHILD_EXIT));
             }
             CommandOutcome::Err(_) => panic!("expected Done"),
         }
     }
 
     #[test]
-    fn from_result_ok_matches_from_exit_code() {
-        crate::output::record_failure_code_for_metrics("validation");
-        let from_res = CommandOutcome::from_result(Ok(1));
-        crate::output::record_failure_code_for_metrics("validation");
-        let from_code = CommandOutcome::from_exit_code(1);
+    fn from_result_ok_matches_from_cli_exit() {
+        let from_res =
+            CommandOutcome::from_result(Ok(CliExit::failure(1, crate::codes::err::VALIDATION)));
+        let from_st = CommandOutcome::from_cli_exit(CliExit::failure(1, crate::codes::err::VALIDATION));
         assert!(matches!(
-            (&from_res, &from_code),
+            (&from_res, &from_st),
             (
                 CommandOutcome::Done {
                     exit_code: 1,
@@ -166,7 +170,7 @@ mod tests {
                     exit_code: 1,
                     error_code: Some(rb),
                 },
-            ) if ra == rb && ra == "validation"
+            ) if ra == rb && *ra == crate::codes::err::VALIDATION
         ));
     }
 

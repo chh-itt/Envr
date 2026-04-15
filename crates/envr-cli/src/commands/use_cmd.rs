@@ -1,9 +1,12 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::kind_label;
+use crate::CliExit;
+use crate::CliUxPolicy;
+use crate::app;
+use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
@@ -12,46 +15,43 @@ pub(crate) fn run_inner(
     service: &RuntimeService,
     runtime: String,
     runtime_version: String,
-) -> EnvrResult<i32> {
-    let kind = parse_runtime_kind(runtime.trim())?;
+) -> EnvrResult<CliExit> {
+    let kind = app::runtime_installation::parse_kind(&runtime)?;
+    emit_verbose_step(
+        g,
+        &fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.verbose.use.resolve",
+                "[verbose] 正在解析 current 目标：{kind} {version}",
+                "[verbose] resolving current target: {kind} {version}",
+            ),
+            &[("kind", kind_label(kind)), ("version", runtime_version.trim())],
+        ),
+    );
 
     let spec = VersionSpec(runtime_version.clone());
-    let resolved = service.resolve(kind, &spec)?;
-    service
-        .set_current(kind, &resolved.version)
-        .map_err(|e| enrich_not_installed_error(e, kind, &resolved.version.0))?;
-    Ok(print_success(g, kind, &resolved.version))
-}
-
-fn enrich_not_installed_error(
-    err: envr_error::EnvrError,
-    kind: RuntimeKind,
-    version: &str,
-) -> envr_error::EnvrError {
-    let msg = err.to_string().to_ascii_lowercase();
-    if msg.contains("not installed") {
-        return envr_error::EnvrError::Validation(fmt_template(
+    let resolved = app::runtime_installation::set_current(service, kind, spec)?;
+    emit_verbose_step(
+        g,
+        &fmt_template(
             &envr_core::i18n::tr_key(
-                "cli.use.not_installed_suggestion",
-                "{kind} {version} 未安装。可先执行：envr install {kind} {version}",
-                "{kind} {version} is not installed. Try: envr install {kind} {version}",
+                "cli.verbose.use.set_current",
+                "[verbose] 正在设置 current：{kind} {version}",
+                "[verbose] setting current: {kind} {version}",
             ),
-            &[
-                ("kind", kind_label(kind)),
-                ("version", version),
-            ],
-        ));
-    }
-    err
+            &[("kind", kind_label(kind)), ("version", &resolved.0)],
+        ),
+    );
+    Ok(print_success(g, kind, &resolved))
 }
 
-fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {
+fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> CliExit {
     let data = serde_json::json!({
         "kind": kind_label(kind),
         "version": v.0,
     });
-    output::emit_ok(g, "current_runtime_set", data, || {
-        if !g.quiet {
+    output::emit_ok(g, crate::codes::ok::CURRENT_RUNTIME_SET, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

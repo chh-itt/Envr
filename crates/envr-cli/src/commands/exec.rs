@@ -1,10 +1,12 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
-use crate::run_context::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::cli_install_progress;
 use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
 use crate::output::fmt_template;
+use crate::run_context::CliPathProfile;
 
 use envr_config::project_config::ProjectConfig;
 use envr_core::runtime::service::RuntimeService;
@@ -45,10 +47,7 @@ fn collect_exec_env_maybe_install(
                     "envr：正在安装缺失的运行时 {lang} {version}…",
                     "envr: installing missing runtime {lang} {version}…",
                 ),
-                &[
-                    ("lang", lang),
-                    ("version", spec_str.as_str()),
-                ],
+                &[("lang", lang), ("version", spec_str.as_str())],
             );
             let kind = parse_runtime_kind(lang)?;
             let use_prog = cli_install_progress::wants_cli_download_progress(g);
@@ -57,13 +56,7 @@ fn collect_exec_env_maybe_install(
                 VersionSpec(spec_str.clone()),
                 headline.clone(),
             );
-            if !use_prog
-                && !g.quiet
-                && matches!(
-                    g.effective_output_format(),
-                    OutputFormat::Text
-                )
-            {
+            if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
                 eprintln!("{headline}");
             }
             let installed = service.install(kind, &request)?;
@@ -108,7 +101,7 @@ pub(crate) fn run_inner(
     output: Option<PathBuf>,
     command: String,
     args: Vec<String>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ExecRunSharedArgs {
         install_if_missing,
         dry_run,
@@ -127,10 +120,7 @@ pub(crate) fn run_inner(
     let ctx = rex.ctx();
     let pc = rex.project_config();
 
-    let text_out = matches!(
-        g.effective_output_format(),
-        OutputFormat::Text
-    );
+    let text_out = matches!(g.effective_output_format(), OutputFormat::Text);
 
     if dry_run || dry_run_diff {
         let mut env_map = child_env::collect_exec_env(ctx, &lang, spec.as_deref(), pc)?;
@@ -170,12 +160,7 @@ pub(crate) fn run_inner(
     if verbose
         && let Ok(line) = child_env::describe_exec_resolution(ctx, &lang, spec.as_deref(), pc)
     {
-        crate::commands::common::emit_verbose_lines(
-            g,
-            text_out,
-            &[line],
-            "cli.exec.verbose_using",
-        );
+        crate::commands::common::emit_verbose_lines(g, text_out, &[line], "cli.exec.verbose_using");
     }
 
     if let Some(cfg) = pc {
@@ -185,16 +170,22 @@ pub(crate) fn run_inner(
     // On Windows, executable lookup may happen before applying the child's environment block
     // (including PATH). Prefer an absolute core tool path when we can derive it from the runtime home.
     let mut resolved_cmd = command.clone();
-    if lang == "go" && (command == "go" || command == "gofmt")
-        && let Ok(home) = child_env::resolve_exec_home_for_lang(ctx, &lang, spec.as_deref(), pc) {
-            let home = std::fs::canonicalize(&home).unwrap_or(home);
-            if let Some(p) = go_tool_executable(&home, &command) {
-                resolved_cmd = p.display().to_string();
-            }
+    if lang == "go"
+        && (command == "go" || command == "gofmt")
+        && let Ok(home) = child_env::resolve_exec_home_for_lang(ctx, &lang, spec.as_deref(), pc)
+    {
+        let home = std::fs::canonicalize(&home).unwrap_or(home);
+        if let Some(p) = go_tool_executable(&home, &command) {
+            resolved_cmd = p.display().to_string();
         }
+    }
 
-    let mut child =
-        crate::commands::common::build_child_command(&resolved_cmd, &args, &env_map, &ctx.working_dir);
+    let mut child = crate::commands::common::build_child_command(
+        &resolved_cmd,
+        &args,
+        &env_map,
+        &ctx.working_dir,
+    );
     if let Some(ref out_path) = output {
         let file = OpenOptions::new()
             .create(true)
@@ -213,10 +204,7 @@ pub(crate) fn run_inner(
 
     let status = child.status().map_err(EnvrError::from)?;
     let exit = status.code().unwrap_or(1);
-    let env_file_s: Vec<String> = env_files
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect();
+    let env_file_s: Vec<String> = env_files.iter().map(|p| p.display().to_string()).collect();
     let data = json!({
         "exit_code": exit,
         "command": command,
@@ -230,5 +218,7 @@ pub(crate) fn run_inner(
         "env_overrides": env_pairs,
         "output_file": output.as_ref().map(|p| p.display().to_string()),
     });
-    Ok(crate::commands::common::emit_child_process_outcome(g, data, exit))
+    Ok(crate::commands::common::emit_child_process_outcome(
+        g, data, exit,
+    ))
 }

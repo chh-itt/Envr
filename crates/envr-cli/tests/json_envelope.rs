@@ -62,7 +62,7 @@ fn narrow_path_for_envr_process() -> String {
 fn assert_envelope_shape(v: &Value) {
     assert_eq!(
         v.get("schema_version"),
-        Some(&serde_json::json!(2)),
+        Some(&serde_json::json!(3)),
         "missing or wrong schema_version: {v}"
     );
     assert!(v.get("success").is_some(), "missing success: {v}");
@@ -78,8 +78,7 @@ fn list_json_contract() {
     let v = json_stdout(&["--format", "json", "list"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert!(v["code"].is_null());
-    assert_eq!(v["message"], "list_installed");
+    assert_eq!(v["code"], "list_installed");
     let runtimes = v["data"]["installed_runtimes"]
         .as_array()
         .expect("installed_runtimes array");
@@ -101,8 +100,7 @@ fn current_json_contract() {
     let v = json_stdout(&["--format", "json", "current"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert!(v["code"].is_null());
-    assert_eq!(v["message"], "show_current");
+    assert_eq!(v["code"], "show_current");
     let runtimes = v["data"]["active_versions"]
         .as_array()
         .expect("active_versions");
@@ -127,20 +125,26 @@ fn doctor_json_contract() {
     let v = json_stdout(&["--format", "json", "doctor"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert!(v["code"].is_null());
-    assert_eq!(v["message"], "doctor_ok");
+    assert_eq!(v["code"], "doctor_ok");
     let kinds = v["data"]["kinds"].as_array().expect("kinds");
     assert!(!kinds.is_empty());
     let row = &kinds[0];
     assert!(row["kind"].is_string());
-    assert!(row.get("current").is_none(), "use current_version, not current");
+    assert!(
+        row.get("current").is_none(),
+        "use current_version, not current"
+    );
     assert!(
         row["current_version"].is_string() || row["current_version"].is_null(),
         "current_version: {:?}",
         row.get("current_version")
     );
     let d = &v["data"];
-    assert!(d["warnings"].is_array(), "warnings: {:?}", d.get("warnings"));
+    assert!(
+        d["warnings"].is_array(),
+        "warnings: {:?}",
+        d.get("warnings")
+    );
     assert!(d["notes"].is_array(), "notes: {:?}", d.get("notes"));
     assert!(d["recommendations"].is_array());
     assert!(
@@ -168,7 +172,9 @@ fn doctor_json_contract() {
         "shims_dir_writable: {:?}",
         d.get("shims_dir_writable")
     );
-    let oc = d["onboarding_checklist"].as_array().expect("onboarding_checklist");
+    let oc = d["onboarding_checklist"]
+        .as_array()
+        .expect("onboarding_checklist");
     assert_eq!(oc.len(), 4, "onboarding_checklist: {oc:?}");
     assert!(oc[0].is_string());
 }
@@ -179,7 +185,7 @@ fn doctor_json_flag_matches_doctor_format_json() {
     let v = json_stdout(&["doctor", "--json"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "doctor_ok");
+    assert_eq!(v["code"], "doctor_ok");
     assert!(v["data"]["kinds"].is_array());
 }
 
@@ -189,7 +195,7 @@ fn deactivate_json_contract() {
     let v = json_stdout(&["--format", "json", "deactivate"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "deactivate_hint");
+    assert_eq!(v["code"], "deactivate_hint");
     let d = &v["data"];
     assert_eq!(d["hint"], "hook_shell_only");
     assert!(d["docs"].is_string());
@@ -201,7 +207,7 @@ fn status_json_contract() {
     let v = json_stdout(&["--format", "json", "status"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "project_status");
+    assert_eq!(v["code"], "project_status");
     let d = &v["data"];
     assert!(d["working_dir"].is_string());
     assert!(d["runtimes"].is_array());
@@ -213,7 +219,7 @@ fn hook_prompt_json_contract() {
     let v = json_stdout(&["--format", "json", "hook", "prompt"], tmp.path());
     assert_envelope_shape(&v);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "hook_prompt");
+    assert_eq!(v["code"], "hook_prompt");
     assert!(v["data"]["segment"].is_string());
 }
 
@@ -320,7 +326,7 @@ fn exec_dry_run_json_envelope_message_dry_run() {
     );
     let v = parse_json_line(&out.stdout);
     assert_envelope_shape(&v);
-    assert_eq!(v["message"], "dry_run");
+    assert_eq!(v["code"], "dry_run");
     assert!(v["data"]["env"].is_object());
     assert!(v["data"]["command"].is_string());
 }
@@ -331,12 +337,9 @@ fn template_json_contract() {
     let tpl = tmp.path().join("x.tpl");
     fs::write(&tpl, r#"{"k":"${PATH}"}"#).expect("write tpl");
     let p = tpl.to_string_lossy();
-    let v = json_stdout(
-        &["--format", "json", "template", p.as_ref()],
-        tmp.path(),
-    );
+    let v = json_stdout(&["--format", "json", "template", p.as_ref()], tmp.path());
     assert_envelope_shape(&v);
-    assert_eq!(v["message"], "template_rendered");
+    assert_eq!(v["code"], "template_rendered");
     assert!(v["data"]["file"].is_string());
     assert!(v["data"]["rendered"].is_string());
 }
@@ -346,7 +349,7 @@ fn update_json_contract() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let v = json_stdout(&["--format", "json", "update"], tmp.path());
     assert_envelope_shape(&v);
-    assert_eq!(v["message"], "update_info");
+    assert_eq!(v["code"], "update_info");
     assert!(v["data"]["version"].is_string());
     assert!(v["data"]["check_requested"].is_boolean());
     assert!(v["data"]["self_update"].is_string());
@@ -384,7 +387,7 @@ fn run_json_child_includes_install_metadata() {
     );
     let v = parse_json_line(&out.stdout);
     assert_envelope_shape(&v);
-    assert_eq!(v["message"], "child_completed");
+    assert_eq!(v["code"], "child_completed");
     let d = &v["data"];
     assert_eq!(d["install_if_missing"], false);
     assert_eq!(d["dry_run"], false);

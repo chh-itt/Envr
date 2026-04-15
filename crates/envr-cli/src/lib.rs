@@ -10,7 +10,8 @@
 //! |------|---------|
 //! | Process entry | [`bootstrap_i18n`], [`run_cli_with_logging`] |
 //! | Parsed argv / globals | [`cli::Cli`], [`cli::GlobalArgs`], [`cli::apply_global`], [`cli::run`], [`commands::dispatch`] → `(CommandOutcome, GlobalArgs)` |
-//! | Command results | [`CommandOutcome`], [`finish_cli_cmd`] |
+//! | Command results | [`CommandOutcome`], [`CliExit`], [`finish_cli_cmd`] |
+//! | Output UX | [`presenter::CliUxPolicy`], [`presenter::CliPresenter`] |
 //! | Runtime / project helpers | [`CliRuntimeSession`], [`CliPathProfile`], [`CliProjectContext`], [`RunExecContext`] |
 //!
 //! The [`commands`] module is a **large, mostly internal** handler surface: prefer the items above.
@@ -19,13 +20,17 @@
 
 pub mod cli;
 pub mod cli_help;
+pub mod codes;
+mod app;
 pub mod command_outcome;
 pub mod commands;
 pub mod output;
+pub mod presenter;
 pub mod run_context;
 mod runtime_session;
 
-pub use command_outcome::{CommandOutcome, finish_cli_cmd};
+pub use command_outcome::{CliExit, CommandOutcome, finish_cli_cmd};
+pub use presenter::{CliPresenter, CliUxPolicy};
 pub use run_context::{CliPathProfile, CliProjectContext, RunExecContext};
 pub use runtime_session::CliRuntimeSession;
 

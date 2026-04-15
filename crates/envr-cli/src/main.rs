@@ -2,9 +2,9 @@ fn main() {
     envr_cli::bootstrap_i18n();
     let cli = match envr_cli::cli::parse_cli_from_env() {
         Ok(cli) => cli,
-        Err(code) => {
+        Err(exit) => {
             envr_cli::flush_parse_metrics_on_early_exit();
-            std::process::exit(code)
+            std::process::exit(exit.exit_code)
         }
     };
     envr_cli::cli::apply_global(&cli);

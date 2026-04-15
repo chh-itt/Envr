@@ -272,14 +272,7 @@ fn cache_clean_dry_run_prune_counts_old_file() {
     }
 
     let out = run_envr(
-        &[
-            "cache",
-            "clean",
-            "node",
-            "--older-than",
-            "30d",
-            "--dry-run",
-        ],
+        &["cache", "clean", "node", "--older-than", "30d", "--dry-run"],
         &runtime_root,
         &project,
     );

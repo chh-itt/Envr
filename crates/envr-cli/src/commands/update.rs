@@ -1,4 +1,5 @@
 //! `envr update` — CLI version info (self-update TBD).
+use crate::CliExit;
 
 use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
@@ -6,14 +7,14 @@ use crate::output::{self, fmt_template};
 use envr_error::EnvrResult;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, check: bool) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, check: bool) -> EnvrResult<CliExit> {
     let version = env!("CARGO_PKG_VERSION");
     let data = serde_json::json!({
         "version": version,
         "check_requested": check,
         "self_update": "not_implemented",
     });
-    Ok(output::emit_ok(g, "update_info", data, || {
+    Ok(output::emit_ok(g, crate::codes::ok::UPDATE_INFO, data, || {
         println!(
             "{}",
             fmt_template(

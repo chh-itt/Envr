@@ -1,4 +1,6 @@
 use crate::cli::GlobalArgs;
+use crate::command_outcome::CliExit;
+use crate::CliUxPolicy;
 use crate::CommandOutcome;
 use crate::runtime_session::CliRuntimeSession;
 
@@ -61,7 +63,7 @@ pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
 /// The process exit path is always [`CommandOutcome::finish`].
 pub fn with_runtime_service<F>(f: F) -> CommandOutcome
 where
-    F: FnOnce(&RuntimeService) -> EnvrResult<i32>,
+    F: FnOnce(&RuntimeService) -> EnvrResult<CliExit>,
 {
     let result = (|| {
         let session = CliRuntimeSession::connect()?;
@@ -79,13 +81,13 @@ pub fn print_envr_error(g: &GlobalArgs, err: EnvrError) -> i32 {
     crate::output::emit_envr_error(g, err)
 }
 
-pub fn missing_positional(g: &GlobalArgs, cmd: &str, example: &str) -> i32 {
+pub fn missing_positional(g: &GlobalArgs, cmd: &str, example: &str) -> CliExit {
     crate::output::emit_validation(g, cmd, example)
 }
 
-pub fn emit_child_process_outcome(g: &GlobalArgs, data: Value, exit: i32) -> i32 {
+pub fn emit_child_process_outcome(g: &GlobalArgs, data: Value, exit: i32) -> CliExit {
     if exit == 0 {
-        crate::output::emit_ok(g, "child_completed", data, || {})
+        crate::output::emit_ok(g, crate::codes::ok::CHILD_COMPLETED, data, || {})
     } else {
         let msg = crate::output::fmt_template(
             &envr_core::i18n::tr_key(
@@ -95,12 +97,12 @@ pub fn emit_child_process_outcome(g: &GlobalArgs, data: Value, exit: i32) -> i32
             ),
             &[("exit", &exit.to_string())],
         );
-        crate::output::emit_failure_envelope(g, "child_exit", &msg, data, &[], exit)
+        crate::output::emit_failure_envelope(g, crate::codes::err::CHILD_EXIT, &msg, data, &[], exit)
     }
 }
 
 pub fn emit_verbose_lines(g: &GlobalArgs, text_out: bool, lines: &[String], i18n_key: &str) {
-    if g.quiet || !text_out {
+    if CliUxPolicy::from_global(g).quiet || !text_out {
         return;
     }
     for line in lines {
@@ -109,6 +111,14 @@ pub fn emit_verbose_lines(g: &GlobalArgs, text_out: bool, lines: &[String], i18n
             &[("detail", line)],
         );
         eprintln!("envr: {msg}");
+    }
+}
+
+/// Emit one verbose progress line for mutating commands (`--verbose`).
+pub fn emit_verbose_step(g: &GlobalArgs, detail: &str) {
+    let p = CliUxPolicy::from_global(g);
+    if p.verbose_stderr(g.verbose) {
+        eprintln!("envr: {detail}");
     }
 }
 

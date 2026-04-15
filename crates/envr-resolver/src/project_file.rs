@@ -1,6 +1,6 @@
 use crate::pin_spec::{RuntimePinSpec, runtime_kind_toml_key};
 use envr_config::project_config::{
-    ProjectConfig, PROJECT_CONFIG_FILE, parse_project_config, save_project_config,
+    PROJECT_CONFIG_FILE, ProjectConfig, parse_project_config, save_project_config,
 };
 use envr_error::{EnvrError, EnvrResult};
 use std::path::{Path, PathBuf};
@@ -9,12 +9,8 @@ use std::path::{Path, PathBuf};
 pub fn upsert_runtime_pin(dir: &Path, pin: &RuntimePinSpec) -> EnvrResult<PathBuf> {
     let path = dir.join(PROJECT_CONFIG_FILE);
     let mut cfg = if path.exists() {
-        parse_project_config(&path).map_err(|e| {
-            EnvrError::Config(format!(
-                "read {}: {e}",
-                path.display()
-            ))
-        })?
+        parse_project_config(&path)
+            .map_err(|e| EnvrError::Config(format!("read {}: {e}", path.display())))?
     } else {
         ProjectConfig::default()
     };

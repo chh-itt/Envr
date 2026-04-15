@@ -1,3 +1,5 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
 
@@ -11,7 +13,11 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn import_run_inner(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> EnvrResult<i32> {
+pub(crate) fn import_run_inner(
+    g: &GlobalArgs,
+    file: PathBuf,
+    path: PathBuf,
+) -> EnvrResult<CliExit> {
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -39,8 +45,8 @@ pub(crate) fn import_run_inner(g: &GlobalArgs, file: PathBuf, path: PathBuf) -> 
         "dest": dest.to_string_lossy(),
         "source": file.to_string_lossy(),
     });
-    Ok(output::emit_ok(g, "config_imported", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::CONFIG_IMPORTED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(
@@ -61,7 +67,7 @@ pub(crate) fn export_run_inner(
     g: &GlobalArgs,
     path: PathBuf,
     output: Option<PathBuf>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(
@@ -83,8 +89,8 @@ pub(crate) fn export_run_inner(
             "written": out_path.to_string_lossy(),
             "toml": toml,
         });
-        Ok(output::emit_ok(g, "config_exported", data, || {
-            if !g.quiet {
+        Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EXPORTED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 println!(
                     "{}",
                     fmt_template(
@@ -103,8 +109,8 @@ pub(crate) fn export_run_inner(
             "config_dir": loc.dir.to_string_lossy(),
             "toml": toml,
         });
-        Ok(output::emit_ok(g, "config_exported", data, || {
-            if !g.quiet {
+        Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EXPORTED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 print!("{toml}");
                 if !toml.ends_with('\n') {
                     println!();

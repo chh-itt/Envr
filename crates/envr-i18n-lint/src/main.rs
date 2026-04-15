@@ -138,7 +138,11 @@ fn dotted_key_conflicts(keys: &HashSet<String>) -> Vec<String> {
     errs
 }
 
-fn write_locale_file(path: &Path, header_lines: &[&str], messages: &HashMap<String, String>) -> std::io::Result<()> {
+fn write_locale_file(
+    path: &Path,
+    header_lines: &[&str],
+    messages: &HashMap<String, String>,
+) -> std::io::Result<()> {
     let mut keys: Vec<_> = messages.keys().cloned().collect();
     keys.sort();
     let mut buf = String::new();
@@ -200,7 +204,13 @@ fn extract_tr_pairs(text: &str, path: &Path, out: &mut HashMap<String, (String, 
 }
 
 #[allow(clippy::type_complexity)]
-fn scan_sources(root: &Path) -> (HashSet<String>, HashMap<String, (String, String)>, Vec<String>) {
+fn scan_sources(
+    root: &Path,
+) -> (
+    HashSet<String>,
+    HashMap<String, (String, String)>,
+    Vec<String>,
+) {
     let tr_key_re = Regex::new(r#"tr_key\s*\(\s*"([^"]+)""#).expect("regex");
     let cli_help_tr_re = Regex::new(r#"\btr\s*\(\s*"([^"]+)""#).expect("regex");
     let legacy_tr_re = Regex::new(r"envr_core::i18n::tr\s*\(").expect("regex");
@@ -301,11 +311,7 @@ fn merge_locales(
             let z = extracts
                 .get(k)
                 .map(|(z, _)| z.clone())
-                .or_else(|| {
-                    en.get(k)
-                        .filter(|e| !is_bad_en_placeholder(e))
-                        .cloned()
-                })
+                .or_else(|| en.get(k).filter(|e| !is_bad_en_placeholder(e)).cloned())
                 .unwrap_or_else(|| format!("[i18n missing zh] {k}"));
             zh.insert(k.clone(), z);
         }
@@ -313,11 +319,7 @@ fn merge_locales(
             let e = extracts
                 .get(k)
                 .map(|(_, e)| e.clone())
-                .or_else(|| {
-                    zh.get(k)
-                        .filter(|z| !is_bad_zh_placeholder(z))
-                        .cloned()
-                })
+                .or_else(|| zh.get(k).filter(|z| !is_bad_zh_placeholder(z)).cloned())
                 .unwrap_or_else(|| format!("[i18n missing en] {k}"));
             en.insert(k.clone(), e);
         }
@@ -356,7 +358,9 @@ fn run_lint(root: &Path) -> Result<(), Vec<String>> {
     let zh_path = root.join("locales/zh-CN.toml");
     let en_path = root.join("locales/en-US.toml");
     if !zh_path.is_file() || !en_path.is_file() {
-        return Err(vec!["missing locales/zh-CN.toml or locales/en-US.toml".into()]);
+        return Err(vec![
+            "missing locales/zh-CN.toml or locales/en-US.toml".into(),
+        ]);
     }
 
     let zh = flatten_messages(&fs::read_to_string(&zh_path).unwrap_or_default());
@@ -384,10 +388,14 @@ fn run_lint(root: &Path) -> Result<(), Vec<String>> {
             continue;
         }
         if !zh.contains_key(k) {
-            errors.push(format!("tr_key/tr(`{k}`) used in code but missing zh-CN.toml"));
+            errors.push(format!(
+                "tr_key/tr(`{k}`) used in code but missing zh-CN.toml"
+            ));
         }
         if !en.contains_key(k) {
-            errors.push(format!("tr_key/tr(`{k}`) used in code but missing en-US.toml"));
+            errors.push(format!(
+                "tr_key/tr(`{k}`) used in code but missing en-US.toml"
+            ));
         }
     }
 
@@ -424,7 +432,9 @@ fn run_lint(root: &Path) -> Result<(), Vec<String>> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let write_locales = args.iter().any(|a| a == "--write-locales" || a == "--sync-locales");
+    let write_locales = args
+        .iter()
+        .any(|a| a == "--write-locales" || a == "--sync-locales");
     let root = workspace_root();
 
     if write_locales {

@@ -130,25 +130,25 @@ New optional fields inside existing documented objects are generally non-breakin
 
 For automation, treat these as the **stable contract**:
 
-- **`success`**, **`schema_version`**, and (on failure) **`code`**
-- **`message`** on **success** paths: a stable snake_case **discriminator** for the payload shape (e.g. `list_installed`, `child_completed`), used with the matching **`data`** schema
+- **`success`**, **`schema_version`**, and **`code`** (both success and failure; stable snake_case token)
+- **`code`** on **success** paths: a stable snake_case **discriminator** for the payload shape (e.g. `list_installed`, `child_completed`), used with the matching **`data`** schema
 - **Typed fields inside `data`** as documented per `message` and JSON Schema under [`docs/schemas/`](../schemas/README.md)
 
 Do **not** build logic on:
 
-- **Natural-language strings** in the envelope **`message`** on **failure** paths (e.g. [`emit_envr_error`](../../crates/envr-cli/src/output.rs) may localize prose); use **`code`**, **`schema_version`**, structured **`data`** when present, and **`diagnostics`** only as human hints
+- **Natural-language strings** in the envelope **`message`** (it is intended for humans and may be localized); use **`code`**, **`schema_version`**, structured **`data`** when present, and **`diagnostics`** only as human hints
 - **Ad-hoc wording** in **`diagnostics`** or stderr mirror hints
 
-Success **`message`** values are programmatic ids, not translated sentences. If future i18n ever touched success labels, **`data`** schemas and **`code`** would remain authoritative; parsers should still prefer **`data`** over free-text fields.
+Success **`code`** values are programmatic ids, not translated sentences. The envelope **`message`** is human-facing text and may be localized; parsers must rely on **`code`** + `data` schemas.
 
 All JSON responses use a single-line envelope:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "success": true,
-  "code": null,
-  "message": "some_message",
+  "code": "some_code",
+  "message": "some human-readable message",
   "data": {},
   "diagnostics": []
 }
@@ -156,10 +156,10 @@ All JSON responses use a single-line envelope:
 
 ### Fields
 
-- `schema_version`: integer (currently **2**). v2 renames list/current/remote `data` keys (see below). Scripts should read this before assuming `data` layout; it will increment on breaking contract changes.
+- `schema_version`: integer (currently **3**). v3 makes envelope `code` required and stable for both success and failure; scripts must not rely on `message` for control flow.
 - `success`: boolean
-- `code`: nullable string (error code token on failure)
-- `message`: on success, stable snake_case id for the payload (see **What scripts should rely on** above); on failure via `emit_envr_error`, may be localized human text — use `code` + `data` for logic
+- `code`: string (stable snake_case token; on success it also acts as the `data` discriminator)
+- `message`: human-facing text (may be localized); use `code` + `data` for logic
 - `data`: command-specific payload
 - `diagnostics`: string array (error chain / hints)
 

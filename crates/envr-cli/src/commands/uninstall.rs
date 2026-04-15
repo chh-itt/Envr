@@ -1,5 +1,7 @@
 use crate::cli::{GlobalArgs, OutputFormat};
-use crate::commands::common::kind_label;
+use crate::CliExit;
+use crate::CliUxPolicy;
+use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
@@ -17,9 +19,20 @@ pub(crate) fn run_inner(
     dry_run: bool,
     force: bool,
     yes: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let kind = parse_runtime_kind(runtime.trim())?;
     let version = RuntimeVersion(runtime_version);
+    emit_verbose_step(
+        g,
+        &fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.verbose.uninstall.plan",
+                "[verbose] 正在规划卸载：{kind} {version}",
+                "[verbose] planning uninstall: {kind} {version}",
+            ),
+            &[("kind", kind_label(kind)), ("version", &version.0)],
+        ),
+    );
 
     let current = service.current(kind)?;
     let is_active = current
@@ -37,11 +50,6 @@ pub(crate) fn run_inner(
             "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
             "external_command": external,
         });
-        let msg = envr_core::i18n::tr_key(
-            "cli.uninstall.dry_run_message",
-            "卸载预演",
-            "uninstall dry-run",
-        );
         if would_refuse {
             let refuse_msg = envr_core::i18n::tr_key(
                 "cli.uninstall.err_active",
@@ -55,14 +63,12 @@ pub(crate) fn run_inner(
                     ("version", &version.0),
                 ],
             );
-            if matches!(g.effective_output_format(), OutputFormat::Text)
-                && !g.quiet
-            {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 print_dry_run_text(g, &paths, external.as_deref());
             }
             return Ok(output::emit_failure_envelope(
                 g,
-                "validation",
+                crate::codes::err::VALIDATION,
                 &refuse_msg,
                 data,
                 &[],
@@ -70,7 +76,7 @@ pub(crate) fn run_inner(
             ));
         }
 
-        return Ok(output::emit_ok(g, &msg, data, || {
+        return Ok(output::emit_ok(g, crate::codes::ok::UNINSTALLED, data, || {
             print_dry_run_text(g, &paths, external.as_deref());
         }));
     }
@@ -124,7 +130,7 @@ pub(crate) fn run_inner(
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
             return Ok(output::emit_failure_envelope(
                 g,
-                "aborted",
+                crate::codes::err::ABORTED,
                 &aborted,
                 json!(null),
                 &[],
@@ -139,7 +145,7 @@ pub(crate) fn run_inner(
             let aborted = envr_core::i18n::tr_key("cli.uninstall.aborted", "已取消", "aborted");
             return Ok(output::emit_failure_envelope(
                 g,
-                "aborted",
+                crate::codes::err::ABORTED,
                 &aborted,
                 json!(null),
                 &[],
@@ -163,6 +169,17 @@ pub(crate) fn run_inner(
         let _ = writeln!(io::stderr(), "{msg}");
     }
 
+    emit_verbose_step(
+        g,
+        &fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.verbose.uninstall.exec",
+                "[verbose] 正在执行卸载：{kind} {version}",
+                "[verbose] uninstalling: {kind} {version}",
+            ),
+            &[("kind", kind_label(kind)), ("version", &version.0)],
+        ),
+    );
     service.uninstall(kind, &version)?;
     Ok(print_success(g, kind, &version))
 }
@@ -177,7 +194,7 @@ fn print_dry_run_text(
         "将删除以下内容：",
         "Would remove:",
     );
-    if output::use_terminal_styles(g) {
+    if CliUxPolicy::from_global(g).use_rich_text_styles() {
         println!("\x1b[1m{header}\x1b[0m");
     } else {
         println!("{header}");
@@ -195,13 +212,13 @@ fn print_dry_run_text(
     }
 }
 
-fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> i32 {
+fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> CliExit {
     let data = json!({
         "kind": kind_label(kind),
         "version": v.0,
     });
-    output::emit_ok(g, "uninstalled", data, || {
-        if !g.quiet {
+    output::emit_ok(g, crate::codes::ok::UNINSTALLED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

@@ -1,10 +1,10 @@
 //! Build merged process environment for `exec`, `run`, and `env` (PATH, JAVA_HOME, project `env`).
 
 use super::run_env_builder::{
-    resolve_exec_lang_layer, resolve_rust_bins, rust_paths, rustup_active_toolchain, ExecLangResolution,
-    RunEnvStack, RunStackLang, RUN_STACK_LANG_ORDER,
+    ExecLangResolution, RUN_STACK_LANG_ORDER, RunEnvStack, RunStackLang, resolve_exec_lang_layer,
+    resolve_rust_bins, rust_paths, rustup_active_toolchain,
 };
-use envr_config::project_config::{load_project_config_profile, ProjectConfig};
+use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
 };
@@ -13,8 +13,8 @@ use envr_platform::paths::current_platform_paths;
 // Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …
 #[allow(unused_imports)]
 pub use envr_resolver::{
-    dedup_paths, path_sep, prepend_path, runtime_bin_dirs, version_label_from_runtime_home,
-    runtime_error_might_install_fix,
+    dedup_paths, path_sep, prepend_path, runtime_bin_dirs, runtime_error_might_install_fix,
+    version_label_from_runtime_home,
 };
 use envr_resolver::{
     extend_env_with_tooling_settings, plan_missing_installable_pins, resolve_exec_lang_home,
@@ -243,11 +243,10 @@ fn collect_run_env_impl(
                 }
             }
             RunStackLang::Runtime { lang, home } => {
-                if collect_template_keys
-                    && let Some(key) = template_version_key_for_lang(&lang) {
-                        let ver = version_label_from_runtime_home(&home);
-                        template_keys.insert(key.to_string(), ver);
-                    }
+                if collect_template_keys && let Some(key) = template_version_key_for_lang(&lang) {
+                    let ver = version_label_from_runtime_home(&home);
+                    template_keys.insert(key.to_string(), ver);
+                }
                 if lang == "java" {
                     java_home = Some(home.clone());
                 }

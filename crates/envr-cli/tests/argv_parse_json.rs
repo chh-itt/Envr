@@ -96,4 +96,3 @@ fn clap_parse_errors_print_to_stderr_in_text_mode_without_json_stdout() {
         "expected clap-style error on stderr, got: {stderr:?}"
     );
 }
-

@@ -1,5 +1,7 @@
-use crate::cli::{EnvShellKind, GlobalArgs, ProjectPathProfileArgs};
+use crate::CliExit;
 use crate::CliPathProfile;
+use crate::CliUxPolicy;
+use crate::cli::{EnvShellKind, GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::child_env;
 use crate::output;
 
@@ -29,7 +31,7 @@ pub(crate) fn run_inner(
     g: &GlobalArgs,
     project: ProjectPathProfileArgs,
     shell: EnvShellKind,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let env_map = child_env::collect_run_env(&session.ctx, false, session.project_config())?;
@@ -54,8 +56,8 @@ pub(crate) fn run_inner(
         "shell": shell_str,
         "vars": vars,
     });
-    Ok(output::emit_ok(g, "project_env", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_ENV, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             for k in &keys {
                 if let Some(v) = env_map.get(k) {
                     emit_pair(shell, k, v);

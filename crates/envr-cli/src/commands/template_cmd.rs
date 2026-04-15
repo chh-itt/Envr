@@ -1,4 +1,5 @@
 use crate::cli::{GlobalArgs, OutputFormat, ProjectPathProfileArgs};
+use crate::CliExit;
 use crate::CliPathProfile;
 use crate::commands::child_env;
 use crate::commands::env_overrides;
@@ -46,7 +47,7 @@ pub(crate) fn run_inner(
     project: ProjectPathProfileArgs,
     env_files: Vec<PathBuf>,
     env_pairs: Vec<String>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let mut vars =
@@ -68,12 +69,18 @@ pub(crate) fn run_inner(
 
     match g.effective_output_format() {
         OutputFormat::Json => {
-            output::write_envelope(true, None, "template_rendered", data, &[]);
-            Ok(0)
+            let _ = output::write_envelope(
+                true,
+                crate::codes::ok::TEMPLATE_RENDERED,
+                crate::codes::ok::TEMPLATE_RENDERED,
+                data,
+                &[],
+            );
+            Ok(CliExit::ok())
         }
         OutputFormat::Text => {
             print!("{rendered}");
-            Ok(0)
+            Ok(CliExit::ok())
         }
     }
 }

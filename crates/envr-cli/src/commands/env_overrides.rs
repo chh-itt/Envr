@@ -31,9 +31,7 @@ fn strip_quotes(val: &str) -> String {
     let t = val.trim();
     if t.len() >= 2 {
         let b = t.as_bytes();
-        if (b[0] == b'"' && b[t.len() - 1] == b'"')
-            || (b[0] == b'\'' && b[t.len() - 1] == b'\'')
-        {
+        if (b[0] == b'"' && b[t.len() - 1] == b'"') || (b[0] == b'\'' && b[t.len() - 1] == b'\'') {
             return t[1..t.len() - 1].to_string();
         }
     }
@@ -99,10 +97,7 @@ mod tests {
 
     #[test]
     fn parse_env_pair_basic() {
-        assert_eq!(
-            parse_env_pair("A=b").unwrap(),
-            ("A".into(), "b".into())
-        );
+        assert_eq!(parse_env_pair("A=b").unwrap(), ("A".into(), "b".into()));
         assert_eq!(parse_env_pair("X=").unwrap(), ("X".into(), "".into()));
     }
 
@@ -110,11 +105,7 @@ mod tests {
     fn load_dotenv_skips_comments() {
         let tmp = tempfile::tempdir().unwrap();
         let p = tmp.path().join("t.env");
-        fs::write(
-            &p,
-            "# c\nFOO=bar\nexport BAR=2\n\nBAZ='q u x'\n",
-        )
-        .unwrap();
+        fs::write(&p, "# c\nFOO=bar\nexport BAR=2\n\nBAZ='q u x'\n").unwrap();
         let v = load_dotenv_file(&p).unwrap();
         let m: HashMap<_, _> = v.into_iter().collect();
         assert_eq!(m.get("FOO").map(String::as_str), Some("bar"));

@@ -2,7 +2,7 @@
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use envr_config::project_config::{
-    load_project_config_profile, reset_project_config_load_cache, PROJECT_CONFIG_FILE,
+    PROJECT_CONFIG_FILE, load_project_config_profile, reset_project_config_load_cache,
 };
 use std::fs;
 use std::path::PathBuf;

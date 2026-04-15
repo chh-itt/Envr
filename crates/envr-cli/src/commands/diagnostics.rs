@@ -1,4 +1,5 @@
 //! `envr diagnostics export` — zip bundle for bug reports (doctor JSON, system/env summary, recent logs).
+use crate::CliExit;
 
 use crate::cli::GlobalArgs;
 use crate::commands::doctor::{self, DoctorReport};
@@ -24,7 +25,7 @@ pub(crate) fn export_zip_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     output: Option<PathBuf>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let report = doctor::build_doctor_report(service)?;
 
     let zip_path = match output {
@@ -65,10 +66,10 @@ pub(crate) fn export_zip_inner(
     }
 }
 
-fn emit_export_ok(g: &GlobalArgs, zip_path: &Path) -> i32 {
+fn emit_export_ok(g: &GlobalArgs, zip_path: &Path) -> crate::CliExit {
     let path_str = zip_path.display().to_string();
     let data = json!({ "path": path_str });
-    output::emit_ok(g, "diagnostics_export_ok", data, || {
+    output::emit_ok(g, crate::codes::ok::DIAGNOSTICS_EXPORT_OK, data, || {
         println!(
             "{}",
             output::fmt_template(
@@ -83,7 +84,7 @@ fn emit_export_ok(g: &GlobalArgs, zip_path: &Path) -> i32 {
     })
 }
 
-fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
+fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> crate::CliExit {
     let path_str = zip_path.display().to_string();
     let msg = output::fmt_template(
         &envr_core::i18n::tr_key(
@@ -101,7 +102,7 @@ fn emit_export_error(g: &GlobalArgs, err: EnvrError, zip_path: &Path) -> i32 {
     let code = output::exit_code_for_error(&err);
     output::emit_failure_envelope(
         g,
-        "diagnostics_export_failed",
+        crate::codes::err::DIAGNOSTICS_EXPORT_FAILED,
         &msg,
         data,
         &diags,

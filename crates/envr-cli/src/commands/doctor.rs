@@ -1,4 +1,6 @@
 use crate::cli::GlobalArgs;
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::commands::common::{self, kind_label};
 use crate::commands::shim_cmd;
 use crate::output::{self, fmt_template};
@@ -573,6 +575,14 @@ fn apply_doctor_fixes(g: &GlobalArgs, service: &RuntimeService, report: &DoctorR
             .unwrap_or(true);
 
     if empty_shims && report.root.exists() && runtime_root_writable(&report.root) {
+        common::emit_verbose_step(
+            g,
+            &envr_core::i18n::tr_key(
+                "cli.verbose.doctor.fix_shims",
+                "[verbose] 正在刷新 shims",
+                "[verbose] refreshing shims",
+            ),
+        );
         match shim_cmd::sync_core_shims_strict(g) {
             Ok(kinds) => {
                 applied.push(fmt_template(
@@ -616,6 +626,17 @@ fn apply_doctor_fixes(g: &GlobalArgs, service: &RuntimeService, report: &DoctorR
         let Some(best) = pick_latest_installed(&installed) else {
             continue;
         };
+        common::emit_verbose_step(
+            g,
+            &fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.verbose.doctor.fix_current",
+                    "[verbose] 正在修复 current：{kind} -> {version}",
+                    "[verbose] fixing current: {kind} -> {version}",
+                ),
+                &[("kind", kind_label(kind)), ("version", &best.0)],
+            ),
+        );
         if let Err(e) = service.set_current(kind, &best) {
             applied.push(fmt_template(
                 &envr_core::i18n::tr_key(
@@ -727,7 +748,7 @@ fn merge_path_fix_json(data: &mut Value, fix_path: bool, report: &DoctorReport) 
 }
 
 fn doctor_use_color(g: &GlobalArgs) -> bool {
-    output::use_terminal_styles(g) && !g.porcelain
+    CliUxPolicy::from_global(g).use_rich_text_styles()
 }
 
 fn doctor_style_line(g: &GlobalArgs, tone: u8, line: &str) -> String {
@@ -767,11 +788,11 @@ fn doctor_path_followup(
     fix_path: bool,
     fix_path_apply: bool,
 ) {
-    if output::wants_porcelain(g) {
+    if CliUxPolicy::from_global(g).wants_porcelain_lines() {
         return;
     }
     let Some(shims) = shims_path_needs_attention(report) else {
-        if fix_path_apply && !g.quiet {
+        if fix_path_apply && CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 envr_core::i18n::tr_key(
@@ -783,7 +804,7 @@ fn doctor_path_followup(
         }
         return;
     };
-    if g.quiet {
+    if !CliUxPolicy::from_global(g).human_text_decorated() {
         return;
     }
 
@@ -956,7 +977,7 @@ fn doctor_path_followup(
 
 fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_text: &[String]) {
     let none_label = envr_core::i18n::tr_key("cli.common.none", "（无）", "(none)");
-    if !g.quiet {
+    if CliUxPolicy::from_global(g).human_text_decorated() {
         println!(
             "{}",
             doctor_style_line(
@@ -1037,7 +1058,7 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
             println!("  - {}", doctor_style_line(g, 1, i));
         }
     }
-    if !report.warnings.is_empty() && !g.quiet {
+    if !report.warnings.is_empty() && CliUxPolicy::from_global(g).human_text_decorated() {
         println!(
             "\n{}",
             doctor_style_line(
@@ -1050,7 +1071,7 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
             println!("  - {}", doctor_style_line(g, 2, w));
         }
     }
-    if !report.notes.is_empty() && !g.quiet {
+    if !report.notes.is_empty() && CliUxPolicy::from_global(g).human_text_decorated() {
         println!(
             "\n{}",
             doctor_style_line(
@@ -1063,7 +1084,7 @@ fn print_doctor_human_sections(g: &GlobalArgs, report: &DoctorReport, fixes_for_
             println!("  - {}", doctor_style_line(g, 3, n));
         }
     }
-    if !fixes_for_text.is_empty() && !g.quiet {
+    if !fixes_for_text.is_empty() && CliUxPolicy::from_global(g).human_text_primary() {
                 println!(
                     "\n{}",
                     envr_core::i18n::tr_key(
@@ -1085,7 +1106,7 @@ pub(crate) fn run_inner(
     fix: bool,
     fix_path: bool,
     fix_path_apply: bool,
-) -> envr_error::EnvrResult<i32> {
+) -> envr_error::EnvrResult<CliExit> {
     let mut report = build_doctor_report(service)?;
 
     let fixes_applied = if fix {
@@ -1111,10 +1132,19 @@ pub(crate) fn run_inner(
     let fixes_for_text = fixes_applied.clone();
 
     if ok {
-        Ok(output::emit_doctor(g, ok, "doctor_ok", None, data, || {
+        let ok_msg =
+            envr_core::i18n::tr_key("cli.ok.doctor_ok", "环境检查通过", "environment checks passed");
+        Ok(output::emit_doctor(
+            g,
+            ok,
+            crate::codes::ok::DOCTOR_OK,
+            &ok_msg,
+            data,
+            || {
             print_doctor_human_sections(g, &report, &fixes_for_text);
             doctor_path_followup(g, &report, fix_path, fix_path_apply);
-        }))
+            },
+        ))
     } else {
         let fail_msg = envr_core::i18n::tr_key(
             "cli.doctor.json_fail_message",
@@ -1124,8 +1154,8 @@ pub(crate) fn run_inner(
         Ok(output::emit_doctor(
             g,
             ok,
+            crate::codes::ok::DOCTOR_ISSUES,
             &fail_msg,
-            Some("doctor_issues"),
             data,
             || {
                 print_doctor_human_sections(g, &report, &fixes_for_text);

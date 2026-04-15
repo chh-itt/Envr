@@ -4,19 +4,15 @@
 //! deterministic rules so GUI / future hosts can reuse the same behavior.
 
 use envr_config::settings::{
-    bun_package_registry_env, deno_package_registry_env, prefer_china_mirror_locale, GoProxyMode,
-    Settings,
+    GoProxyMode, Settings, bun_package_registry_env, deno_package_registry_env,
+    prefer_china_mirror_locale,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// `PATH` separator for the current platform (`;` on Windows, `:` elsewhere).
 pub fn path_sep() -> char {
-    if cfg!(windows) {
-        ';'
-    } else {
-        ':'
-    }
+    if cfg!(windows) { ';' } else { ':' }
 }
 
 /// Directory name under `.../versions/<name>` when applicable; otherwise the last path component.

@@ -1,4 +1,6 @@
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::output::{self, fmt_template};
 use crate::CliPathProfile;
 
@@ -12,7 +14,7 @@ pub(crate) fn run_inner(
     lang: String,
     spec: Option<String>,
     project: ProjectPathProfileArgs,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let lang = lang.trim().to_ascii_lowercase();
     parse_runtime_kind(&lang)?;
@@ -49,12 +51,13 @@ pub(crate) fn run_inner(
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
-    Ok(output::emit_ok(g, "runtime_resolved", data, || {
-        if output::wants_porcelain(g) {
+    Ok(output::emit_ok(g, crate::codes::ok::RUNTIME_RESOLVED, data, || {
+        let ux = CliUxPolicy::from_global(g);
+        if ux.wants_porcelain_lines() {
             println!("{}", home.display());
             return;
         }
-        if !g.quiet {
+        if ux.human_text_primary() {
             let source_label = match source {
                 "cli_override" => envr_core::i18n::tr_key(
                     "cli.resolve.source.cli_override",

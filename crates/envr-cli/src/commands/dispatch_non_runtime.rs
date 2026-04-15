@@ -8,11 +8,9 @@ use crate::CommandOutcome;
 
 /// Route commands that do not require a live runtime service.
 pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
-    debug_assert!(!command.is_runtime_command());
+    debug_assert!(command.runtime_handler_group().is_none());
     match command {
-        Command::Completion { shell } => {
-            CommandOutcome::from_exit_code(completion_cmd::run(shell))
-        }
+        Command::Completion { shell } => CommandOutcome::from_result(completion_cmd::run(shell)),
         Command::Help(sub) => route_help(sub, global),
         Command::Init {
             path,
@@ -99,14 +97,14 @@ fn route_help(sub: crate::cli::HelpCmd, global: &GlobalArgs) -> CommandOutcome {
 fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
     match sub {
         crate::cli::HookCmd::Bash => {
-            CommandOutcome::from_exit_code(hook_cmd::emit_hook_script(
+            CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
                 global,
                 "bash",
                 hook_cmd::HOOK_BASH,
             ))
         }
         crate::cli::HookCmd::Zsh => {
-            CommandOutcome::from_exit_code(hook_cmd::emit_hook_script(
+            CommandOutcome::from_cli_exit(hook_cmd::emit_hook_script(
                 global,
                 "zsh",
                 hook_cmd::HOOK_ZSH,
@@ -186,6 +184,7 @@ mod tests {
             quiet: false,
             no_color: false,
             debug: false,
+            verbose: false,
             runtime_root: None,
         };
         let out = route(cmd, &g);

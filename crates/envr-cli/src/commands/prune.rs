@@ -1,4 +1,5 @@
 //! `envr prune` — uninstall installed runtime versions except the active `current` one.
+use crate::CliExit;
 
 use crate::cli::GlobalArgs;
 use crate::commands::common::kind_label;
@@ -25,7 +26,7 @@ pub(crate) fn run_inner(
     service: &RuntimeService,
     lang: Option<String>,
     execute: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match lang {
         None => ALL_KINDS.to_vec(),
         Some(l) => vec![parse_runtime_kind(l.trim())?],
@@ -58,7 +59,7 @@ pub(crate) fn run_inner(
             })
             .collect();
         let data = serde_json::json!({ "dry_run": true, "plan": rows });
-        return Ok(output::emit_ok(g, "prune_dry_run", data, || {
+        return Ok(output::emit_ok(g, crate::codes::ok::PRUNE_DRY_RUN, data, || {
             println!(
                 "{}",
                 envr_core::i18n::tr_key(
@@ -114,7 +115,7 @@ pub(crate) fn run_inner(
     }
 
     let data = serde_json::json!({ "removed": removed });
-    Ok(output::emit_ok(g, "prune_executed", data, || {
+    Ok(output::emit_ok(g, crate::codes::ok::PRUNE_EXECUTED, data, || {
         if removed.is_empty() {
             println!(
                 "{}",

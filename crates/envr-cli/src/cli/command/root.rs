@@ -11,7 +11,7 @@ use clap_complete::Shell;
 use std::path::PathBuf;
 
 // Subcommands are ordered by topic (runtime → project → data → diagnostics) to make `--help` easier to scan.
-// Clap 4 does not render multiple titled subcommand sections; see `cli_help::patch_root` `after_long_help`.
+// Clap 4 does not render multiple titled subcommand sections; see `cli::help_registry::apply_root_help` `after_long_help`.
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Install a runtime version

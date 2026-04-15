@@ -156,7 +156,10 @@ version = "20"
         fs::create_dir_all(&nested).expect("mkdir");
         let session = CliProjectContext::load(nested, None).expect("load");
         let (cfg, loc) = session.project.as_ref().expect("project");
-        assert_eq!(cfg.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("20"));
+        assert_eq!(
+            cfg.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            Some("20")
+        );
         let expect_root = fs::canonicalize(tmp.path()).expect("canonicalize root");
         assert_eq!(loc.dir, expect_root);
     }

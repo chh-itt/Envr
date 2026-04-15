@@ -10,7 +10,7 @@ pub use nested::{
 pub use root::Command;
 
 use super::metadata::{
-    metadata_for_key, CommandCapabilities, CommandKey, CommandMetadata, RuntimeHandlerGroup,
+    CommandCapabilities, CommandKey, CommandMetadata, RuntimeHandlerGroup, metadata_for_key,
 };
 
 macro_rules! command_key_arms {
@@ -106,11 +106,6 @@ impl Command {
     #[inline]
     pub(crate) fn legacy_json_shorthand(&self) -> bool {
         self.metadata().legacy_json_shorthand
-    }
-
-    #[inline]
-    pub(crate) fn is_runtime_command(&self) -> bool {
-        self.metadata().runtime_required
     }
 
     #[inline]

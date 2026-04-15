@@ -1,4 +1,6 @@
 //! `envr debug` — quick introspection for bug reports.
+use crate::CliExit;
+use crate::CliUxPolicy;
 
 use crate::cli::GlobalArgs;
 use crate::commands::common;
@@ -23,16 +25,14 @@ fn summarize_dir(path: &std::path::Path, max_entries: usize) -> Vec<String> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<i32> {
+pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     let mut envr_vars: Vec<(String, String)> = std::env::vars()
         .filter(|(k, _)| k.starts_with("ENVR_"))
         .collect();
     envr_vars.sort_by(|a, b| a.0.cmp(&b.0));
 
     let platform = current_platform_paths().ok();
-    let settings_path = platform
-        .as_ref()
-        .map(settings_path_from_platform);
+    let settings_path = platform.as_ref().map(settings_path_from_platform);
     let settings_ok = settings_path
         .as_ref()
         .map(|p| validate_settings_file(p).is_ok());
@@ -62,16 +62,13 @@ pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<i32> {
         "log_dir": log_dir,
     });
 
-    Ok(output::emit_ok(g, "debug_info", data, || {
-        if g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::DEBUG_INFO, data, || {
+        if !CliUxPolicy::from_global(g).human_text_primary() {
             return;
         }
         println!("cwd: {cwd}");
         if let Some(ref sp) = settings_path {
-            println!(
-                "settings.toml: {}",
-                sp.display(),
-            );
+            println!("settings.toml: {}", sp.display(),);
             match settings_ok {
                 Some(true) => println!("  (validate: ok)"),
                 Some(false) => println!("  (validate: FAILED — run `envr config validate`)"),

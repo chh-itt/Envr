@@ -29,11 +29,12 @@ fn resolve_envr_executable() -> std::path::PathBuf {
     const SIDE_BY_SIDE: &str = "envr";
 
     if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent() {
-            let cand = dir.join(SIDE_BY_SIDE);
-            if cand.is_file() {
-                return cand;
-            }
+        && let Some(dir) = exe.parent()
+    {
+        let cand = dir.join(SIDE_BY_SIDE);
+        if cand.is_file() {
+            return cand;
         }
+    }
     std::path::PathBuf::from("envr")
 }

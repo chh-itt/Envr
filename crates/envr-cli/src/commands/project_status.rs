@@ -1,6 +1,8 @@
 //! Shared logic for `envr status` and `envr hook prompt`.
 
-use envr_config::project_config::{ProjectConfig, ProjectConfigLocation, load_project_config_profile};
+use envr_config::project_config::{
+    ProjectConfig, ProjectConfigLocation, load_project_config_profile,
+};
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::EnvrResult;
 use envr_shim_core::{

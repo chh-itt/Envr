@@ -777,13 +777,11 @@ impl Settings {
         let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
 
         if let Some(s) = SETTINGS_FILE_CACHE.with(|c| {
-            c.borrow().get(&path).and_then(|(m2, s)| {
-                if m2 == &mtime {
-                    Some(s.clone())
-                } else {
-                    None
-                }
-            })
+            c.borrow().get(&path).and_then(
+                |(m2, s)| {
+                    if m2 == &mtime { Some(s.clone()) } else { None }
+                },
+            )
         }) {
             return Ok(s);
         }
@@ -801,8 +799,7 @@ impl Settings {
         };
 
         SETTINGS_FILE_CACHE.with(|c| {
-            c.borrow_mut()
-                .insert(path, (mtime, loaded.clone()));
+            c.borrow_mut().insert(path, (mtime, loaded.clone()));
         });
         Ok(loaded)
     }
@@ -1062,7 +1059,9 @@ fn env_locale_vars_suggest_chinese() -> bool {
 ///
 /// Order: [`sys_locale::get_locale`] (cross-platform OS API), then `LC_*` / `LANG` / `LANGUAGE`.
 pub fn system_locale_suggests_chinese() -> bool {
-    if let Some(tag) = sys_locale::get_locale() && bcp47_primary_language_is_zh(&tag) {
+    if let Some(tag) = sys_locale::get_locale()
+        && bcp47_primary_language_is_zh(&tag)
+    {
         return true;
     }
     env_locale_vars_suggest_chinese()

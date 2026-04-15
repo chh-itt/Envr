@@ -1,6 +1,8 @@
 //! Dry-run helpers: full env dump vs diff against the parent process.
 
 use crate::cli::GlobalArgs;
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::output;
 
 use serde_json::{Value, json};
@@ -97,7 +99,7 @@ pub fn emit_dry_run_snapshot(
     env_map: &HashMap<String, String>,
     command: &str,
     args: &[String],
-) -> i32 {
+) -> CliExit {
     let mut keys: Vec<_> = env_map.keys().cloned().collect();
     keys.sort();
     let mut env_obj = serde_json::Map::new();
@@ -111,8 +113,8 @@ pub fn emit_dry_run_snapshot(
         "args": args,
         "env": env_obj,
     });
-    output::emit_ok(g, "dry_run", data, || {
-        if !g.quiet {
+    output::emit_ok(g, crate::codes::ok::DRY_RUN, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 envr_core::i18n::tr_key(
@@ -138,15 +140,15 @@ pub fn emit_dry_run_diff(
     child: &HashMap<String, String>,
     command: &str,
     args: &[String],
-) -> i32 {
+) -> CliExit {
     let diff = env_diff(parent, child);
     let data = json!({
         "command": command,
         "args": args,
         "env_diff": diff,
     });
-    output::emit_ok(g, "dry_run_diff", data, || {
-        if g.quiet {
+    output::emit_ok(g, crate::codes::ok::DRY_RUN_DIFF, data, || {
+        if !CliUxPolicy::from_global(g).human_text_primary() {
             return;
         }
         println!(
@@ -160,7 +162,7 @@ pub fn emit_dry_run_diff(
         println!("  {} {}", command, shell_words_join(args));
         println!();
 
-        let styles = output::use_terminal_styles(g);
+        let styles = CliUxPolicy::from_global(g).use_rich_text_styles();
         let hl = |s: &str| {
             if styles {
                 format!("\x1b[33;1m{s}\x1b[0m")

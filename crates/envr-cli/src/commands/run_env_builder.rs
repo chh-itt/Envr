@@ -5,10 +5,8 @@
 
 use envr_config::project_config::ProjectConfig;
 use envr_error::{EnvrError, EnvrResult};
-use envr_resolver::{
-    resolve_bun_home, resolve_deno_home, resolve_go_home, resolve_php_home,
-};
-use envr_shim_core::{resolve_runtime_home_for_lang, ShimContext};
+use envr_resolver::{resolve_bun_home, resolve_deno_home, resolve_go_home, resolve_php_home};
+use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
 use std::path::PathBuf;
 
 /// Languages merged for `envr run` / `run --verbose` (fixed order; includes rust).
@@ -44,10 +42,7 @@ fn run_resolve_home_or_skip(
 /// One layer of the `run` stack after resolution (canonicalized homes).
 pub(crate) enum RunStackLang {
     RustBins(Vec<PathBuf>),
-    Runtime {
-        lang: String,
-        home: PathBuf,
-    },
+    Runtime { lang: String, home: PathBuf },
 }
 
 pub(crate) struct RunEnvStack<'a> {

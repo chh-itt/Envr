@@ -7,8 +7,7 @@ use envr_config::project_config::ProjectConfig;
 use envr_error::EnvrError;
 
 /// Languages considered by `envr run` / `envr project sync` when checking pins (fixed order).
-pub const RUNTIME_PLAN_ORDER: &[&str] =
-    &["node", "python", "java", "go", "php", "deno", "bun"];
+pub const RUNTIME_PLAN_ORDER: &[&str] = &["node", "python", "java", "go", "php", "deno", "bun"];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and
 /// [`envr_core::runtime::RuntimeService::install`] may create the missing tree.
@@ -24,8 +23,7 @@ pub fn runtime_error_might_install_fix(err: &EnvrError) -> bool {
 }
 
 fn trimmed_pin(cfg: Option<&ProjectConfig>, lang: &str) -> Option<String> {
-    cfg
-        .and_then(|c| c.runtimes.get(lang))
+    cfg.and_then(|c| c.runtimes.get(lang))
         .and_then(|r| r.version.as_deref())
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -98,11 +96,7 @@ mod tests {
     #[test]
     fn list_pinned_respects_plan_order() {
         let mut runtimes = HashMap::new();
-        for (k, v) in [
-            ("bun", "1.0"),
-            ("node", "20"),
-            ("python", "3.12"),
-        ] {
+        for (k, v) in [("bun", "1.0"), ("node", "20"), ("python", "3.12")] {
             runtimes.insert(
                 k.to_string(),
                 RuntimeConfig {
@@ -131,9 +125,7 @@ mod tests {
         let cfg = cfg_with_node_pin("20");
         let pending = plan_missing_installable_pins(Some(&cfg), |lang| {
             assert_eq!(lang, "node");
-            Err(EnvrError::Runtime(
-                "no installed version matches 20".into(),
-            ))
+            Err(EnvrError::Runtime("no installed version matches 20".into()))
         });
         assert_eq!(pending, vec![("node".to_string(), "20".to_string())]);
     }
@@ -141,9 +133,8 @@ mod tests {
     #[test]
     fn plan_skips_validation_like_errors() {
         let cfg = cfg_with_node_pin("20");
-        let pending = plan_missing_installable_pins(Some(&cfg), |_| {
-            Err(EnvrError::Validation("bad".into()))
-        });
+        let pending =
+            plan_missing_installable_pins(Some(&cfg), |_| Err(EnvrError::Validation("bad".into())));
         assert!(pending.is_empty());
     }
 

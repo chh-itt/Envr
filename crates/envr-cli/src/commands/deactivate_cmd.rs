@@ -3,6 +3,8 @@
 //! Actual restoration runs in the shell where `eval "$(envr hook …)"` is loaded: the hook script
 //! defines an `envr` function that intercepts `deactivate`/`off` and calls `_envr_hook_restore`.
 
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
@@ -11,13 +13,13 @@ use envr_error::EnvrResult;
 use serde_json::json;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     let data = json!({
         "hint": "hook_shell_only",
         "docs": "After eval \"$(envr hook bash)\" or eval \"$(envr hook zsh)\", run `envr deactivate` or `envr off` to restore saved variables. You can also call `envr_deactivate` if defined.",
     });
-    Ok(output::emit_ok(g, "deactivate_hint", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::DEACTIVATE_HINT, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             eprintln!(
                 "{}",
                 envr_core::i18n::tr_key(

@@ -1,4 +1,6 @@
 //! `envr config` — path and show for `settings.toml`.
+use crate::CliExit;
+use crate::CliUxPolicy;
 
 use crate::cli::{ConfigValueType, GlobalArgs, OutputFormat};
 use crate::output;
@@ -13,7 +15,7 @@ use std::path::Path;
 use std::process::Command;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResult<CliExit> {
     let paths = current_platform_paths()?;
     let settings_path = envr_config::settings::settings_path_from_platform(&paths);
 
@@ -27,7 +29,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "template": tpl,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, "config_schema", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SCHEMA, data, || {
                 print!("{tpl}");
             }))
         }
@@ -38,8 +40,8 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                     "valid": true,
                     "migrated": migrated,
                 });
-                Ok(output::emit_ok(g, "config_validate_ok", data, || {
-                    if !g.quiet {
+                Ok(output::emit_ok(g, crate::codes::ok::CONFIG_VALIDATE_OK, data, || {
+                    if CliUxPolicy::from_global(g).human_text_primary() {
                         println!(
                             "{}",
                             envr_core::i18n::tr_key(
@@ -60,11 +62,11 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "path": settings_path.to_string_lossy(),
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, "config_edit_ok", data, || {}))
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_EDIT_OK, data, || {}))
         }
         crate::cli::ConfigCmd::Path => {
             let data = serde_json::json!({ "path": settings_path.to_string_lossy() });
-            Ok(output::emit_ok(g, "config_path", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_PATH, data, || {
                 println!("{}", settings_path.display());
             }))
         }
@@ -75,45 +77,45 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "keys": keys,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, "config_keys", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_KEYS, data, || {
                 for k in keys {
                     println!("{k}");
                 }
             }))
         }
-        crate::cli::ConfigCmd::Get { key } => match Settings::load_or_default_from(&settings_path) {
-            Ok(st) => {
-                let v = serde_json::to_value(&st).map_err(|e| {
-                    EnvrError::Runtime(format!("json encode settings: {e}"))
-                })?;
-                let got = get_json_dotted(&v, &key);
-                let data = serde_json::json!({
-                    "path": settings_path.to_string_lossy(),
-                    "key": key,
-                    "value": got.cloned().unwrap_or(serde_json::Value::Null),
-                    "migrated": migrated,
-                });
-                Ok(output::emit_ok(g, "config_get", data, || {
-                    if let Some(val) = got {
-                        if val.is_string() {
-                            println!("{}", val.as_str().unwrap_or(""));
-                        } else {
-                            println!("{val}");
+        crate::cli::ConfigCmd::Get { key } => {
+            match Settings::load_or_default_from(&settings_path) {
+                Ok(st) => {
+                    let v = serde_json::to_value(&st)
+                        .map_err(|e| EnvrError::Runtime(format!("json encode settings: {e}")))?;
+                    let got = get_json_dotted(&v, &key);
+                    let data = serde_json::json!({
+                        "path": settings_path.to_string_lossy(),
+                        "key": key,
+                        "value": got.cloned().unwrap_or(serde_json::Value::Null),
+                        "migrated": migrated,
+                    });
+                    Ok(output::emit_ok(g, crate::codes::ok::CONFIG_GET, data, || {
+                        if let Some(val) = got {
+                            if val.is_string() {
+                                println!("{}", val.as_str().unwrap_or(""));
+                            } else {
+                                println!("{val}");
+                            }
                         }
-                    }
-                }))
+                    }))
+                }
+                Err(e) => Err(e),
             }
-            Err(e) => Err(e),
-        },
+        }
         crate::cli::ConfigCmd::Set {
             key,
             value,
             value_type,
         } => {
             let mut st = Settings::load_or_default_from(&settings_path)?;
-            let mut as_json = serde_json::to_value(&st).map_err(|e| {
-                EnvrError::Runtime(format!("json encode settings: {e}"))
-            })?;
+            let mut as_json = serde_json::to_value(&st)
+                .map_err(|e| EnvrError::Runtime(format!("json encode settings: {e}")))?;
             if get_json_dotted(&as_json, &key).is_none() {
                 let hint = suggest_key_hint(&key);
                 let msg = if let Some(h) = hint {
@@ -125,9 +127,8 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
             }
             let parsed = parse_user_value(&value, value_type)?;
             set_json_dotted(&mut as_json, &key, parsed.clone()).map_err(EnvrError::Validation)?;
-            st = serde_json::from_value(as_json).map_err(|e| {
-                EnvrError::Validation(format!("invalid value for `{key}`: {e}"))
-            })?;
+            st = serde_json::from_value(as_json)
+                .map_err(|e| EnvrError::Validation(format!("invalid value for `{key}`: {e}")))?;
             st.validate()?;
             st.save_to(&settings_path)?;
             let data = serde_json::json!({
@@ -136,7 +137,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "value": parsed,
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, "config_set", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SET, data, || {
                 println!("{}", settings_path.display());
             }))
         }
@@ -149,7 +150,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 "settings": serde_json::to_value(&st).unwrap_or(serde_json::Value::Null),
                 "migrated": migrated,
             });
-            Ok(output::emit_ok(g, "config_show", data, || {
+            Ok(output::emit_ok(g, crate::codes::ok::CONFIG_SHOW, data, || {
                 println!("{}", settings_path.display());
                 println!();
                 print!("{pretty}");
@@ -212,10 +213,8 @@ fn edit_settings_loop(g: &GlobalArgs, path: &Path, _migrated: bool) -> Result<()
     }
     let _ = ensure_migrated_settings_file(path)?;
 
-    let interactive = matches!(
-        g.effective_output_format(),
-        OutputFormat::Text
-    ) && io::stdin().is_terminal();
+    let interactive =
+        matches!(g.effective_output_format(), OutputFormat::Text) && io::stdin().is_terminal();
 
     loop {
         let editor = editor_invocation()?;
@@ -242,10 +241,7 @@ fn edit_settings_loop(g: &GlobalArgs, path: &Path, _migrated: bool) -> Result<()
                 io::stdout().flush().map_err(EnvrError::from)?;
                 let mut line = String::new();
                 io::stdin().read_line(&mut line).map_err(EnvrError::from)?;
-                let y = matches!(
-                    line.trim().to_ascii_lowercase().as_str(),
-                    "y" | "yes"
-                );
+                let y = matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes");
                 if !y {
                     return Err(e);
                 }
@@ -275,23 +271,21 @@ fn parse_user_value(
                 serde_json::Value::Bool(b)
             }
             ConfigValueType::Int => {
-                let i = trimmed.parse::<i64>().map_err(|_| {
-                    EnvrError::Validation(format!("invalid int value `{raw}`"))
-                })?;
+                let i = trimmed
+                    .parse::<i64>()
+                    .map_err(|_| EnvrError::Validation(format!("invalid int value `{raw}`")))?;
                 serde_json::Value::Number(i.into())
             }
             ConfigValueType::Float => {
-                let f = trimmed.parse::<f64>().map_err(|_| {
-                    EnvrError::Validation(format!("invalid float value `{raw}`"))
-                })?;
-                let n = serde_json::Number::from_f64(f).ok_or_else(|| {
-                    EnvrError::Validation(format!("invalid float value `{raw}`"))
-                })?;
+                let f = trimmed
+                    .parse::<f64>()
+                    .map_err(|_| EnvrError::Validation(format!("invalid float value `{raw}`")))?;
+                let n = serde_json::Number::from_f64(f)
+                    .ok_or_else(|| EnvrError::Validation(format!("invalid float value `{raw}`")))?;
                 serde_json::Value::Number(n)
             }
-            ConfigValueType::Json => serde_json::from_str::<serde_json::Value>(trimmed).map_err(
-                |_| EnvrError::Validation(format!("invalid json value `{raw}`")),
-            )?,
+            ConfigValueType::Json => serde_json::from_str::<serde_json::Value>(trimmed)
+                .map_err(|_| EnvrError::Validation(format!("invalid json value `{raw}`")))?,
         };
         return Ok(parsed);
     }
@@ -377,8 +371,8 @@ fn ensure_migrated_settings_file(path: &Path) -> Result<bool, EnvrError> {
     }
     let backup = backup_path(path);
     fs::copy(path, &backup).map_err(EnvrError::from)?;
-    let text =
-        toml::to_string_pretty(&doc).map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+    let text = toml::to_string_pretty(&doc)
+        .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
     fs::write(path, text).map_err(EnvrError::from)?;
     Ok(true)
 }

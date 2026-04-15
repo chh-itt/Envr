@@ -21,7 +21,5 @@ fn status_visible_alias_st_parses() {
 #[test]
 fn diag_expands_to_diagnostics_export_help() {
     let mut cmd = Command::cargo_bin("envr").expect("envr binary");
-    cmd.args(["diag", "--help"])
-        .assert()
-        .success();
+    cmd.args(["diag", "--help"]).assert().success();
 }

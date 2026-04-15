@@ -1,8 +1,9 @@
 use clap::CommandFactory;
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
+use envr_error::EnvrResult;
 use std::io::{self, Write};
 
-pub fn run(shell: Shell) -> i32 {
+pub fn run(shell: Shell) -> EnvrResult<crate::CliExit> {
     let mut cmd = crate::cli::Cli::command();
     let bin = cmd.get_bin_name().unwrap_or("envr").to_string();
     let mut buf = Vec::<u8>::new();
@@ -11,5 +12,5 @@ pub fn run(shell: Shell) -> i32 {
     let mut out = io::stdout().lock();
     let _ = out.write_all(header.as_bytes());
     let _ = out.write_all(&buf);
-    0
+    Ok(crate::CliExit::ok())
 }

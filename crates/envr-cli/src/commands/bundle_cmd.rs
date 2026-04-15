@@ -1,11 +1,13 @@
 //! `envr bundle` — portable offline bundle create/apply.
+use crate::CliExit;
+use crate::CliUxPolicy;
 
 use crate::cli::{BundleCmd, GlobalArgs};
 use crate::commands::common;
 use crate::output;
 
 use envr_config::project_config::{
-    load_project_config_profile, PROJECT_CONFIG_FILE, PROJECT_CONFIG_LOCAL_FILE,
+    PROJECT_CONFIG_FILE, PROJECT_CONFIG_LOCAL_FILE, load_project_config_profile,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
@@ -15,12 +17,12 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use zip::write::FileOptions;
 use zip::ZipArchive;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, cmd: BundleCmd) -> EnvrResult<i32> {
+pub(crate) fn run_inner(g: &GlobalArgs, cmd: BundleCmd) -> EnvrResult<CliExit> {
     match cmd {
         BundleCmd::Create {
             output,
@@ -68,7 +70,7 @@ fn create_inner(
     include_shims: bool,
     full: bool,
     no_current: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     if full && no_current {
         return Err(EnvrError::Validation(
             "`--full` cannot be combined with `--no-current`".to_string(),
@@ -108,10 +110,7 @@ fn create_inner(
     let mut included_versions: Vec<(RuntimeKind, String)> = Vec::new();
     for (k, spec) in &pinned_specs {
         let kind = parse_runtime_kind(k)?;
-        let resolved = service
-            .resolve(kind, &VersionSpec(spec.clone()))?
-            .version
-            .0;
+        let resolved = service.resolve(kind, &VersionSpec(spec.clone()))?.version.0;
         included_versions.push((kind, resolved));
     }
     included_versions.sort_by(|a, b| {
@@ -155,7 +154,12 @@ fn create_inner(
 
     let included_versions_manifest: Vec<(String, String)> = included_versions
         .iter()
-        .map(|(k, v)| (crate::commands::common::kind_label(*k).to_string(), v.clone()))
+        .map(|(k, v)| {
+            (
+                crate::commands::common::kind_label(*k).to_string(),
+                v.clone(),
+            )
+        })
         .collect();
 
     let manifest = serde_json::json!({
@@ -190,8 +194,8 @@ fn create_inner(
     )?;
 
     let data = serde_json::json!({ "path": bundle_zip.to_string_lossy() });
-    Ok(output::emit_ok(g, "bundle_created", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::BUNDLE_CREATED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!("{}", bundle_zip.display());
         }
     }))
@@ -202,7 +206,7 @@ fn apply_inner(
     file: PathBuf,
     runtime_root_override: Option<String>,
     index_cache_dir_override: Option<PathBuf>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     if !file.is_file() {
         return Err(EnvrError::Validation(format!(
             "bundle file not found: {}",
@@ -231,14 +235,15 @@ fn apply_inner(
 
     extract_bundle_zip(&file, tmp.path())?;
 
-    let manifest_path = tmp
-        .path()
-        .join("envr-bundle")
-        .join("manifest.json");
+    let manifest_path = tmp.path().join("envr-bundle").join("manifest.json");
     let manifest = fs::read_to_string(&manifest_path).ok();
 
     // Copy runtimes
-    let src_runtimes = tmp.path().join("envr-bundle").join("runtime_root").join("runtimes");
+    let src_runtimes = tmp
+        .path()
+        .join("envr-bundle")
+        .join("runtime_root")
+        .join("runtimes");
     if src_runtimes.is_dir() {
         let dst = runtime_root.join("runtimes");
         copy_dir_merge(&src_runtimes, &dst)?;
@@ -255,7 +260,11 @@ fn apply_inner(
     }
 
     // Copy shims
-    let src_shims = tmp.path().join("envr-bundle").join("runtime_root").join("shims");
+    let src_shims = tmp
+        .path()
+        .join("envr-bundle")
+        .join("runtime_root")
+        .join("shims");
     if src_shims.is_dir() {
         let dst = runtime_root.join("shims");
         copy_dir_merge(&src_shims, &dst)?;
@@ -266,26 +275,27 @@ fn apply_inner(
     // `CliRuntimeSession::connect` / `common::runtime_service` here.
     if let Some(m) = manifest
         && let Ok(v) = serde_json::from_str::<serde_json::Value>(&m)
-            && let Some(list) = v.get("global_current").and_then(|x| x.as_array())
-                && let Ok(svc) = RuntimeService::with_runtime_root(runtime_root.clone()) {
-                    for item in list {
-                        let kind_str = item.get(0).and_then(|x| x.as_str()).unwrap_or("");
-                        let ver = item.get(1).and_then(|x| x.as_str()).unwrap_or("");
-                        if kind_str.is_empty() || ver.is_empty() {
-                            continue;
-                        }
-                        if let Ok(kind) = parse_runtime_kind(kind_str) {
-                            let _ = svc.set_current(kind, &RuntimeVersion(ver.to_string()));
-                        }
-                    }
-                }
+        && let Some(list) = v.get("global_current").and_then(|x| x.as_array())
+        && let Ok(svc) = RuntimeService::with_runtime_root(runtime_root.clone())
+    {
+        for item in list {
+            let kind_str = item.get(0).and_then(|x| x.as_str()).unwrap_or("");
+            let ver = item.get(1).and_then(|x| x.as_str()).unwrap_or("");
+            if kind_str.is_empty() || ver.is_empty() {
+                continue;
+            }
+            if let Ok(kind) = parse_runtime_kind(kind_str) {
+                let _ = svc.set_current(kind, &RuntimeVersion(ver.to_string()));
+            }
+        }
+    }
 
     let data = serde_json::json!({
         "runtime_root": runtime_root.to_string_lossy(),
         "index_cache_dir": index_cache_dir.to_string_lossy(),
     });
-    Ok(output::emit_ok(g, "bundle_applied", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::BUNDLE_APPLIED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!("{}", runtime_root.display());
         }
     }))
@@ -339,14 +349,20 @@ fn write_bundle_zip(
             .map_err(|e| EnvrError::Runtime(format!("serialize bundle location: {e}")))?;
         zip.start_file("envr-bundle/project/location.json", opts)
             .map_err(|e| EnvrError::Runtime(format!("zip location.json: {e}")))?;
-        zip.write_all(loc_text.as_bytes()).map_err(EnvrError::from)?;
+        zip.write_all(loc_text.as_bytes())
+            .map_err(EnvrError::from)?;
     }
 
     // Runtimes
     let runtimes_dir = runtime_root.join("runtimes");
     if full {
         if runtimes_dir.is_dir() {
-            add_dir_to_zip(&mut zip, opts, &runtimes_dir, "envr-bundle/runtime_root/runtimes")?;
+            add_dir_to_zip(
+                &mut zip,
+                opts,
+                &runtimes_dir,
+                "envr-bundle/runtime_root/runtimes",
+            )?;
         }
     } else {
         // Precise: include only required version directories.
@@ -362,9 +378,10 @@ fn write_bundle_zip(
 
     // Index cache (offline indexes)
     if let Some(idx) = index_cache_dir
-        && idx.is_dir() {
-            add_dir_to_zip(&mut zip, opts, idx, "envr-bundle/index_cache/indexes")?;
-        }
+        && idx.is_dir()
+    {
+        add_dir_to_zip(&mut zip, opts, idx, "envr-bundle/index_cache/indexes")?;
+    }
 
     // Shims (optional)
     if include_shims {
@@ -444,8 +461,8 @@ fn bundle_zip_entry_name_unsafe(name: &str) -> bool {
 
 fn extract_bundle_zip(zip_path: &Path, dest: &Path) -> Result<(), EnvrError> {
     let file = File::open(zip_path).map_err(EnvrError::from)?;
-    let mut zip = ZipArchive::new(file)
-        .map_err(|e| EnvrError::Runtime(format!("open bundle zip: {e}")))?;
+    let mut zip =
+        ZipArchive::new(file).map_err(|e| EnvrError::Runtime(format!("open bundle zip: {e}")))?;
     for i in 0..zip.len() {
         let mut f = zip
             .by_index(i)
@@ -516,4 +533,3 @@ mod bundle_zip_path_proptests {
         }
     }
 }
-

@@ -1,12 +1,14 @@
 //! Supplemental CLI help (`envr help …`).
+use crate::CliExit;
+use crate::CliUxPolicy;
 
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 use crate::output;
 use envr_error::EnvrResult;
 use serde_json::json;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<i32> {
+pub(crate) fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     let note = envr_core::i18n::tr_key(
         "cli.help.shortcuts.note",
         "以上在 clap 解析之前改写 argv。用户自定义名称见 runtime root 下 config/aliases.toml（优先级高于内置简写）。",
@@ -20,8 +22,8 @@ pub(crate) fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<i32> {
         "builtin_shorthands": rows,
         "note": note,
     });
-    Ok(output::emit_ok(g, "help_shortcuts", data, || {
-        if g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::HELP_SHORTCUTS, data, || {
+        if !CliUxPolicy::from_global(g).human_text_primary() {
             return;
         }
         println!(
@@ -37,18 +39,13 @@ pub(crate) fn shortcuts_inner(g: &GlobalArgs) -> EnvrResult<i32> {
         }
         println!();
         println!("{note}");
-        if matches!(
-            g.effective_output_format(),
-            OutputFormat::Text
-        ) {
-            println!(
-                "{}",
-                envr_core::i18n::tr_key(
-                    "cli.help.shortcuts.completion_hint",
-                    "补全脚本在文件头注释中指向本主题：`envr completion <shell>`",
-                    "Completion scripts include a header comment pointing here: `envr completion <shell>`",
-                )
-            );
-        }
+        println!(
+            "{}",
+            envr_core::i18n::tr_key(
+                "cli.help.shortcuts.completion_hint",
+                "补全脚本在文件头注释中指向本主题：`envr completion <shell>`",
+                "Completion scripts include a header comment pointing here: `envr completion <shell>`",
+            )
+        );
     }))
 }

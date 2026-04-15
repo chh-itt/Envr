@@ -592,7 +592,7 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| EnvrError::Download(e.to_string()))?;
         if n == 0 {
             break;
         }

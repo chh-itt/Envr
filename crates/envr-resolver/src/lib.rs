@@ -16,10 +16,10 @@ pub use merge_env::{
     runtime_bin_dirs, version_label_from_runtime_home,
 };
 pub use missing_pins::{
-    list_pinned_runtime_specs, plan_missing_installable_pins, runtime_error_might_install_fix,
-    RUNTIME_PLAN_ORDER,
+    RUNTIME_PLAN_ORDER, list_pinned_runtime_specs, plan_missing_installable_pins,
+    runtime_error_might_install_fix,
 };
-pub use pin_spec::{parse_runtime_pin_spec, runtime_kind_toml_key, RuntimePinSpec};
+pub use pin_spec::{RuntimePinSpec, parse_runtime_pin_spec, runtime_kind_toml_key};
 pub use project_file::upsert_runtime_pin;
 pub use run_home::{
     resolve_bun_home, resolve_deno_home, resolve_exec_lang_home, resolve_go_home, resolve_php_home,

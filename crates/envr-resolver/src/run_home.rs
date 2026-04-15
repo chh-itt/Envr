@@ -6,7 +6,7 @@
 
 use envr_config::project_config::ProjectConfig;
 use envr_error::{EnvrError, EnvrResult};
-use envr_shim_core::{pick_version_home, resolve_runtime_home_for_lang, ShimContext};
+use envr_shim_core::{ShimContext, pick_version_home, resolve_runtime_home_for_lang};
 use std::path::PathBuf;
 
 fn pinned_or_override<'a>(

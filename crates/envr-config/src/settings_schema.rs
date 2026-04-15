@@ -14,6 +14,7 @@ mod tests {
     fn schema_template_roundtrips_parse() {
         let raw = settings_toml_schema_template_zh();
         let s: Settings = toml::from_str(raw).expect("commented schema template must deserialize");
-        s.validate().expect("schema template must satisfy Settings::validate");
+        s.validate()
+            .expect("schema template must satisfy Settings::validate");
     }
 }

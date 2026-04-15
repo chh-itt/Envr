@@ -34,6 +34,10 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub debug: bool,
 
+    /// Emit detailed step logs for write operations to stderr.
+    #[arg(long, global = true)]
+    pub verbose: bool,
+
     /// Override runtime root directory (sets `ENVR_RUNTIME_ROOT`).
     #[arg(long, global = true, value_name = "PATH")]
     pub runtime_root: Option<String>,

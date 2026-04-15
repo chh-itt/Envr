@@ -2,6 +2,11 @@
 """
 Generate schemas/cli/index.json from envr-cli source literals.
 
+Collects success `success_codes` from:
+  - emit_ok(..., "token", ...)
+  - write_envelope(true, "token", ...)
+  - emit_doctor(g, ok, "token", ...)  (doctor success path; `code` arg)
+
 Usage:
   python scripts/generate_cli_schema_index.py
   python scripts/generate_cli_schema_index.py --check
@@ -21,22 +26,27 @@ INDEX_PATH = ROOT / "schemas" / "cli" / "index.json"
 
 EMIT_OK_RE = re.compile(r'emit_ok\([^,]+,\s*"([a-zA-Z0-9_]+)"')
 WRITE_ENVELOPE_OK_RE = re.compile(
-    r'write_envelope\(\s*true\s*,\s*None\s*,\s*"([a-zA-Z0-9_]+)"'
+    r'write_envelope\(\s*true\s*,\s*"([a-zA-Z0-9_]+)"'
+)
+# `emit_doctor(g, ok, "doctor_ok", ...)` success path (third arg is the envelope code).
+EMIT_DOCTOR_OK_RE = re.compile(
+    r'emit_doctor\(\s*g\s*,\s*ok\s*,\s*"([a-zA-Z0-9_]+)"'
 )
 EMIT_FAILURE_RE = re.compile(r'emit_failure_envelope\([^"]*"([a-zA-Z0-9_]+)"')
 
 
 def collect_source_literals() -> tuple[list[str], list[str]]:
-    data_messages: set[str] = set()
+    success_codes: set[str] = set()
     failure_codes: set[str] = set()
 
     for path in sorted(CLI_SRC.rglob("*.rs")):
         src = path.read_text(encoding="utf-8", errors="replace")
-        data_messages.update(m.group(1) for m in EMIT_OK_RE.finditer(src))
-        data_messages.update(m.group(1) for m in WRITE_ENVELOPE_OK_RE.finditer(src))
+        success_codes.update(m.group(1) for m in EMIT_OK_RE.finditer(src))
+        success_codes.update(m.group(1) for m in WRITE_ENVELOPE_OK_RE.finditer(src))
+        success_codes.update(m.group(1) for m in EMIT_DOCTOR_OK_RE.finditer(src))
         failure_codes.update(m.group(1) for m in EMIT_FAILURE_RE.finditer(src))
 
-    return sorted(data_messages), sorted(failure_codes)
+    return sorted(success_codes), sorted(failure_codes)
 
 
 def main() -> int:
@@ -48,10 +58,10 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    data_messages, failure_codes = collect_source_literals()
+    success_codes, failure_codes = collect_source_literals()
     generated = {
         "version": 1,
-        "data_messages": data_messages,
+        "success_codes": success_codes,
         "failure_codes": failure_codes,
     }
     rendered = json.dumps(generated, indent=2) + "\n"

@@ -2,9 +2,9 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_NODE_INDEX_JSON_URL, NodeRelease, NodeRemoteRow, blocking_http_client, fetch_node_index,
-    list_node_remote_rows, list_remote_versions, node_version_v_prefix, normalize_node_version,
-    parse_node_index, release_has_platform, resolve_node_version,
+    DEFAULT_NODE_INDEX_JSON_URL, NodeRelease, NodeRemoteRow, blocking_http_client,
+    fetch_node_index, list_node_remote_rows, list_remote_versions, node_version_v_prefix,
+    normalize_node_version, parse_node_index, release_has_platform, resolve_node_version,
 };
 pub use manager::{
     NodeManager, NodePaths, dist_root_from_index_json_url, list_installed_versions,

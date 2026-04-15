@@ -3,10 +3,14 @@
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-const METRICS_EVENT_SCHEMA: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schemas/cli/metrics-event.json"));
-const OUTPUT_CONTRACT_DOC: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/cli/output-contract.md"));
+const METRICS_EVENT_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/metrics-event.json"
+));
+const OUTPUT_CONTRACT_DOC: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/cli/output-contract.md"
+));
 
 fn schema_property_names() -> BTreeSet<String> {
     let schema_src = METRICS_EVENT_SCHEMA.trim_start_matches('\u{feff}');
@@ -66,7 +70,10 @@ fn docs_table_captures_required_phase_specific_fields() {
             .get(field)
             .unwrap_or_else(|| panic!("missing required field row `{field}` in metrics table"));
         assert_eq!(cols[2], "yes", "field `{field}` must be marked required");
-        assert_eq!(cols[3], "all", "field `{field}` must be marked as all phases");
+        assert_eq!(
+            cols[3], "all",
+            "field `{field}` must be marked as all phases"
+        );
     }
 
     let parse_only = doc_rows.get("quiet").expect("missing `quiet` row");
@@ -77,8 +84,9 @@ fn docs_table_captures_required_phase_specific_fields() {
     assert_eq!(dispatch_command[2], "yes");
     assert_eq!(dispatch_command[3], "dispatch");
 
-    let dispatch_elapsed = doc_rows.get("elapsed_ms").expect("missing `elapsed_ms` row");
+    let dispatch_elapsed = doc_rows
+        .get("elapsed_ms")
+        .expect("missing `elapsed_ms` row");
     assert_eq!(dispatch_elapsed[2], "yes");
     assert_eq!(dispatch_elapsed[3], "dispatch");
 }
-

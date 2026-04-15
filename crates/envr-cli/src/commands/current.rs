@@ -1,9 +1,12 @@
 use crate::cli::GlobalArgs;
+use crate::CliExit;
+use crate::CliUxPolicy;
+use crate::app;
 use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
+use envr_domain::runtime::RuntimeKind;
 use envr_error::EnvrResult;
 use serde_json::Value;
 
@@ -23,10 +26,10 @@ pub(crate) fn run_inner(
     g: &GlobalArgs,
     service: &RuntimeService,
     runtime: Option<String>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
-        Some(l) => vec![parse_runtime_kind(l.trim())?],
+        Some(l) => vec![app::runtime_installation::parse_kind(&l)?],
     };
 
     let mut rows: Vec<(RuntimeKind, Option<String>)> = Vec::with_capacity(kinds.len());
@@ -60,8 +63,9 @@ pub(crate) fn run_inner(
     // JSON `data.active_versions`: one row per runtime kind (see `schemas/cli/data/show_current.json`).
     let data = serde_json::json!({ "active_versions": runtimes });
 
-    Ok(output::emit_ok(g, "show_current", data, || {
-        if output::wants_porcelain(g) {
+    Ok(output::emit_ok(g, crate::codes::ok::SHOW_CURRENT, data, || {
+        let ux = CliUxPolicy::from_global(g);
+        if ux.wants_porcelain_lines() {
             if rows.len() == 1 {
                 if let Some(v) = rows[0].1.as_deref() {
                     println!("{v}");
@@ -90,7 +94,7 @@ pub(crate) fn run_inner(
                         ),
                         &[("kind", k), ("version", v.as_str())],
                     );
-                    if output::use_terminal_styles(g) {
+                    if ux.use_rich_text_styles() {
                         println!("\x1b[2m{k}\x1b[0m: \x1b[32;1m{v}\x1b[0m");
                     } else {
                         println!("{line}");
@@ -116,7 +120,7 @@ pub(crate) fn run_inner(
                         ),
                         &[("kind", k)],
                     );
-                    if output::use_terminal_styles(g) {
+                    if ux.use_rich_text_styles() {
                         println!("\x1b[2m  {hint}\x1b[0m");
                     } else {
                         println!("  {hint}");

@@ -23,8 +23,8 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::EnvrResult;
-use std::path::PathBuf;
 use envr_platform::paths::current_platform_paths;
+use std::path::PathBuf;
 
 /// JDK runtime provider (Adoptium Temurin: index, download, `current`, `JAVA_HOME` marker file).
 pub struct JavaRuntimeProvider {

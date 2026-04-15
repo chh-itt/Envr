@@ -1,3 +1,5 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output;
@@ -15,7 +17,7 @@ pub(crate) fn clean_inner(
     older_than: Option<String>,
     newer_than: Option<String>,
     dry_run: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     clean_impl(g, kind, all, older_than, newer_than, dry_run)
 }
 
@@ -26,7 +28,7 @@ fn clean_impl(
     older_than: Option<String>,
     newer_than: Option<String>,
     dry_run: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let root = common::effective_runtime_root()?;
 
     let target = match (
@@ -51,13 +53,11 @@ fn clean_impl(
         .map(|s| s.to_string());
 
     if newer_raw.is_some() && older_raw.is_none() {
-        return Err(EnvrError::Validation(
-            envr_core::i18n::tr_key(
-                "cli.err.cache_newer_than_requires_older",
-                "`--newer-than` 必须与 `--older-than` 同时使用。",
-                "`--newer-than` requires `--older-than`.",
-            ),
-        ));
+        return Err(EnvrError::Validation(envr_core::i18n::tr_key(
+            "cli.err.cache_newer_than_requires_older",
+            "`--newer-than` 必须与 `--older-than` 同时使用。",
+            "`--newer-than` requires `--older-than`.",
+        )));
     }
 
     if let Some(ref spec) = older_raw {
@@ -68,34 +68,23 @@ fn clean_impl(
             None
         };
         if let Some(an) = age_new
-            && an <= age_old {
-                return Err(EnvrError::Validation(
-                    envr_core::i18n::tr_key(
-                        "cli.err.cache_age_window_invalid",
-                        "`--newer-than` 必须比 `--older-than` 更长（更久以前），例如 `--newer-than 90d --older-than 30d`。",
-                        "`--newer-than` must be a longer age than `--older-than` (further in the past), e.g. `--newer-than 90d --older-than 30d`.",
-                    ),
-                ));
-            }
+            && an <= age_old
+        {
+            return Err(EnvrError::Validation(envr_core::i18n::tr_key(
+                "cli.err.cache_age_window_invalid",
+                "`--newer-than` 必须比 `--older-than` 更长（更久以前），例如 `--newer-than 90d --older-than 30d`。",
+                "`--newer-than` must be a longer age than `--older-than` (further in the past), e.g. `--newer-than 90d --older-than 30d`.",
+            )));
+        }
 
         let now = SystemTime::now();
-        let cutoff_old = now
-            .checked_sub(age_old)
-            .unwrap_or(SystemTime::UNIX_EPOCH);
-        let cutoff_new = age_new.map(|d| {
-            now.checked_sub(d)
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-        });
+        let cutoff_old = now.checked_sub(age_old).unwrap_or(SystemTime::UNIX_EPOCH);
+        let cutoff_new = age_new.map(|d| now.checked_sub(d).unwrap_or(SystemTime::UNIX_EPOCH));
 
         if !target.exists() {
-            let data = prune_missing_json(
-                &target,
-                spec,
-                newer_raw.as_deref(),
-                dry_run,
-            );
-            return Ok(output::emit_ok(g, "cache_cleaned", data, || {
-                if !g.quiet {
+            let data = prune_missing_json(&target, spec, newer_raw.as_deref(), dry_run);
+            return Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
                     println!(
                         "{}",
                         envr_core::i18n::tr_key(
@@ -120,24 +109,10 @@ fn clean_impl(
         }
 
         let (n, b) = prune_cache_by_age(&target, cutoff_old, cutoff_new, dry_run)?;
-        let data = prune_result_json(
-            &target,
-            spec,
-            newer_raw.as_deref(),
-            dry_run,
-            n,
-            b,
-        );
-        Ok(output::emit_ok(g, "cache_cleaned", data, || {
-            if !g.quiet {
-                print_prune_human(
-                    &target,
-                    spec,
-                    newer_raw.as_deref(),
-                    dry_run,
-                    n,
-                    b,
-                );
+        let data = prune_result_json(&target, spec, newer_raw.as_deref(), dry_run, n, b);
+        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                print_prune_human(&target, spec, newer_raw.as_deref(), dry_run, n, b);
             }
         }))
     } else if dry_run {
@@ -149,8 +124,8 @@ fn clean_impl(
                 "files_would_remove": 0u64,
                 "bytes_would_free": 0u64,
             });
-            return Ok(output::emit_ok(g, "cache_cleaned", data, || {
-                if !g.quiet {
+            return Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
                     println!(
                         "{}",
                         envr_core::i18n::tr_key(
@@ -180,8 +155,8 @@ fn clean_impl(
             "files_would_remove": files,
             "bytes_would_free": bytes,
         });
-        Ok(output::emit_ok(g, "cache_cleaned", data, || {
-            if !g.quiet {
+        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
                 println!(
                     "{}",
                     crate::output::fmt_template(
@@ -205,20 +180,20 @@ fn clean_impl(
             "removed": target.to_string_lossy(),
             "mode": "remove_tree",
         });
-        Ok(output::emit_ok(g, "cache_cleaned", data, || {
-                if !g.quiet {
-                    println!(
-                        "{}",
-                        crate::output::fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.cache.removed",
-                                "已移除缓存：{path}",
-                                "cache removed: {path}",
-                            ),
-                            &[("path", &target.display().to_string())],
-                        )
-                    );
-                }
+        Ok(output::emit_ok(g, crate::codes::ok::CACHE_CLEANED, data, || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    crate::output::fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.cache.removed",
+                            "已移除缓存：{path}",
+                            "cache removed: {path}",
+                        ),
+                        &[("path", &target.display().to_string())],
+                    )
+                );
+            }
         }))
     }
 }
@@ -359,18 +334,16 @@ fn print_prune_human(
 /// Parse `<n><unit>` with units `s|m|h|d|w` (ASCII, case-insensitive) plus common long forms (`days`, `hours`, …).
 fn parse_duration_spec(raw: &str) -> Result<Duration, EnvrError> {
     let s = raw.trim();
-    let pos = s
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(s.len());
+    let pos = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
     if pos == 0 || pos == s.len() {
         return Err(EnvrError::Validation(format!(
             "invalid duration {s:?}: expected e.g. 30d, 24h, 90m, 3600s, 1w (see help)"
         )));
     }
     let (num_s, rest) = s.split_at(pos);
-    let num: u64 = num_s.parse().map_err(|_| {
-        EnvrError::Validation(format!("invalid number in duration {s:?}"))
-    })?;
+    let num: u64 = num_s
+        .parse()
+        .map_err(|_| EnvrError::Validation(format!("invalid number in duration {s:?}")))?;
     if num == 0 {
         return Err(EnvrError::Validation(
             "duration must be positive (non-zero)".into(),
@@ -437,17 +410,19 @@ fn prune_files_recursive(
     if path.is_file() {
         let meta = fs::metadata(path).map_err(EnvrError::from)?;
         if let Ok(mtime) = meta.modified()
-            && mtime < cutoff_old && cutoff_new.map(|cn| mtime > cn).unwrap_or(true) {
-                let len = meta.len();
-                if dry_run {
-                    *files_removed = files_removed.saturating_add(1);
-                    *bytes_freed = bytes_freed.saturating_add(len);
-                } else {
-                    fs::remove_file(path).map_err(EnvrError::from)?;
-                    *files_removed = files_removed.saturating_add(1);
-                    *bytes_freed = bytes_freed.saturating_add(len);
-                }
+            && mtime < cutoff_old
+            && cutoff_new.map(|cn| mtime > cn).unwrap_or(true)
+        {
+            let len = meta.len();
+            if dry_run {
+                *files_removed = files_removed.saturating_add(1);
+                *bytes_freed = bytes_freed.saturating_add(len);
+            } else {
+                fs::remove_file(path).map_err(EnvrError::from)?;
+                *files_removed = files_removed.saturating_add(1);
+                *bytes_freed = bytes_freed.saturating_add(len);
             }
+        }
         return Ok(());
     }
     if path.is_dir() {
@@ -514,7 +489,7 @@ fn dir_is_empty(path: &Path) -> EnvrResult<bool> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn index_inner(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> EnvrResult<i32> {
+pub(crate) fn index_inner(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> EnvrResult<CliExit> {
     match sub {
         crate::cli::CacheIndexCmd::Sync { runtime, all, dir } => {
             index_sync_inner(g, runtime, all, dir)
@@ -528,7 +503,9 @@ fn index_cache_dir(dir_override: Option<PathBuf>) -> Result<PathBuf, EnvrError> 
         return Ok(d);
     }
     let platform = envr_platform::paths::current_platform_paths()?;
-    Ok(envr_platform::paths::index_cache_dir_from_platform(&platform))
+    Ok(envr_platform::paths::index_cache_dir_from_platform(
+        &platform,
+    ))
 }
 
 fn index_sync_inner(
@@ -536,7 +513,7 @@ fn index_sync_inner(
     runtime: Option<String>,
     all: bool,
     dir: Option<PathBuf>,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let cache_dir = index_cache_dir(dir)?;
 
     // Temporarily override index cache dir for this process.
@@ -600,8 +577,8 @@ fn index_sync_inner(
         "dir": cache_dir.to_string_lossy(),
         "synced": synced,
     });
-    Ok(output::emit_ok(g, "cache_index_synced", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::CACHE_INDEX_SYNCED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 crate::output::fmt_template(
@@ -617,7 +594,7 @@ fn index_sync_inner(
     }))
 }
 
-fn index_status_inner(g: &GlobalArgs, dir: Option<PathBuf>) -> EnvrResult<i32> {
+fn index_status_inner(g: &GlobalArgs, dir: Option<PathBuf>) -> EnvrResult<CliExit> {
     let cache_dir = index_cache_dir(dir)?;
     let report = build_index_status(cache_dir.as_path());
     let entries_json: Vec<serde_json::Value> = report
@@ -634,15 +611,14 @@ fn index_status_inner(g: &GlobalArgs, dir: Option<PathBuf>) -> EnvrResult<i32> {
         "dir": cache_dir.to_string_lossy(),
         "entries": entries_json,
     });
-    Ok(output::emit_ok(g, "cache_index_status", data, || {
+    Ok(output::emit_ok(g, crate::codes::ok::CACHE_INDEX_STATUS, data, || {
         println!("{}", cache_dir.display());
         for r in report {
             println!(
                 "{}\t{}\t{}",
                 r.runtime,
                 r.files,
-                r
-                    .newest_mtime_unix_secs
+                r.newest_mtime_unix_secs
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "-".to_string())
             );
@@ -740,12 +716,30 @@ mod parse_duration_tests {
 
     #[test]
     fn parses_days_hours_minutes_seconds_weeks() {
-        assert_eq!(parse_duration_spec("30d").unwrap(), Duration::from_secs(30 * 86_400));
-        assert_eq!(parse_duration_spec("24h").unwrap(), Duration::from_secs(24 * 3600));
-        assert_eq!(parse_duration_spec("90m").unwrap(), Duration::from_secs(90 * 60));
-        assert_eq!(parse_duration_spec("3600s").unwrap(), Duration::from_secs(3600));
-        assert_eq!(parse_duration_spec("1w").unwrap(), Duration::from_secs(7 * 86_400));
-        assert_eq!(parse_duration_spec("2days").unwrap(), Duration::from_secs(2 * 86_400));
+        assert_eq!(
+            parse_duration_spec("30d").unwrap(),
+            Duration::from_secs(30 * 86_400)
+        );
+        assert_eq!(
+            parse_duration_spec("24h").unwrap(),
+            Duration::from_secs(24 * 3600)
+        );
+        assert_eq!(
+            parse_duration_spec("90m").unwrap(),
+            Duration::from_secs(90 * 60)
+        );
+        assert_eq!(
+            parse_duration_spec("3600s").unwrap(),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(
+            parse_duration_spec("1w").unwrap(),
+            Duration::from_secs(7 * 86_400)
+        );
+        assert_eq!(
+            parse_duration_spec("2days").unwrap(),
+            Duration::from_secs(2 * 86_400)
+        );
     }
 
     #[test]

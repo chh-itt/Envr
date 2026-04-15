@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "data_messages": [
+  "success_codes": [
     "alias_added",
     "alias_list",
     "alias_removed",
@@ -24,6 +24,8 @@
     "deactivate_hint",
     "debug_info",
     "diagnostics_export_ok",
+    "doctor_issues",
+    "doctor_ok",
     "dry_run",
     "dry_run_diff",
     "help_shortcuts",

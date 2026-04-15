@@ -46,7 +46,11 @@ impl ShimContext {
     }
 
     /// Build context with an explicit runtime data root (CLI session cache, tests, shims).
-    pub fn with_runtime_root(runtime_root: PathBuf, working_dir: PathBuf, profile: Option<String>) -> Self {
+    pub fn with_runtime_root(
+        runtime_root: PathBuf,
+        working_dir: PathBuf,
+        profile: Option<String>,
+    ) -> Self {
         Self {
             runtime_root,
             working_dir,
@@ -124,7 +128,8 @@ pub fn core_command_uses_path_proxy_bypass(cmd: CoreCommand) -> bool {
     {
         return true;
     }
-    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk() {
+    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !java_path_proxy_enabled_from_disk()
+    {
         return true;
     }
     if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !go_path_proxy_enabled_from_disk() {
@@ -160,7 +165,8 @@ pub fn which_runtime_detail(
     executable: &Path,
 ) -> EnvrResult<WhichRuntimeDetail> {
     if core_command_uses_path_proxy_bypass(cmd) {
-        let version = envr_version_dir_from_executable(executable).unwrap_or_else(|| "system".into());
+        let version =
+            envr_version_dir_from_executable(executable).unwrap_or_else(|| "system".into());
         return Ok(WhichRuntimeDetail {
             version,
             source: WhichRuntimeSource::PathProxyBypass,

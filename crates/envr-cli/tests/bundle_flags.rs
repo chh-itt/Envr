@@ -15,4 +15,3 @@ fn bundle_create_rejects_full_and_no_current() {
         .assert()
         .failure();
 }
-

@@ -8,8 +8,10 @@
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-const OUTPUT_CONTRACT_DOC: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/cli/output-contract.md"));
+const OUTPUT_CONTRACT_DOC: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/cli/output-contract.md"
+));
 
 fn load_schema(name: &str) -> Value {
     let src = match name {
@@ -77,7 +79,10 @@ fn parse_tier_codes_from_docs() -> BTreeMap<String, Vec<String>> {
             if tok.is_empty() {
                 continue;
             }
-            if tok.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+            if tok
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            {
                 codes.push(tok.to_string());
             }
         }
@@ -94,7 +99,11 @@ fn schema_types(schema: &Value) -> BTreeSet<String> {
             Value::String(s) => [s.clone()].into_iter().collect(),
             Value::Array(a) => a
                 .iter()
-                .map(|v| v.as_str().expect("type array entries are strings").to_string())
+                .map(|v| {
+                    v.as_str()
+                        .expect("type array entries are strings")
+                        .to_string()
+                })
                 .collect(),
             _ => panic!("unexpected schema type: {t:?}"),
         };
@@ -178,4 +187,3 @@ fn tier2_failure_data_schemas_allow_null() {
         );
     }
 }
-

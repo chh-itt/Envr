@@ -61,7 +61,7 @@ fn json_config_path_emits_envelope() {
     let v = parse_json_line(&out.stdout);
     assert_envelope_core(&v);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "config_path");
+    assert_eq!(v["code"], "config_path");
     assert!(v["data"]["path"].is_string());
 }
 
@@ -116,7 +116,11 @@ fn porcelain_resolve_single_line_runtime_home() {
         String::from_utf8_lossy(&out.stderr)
     );
     let text = String::from_utf8_lossy(&out.stdout);
-    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
     assert_eq!(lines.len(), 1, "porcelain resolve: one line, got: {text:?}");
     assert!(
         lines[0].contains("runtimes") && lines[0].contains("20.10.0"),
@@ -159,8 +163,16 @@ fn porcelain_which_single_line_executable_path() {
         String::from_utf8_lossy(&out.stderr)
     );
     let text = String::from_utf8_lossy(&out.stdout);
-    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    assert_eq!(lines.len(), 1, "porcelain which: one stdout line, got: {text:?}");
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "porcelain which: one stdout line, got: {text:?}"
+    );
     let p = std::path::Path::new(lines[0]);
     assert!(p.is_absolute(), "expected absolute path: {:?}", lines[0]);
 }
@@ -186,10 +198,7 @@ fn porcelain_list_all_runtimes_tab_lines_when_no_runtime_filter() {
         String::from_utf8_lossy(&out.stderr)
     );
     let text = String::from_utf8_lossy(&out.stdout);
-    let node_lines: Vec<&str> = text
-        .lines()
-        .filter(|l| l.starts_with("node\t"))
-        .collect();
+    let node_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("node\t")).collect();
     assert!(
         node_lines.len() >= 2,
         "expected at least two node\\t lines, got:\n{text}"

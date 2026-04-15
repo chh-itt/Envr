@@ -1,3 +1,5 @@
+use crate::CliExit;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
 
@@ -82,11 +84,7 @@ fn prompt_version(stdin: &mut dyn BufRead, default: &str) -> String {
     let _ = io::stderr().flush();
     let line = read_line(stdin);
     let v = trim_version_input(&line);
-    if v.is_empty() {
-        default.to_string()
-    } else {
-        v
-    }
+    if v.is_empty() { default.to_string() } else { v }
 }
 
 fn maybe_pin_runtime(
@@ -110,26 +108,22 @@ fn runtime_block(kind: &str, v: &str) -> EnvrResult<String> {
     if v.chars()
         .any(|c| matches!(c, '"' | '\\' | '\n' | '\r' | '[' | ']'))
     {
-        return Err(EnvrError::Validation(
-            envr_core::i18n::tr_key(
-                "cli.err.init_version_chars",
-                "版本字符串包含不允许的字符（请使用字母、数字和 .-+_ 等）。",
-                "version string contains disallowed characters (use letters, digits, and .-+_ etc.).",
-            ),
-        ));
+        return Err(EnvrError::Validation(envr_core::i18n::tr_key(
+            "cli.err.init_version_chars",
+            "版本字符串包含不允许的字符（请使用字母、数字和 .-+_ 等）。",
+            "version string contains disallowed characters (use letters, digits, and .-+_ etc.).",
+        )));
     }
     Ok(format!("[runtimes.{kind}]\nversion = \"{v}\"\n\n"))
 }
 
 fn interactive_toml() -> EnvrResult<String> {
     if !io::stdin().is_terminal() {
-        return Err(EnvrError::Validation(
-            envr_core::i18n::tr_key(
-                "cli.err.init_interactive_tty",
-                "`envr init --interactive` 需要交互式终端（TTY）。",
-                "`envr init --interactive` requires an interactive terminal (TTY).",
-            ),
-        ));
+        return Err(EnvrError::Validation(envr_core::i18n::tr_key(
+            "cli.err.init_interactive_tty",
+            "`envr init --interactive` 需要交互式终端（TTY）。",
+            "`envr init --interactive` requires an interactive terminal (TTY).",
+        )));
     }
     let mut stdin = io::stdin().lock();
     eprintln!(
@@ -141,7 +135,8 @@ fn interactive_toml() -> EnvrResult<String> {
         )
     );
 
-    let mut out = String::from("# envr project configuration (`envr init --interactive`)\n\n[env]\n\n");
+    let mut out =
+        String::from("# envr project configuration (`envr init --interactive`)\n\n[env]\n\n");
 
     if let Some(v) = maybe_pin_runtime(&mut stdin, "node", "20", true) {
         out.push_str(&runtime_block("node", &v)?);
@@ -197,20 +192,14 @@ pub(crate) fn run_inner(
     force: bool,
     full: bool,
     interactive: bool,
-) -> EnvrResult<i32> {
-    if interactive
-        && matches!(
-            g.effective_output_format(),
-            crate::cli::OutputFormat::Json
-        ) {
-            return Err(EnvrError::Validation(
-                envr_core::i18n::tr_key(
-                    "cli.err.init_interactive_format",
-                    "`envr init --interactive` 不能与 `--format json` 同时使用。",
-                    "`envr init --interactive` cannot be used with `--format json`.",
-                ),
-            ));
-        }
+) -> EnvrResult<CliExit> {
+    if interactive && matches!(g.effective_output_format(), crate::cli::OutputFormat::Json) {
+        return Err(EnvrError::Validation(envr_core::i18n::tr_key(
+            "cli.err.init_interactive_format",
+            "`envr init --interactive` 不能与 `--format json` 同时使用。",
+            "`envr init --interactive` cannot be used with `--format json`.",
+        )));
+    }
 
     if !path.is_dir() {
         return Err(EnvrError::Validation(fmt_template(
@@ -247,8 +236,8 @@ pub(crate) fn run_inner(
         "path": target.to_string_lossy(),
         "interactive": interactive,
     });
-    Ok(output::emit_ok(g, "project_config_init", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_CONFIG_INIT, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

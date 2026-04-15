@@ -1,8 +1,10 @@
 //! Explain runtime resolution for the current project directory (`envr why <runtime>`).
+use crate::CliExit;
+use crate::CliUxPolicy;
 
+use crate::CliPathProfile;
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
-use crate::CliPathProfile;
 
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 use envr_error::EnvrError;
@@ -14,7 +16,7 @@ pub(crate) fn run_inner(
     runtime: String,
     spec: Option<String>,
     project: ProjectPathProfileArgs,
-) -> envr_error::EnvrResult<i32> {
+) -> envr_error::EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let lang = runtime.trim().to_ascii_lowercase();
     let kind = parse_runtime_kind(&lang)?;
@@ -77,8 +79,8 @@ pub(crate) fn run_inner(
         "resolved_home": home.to_string_lossy(),
     });
 
-    Ok(output::emit_ok(g, "why_runtime", data, || {
-        if !g.quiet {
+    Ok(output::emit_ok(g, crate::codes::ok::WHY_RUNTIME, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
                 "{}",
                 fmt_template(

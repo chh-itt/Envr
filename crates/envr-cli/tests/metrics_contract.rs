@@ -2,8 +2,10 @@
 
 use serde_json::Value;
 
-const METRICS_EVENT_SCHEMA: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schemas/cli/metrics-event.json"));
+const METRICS_EVENT_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/metrics-event.json"
+));
 
 fn assert_valid(schema_src: &str, instance: &Value) {
     let schema_src = schema_src.trim_start_matches('\u{feff}');
@@ -51,4 +53,3 @@ fn finish_phase_event_matches_metrics_schema() {
     });
     assert_valid(METRICS_EVENT_SCHEMA, &event);
 }
-

@@ -1,8 +1,8 @@
 use super::diagnostics;
-use super::dispatch_runtime::{dispatch_runtime_result, DispatchCtx};
+use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
 use super::{doctor, remote};
-use crate::cli::Command;
 use crate::CommandOutcome;
+use crate::cli::Command;
 
 pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
     match command {
@@ -14,9 +14,9 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         } => dispatch_runtime_result(ctx, |g, service| {
             doctor::run_inner(g, service, fix, fix_path, fix_path_apply)
         }),
-        Command::Remote { runtime, prefix } => {
-            dispatch_runtime_result(ctx, |g, service| remote::run_inner(g, service, runtime, prefix))
-        }
+        Command::Remote { runtime, prefix } => dispatch_runtime_result(ctx, |g, service| {
+            remote::run_inner(g, service, runtime, prefix)
+        }),
         Command::Diagnostics(sub) => dispatch_runtime_result(ctx, |g, service| match sub {
             crate::cli::DiagnosticsCmd::Export { output } => {
                 diagnostics::export_zip_inner(g, service, output)
@@ -28,4 +28,3 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         ),
     }
 }
-

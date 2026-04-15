@@ -281,13 +281,13 @@ fn load_project_config_inner_uncached(
 pub fn parse_project_config(path: impl AsRef<Path>) -> EnvrResult<ProjectConfig> {
     let path = path.as_ref();
     let content = fs::read_to_string(path).map_err(EnvrError::from)?;
-    parse_project_config_str(&content).map_err(|err| {
-        EnvrError::Config(format!("failed to parse {}: {err}", path.display()))
-    })
+    parse_project_config_str(&content)
+        .map_err(|err| EnvrError::Config(format!("failed to parse {}: {err}", path.display())))
 }
 
 pub fn parse_project_config_str(content: &str) -> EnvrResult<ProjectConfig> {
-    toml::from_str(content).map_err(|err| EnvrError::Config(format!("failed to parse project config: {err}")))
+    toml::from_str(content)
+        .map_err(|err| EnvrError::Config(format!("failed to parse project config: {err}")))
 }
 
 pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
@@ -462,7 +462,9 @@ FOO = "a-local"
         let mut base = ProjectConfig::default();
         base.scripts.insert("dev".into(), "vite".into());
         let mut local = ProjectConfig::default();
-        local.scripts.insert("dev".into(), "vite --port 3001".into());
+        local
+            .scripts
+            .insert("dev".into(), "vite --port 3001".into());
         let merged = local.merge_over(base);
         assert_eq!(
             merged.scripts.get("dev").map(String::as_str),
@@ -527,8 +529,16 @@ B = "${A}"
             .expect("load")
             .expect("found");
         assert_eq!(
-            first.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
-            cached.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            first
+                .0
+                .runtimes
+                .get("node")
+                .and_then(|r| r.version.as_deref()),
+            cached
+                .0
+                .runtimes
+                .get("node")
+                .and_then(|r| r.version.as_deref()),
             "second load should hit in-process cache"
         );
         reset_project_config_load_cache();
@@ -536,7 +546,11 @@ B = "${A}"
             .expect("load")
             .expect("found");
         assert_eq!(
-            fresh.0.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            fresh
+                .0
+                .runtimes
+                .get("node")
+                .and_then(|r| r.version.as_deref()),
             Some("22")
         );
     }

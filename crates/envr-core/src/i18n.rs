@@ -218,8 +218,7 @@ pub fn tr_key(key: &str, zh_cn_fallback: &'static str, en_us_fallback: &'static 
 pub fn lock_locale_for_test() -> std::sync::MutexGuard<'static, ()> {
     use std::sync::{Mutex, OnceLock};
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK
-        .get_or_init(|| Mutex::new(()))
+    LOCK.get_or_init(|| Mutex::new(()))
         .lock()
         .expect("locale test lock poisoned")
 }
@@ -362,11 +361,15 @@ a.b.c = "nested"
     fn embedded_zh_messages_include_gui_route_keys() {
         let _lock = lock_locale_for_test();
         assert_eq!(
-            super::zh_messages().get("gui.route.dashboard").map(String::as_str),
+            super::zh_messages()
+                .get("gui.route.dashboard")
+                .map(String::as_str),
             Some("仪表盘")
         );
         assert_eq!(
-            super::zh_messages().get("gui.route.settings").map(String::as_str),
+            super::zh_messages()
+                .get("gui.route.settings")
+                .map(String::as_str),
             Some("设置")
         );
     }
@@ -375,7 +378,9 @@ a.b.c = "nested"
     fn embedded_en_messages_include_gui_route_keys() {
         let _lock = lock_locale_for_test();
         assert_eq!(
-            super::en_messages().get("gui.route.dashboard").map(String::as_str),
+            super::en_messages()
+                .get("gui.route.dashboard")
+                .map(String::as_str),
             Some("Dashboard")
         );
     }

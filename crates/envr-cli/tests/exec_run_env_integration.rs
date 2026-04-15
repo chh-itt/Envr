@@ -479,12 +479,7 @@ fn template_substitutes_placeholder() {
     let tp = tpl.to_string_lossy();
 
     let out = run_envr(
-        &[
-            "template",
-            "--env",
-            "ENVR_IT_TMPL=replaced",
-            tp.as_ref(),
-        ],
+        &["template", "--env", "ENVR_IT_TMPL=replaced", tp.as_ref()],
         &runtime_root,
         &project,
     );
@@ -557,7 +552,7 @@ fn exec_json_child_completed_lists_output_and_env_fields() {
     );
     let v = parse_json_line(&out.stdout);
     assert_eq!(v["success"], true);
-    assert_eq!(v["message"], "child_completed");
+    assert_eq!(v["code"], "child_completed");
     let d = &v["data"];
     assert_eq!(d["env_overrides"], serde_json::json!(["ENVR_IT_JSON=1"]));
     let files = d["env_files"].as_array().expect("env_files");

@@ -55,11 +55,7 @@ fn list_node_porcelain_one_line_per_version() {
     write_node_layout(&runtime_root, "20.0.0");
     write_node_layout(&runtime_root, "20.1.0");
 
-    let out = run_envr(
-        &["--porcelain", "list", "node"],
-        &runtime_root,
-        &cwd,
-    );
+    let out = run_envr(&["--porcelain", "list", "node"], &runtime_root, &cwd);
     assert!(
         out.status.success(),
         "stderr={}",
@@ -100,10 +96,7 @@ fn which_node_resolves_with_project_pin() {
         String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.to_lowercase().contains("20.10.0"),
-        "stdout={stdout}"
-    );
+    assert!(stdout.to_lowercase().contains("20.10.0"), "stdout={stdout}");
 }
 
 #[test]
@@ -147,8 +140,7 @@ fn why_node_shows_pin_and_home() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("20.1.0")
-            && (stdout.contains("versions") || stdout.contains("runtimes")),
+        stdout.contains("20.1.0") && (stdout.contains("versions") || stdout.contains("runtimes")),
         "expected pin and resolved path in why output:\n{stdout}"
     );
 }

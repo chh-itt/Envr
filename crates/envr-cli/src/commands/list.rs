@@ -1,16 +1,20 @@
 use crate::cli::GlobalArgs;
-use crate::commands::common::{kind_label, session_runtime_root};
+use crate::CliExit;
+use crate::CliUxPolicy;
+use crate::app;
+use crate::commands::common::{emit_verbose_step, kind_label, runtime_service, session_runtime_root};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
 use envr_error::EnvrResult;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodePaths, normalize_node_version, parse_node_index};
 use serde_json::{Value, json};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
+use std::thread;
 
 fn cmp_version_labels(a: &str, b: &str) -> Ordering {
     fn tokens(s: &str) -> Vec<&str> {
@@ -176,7 +180,7 @@ fn format_version_text_line(
     npm: Option<&str>,
     outdated_hint: Option<&str>,
 ) -> String {
-    let styles = output::use_terminal_styles(g);
+    let styles = CliUxPolicy::from_global(g).use_rich_text_styles();
     let mark = if is_current {
         if styles {
             "\x1b[32;1m*\x1b[0m".to_string()
@@ -236,10 +240,10 @@ pub(crate) fn run_inner(
     service: &RuntimeService,
     runtime: Option<String>,
     outdated: bool,
-) -> EnvrResult<i32> {
+) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match runtime {
         None => ALL_KINDS.to_vec(),
-        Some(l) => vec![parse_runtime_kind(l.trim())?],
+        Some(l) => vec![app::runtime_installation::parse_kind(&l)?],
     };
 
     let mut rows: Vec<(RuntimeKind, Vec<RuntimeVersion>)> = Vec::with_capacity(kinds.len());
@@ -251,21 +255,43 @@ pub(crate) fn run_inner(
         rows.push((kind, vers));
     }
 
+    let mut stale_remote_index = false;
+    let kinds_for_refresh: Vec<RuntimeKind> = rows.iter().map(|(k, _)| *k).collect();
     let remote_maps: Vec<Option<HashMap<String, String>>> = if outdated {
         rows
             .iter()
             .map(|(kind, _)| {
-                match service.list_remote_latest_per_major(*kind) {
-                    Ok(list) if !list.is_empty() => {
-                        Some(remote_latest_by_line(*kind, &list))
-                    }
-                    _ => Some(HashMap::new()),
+                let cached = service.try_load_remote_latest_per_major_from_disk(*kind);
+                if cached.is_empty() {
+                    stale_remote_index = true;
                 }
+                Some(remote_latest_by_line(*kind, &cached))
             })
             .collect()
     } else {
         (0..rows.len()).map(|_| None).collect()
     };
+    if outdated {
+        if stale_remote_index {
+            emit_verbose_step(
+                g,
+                &envr_core::i18n::tr_key(
+                    "cli.verbose.list.outdated_refresh",
+                    "[verbose] 本地远程索引为空或过旧，已在后台刷新缓存",
+                    "[verbose] remote index cache is empty/stale; refreshing in background",
+                ),
+            );
+        }
+        let _ = thread::Builder::new()
+            .name("envr-list-outdated-refresh".to_string())
+            .spawn(move || {
+                if let Ok(svc) = runtime_service() {
+                    for kind in kinds_for_refresh {
+                        let _ = svc.list_remote_latest_per_major(kind);
+                    }
+                }
+            });
+    }
 
     let node_lts = try_node_lts_map();
     let runtime_root = session_runtime_root().ok();
@@ -283,8 +309,8 @@ pub(crate) fn run_inner(
         .collect();
     let data = json!({ "installed_runtimes": runtimes });
 
-    Ok(output::emit_ok(g, "list_installed", data, || {
-        if output::wants_porcelain(g) {
+    Ok(output::emit_ok(g, crate::codes::ok::LIST_INSTALLED, data, || {
+        if CliUxPolicy::from_global(g).wants_porcelain_lines() {
             if rows.len() == 1 {
                 for v in &rows[0].1 {
                     println!("{}", v.0);
@@ -363,6 +389,16 @@ pub(crate) fn run_inner(
                     );
                     println!("{line}");
                 }
+            }
+            if outdated && stale_remote_index {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.list.outdated_refresh_notice",
+                        "  远程索引更新中，本次结果可能暂不含最新可升级信息（下次命令生效）。",
+                        "  Remote index is refreshing; upgrade hints may be incomplete this run (available next command).",
+                    )
+                );
             }
         }
     }))

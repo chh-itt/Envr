@@ -1,7 +1,7 @@
+use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
 use super::{current, install, list, uninstall, use_cmd};
-use super::dispatch_runtime::{dispatch_runtime_result, DispatchCtx};
-use crate::cli::Command;
 use crate::CommandOutcome;
+use crate::cli::Command;
 
 pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
     match command {
@@ -17,9 +17,9 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         } => dispatch_runtime_result(ctx, |g, service| {
             use_cmd::run_inner(g, service, runtime, runtime_version)
         }),
-        Command::List { runtime, outdated } => {
-            dispatch_runtime_result(ctx, |g, service| list::run_inner(g, service, runtime, outdated))
-        }
+        Command::List { runtime, outdated } => dispatch_runtime_result(ctx, |g, service| {
+            list::run_inner(g, service, runtime, outdated)
+        }),
         Command::Current { runtime } => {
             dispatch_runtime_result(ctx, |g, service| current::run_inner(g, service, runtime))
         }
@@ -38,4 +38,3 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         ),
     }
 }
-

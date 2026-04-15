@@ -1,10 +1,13 @@
 //! Command-line interface for `envr` (clap tree and global flags).
 //!
 //! Layout: `global` (`GlobalArgs`, shared arg structs), `command` (`Command`, `trace_name`),
-//! `metadata` (registry), and this module (`Cli`, argv preprocess/parse, `run`).
+//! `command_spec` (SSOT: trace, routing hints, help path, success JSON messages), `metadata`
+//! (re-exports `command_spec` + `CommandMetadata` alias), and this module (`Cli`, argv preprocess, `run`).
 
 mod command;
+mod command_spec;
 mod global;
+pub(crate) mod help_registry;
 mod metadata;
 
 pub use command::{
@@ -16,7 +19,7 @@ pub use global::{ExecRunSharedArgs, GlobalArgs, OutputFormat, ProjectPathProfile
 
 #[allow(unused_imports)]
 pub(crate) use metadata::{
-    CommandCapabilities, CommandKey, ContractSurface, RuntimeHandlerGroup,
+    CommandCapabilities, CommandKey, ContractSurface, RuntimeHandlerGroup, command_specs,
 };
 #[allow(unused_imports)]
 pub(crate) use metadata::metadata_for_key;
@@ -114,15 +117,17 @@ impl Cli {
 
 /// Parse argv into [`Cli`] after alias/shorthand preprocessing.
 ///
-/// On clap failures (token parsing **or** model binding into [`Cli`]), this function returns the
-/// process exit code and:
+/// On clap failures (token parsing **or** model binding into [`Cli`]), this function returns
+/// `Err(`[`CliExit`][crate::CliExit]`)` with the process exit code. After emitting a JSON parse
+/// envelope, [`CliExit::error_code`] is `Some("argv_parse_error")`; in text mode it is [`None`].
+///
 /// - emits one JSON failure envelope to stdout when machine-readable mode is requested
 ///   ([`crate::output::emit_failure_envelope`] with code `argv_parse_error`);
 /// - otherwise prints clap's formatted error to stderr (same family of message as `clap::Error::exit`).
 ///
 /// Parse-phase metrics are recorded before emitting output; the process entrypoint should call
 /// [`crate::flush_parse_metrics_on_early_exit`] when returning [`Err`].
-pub fn parse_cli_from_argv(argv: Vec<OsString>) -> Result<Cli, i32> {
+pub fn parse_cli_from_argv(argv: Vec<OsString>) -> Result<Cli, crate::CliExit> {
     let (wants_json, quiet) = argv_requests_json_and_quiet(&argv);
     let matches = match crate::cli_help::localized_command().try_get_matches_from(argv) {
         Ok(m) => m,
@@ -138,7 +143,10 @@ pub fn parse_cli_from_argv(argv: Vec<OsString>) -> Result<Cli, i32> {
                 return Err(emit_clap_error_as_json_envelope(&e, quiet));
             }
             let _ = e.print();
-            return Err(exit_code);
+            return Err(crate::CliExit {
+                exit_code,
+                error_code: None,
+            });
         }
     };
     match Cli::from_arg_matches(&matches) {
@@ -163,19 +171,22 @@ pub fn parse_cli_from_argv(argv: Vec<OsString>) -> Result<Cli, i32> {
                 return Err(emit_clap_error_as_json_envelope(&e, quiet));
             }
             let _ = e.print();
-            Err(exit_code)
+            Err(crate::CliExit {
+                exit_code,
+                error_code: None,
+            })
         }
     }
 }
 
 /// Expand user aliases and built-in shorthands from process argv, then parse into [`Cli`].
-pub fn parse_cli_from_env() -> Result<Cli, i32> {
+pub fn parse_cli_from_env() -> Result<Cli, crate::CliExit> {
     let argv = expand_user_cli_aliases(std::env::args_os().collect());
     let argv = preprocess_cli_args(argv);
     parse_cli_from_argv(argv)
 }
 
-fn emit_clap_error_as_json_envelope(e: &clap::Error, quiet: bool) -> i32 {
+fn emit_clap_error_as_json_envelope(e: &clap::Error, quiet: bool) -> crate::CliExit {
     let exit_code = e.exit_code();
     let kind = format!("{:?}", e.kind());
     let g = GlobalArgs {
@@ -184,6 +195,7 @@ fn emit_clap_error_as_json_envelope(e: &clap::Error, quiet: bool) -> i32 {
         quiet,
         no_color: false,
         debug: false,
+        verbose: false,
         runtime_root: None,
     };
     let msg = envr_core::i18n::tr_key(
@@ -201,7 +213,7 @@ fn emit_clap_error_as_json_envelope(e: &clap::Error, quiet: bool) -> i32 {
     let diagnostics = vec![e.to_string()];
     crate::output::emit_failure_envelope(
         &g,
-        "argv_parse_error",
+        crate::codes::err::ARGV_PARSE_ERROR,
         &msg,
         data,
         &diagnostics,
@@ -214,10 +226,6 @@ fn argv_requests_json_and_quiet(argv: &[OsString]) -> (bool, bool) {
         return (false, false);
     }
     let command_idx = first_command_token_index(argv);
-    let command = argv
-        .get(command_idx)
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase());
 
     let mut wants_json = false;
     let mut quiet = false;
@@ -241,22 +249,59 @@ fn argv_requests_json_and_quiet(argv: &[OsString]) -> (bool, bool) {
         }
         i += 1;
     }
-    // Structured legacy shorthand detection: command token + local flags.
-    if command.as_deref() == Some("doctor") {
-        let mut j = command_idx.saturating_add(1);
-        while j < argv.len() {
-            let s = argv[j].to_string_lossy();
-            if s == "--" {
-                break;
-            }
-            if s == "--json" {
-                wants_json = true;
-                break;
-            }
-            j += 1;
-        }
+    if argv_requests_legacy_json_shorthand(argv, command_idx) {
+        wants_json = true;
     }
     (wants_json, quiet)
+}
+
+fn argv_requests_legacy_json_shorthand(argv: &[OsString], command_idx: usize) -> bool {
+    let Some((matched_path_len, legacy_flag)) = legacy_json_path_and_flag_for_argv(argv, command_idx)
+    else {
+        return false;
+    };
+    let mut i = command_idx.saturating_add(matched_path_len);
+    while i < argv.len() {
+        let token = argv[i].to_string_lossy();
+        if token == "--" {
+            break;
+        }
+        if token == legacy_flag {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+fn legacy_json_path_and_flag_for_argv(
+    argv: &[OsString],
+    command_idx: usize,
+) -> Option<(usize, &'static str)> {
+    if command_idx >= argv.len() {
+        return None;
+    }
+    let lower_tokens: Vec<String> = argv[command_idx..]
+        .iter()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .collect();
+    for (_, spec) in command_specs() {
+        let Some(flag) = spec.legacy_json_flag else {
+            continue;
+        };
+        if spec.help_path.len() > lower_tokens.len() {
+            continue;
+        }
+        let path_matches = spec
+            .help_path
+            .iter()
+            .zip(lower_tokens.iter())
+            .all(|(expected, actual)| actual == expected);
+        if path_matches {
+            return Some((spec.help_path.len(), flag));
+        }
+    }
+    None
 }
 
 fn record_parse_metrics(event: ParseMetricsEvent) {
@@ -382,6 +427,7 @@ pub fn first_command_token_index(args: &[OsString]) -> usize {
             || lower == "--quiet"
             || lower == "--no-color"
             || lower == "--debug"
+            || lower == "--verbose"
         {
             i += 1;
             continue;
@@ -537,8 +583,8 @@ pub fn run(cli: Cli) -> i32 {
 #[cfg(test)]
 mod command_trace_tests {
     use super::{
-        CommandKey, ContractSurface, all_command_keys, metadata_for_key, metadata_registry_entries,
-        Cli, Command, HookCmd, Parser,
+        CommandKey, ContractSurface, all_command_keys, command_specs, metadata_for_key,
+        metadata_registry_entries, Cli, Command, HookCmd, Parser,
     };
     use std::collections::HashSet;
 
@@ -587,14 +633,29 @@ mod command_trace_tests {
     fn metadata_runtime_and_legacy_json_flags_are_consistent() {
         let doctor = Cli::try_parse_from(["envr", "doctor", "--json"]).expect("parse");
         assert!(doctor.command.legacy_json_shorthand());
-        assert!(doctor.command.is_runtime_command());
+        assert!(doctor.command.runtime_handler_group().is_some());
 
         let status = Cli::try_parse_from(["envr", "status"]).expect("parse");
         assert!(!status.command.legacy_json_shorthand());
-        assert!(!status.command.is_runtime_command());
+        assert!(status.command.runtime_handler_group().is_none());
 
         let remote = Cli::try_parse_from(["envr", "remote"]).expect("parse");
-        assert!(remote.command.is_runtime_command());
+        assert!(remote.command.runtime_handler_group().is_some());
+    }
+
+    #[test]
+    fn legacy_json_spec_support_matches_runtime_behavior_for_doctor() {
+        let doctor_spec = command_specs()
+            .iter()
+            .find_map(|(key, spec)| (*key == CommandKey::Doctor).then_some(*spec))
+            .expect("doctor command spec");
+        assert_eq!(doctor_spec.legacy_json_flag, Some("--json"));
+
+        let without = Cli::try_parse_from(["envr", "doctor"]).expect("parse");
+        assert!(!without.command.legacy_json_shorthand());
+
+        let with = Cli::try_parse_from(["envr", "doctor", "--json"]).expect("parse");
+        assert!(with.command.legacy_json_shorthand());
     }
 
     #[test]
@@ -700,7 +761,7 @@ mod command_trace_tests {
         assert_eq!(
             samples.len(),
             metadata_registry_entries().len(),
-            "argv sample table must include exactly one entry per COMMAND_METADATA_REGISTRY row"
+            "argv sample table must include exactly one entry per COMMAND_SPEC_REGISTRY row"
         );
 
         let mut seen = HashSet::new();
@@ -975,7 +1036,7 @@ mod preprocess_tests {
 
 #[cfg(test)]
 mod preparse_request_tests {
-    use super::argv_requests_json_and_quiet;
+    use super::{argv_requests_json_and_quiet, command_specs, legacy_json_path_and_flag_for_argv};
     use std::ffi::OsString;
 
     fn os_args(xs: &[&str]) -> Vec<OsString> {
@@ -1004,6 +1065,33 @@ mod preparse_request_tests {
         let (json, _) = argv_requests_json_and_quiet(&args);
         assert!(!json);
     }
+
+    #[test]
+    fn resolves_legacy_json_path_and_flag_from_command_spec_registry() {
+        let args = os_args(&["envr", "doctor", "--json"]);
+        let matched = legacy_json_path_and_flag_for_argv(&args, 1);
+        assert_eq!(matched, Some((1, "--json")));
+    }
+
+    #[test]
+    fn every_spec_legacy_json_flag_is_detected_by_preparse_scan() {
+        for (_, spec) in command_specs() {
+            let Some(flag) = spec.legacy_json_flag else {
+                continue;
+            };
+            let mut argv = vec![OsString::from("envr")];
+            argv.extend(spec.help_path.iter().map(OsString::from));
+            argv.push(OsString::from(flag));
+
+            let (json, quiet) = argv_requests_json_and_quiet(&argv);
+            assert!(
+                json,
+                "preparse scan must detect legacy json flag `{flag}` for command path {:?}",
+                spec.help_path
+            );
+            assert!(!quiet);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1026,11 +1114,8 @@ mod argv_parse_stage_tests {
         let exit = err.exit_code();
         assert_ne!(exit, 0);
         let ret = emit_clap_error_as_json_envelope(&err, false);
-        assert_eq!(ret, exit);
-        assert_eq!(
-            crate::output::take_recorded_failure_code_for_exit(exit),
-            Some("argv_parse_error".to_string())
-        );
+        assert_eq!(ret.exit_code, exit);
+        assert_eq!(ret.error_code.as_deref(), Some("argv_parse_error"));
     }
 
     #[test]
