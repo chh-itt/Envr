@@ -548,7 +548,16 @@ fn index_sync_inner(
 
     let mut synced: Vec<String> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
+    let use_mock_sync = cli_test_mock_index_sync_enabled();
     for k in kinds {
+        if use_mock_sync {
+            if let Err(e) = write_mock_index_cache_entry(&cache_dir, k) {
+                errors.push(format!("{k:?}: {e}"));
+            } else {
+                synced.push(format!("{k:?}"));
+            }
+            continue;
+        }
         // Prefer smaller indexes; ensure Node index.json is populated.
         let res: Result<(), envr_error::EnvrError> = (|| {
             if k == envr_domain::runtime::RuntimeKind::Node {
@@ -573,10 +582,18 @@ fn index_sync_inner(
         )));
     }
 
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "dir": cache_dir.to_string_lossy(),
         "synced": synced,
     });
+    data = output::with_next_steps(data, vec![(
+        "check_index_status",
+        envr_core::i18n::tr_key(
+            "cli.next_step.cache_index.check_status",
+            "可执行 `envr cache index status` 查看各运行时索引文件状态。",
+            "Run `envr cache index status` to inspect per-runtime index cache status.",
+        ),
+    )]);
     Ok(output::emit_ok(g, crate::codes::ok::CACHE_INDEX_SYNCED, data, || {
         if CliUxPolicy::from_global(g).human_text_primary() {
             println!(
@@ -592,6 +609,34 @@ fn index_sync_inner(
             );
         }
     }))
+}
+
+fn cli_test_mock_index_sync_enabled() -> bool {
+    matches!(
+        std::env::var("ENVR_CLI_TEST_MOCK_INDEX_SYNC")
+            .ok()
+            .map(|v| v.to_ascii_lowercase())
+            .as_deref(),
+        Some("1" | "true" | "yes")
+    )
+}
+
+fn write_mock_index_cache_entry(dir: &Path, kind: envr_domain::runtime::RuntimeKind) -> EnvrResult<()> {
+    let kind_dir_name = match kind {
+        envr_domain::runtime::RuntimeKind::Node => "node",
+        envr_domain::runtime::RuntimeKind::Deno => "deno",
+        envr_domain::runtime::RuntimeKind::Bun => "bun",
+        _ => {
+            return Err(EnvrError::Validation(format!(
+                "mock index sync unsupported runtime: {kind:?}"
+            )));
+        }
+    };
+    let sub = dir.join(kind_dir_name);
+    fs::create_dir_all(&sub).map_err(EnvrError::from)?;
+    let file = sub.join("index.json");
+    fs::write(file, b"{\"mock\":true}\n").map_err(EnvrError::from)?;
+    Ok(())
 }
 
 fn index_status_inner(g: &GlobalArgs, dir: Option<PathBuf>) -> EnvrResult<CliExit> {

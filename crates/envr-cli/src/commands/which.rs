@@ -11,6 +11,32 @@ use envr_shim_core::{
     resolve_core_shim_command, which_runtime_detail,
 };
 
+fn next_steps_for_which(name: &str, source: WhichRuntimeSource) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    steps.push((
+        "resolve_runtime_home",
+        fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.next_step.which.resolve_home",
+                "可执行 `envr resolve {name}` 查看解析到的运行时目录。",
+                "Run `envr resolve {name}` to inspect the resolved runtime home.",
+            ),
+            &[("name", name)],
+        ),
+    ));
+    if matches!(source, WhichRuntimeSource::PathProxyBypass) {
+        steps.push((
+            "check_status",
+            envr_core::i18n::tr_key(
+                "cli.next_step.which.check_status",
+                "当前走系统 PATH，建议执行 `envr status` 检查是否命中项目/全局配置。",
+                "Resolution is using system PATH; run `envr status` to verify project/global selection.",
+            ),
+        ));
+    }
+    steps
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<CliExit> {
     let Some(name) = name else {
@@ -35,7 +61,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<CliE
     let shim = resolve_core_shim_command(cmd, &session.ctx)?;
     let detail = which_runtime_detail(cmd, &session.ctx, &shim.executable)?;
     let selection_source = which_selection_json(&detail.source);
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "executable": shim.executable.to_string_lossy(),
         "version": detail.version,
         "selection_source": selection_source,
@@ -43,6 +69,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, name: Option<String>) -> EnvrResult<CliE
             serde_json::json!({ "key": k, "value": v })
         }).collect::<Vec<_>>(),
     });
+    data = output::with_next_steps(data, next_steps_for_which(&base, detail.source));
     Ok(output::emit_ok(g, crate::codes::ok::RESOLVED_EXECUTABLE, data, || {
         let ux = CliUxPolicy::from_global(g);
         println!("{}", shim.executable.display());

@@ -51,6 +51,7 @@ When JSON is explicitly requested (`--format json`, or supported legacy shorthan
 | `exec` | yes | yes | partial |
 | `install` / `use` / `uninstall` | yes | yes | — |
 | `cache` subcommands | yes (per subcmd) | yes | — |
+| `shim sync` | yes | yes | — |
 | `bundle` | yes | yes | — |
 | `project` / `prune` / … | yes | yes | — |
 
@@ -95,13 +96,15 @@ Offline-safe unless noted. Schema validation strips UTF-8 BOM in `assert_valid` 
 | `doctor` | `doctor_json_data_matches_schema`, `doctor_json_contract`, `doctor_json_flag_matches_doctor_format_json` | `doctor_issues_json_matches_schema_when_runtime_root_missing` | — |
 | `status` | `project_status_json_matches_schemas`, `status_json_contract` | `check_failure_project_check_failed_matches_schema` (via `check`) | — |
 | `resolve` / `which` | `resolve_json_matches_schemas_with_project_pin`, `which_json_matches_schemas_with_project_pin` | — | `porcelain_resolve_single_line_runtime_home`, `porcelain_which_single_line_executable_path` |
-| `config` | `config_path_json_matches_schemas`, `config_keys_get_show_set_json_match_schemas_under_envr_root` (uses `ENVR_ROOT` temp) | — | — |
+| `config` | `config_path_json_matches_schemas`, `config_keys_get_show_set_json_match_schemas_under_envr_root` (uses `ENVR_ROOT` temp), `config_edit_json_matches_schemas`, `config_edit_json_contract` | — | — |
 | `deactivate` / `hook prompt` / `template` / `update` | `deactivate_hint_json_matches_schemas`, `hook_prompt_json_matches_schemas`, `template_rendered_json_matches_schemas`, `update_info_json_matches_schemas` (+ `json_envelope` counterparts) | — | — |
 | `run` / `exec` | `run_child_completed_json_matches_schemas`, `exec_child_completed_json_matches_schemas`, `exec_dry_run_json_matches_schemas`; `run_json_child_includes_install_metadata`, `exec_dry_run_json_envelope_message_dry_run` | — | — |
 | `use` / `uninstall` | `use_sets_current_json_matches_schemas`, `uninstall_dry_run_json_matches_envelope_and_data_shape` | — | — |
 | `cache` | `cache_clean_dry_run_prune_json_matches_schemas`, `cache_index_status_json_matches_schemas`, `cache_index_sync_json_matches_schemas_when_success` (skips on failure); `e2e_flows` text/json cache | — | — |
+| `shim` | `shim_sync_json_matches_schemas`, `shim_sync_json_contract` | — | — |
+| `rust` | `rust_install_managed_json_matches_schemas`, `rust_install_managed_json_contract` | — | — |
 | `bundle` | `bundle_created_and_applied_json_match_schemas` | — | — |
-| `project` / `prune` | `project_add_json_matches_schemas`, `project_validated_json_matches_schemas`, `prune_dry_run_json_matches_schemas` | — | — |
+| `project` / `prune` | `project_add_json_matches_schemas`, `project_sync_json_matches_schemas`, `project_validated_json_matches_schemas`, `project_sync_json_contract`, `prune_dry_run_json_matches_schemas` | — | — |
 | `--quiet` + JSON | `quiet_validation_json_message_is_bracket_tag_only` | — | — |
 
 When you add a command that scripts might call with `--format json` or `--porcelain`, **update this matrix** and add or extend a test.

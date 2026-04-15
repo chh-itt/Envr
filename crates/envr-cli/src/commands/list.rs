@@ -234,6 +234,31 @@ fn format_version_text_line(
     format!("  {mark} {ver_display}{tags}")
 }
 
+fn next_steps_for_list(outdated: bool, stale_remote_index: bool) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    if outdated {
+        steps.push((
+            "sync_remote_index",
+            envr_core::i18n::tr_key(
+                "cli.next_step.list.sync_remote_index",
+                "可执行 `envr cache index sync` 预热远程索引，再次查看可升级提示更稳定。",
+                "Run `envr cache index sync` to warm remote indexes for more stable upgrade hints.",
+            ),
+        ));
+        if stale_remote_index {
+            steps.push((
+                "re_run_list_outdated",
+                envr_core::i18n::tr_key(
+                    "cli.next_step.list.re_run_outdated",
+                    "远程索引后台刷新后，重试 `envr list --outdated` 获取更完整结果。",
+                    "After background refresh, re-run `envr list --outdated` for more complete results.",
+                ),
+            ));
+        }
+    }
+    steps
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -307,7 +332,8 @@ pub(crate) fn run_inner(
             })
         })
         .collect();
-    let data = json!({ "installed_runtimes": runtimes });
+    let mut data = json!({ "installed_runtimes": runtimes });
+    data = output::with_next_steps(data, next_steps_for_list(outdated, stale_remote_index));
 
     Ok(output::emit_ok(g, crate::codes::ok::LIST_INSTALLED, data, || {
         if CliUxPolicy::from_global(g).wants_porcelain_lines() {

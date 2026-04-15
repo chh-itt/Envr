@@ -3,6 +3,7 @@
 use super::{dispatch_non_runtime, dispatch_runtime};
 
 use crate::cli::{CliContext, GlobalArgs};
+use crate::presenter::CliPersona;
 use crate::CommandOutcome;
 use std::time::{Duration, Instant};
 
@@ -55,6 +56,7 @@ fn emit_dispatch_metrics(
         phase = "dispatch",
         command = command,
         output_mode = crate::output::output_mode_token(output_format),
+        persona = CliPersona::from_env().token(),
         success = success,
         exit_code = exit_code,
         error_code = error_code.unwrap_or(""),

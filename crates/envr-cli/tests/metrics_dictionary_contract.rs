@@ -65,7 +65,14 @@ fn docs_field_names_match_metrics_schema_properties() {
 #[test]
 fn docs_table_captures_required_phase_specific_fields() {
     let doc_rows = parse_doc_table_rows();
-    for field in ["phase", "output_mode", "success", "exit_code", "error_code"] {
+    for field in [
+        "phase",
+        "output_mode",
+        "persona",
+        "success",
+        "exit_code",
+        "error_code",
+    ] {
         let cols = doc_rows
             .get(field)
             .unwrap_or_else(|| panic!("missing required field row `{field}` in metrics table"));

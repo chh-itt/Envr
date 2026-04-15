@@ -11,3 +11,7 @@ experiments/
 
 # Windows packaging artifacts
 *.wixpdb
+
+# Python caches
+__pycache__/
+*.pyc

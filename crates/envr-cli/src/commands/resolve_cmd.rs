@@ -8,6 +8,32 @@ use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 
+fn next_steps_for_resolve(lang: &str, source: &str) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    steps.push((
+        "check_resolved_executable",
+        crate::output::fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.next_step.resolve.check_executable",
+                "可执行 `envr which {lang}` 查看最终可执行文件路径。",
+                "Run `envr which {lang}` to inspect the final executable path.",
+            ),
+            &[("lang", lang)],
+        ),
+    ));
+    if source != "global_current" {
+        steps.push((
+            "set_global_current",
+            envr_core::i18n::tr_key(
+                "cli.next_step.resolve.set_global_current",
+                "如需全局默认版本，可执行 `envr use <runtime> <version>`。",
+                "If you want a global default version, run `envr use <runtime> <version>`.",
+            ),
+        ));
+    }
+    steps
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -45,12 +71,13 @@ pub(crate) fn run_inner(
         .unwrap_or("")
         .to_string();
 
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "kind": lang,
         "resolution_source": source,
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
+    data = output::with_next_steps(data, next_steps_for_resolve(&lang, source));
     Ok(output::emit_ok(g, crate::codes::ok::RUNTIME_RESOLVED, data, || {
         let ux = CliUxPolicy::from_global(g);
         if ux.wants_porcelain_lines() {

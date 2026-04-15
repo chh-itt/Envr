@@ -10,6 +10,20 @@ use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::io::{self, IsTerminal, Write};
 
+fn next_steps_for_uninstall(kind: RuntimeKind) -> Vec<(&'static str, String)> {
+    vec![(
+        "verify_after_uninstall",
+        fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.next_step.uninstall.verify_after",
+                "可执行 `envr current {kind}` 或 `envr list {kind}` 检查卸载后状态。",
+                "Run `envr current {kind}` or `envr list {kind}` to verify post-uninstall state.",
+            ),
+            &[("kind", kind_label(kind))],
+        ),
+    )]
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -43,13 +57,14 @@ pub(crate) fn run_inner(
 
     if dry_run {
         let would_refuse = is_active && !force;
-        let data = json!({
+        let mut data = json!({
             "kind": kind_label(kind),
             "version": version.0,
             "would_refuse_active_without_force": would_refuse,
             "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
             "external_command": external,
         });
+        data = output::with_next_steps(data, next_steps_for_uninstall(kind));
         if would_refuse {
             let refuse_msg = envr_core::i18n::tr_key(
                 "cli.uninstall.err_active",
@@ -213,10 +228,11 @@ fn print_dry_run_text(
 }
 
 fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> CliExit {
-    let data = json!({
+    let mut data = json!({
         "kind": kind_label(kind),
         "version": v.0,
     });
+    data = output::with_next_steps(data, next_steps_for_uninstall(kind));
     output::emit_ok(g, crate::codes::ok::UNINSTALLED, data, || {
         if CliUxPolicy::from_global(g).human_text_primary() {
             println!(

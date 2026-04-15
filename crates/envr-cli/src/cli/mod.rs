@@ -31,6 +31,7 @@ pub(crate) use metadata::{all_command_keys, metadata_registry_entries};
 use clap::{FromArgMatches, Parser};
 use envr_config::aliases::AliasesFile;
 use envr_platform::paths::current_platform_paths;
+use crate::presenter::CliPersona;
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 
@@ -323,6 +324,7 @@ pub fn emit_pending_parse_metrics() {
         target: "envr_cli_metrics",
         phase = "parse",
         output_mode = output_mode,
+        persona = CliPersona::from_env().token(),
         quiet = event.quiet,
         success = event.success,
         exit_code = event.exit_code,

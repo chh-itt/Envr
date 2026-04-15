@@ -20,6 +20,7 @@ fn parse_phase_event_matches_metrics_schema() {
     let event = serde_json::json!({
         "phase": "parse",
         "output_mode": "json",
+        "persona": "operator",
         "quiet": false,
         "success": true,
         "exit_code": 0,
@@ -34,6 +35,7 @@ fn dispatch_phase_event_matches_metrics_schema() {
         "phase": "dispatch",
         "command": "doctor",
         "output_mode": "json",
+        "persona": "automation",
         "success": false,
         "exit_code": 1,
         "error_code": "validation",
@@ -47,6 +49,7 @@ fn finish_phase_event_matches_metrics_schema() {
     let event = serde_json::json!({
         "phase": "finish",
         "output_mode": "text",
+        "persona": "onboarding",
         "success": false,
         "exit_code": 2,
         "error_code": "download"

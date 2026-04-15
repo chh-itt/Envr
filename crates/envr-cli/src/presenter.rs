@@ -18,6 +18,50 @@
 
 use crate::cli::{GlobalArgs, OutputFormat};
 
+/// High-level output persona for future response shaping.
+///
+/// Phase 3 starts by introducing this stable model without changing existing
+/// command behavior. Current output remains identical until persona-specific
+/// shaping is enabled command-by-command.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CliPersona {
+    Automation,
+    Operator,
+    Onboarding,
+}
+
+impl CliPersona {
+    pub const ENV_KEY: &'static str = "ENVR_CLI_PERSONA";
+
+    #[inline]
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "automation" | "auto" | "machine" => Some(Self::Automation),
+            "operator" | "ops" | "default" => Some(Self::Operator),
+            "onboarding" | "guide" | "newcomer" => Some(Self::Onboarding),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn from_env() -> Self {
+        std::env::var(Self::ENV_KEY)
+            .ok()
+            .as_deref()
+            .and_then(Self::parse)
+            .unwrap_or(Self::Operator)
+    }
+
+    #[inline]
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Automation => "automation",
+            Self::Operator => "operator",
+            Self::Onboarding => "onboarding",
+        }
+    }
+}
+
 /// Snapshot of global output flags used for presentation decisions ([`CliUxPolicy::from_global`]).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CliUxPolicy {
@@ -25,6 +69,7 @@ pub struct CliUxPolicy {
     pub quiet: bool,
     pub porcelain: bool,
     pub no_color: bool,
+    pub persona: CliPersona,
 }
 
 impl CliUxPolicy {
@@ -35,6 +80,7 @@ impl CliUxPolicy {
             quiet: g.quiet,
             porcelain: g.porcelain,
             no_color: g.no_color,
+            persona: CliPersona::from_env(),
         }
     }
 
@@ -204,5 +250,23 @@ mod tests {
         assert!(!p.verbose_stderr(false));
         let gq = g_text(true, false);
         assert!(!CliUxPolicy::from_global(&gq).verbose_stderr(true));
+    }
+
+    #[test]
+    fn persona_parse_accepts_aliases() {
+        assert_eq!(CliPersona::parse("automation"), Some(CliPersona::Automation));
+        assert_eq!(CliPersona::parse("auto"), Some(CliPersona::Automation));
+        assert_eq!(CliPersona::parse("ops"), Some(CliPersona::Operator));
+        assert_eq!(CliPersona::parse("guide"), Some(CliPersona::Onboarding));
+        assert_eq!(CliPersona::parse("unknown"), None);
+    }
+
+    #[test]
+    fn persona_from_env_defaults_to_operator() {
+        // SAFETY: test-only env mutation in single-threaded assertion scope.
+        unsafe {
+            std::env::remove_var(CliPersona::ENV_KEY);
+        }
+        assert_eq!(CliPersona::from_env(), CliPersona::Operator);
     }
 }

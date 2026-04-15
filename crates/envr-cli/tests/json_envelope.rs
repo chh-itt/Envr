@@ -356,6 +356,97 @@ fn update_json_contract() {
 }
 
 #[test]
+fn shim_sync_json_contract() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    std::fs::create_dir_all(&runtime_root).expect("runtime-root");
+    let v = json_stdout(&["--format", "json", "shim", "sync"], &runtime_root);
+    assert_envelope_shape(&v);
+    assert_eq!(v["code"], "shims_synced");
+    let d = &v["data"];
+    assert!(d["runtime_root"].is_string());
+    assert!(d["ensured_core_kinds"].is_array());
+    assert!(d["globals_synced"].is_boolean());
+}
+
+#[test]
+fn project_sync_json_contract() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "20.10.0");
+    std::fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"20.10.0\"\n",
+    )
+    .expect("envr.toml");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(["--format", "json", "project", "sync"])
+        .output()
+        .expect("project sync");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["code"], "project_synced");
+    assert!(v["data"]["missing"].is_array() || v["data"]["missing_before"].is_array());
+    assert!(v["data"]["installed"].is_array());
+}
+
+#[test]
+fn config_edit_json_contract() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let envr_root = tmp.path().join("envr-home");
+    std::fs::create_dir_all(&envr_root).expect("envr-home");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_ROOT", envr_root.as_os_str())
+        .env("EDITOR", "echo")
+        .args(["--format", "json", "config", "edit"])
+        .output()
+        .expect("config edit");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["code"], "config_edit_ok");
+    assert!(v["data"]["path"].is_string());
+}
+
+#[test]
+fn rust_install_managed_json_contract() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    std::fs::create_dir_all(&runtime_root).expect("runtime-root");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .env("ENVR_CLI_TEST_MOCK_RUST_INSTALL_MANAGED", "1")
+        .args(["--format", "json", "rust", "install-managed"])
+        .output()
+        .expect("rust install-managed");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_envelope_shape(&v);
+    assert_eq!(v["code"], "rust_managed_installed");
+    assert_eq!(v["data"]["channel"], "stable");
+}
+
+#[test]
 fn run_json_child_includes_install_metadata() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let runtime_root = tmp.path().join("runtime-root");

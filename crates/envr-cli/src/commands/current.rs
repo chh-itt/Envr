@@ -21,6 +21,17 @@ const ALL_KINDS: [RuntimeKind; 8] = [
     RuntimeKind::Bun,
 ];
 
+fn next_steps_for_current() -> Vec<(&'static str, String)> {
+    vec![(
+        "set_or_update_current",
+        envr_core::i18n::tr_key(
+            "cli.next_step.current.set_or_update",
+            "可执行 `envr use <runtime> <version>` 设置或更新全局 current。",
+            "Run `envr use <runtime> <version>` to set or update global current.",
+        ),
+    )]
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -61,7 +72,8 @@ pub(crate) fn run_inner(
         })
         .collect();
     // JSON `data.active_versions`: one row per runtime kind (see `schemas/cli/data/show_current.json`).
-    let data = serde_json::json!({ "active_versions": runtimes });
+    let mut data = serde_json::json!({ "active_versions": runtimes });
+    data = output::with_next_steps(data, next_steps_for_current());
 
     Ok(output::emit_ok(g, crate::codes::ok::SHOW_CURRENT, data, || {
         let ux = CliUxPolicy::from_global(g);

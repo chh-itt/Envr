@@ -11,12 +11,47 @@ use crate::output::{self, fmt_template};
 
 use envr_error::EnvrResult;
 use serde_json::json;
+
+fn next_steps_for_status(st: &crate::commands::project_status::ProjectStatus) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    if st.project_dir.is_none() {
+        steps.push((
+            "init_project_config",
+            envr_core::i18n::tr_key(
+                "cli.next_step.status.init_project",
+                "可执行 `envr init` 创建项目配置。",
+                "Run `envr init` to create project configuration.",
+            ),
+        ));
+    } else {
+        steps.push((
+            "check_project_health",
+            envr_core::i18n::tr_key(
+                "cli.next_step.status.check_project_health",
+                "可执行 `envr check` 检查项目 pin 与本地运行时是否匹配。",
+                "Run `envr check` to verify project pins against local runtimes.",
+            ),
+        ));
+    }
+    if st.rows.iter().any(|r| !r.ok) {
+        steps.push((
+            "run_doctor",
+            envr_core::i18n::tr_key(
+                "cli.next_step.status.run_doctor",
+                "存在未解析运行时，建议执行 `envr doctor` 进一步诊断。",
+                "Some runtimes are unresolved; run `envr doctor` for deeper diagnostics.",
+            ),
+        ));
+    }
+    steps
+}
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
-    let data = status_to_json(&st);
+    let mut data = status_to_json(&st);
+    data = output::with_next_steps(data, next_steps_for_status(&st));
     Ok(output::emit_ok(g, crate::codes::ok::PROJECT_STATUS, data, || {
         if !CliUxPolicy::from_global(g).human_text_primary() {
             return;

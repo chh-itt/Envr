@@ -66,8 +66,10 @@
 
 ## 相关文档
 
+- [v1.0 终态定义（草案）](./v1.0-definition.md)
 - [输出契约（JSON / text）](./output-contract.md)
 - [自动化输出矩阵（维护者清单）](./automation-matrix.md)
+- [v1.0 指标采集建议](./v1.0-metrics.md)
 - [任务导向菜谱](./recipes.md)
 - [脚本化与子进程](./scripting.md)
 - [settings 与 `config`](./config.md)

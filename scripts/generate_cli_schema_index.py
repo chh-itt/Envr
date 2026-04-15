@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Generate schemas/cli/index.json from envr-cli source literals.
+Generate schemas/cli/index.json from CLI single sources of truth.
 
-Collects success `success_codes` from:
-  - emit_ok(..., "token", ...)
-  - write_envelope(true, "token", ...)
-  - emit_doctor(g, ok, "token", ...)  (doctor success path; `code` arg)
+Sources:
+  - success_codes: union of CommandSpec.success_messages in
+      crates/envr-cli/src/cli/command_spec.rs
+  - failure_codes: codes::err constants in
+      crates/envr-cli/src/codes.rs
 
 Usage:
   python scripts/generate_cli_schema_index.py
@@ -16,37 +17,76 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI_SRC = ROOT / "crates" / "envr-cli" / "src"
+COMMAND_SPEC_PATH = ROOT / "crates" / "envr-cli" / "src" / "cli" / "command_spec.rs"
+CODES_PATH = ROOT / "crates" / "envr-cli" / "src" / "codes.rs"
 INDEX_PATH = ROOT / "schemas" / "cli" / "index.json"
 
-EMIT_OK_RE = re.compile(r'emit_ok\([^,]+,\s*"([a-zA-Z0-9_]+)"')
-WRITE_ENVELOPE_OK_RE = re.compile(
-    r'write_envelope\(\s*true\s*,\s*"([a-zA-Z0-9_]+)"'
-)
-# `emit_doctor(g, ok, "doctor_ok", ...)` success path (third arg is the envelope code).
-EMIT_DOCTOR_OK_RE = re.compile(
-    r'emit_doctor\(\s*g\s*,\s*ok\s*,\s*"([a-zA-Z0-9_]+)"'
-)
-EMIT_FAILURE_RE = re.compile(r'emit_failure_envelope\([^"]*"([a-zA-Z0-9_]+)"')
+def parse_codes_registry(path: Path) -> tuple[list[str], list[str]]:
+    ok: list[str] = []
+    err: list[str] = []
+    scope: str | None = None
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if line == "pub mod ok {":
+            scope = "ok"
+            continue
+        if line == "pub mod err {":
+            scope = "err"
+            continue
+        if line == "}":
+            scope = None
+            continue
+        if not line.startswith("pub const ") or ': &str = "' not in line:
+            continue
+        try:
+            value = line.split(': &str = "', 1)[1].split('"', 1)[0]
+        except IndexError:
+            continue
+        if not value:
+            continue
+        if scope == "ok":
+            ok.append(value)
+        elif scope == "err":
+            err.append(value)
+    return sorted(set(ok)), sorted(set(err))
 
 
-def collect_source_literals() -> tuple[list[str], list[str]]:
-    success_codes: set[str] = set()
-    failure_codes: set[str] = set()
-
-    for path in sorted(CLI_SRC.rglob("*.rs")):
-        src = path.read_text(encoding="utf-8", errors="replace")
-        success_codes.update(m.group(1) for m in EMIT_OK_RE.finditer(src))
-        success_codes.update(m.group(1) for m in WRITE_ENVELOPE_OK_RE.finditer(src))
-        success_codes.update(m.group(1) for m in EMIT_DOCTOR_OK_RE.finditer(src))
-        failure_codes.update(m.group(1) for m in EMIT_FAILURE_RE.finditer(src))
-
-    return sorted(success_codes), sorted(failure_codes)
+def parse_command_spec_success_messages(path: Path) -> list[str]:
+    source = path.read_text(encoding="utf-8", errors="replace")
+    messages: set[str] = set()
+    marker = "CommandSpec::new("
+    i = 0
+    while True:
+        start = source.find(marker, i)
+        if start < 0:
+            break
+        depth = 0
+        j = start
+        while j < len(source):
+            ch = source[j]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        block = source[start : j + 1]
+        pos = block.rfind("&[")
+        if pos >= 0:
+            end = block.find("]", pos)
+            if end > pos:
+                msg_list = block[pos + 2 : end]
+                for token in msg_list.split(","):
+                    token = token.strip()
+                    if token.startswith('"') and token.endswith('"') and len(token) >= 2:
+                        messages.add(token[1:-1])
+        i = j + 1
+    return sorted(messages)
 
 
 def main() -> int:
@@ -58,7 +98,8 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    success_codes, failure_codes = collect_source_literals()
+    success_codes = parse_command_spec_success_messages(COMMAND_SPEC_PATH)
+    _, failure_codes = parse_codes_registry(CODES_PATH)
     generated = {
         "version": 1,
         "success_codes": success_codes,

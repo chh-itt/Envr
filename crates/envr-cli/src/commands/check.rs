@@ -11,6 +11,38 @@ use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
+fn next_steps_for_check_ok() -> Vec<(&'static str, String)> {
+    vec![(
+        "project_validate_remote",
+        envr_core::i18n::tr_key(
+            "cli.next_step.check.project_validate_remote",
+            "可执行 `envr project validate --check-remote` 校验远端可用性。",
+            "Run `envr project validate --check-remote` to validate remote availability.",
+        ),
+    )]
+}
+
+fn next_steps_for_check_failure() -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "project_sync_install",
+            envr_core::i18n::tr_key(
+                "cli.next_step.check.project_sync_install",
+                "可执行 `envr project sync --install` 安装缺失的项目 pin 运行时。",
+                "Run `envr project sync --install` to install missing pinned runtimes.",
+            ),
+        ),
+        (
+            "run_doctor",
+            envr_core::i18n::tr_key(
+                "cli.next_step.check.run_doctor",
+                "若仍失败，可执行 `envr doctor` 排查环境问题。",
+                "If failures persist, run `envr doctor` for environment diagnostics.",
+            ),
+        ),
+    ]
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
@@ -54,10 +86,11 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
             "项目配置检查失败",
             "project configuration check failed",
         );
-        let data = json!({
+        let mut data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "issues": problems,
         });
+        data = output::with_next_steps(data, next_steps_for_check_failure());
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_CHECK_FAILED,
@@ -74,12 +107,13 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
         return Ok(code);
     }
 
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "config_dir": loc.dir.to_string_lossy(),
         "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "pinned_runtimes": cfg.runtimes.len(),
     });
+    data = output::with_next_steps(data, next_steps_for_check_ok());
     Ok(output::emit_ok(g, crate::codes::ok::PROJECT_CONFIG_OK, data, || {
         if CliUxPolicy::from_global(g).human_text_primary() {
             println!(

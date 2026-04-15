@@ -7,7 +7,7 @@
 use crate::cli::{GlobalArgs, OutputFormat};
 use crate::codes;
 use crate::command_outcome::CliExit;
-use crate::presenter::CliUxPolicy;
+use crate::presenter::{CliPersona, CliUxPolicy};
 
 use envr_error::{EnvrError, ErrorCode};
 use serde_json::{Map, Value, json};
@@ -423,6 +423,102 @@ pub fn emit_ok<F: FnOnce()>(g: &GlobalArgs, message: &'static str, data: Value, 
     CliExit::ok()
 }
 
+/// Add normalized actionable guidance for automation-friendly success payloads.
+///
+/// `next_steps` is a list of `{ "id", "text" }` objects to keep shape stable
+/// across commands while allowing localized copy.
+pub fn with_next_steps(data: Value, steps: Vec<(&'static str, String)>) -> Value {
+    with_next_steps_for_persona(data, steps, CliPersona::from_env())
+}
+
+fn with_next_steps_for_persona(
+    data: Value,
+    steps: Vec<(&'static str, String)>,
+    persona: CliPersona,
+) -> Value {
+    if steps.is_empty() {
+        return data;
+    }
+    let mut obj = match data {
+        Value::Object(m) => m,
+        _ => return data,
+    };
+    let items: Vec<Value> = select_steps_for_persona(steps, persona)
+        .into_iter()
+        .map(|(id, text)| json!({ "id": id, "text": text }))
+        .collect();
+    obj.insert("next_steps".into(), Value::Array(items));
+    Value::Object(obj)
+}
+
+fn select_steps_for_persona(
+    steps: Vec<(&'static str, String)>,
+    persona: CliPersona,
+) -> Vec<(&'static str, String)> {
+    let max = max_next_steps_for_persona(persona);
+    if matches!(persona, CliPersona::Operator) {
+        return steps.into_iter().take(max).collect();
+    }
+
+    let mut ranked: Vec<(usize, i32, (&'static str, String))> = steps
+        .into_iter()
+        .enumerate()
+        .map(|(idx, step)| (idx, next_step_persona_rank(step.0, persona), step))
+        .collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    ranked
+        .into_iter()
+        .take(max)
+        .map(|(_, _, step)| step)
+        .collect()
+}
+
+fn next_step_persona_rank(id: &str, persona: CliPersona) -> i32 {
+    match persona {
+        CliPersona::Operator => 0,
+        CliPersona::Automation => {
+            // Automation prefers deterministic probe/status checks over setup guidance.
+            if id.starts_with("verify_")
+                || id.starts_with("check_")
+                || id.starts_with("resolve_")
+                || id.contains("status")
+            {
+                30
+            } else if id.starts_with("set_") || id.starts_with("sync_") {
+                20
+            } else if id.starts_with("run_") || id.starts_with("fix_") || id.starts_with("init_") {
+                10
+            } else {
+                0
+            }
+        }
+        CliPersona::Onboarding => {
+            // Onboarding prioritizes setup and repair actions before deep inspection commands.
+            if id.starts_with("init_") || id.starts_with("fix_") || id.starts_with("run_doctor") {
+                30
+            } else if id.starts_with("sync_") || id.starts_with("set_") {
+                20
+            } else if id.starts_with("check_") || id.starts_with("verify_") || id.contains("status") {
+                10
+            } else {
+                0
+            }
+        }
+    }
+}
+
+#[inline]
+fn max_next_steps_for_persona(persona: CliPersona) -> usize {
+    match persona {
+        // Automation consumers should get concise guidance.
+        CliPersona::Automation => 1,
+        // Operator keeps backward-compatible full guidance.
+        CliPersona::Operator => usize::MAX,
+        // Onboarding gets a short curated list to reduce overload.
+        CliPersona::Onboarding => 3,
+    }
+}
+
 /// Script-friendly plain lines (`--porcelain`); see [`CliUxPolicy::wants_porcelain_lines`].
 #[inline]
 pub fn wants_porcelain(g: &GlobalArgs) -> bool {
@@ -695,6 +791,73 @@ mod tests {
             write_envelope(false, "envelope_fail", "m", Value::Null, &[]),
             Some("envelope_fail")
         );
+    }
+
+    #[test]
+    fn with_next_steps_operator_keeps_all_steps() {
+        let data = with_next_steps_for_persona(
+            json!({ "ok": true }),
+            vec![
+                ("a", "A".to_string()),
+                ("b", "B".to_string()),
+                ("c", "C".to_string()),
+            ],
+            CliPersona::Operator,
+        );
+        let steps = data["next_steps"].as_array().expect("array");
+        assert_eq!(steps.len(), 3);
+    }
+
+    #[test]
+    fn with_next_steps_automation_is_truncated() {
+        let data = with_next_steps_for_persona(
+            json!({ "ok": true }),
+            vec![
+                ("a", "A".to_string()),
+                ("b", "B".to_string()),
+                ("c", "C".to_string()),
+            ],
+            CliPersona::Automation,
+        );
+        let steps = data["next_steps"].as_array().expect("array");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0]["id"], "a");
+    }
+
+    #[test]
+    fn with_next_steps_automation_prefers_verify_or_check_actions() {
+        let data = with_next_steps_for_persona(
+            json!({ "ok": true }),
+            vec![
+                ("run_doctor", "Run doctor".to_string()),
+                ("verify_executable", "Verify executable".to_string()),
+                ("set_current", "Set current".to_string()),
+            ],
+            CliPersona::Automation,
+        );
+        let steps = data["next_steps"].as_array().expect("array");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0]["id"], "verify_executable");
+    }
+
+    #[test]
+    fn with_next_steps_onboarding_prefers_fix_and_init_actions() {
+        let data = with_next_steps_for_persona(
+            json!({ "ok": true }),
+            vec![
+                ("check_status", "Check status".to_string()),
+                ("fix_project_config", "Fix config".to_string()),
+                ("init_project_config", "Init project".to_string()),
+                ("verify_executable", "Verify executable".to_string()),
+            ],
+            CliPersona::Onboarding,
+        );
+        let steps = data["next_steps"].as_array().expect("array");
+        let ids: Vec<&str> = steps
+            .iter()
+            .filter_map(|s| s.get("id").and_then(Value::as_str))
+            .collect();
+        assert_eq!(ids, vec!["fix_project_config", "init_project_config", "check_status"]);
     }
 
     proptest! {

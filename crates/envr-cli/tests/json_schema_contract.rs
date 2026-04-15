@@ -138,6 +138,22 @@ const PROJECT_PIN_ADDED_SCHEMA: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../schemas/cli/data/project_pin_added.json"
 ));
+const PROJECT_SYNCED_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/project_synced.json"
+));
+const SHIMS_SYNCED_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/shims_synced.json"
+));
+const CONFIG_EDIT_OK_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/config_edit_ok.json"
+));
+const RUST_MANAGED_INSTALLED_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../schemas/cli/data/rust_managed_installed.json"
+));
 
 fn parse_json_line(stdout: &[u8]) -> Value {
     for line in stdout.split(|b| *b == b'\n') {
@@ -168,6 +184,22 @@ fn json_stdout(args: &[&str], root: &std::path::Path) -> Value {
     let out = Command::cargo_bin("envr")
         .expect("envr binary")
         .env("ENVR_RUNTIME_ROOT", root.as_os_str())
+        .args(args)
+        .output()
+        .expect("envr output");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    parse_json_line(&out.stdout)
+}
+
+fn json_stdout_with_persona(args: &[&str], root: &std::path::Path, persona: &str) -> Value {
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", root.as_os_str())
+        .env("ENVR_CLI_PERSONA", persona)
         .args(args)
         .output()
         .expect("envr output");
@@ -210,11 +242,122 @@ fn list_json_matches_schemas() {
 }
 
 #[test]
+fn list_outdated_json_includes_next_steps() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let v = json_stdout(&["--format", "json", "list", "--outdated"], tmp.path());
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_valid(LIST_DATA_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "sync_remote_index")
+        }),
+        "list --outdated should include sync_remote_index next step"
+    );
+}
+
+#[test]
+fn list_outdated_json_next_steps_follow_persona_policy() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let args = ["--format", "json", "list", "--outdated"];
+
+    let operator = json_stdout_with_persona(&args, tmp.path(), "operator");
+    let operator_steps = operator
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(Value::as_array)
+        .expect("operator next_steps");
+    assert_eq!(
+        operator_steps.len(),
+        2,
+        "operator should keep full next_steps list"
+    );
+
+    let automation = json_stdout_with_persona(&args, tmp.path(), "automation");
+    let automation_steps = automation
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(Value::as_array)
+        .expect("automation next_steps");
+    assert_eq!(
+        automation_steps.len(),
+        1,
+        "automation should be truncated to one next step"
+    );
+    assert_eq!(
+        automation_steps[0].get("id"),
+        Some(&serde_json::json!("sync_remote_index")),
+        "automation should prioritize index sync before rerun guidance"
+    );
+
+    let onboarding = json_stdout_with_persona(&args, tmp.path(), "onboarding");
+    let onboarding_steps = onboarding
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(Value::as_array)
+        .expect("onboarding next_steps");
+    assert_eq!(
+        onboarding_steps.len(),
+        2,
+        "onboarding should keep short guided subset"
+    );
+    assert_eq!(
+        onboarding_steps[0].get("id"),
+        Some(&serde_json::json!("sync_remote_index")),
+        "onboarding should prioritize setup/remediation guidance first"
+    );
+}
+
+#[test]
+fn list_outdated_json_unknown_persona_falls_back_to_operator() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let args = ["--format", "json", "list", "--outdated"];
+
+    let operator = json_stdout_with_persona(&args, tmp.path(), "operator");
+    let unknown = json_stdout_with_persona(&args, tmp.path(), "some-unknown-persona");
+
+    let operator_steps = operator
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(Value::as_array)
+        .expect("operator next_steps");
+    let unknown_steps = unknown
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(Value::as_array)
+        .expect("unknown next_steps");
+
+    assert_eq!(
+        unknown_steps, operator_steps,
+        "unknown ENVR_CLI_PERSONA should fall back to operator behavior"
+    );
+}
+
+#[test]
 fn current_json_matches_schemas() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let v = json_stdout(&["--format", "json", "current"], tmp.path());
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(CURRENT_DATA_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "set_or_update_current")
+        }),
+        "show_current should include set_or_update_current next step"
+    );
 }
 
 #[test]
@@ -231,6 +374,19 @@ fn project_status_json_matches_schemas() {
     let v = json_stdout(&["--format", "json", "status"], tmp.path());
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(PROJECT_STATUS_DATA_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "init_project_config")
+        }),
+        "status without project should include init_project_config next step"
+    );
 }
 
 #[test]
@@ -239,6 +395,19 @@ fn doctor_json_data_matches_schema() {
     let v = json_stdout(&["--format", "json", "doctor"], tmp.path());
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(DOCTOR_OK_DATA_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "verify_project_status")
+        }),
+        "doctor ok should include verify_project_status next step"
+    );
 }
 
 #[test]
@@ -279,6 +448,18 @@ fn doctor_issues_json_matches_schema_when_runtime_root_missing() {
     assert!(
         !issues.is_empty(),
         "expected at least one issue when runtime root is missing"
+    );
+    let next_steps = data
+        .get("next_steps")
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "run_doctor_fix")
+        }),
+        "doctor issues should include run_doctor_fix next step"
     );
     assert_valid(DOCTOR_ISSUES_DATA_SCHEMA, data);
 }
@@ -327,9 +508,61 @@ version = "0.0.0-envr-schema-contract-nonexistent"
         v.get("code"),
         Some(&serde_json::json!("project_check_failed"))
     );
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "project_sync_install")
+        }),
+        "project_check_failed should include project_sync_install next step"
+    );
     assert_valid(
         FAILURE_PROJECT_CHECK_FAILED_SCHEMA,
         v.get("data").expect("data"),
+    );
+}
+
+#[test]
+fn check_success_json_includes_next_steps() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let runtime_root = tmp.path().join("rr");
+    let project = tmp.path().join("proj");
+    fs::create_dir_all(&project).expect("proj");
+    write_node_layout(&runtime_root, "20.10.0");
+    fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"20.10.0\"\n",
+    )
+    .expect("envr.toml");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(["--format", "json", "check"])
+        .output()
+        .expect("check");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(v.get("code"), Some(&serde_json::json!("project_config_ok")));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "project_validate_remote")
+        }),
+        "project_config_ok should include project_validate_remote next step"
     );
 }
 
@@ -388,6 +621,19 @@ fn project_validate_failure_matches_schema() {
         v.get("code"),
         Some(&serde_json::json!("project_validate_failed"))
     );
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "fix_project_config")
+        }),
+        "project_validate_failed should include fix_project_config next step"
+    );
     assert_valid(
         FAILURE_PROJECT_VALIDATE_FAILED_SCHEMA,
         v.get("data").expect("data"),
@@ -437,16 +683,28 @@ fn remote_json_matches_schemas_when_success() {
         .args(["--format", "json", "remote", "node"])
         .output()
         .expect("envr output");
-    if !out.status.success() {
-        eprintln!(
-            "skip remote_json_matches_schemas_when_success: remote node failed (network?): {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        return;
-    }
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_valid(REMOTE_DATA_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().all(|s| {
+            s.get("id").and_then(|x| x.as_str()).is_some()
+                && s.get("text")
+                    .and_then(|x| x.as_str())
+                    .is_some_and(|t| !t.is_empty())
+        }),
+        "next_steps entries should include id/text"
+    );
 }
 
 #[test]
@@ -487,6 +745,19 @@ fn resolve_json_matches_schemas_with_project_pin() {
         Some(&serde_json::json!("runtime_resolved"))
     );
     assert_valid(RUNTIME_RESOLVED_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "check_resolved_executable")
+        }),
+        "runtime_resolved should include check_resolved_executable next step"
+    );
 }
 
 #[test]
@@ -521,6 +792,19 @@ fn which_json_matches_schemas_with_project_pin() {
         Some(&serde_json::json!("resolved_executable"))
     );
     assert_valid(RESOLVED_EXECUTABLE_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "resolve_runtime_home")
+        }),
+        "resolved_executable should include resolve_runtime_home next step"
+    );
 }
 
 #[test]
@@ -872,6 +1156,19 @@ fn project_validated_json_matches_schemas() {
         Some(&serde_json::json!("project_validated"))
     );
     assert_valid(PROJECT_VALIDATED_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "sync_project_pins")
+        }),
+        "project_validated should include sync_project_pins next step"
+    );
 }
 
 #[test]
@@ -911,6 +1208,19 @@ fn use_sets_current_json_matches_schemas() {
         Some(&serde_json::json!("current_runtime_set"))
     );
     assert_valid(CURRENT_RUNTIME_SET_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "verify_current")
+        }),
+        "current_runtime_set should include verify_current next step"
+    );
 }
 
 #[test]
@@ -1029,6 +1339,85 @@ fn project_add_json_matches_schemas() {
 }
 
 #[test]
+fn project_sync_json_matches_schemas() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    let project = tmp.path().join("proj");
+    fs::create_dir_all(&project).expect("proj");
+    write_node_layout(&runtime_root, "20.10.0");
+    fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.node]\nversion = \"20.10.0\"\n",
+    )
+    .expect("envr.toml");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .current_dir(&project)
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(["--format", "json", "project", "sync"])
+        .output()
+        .expect("project sync");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(v.get("code"), Some(&serde_json::json!("project_synced")));
+    assert_valid(PROJECT_SYNCED_SCHEMA, v.get("data").expect("data"));
+}
+
+#[test]
+fn config_edit_json_matches_schemas() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let envr_root = tmp.path().join("envr-home");
+    fs::create_dir_all(&envr_root).expect("envr home");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_ROOT", envr_root.as_os_str())
+        .env("EDITOR", "echo")
+        .args(["--format", "json", "config", "edit"])
+        .output()
+        .expect("config edit");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(v.get("code"), Some(&serde_json::json!("config_edit_ok")));
+    assert_valid(CONFIG_EDIT_OK_SCHEMA, v.get("data").expect("data"));
+}
+
+#[test]
+fn rust_install_managed_json_matches_schemas() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    fs::create_dir_all(&runtime_root).expect("runtime root");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .env("ENVR_CLI_TEST_MOCK_RUST_INSTALL_MANAGED", "1")
+        .args(["--format", "json", "rust", "install-managed"])
+        .output()
+        .expect("rust install managed");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(
+        v.get("code"),
+        Some(&serde_json::json!("rust_managed_installed"))
+    );
+    assert_valid(RUST_MANAGED_INSTALLED_SCHEMA, v.get("data").expect("data"));
+}
+
+#[test]
 fn cache_index_sync_json_matches_schemas_when_success() {
     let tmp = tempfile::tempdir().expect("tmp");
     let idx = tmp.path().join("idx");
@@ -1036,6 +1425,7 @@ fn cache_index_sync_json_matches_schemas_when_success() {
     let out = Command::cargo_bin("envr")
         .expect("envr binary")
         .env("ENVR_RUNTIME_ROOT", tmp.path().join("rr").as_os_str())
+        .env("ENVR_CLI_TEST_MOCK_INDEX_SYNC", "1")
         .args([
             "--format",
             "json",
@@ -1048,13 +1438,11 @@ fn cache_index_sync_json_matches_schemas_when_success() {
         ])
         .output()
         .expect("cache index sync");
-    if !out.status.success() {
-        eprintln!(
-            "skip cache_index_sync_json_matches_schemas_when_success: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        return;
-    }
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = parse_json_line(&out.stdout);
     assert_valid(ENVELOPE_SCHEMA, &v);
     assert_eq!(
@@ -1062,6 +1450,49 @@ fn cache_index_sync_json_matches_schemas_when_success() {
         Some(&serde_json::json!("cache_index_synced"))
     );
     assert_valid(CACHE_INDEX_SYNCED_SCHEMA, v.get("data").expect("data"));
+    let next_steps = v
+        .get("data")
+        .and_then(|d| d.get("next_steps"))
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "check_index_status")
+        }),
+        "cache_index_synced should include check_index_status next step"
+    );
+}
+
+#[test]
+fn shim_sync_json_matches_schemas() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("rr");
+    std::fs::create_dir_all(&runtime_root).expect("runtime root");
+    let out = Command::cargo_bin("envr")
+        .expect("envr binary")
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .args(["--format", "json", "shim", "sync"])
+        .output()
+        .expect("shim sync");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = parse_json_line(&out.stdout);
+    assert_valid(ENVELOPE_SCHEMA, &v);
+    assert_eq!(v.get("code"), Some(&serde_json::json!("shims_synced")));
+    assert_valid(SHIMS_SYNCED_SCHEMA, v.get("data").expect("data"));
+    let data = v.get("data").expect("data");
+    assert!(data.get("runtime_root").and_then(Value::as_str).is_some());
+    assert!(data.get("ensured_core_kinds").and_then(Value::as_array).is_some());
+    assert!(
+        data.get("globals_synced")
+            .and_then(Value::as_bool)
+            .is_some()
+    );
 }
 
 #[test]
@@ -1097,6 +1528,18 @@ fn uninstall_dry_run_json_matches_envelope_and_data_shape() {
     assert_eq!(data.get("kind"), Some(&serde_json::json!("node")));
     assert_eq!(data.get("version"), Some(&serde_json::json!("18.99.0")));
     assert!(data.get("paths").is_some());
+    let next_steps = data
+        .get("next_steps")
+        .and_then(|x| x.as_array())
+        .expect("next_steps array");
+    assert!(
+        next_steps.iter().any(|s| {
+            s.get("id")
+                .and_then(|x| x.as_str())
+                .is_some_and(|id| id == "verify_after_uninstall")
+        }),
+        "uninstall dry-run should include verify_after_uninstall next step"
+    );
 }
 
 #[test]

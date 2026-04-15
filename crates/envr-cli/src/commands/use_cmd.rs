@@ -9,6 +9,33 @@ use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
 
+fn next_steps_for_use(kind: RuntimeKind) -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "verify_current",
+            fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.next_step.use.verify_current",
+                    "可执行 `envr current {kind}` 确认 current 已生效。",
+                    "Run `envr current {kind}` to confirm current is active.",
+                ),
+                &[("kind", kind_label(kind))],
+            ),
+        ),
+        (
+            "verify_executable",
+            fmt_template(
+                &envr_core::i18n::tr_key(
+                    "cli.next_step.use.verify_executable",
+                    "可执行 `envr which {kind}` 验证最终命中路径。",
+                    "Run `envr which {kind}` to verify final executable path.",
+                ),
+                &[("kind", kind_label(kind))],
+            ),
+        ),
+    ]
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -46,10 +73,11 @@ pub(crate) fn run_inner(
 }
 
 fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> CliExit {
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "kind": kind_label(kind),
         "version": v.0,
     });
+    data = output::with_next_steps(data, next_steps_for_use(kind));
     output::emit_ok(g, crate::codes::ok::CURRENT_RUNTIME_SET, data, || {
         if CliUxPolicy::from_global(g).human_text_primary() {
             println!(

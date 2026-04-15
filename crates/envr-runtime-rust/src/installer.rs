@@ -171,6 +171,19 @@ pub fn install_rustup_managed(
     default_channel: RustChannel,
     progress: Option<&InstallRequest>,
 ) -> EnvrResult<()> {
+    if std::env::var("ENVR_CLI_TEST_MOCK_RUST_INSTALL_MANAGED")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        let paths = RustPaths::new(runtime_root);
+        fs::create_dir_all(paths.rust_root()).map_err(EnvrError::from)?;
+        fs::create_dir_all(paths.rust_root().join("cache")).map_err(EnvrError::from)?;
+        fs::create_dir_all(paths.rustup_home()).map_err(EnvrError::from)?;
+        fs::create_dir_all(paths.cargo_home()).map_err(EnvrError::from)?;
+        return Ok(());
+    }
+
     // Rule B: if system rustup exists, do not install a managed one.
     if RustManager::system_rustup_available() {
         return Err(EnvrError::Validation(

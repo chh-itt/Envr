@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/cli-v1-health.schema.json",
+  "title": "CLI v1 Health Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "generated_at",
+    "window",
+    "summary",
+    "metrics",
+    "thresholds",
+    "sources"
+  ],
+  "properties": {
+    "report_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "UTC ISO-8601 timestamp"
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Inclusive date YYYY-MM-DD"
+        },
+        "to": {
+          "type": "string",
+          "description": "Inclusive date YYYY-MM-DD"
+        },
+        "sample_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hard_guard_passed",
+        "dod_passed",
+        "blocking_reasons",
+        "missing_required_metrics",
+        "threshold_violations",
+        "metric_mode"
+      ],
+      "properties": {
+        "hard_guard_passed": {
+          "type": "boolean"
+        },
+        "dod_passed": {
+          "type": "boolean"
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "missing_required_metrics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "threshold_violations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metric_mode": {
+          "type": "string",
+          "enum": ["proxy", "observed"]
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bootstrap_success_rate",
+        "daily_run_success_rate",
+        "doctor_fix_recovery_rate",
+        "time_to_first_success_p95_ms",
+        "offline_safe_latency_p95_ms",
+        "breaking_contract_changes",
+        "governance_gate_passed",
+        "long_lived_exemptions",
+        "top_level_command_count",
+        "top_level_command_baseline",
+        "extension_over_new_command_ratio"
+      ],
+      "properties": {
+        "bootstrap_success_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "daily_run_success_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "doctor_fix_recovery_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "time_to_first_success_p95_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "offline_safe_latency_p95_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "breaking_contract_changes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "governance_gate_passed": {
+          "type": "boolean"
+        },
+        "long_lived_exemptions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "top_level_command_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "top_level_command_baseline": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "extension_over_new_command_ratio": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bootstrap_success_rate",
+        "daily_run_success_rate",
+        "doctor_fix_recovery_rate",
+        "time_to_first_success_p95_ms",
+        "offline_safe_latency_p95_ms",
+        "breaking_contract_changes",
+        "governance_gate_passed",
+        "long_lived_exemptions",
+        "extension_over_new_command_ratio",
+        "top_level_command_freeze"
+      ],
+      "properties": {
+        "bootstrap_success_rate": { "type": "string" },
+        "daily_run_success_rate": { "type": "string" },
+        "doctor_fix_recovery_rate": { "type": "string" },
+        "time_to_first_success_p95_ms": { "type": "string" },
+        "offline_safe_latency_p95_ms": { "type": "string" },
+        "breaking_contract_changes": { "type": "string" },
+        "governance_gate_passed": { "type": "string" },
+        "long_lived_exemptions": { "type": "string" },
+        "extension_over_new_command_ratio": { "type": "string" },
+        "top_level_command_freeze": { "type": "string" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_report",
+        "capabilities_report",
+        "governance_index",
+        "command_spec",
+        "observed_metrics"
+      ],
+      "properties": {
+        "contract_report": { "type": "string" },
+        "capabilities_report": { "type": "string" },
+        "governance_index": { "type": "string" },
+        "command_spec": { "type": "string" },
+        "observed_metrics": { "type": "string" }
+      }
+    }
+  }
+}

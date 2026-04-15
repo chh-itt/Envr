@@ -70,26 +70,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
-      - name: CLI schema index check (P13)
-        run: python scripts/generate_cli_schema_index.py --check
-
-      - name: CLI error kind map schema check (P40.5)
-        run: python scripts/check_cli_error_kind_map_schema.py
-
-      - name: CLI governance index schema check (Phase2)
-        run: python scripts/check_cli_governance_index_schema.py
-
-      - name: CLI schema fragments check (P37)
-        run: python scripts/check_cli_schema_fragments.py
-
-      - name: CLI governance index sync check (Phase2)
-        run: python scripts/check_cli_governance_index_sync.py
-
-      - name: CLI contract gate (P15)
-        run: python scripts/check_cli_contract_gate.py
-
-      - name: CLI contract gate unit tests (P27)
-        run: python scripts/test_cli_contract_gate.py
+      - name: CLI governance checks (Phase1 aggregator)
+        run: python scripts/check_cli_governance_all.py
 
       - name: Generate CLI contract report (P22)
         run: python scripts/generate_cli_contract_report.py --output artifacts/cli-contract-report.json
@@ -109,6 +91,24 @@ jobs:
       - name: Check CLI capability test coverage (Phase3)
         run: python scripts/check_cli_capability_test_coverage.py --report artifacts/cli-capabilities-report.json
 
+      - name: Generate observed CLI metrics (if JSONL exists)
+        run: |
+          if [ -f artifacts/envr-cli-metrics.jsonl ]; then
+            python scripts/generate_cli_observed_metrics.py --metrics-jsonl artifacts/envr-cli-metrics.jsonl --output artifacts/cli-observed-metrics.json
+          else
+            echo "skip observed metrics: artifacts/envr-cli-metrics.jsonl not found"
+          fi
+
+      - name: Check observed CLI metrics quality (if exists)
+        if: hashFiles('artifacts/cli-observed-metrics.json') != ''
+        run: python scripts/check_cli_observed_metrics.py --report artifacts/cli-observed-metrics.json --min-sample-size 20
+
+      - name: Generate CLI v1 health report
+        run: python scripts/generate_cli_v1_health_report.py --output artifacts/cli-v1-health.json --observed-metrics-json artifacts/cli-observed-metrics.json
+
+      - name: Check CLI v1 health hard guards
+        run: python scripts/check_cli_v1_health.py --report artifacts/cli-v1-health.json
+
       - name: Upload CLI contract report artifact
         uses: actions/upload-artifact@v4
         with:
@@ -126,6 +126,19 @@ jobs:
         with:
           name: cli-capabilities-report
           path: artifacts/cli-capabilities-report.json
+
+      - name: Upload CLI v1 health artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-v1-health
+          path: artifacts/cli-v1-health.json
+
+      - name: Upload observed CLI metrics artifact (if exists)
+        if: hashFiles('artifacts/cli-observed-metrics.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-observed-metrics
+          path: artifacts/cli-observed-metrics.json
 
   test:
     name: Workspace Tests

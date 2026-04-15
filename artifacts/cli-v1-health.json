@@ -1,0 +1,49 @@
+{
+  "report_version": 1,
+  "generated_at": "2026-04-15T09:09:53+00:00",
+  "window": {
+    "from": "2026-04-15",
+    "to": "2026-04-15",
+    "sample_size": null
+  },
+  "summary": {
+    "hard_guard_passed": true,
+    "dod_passed": true,
+    "blocking_reasons": [],
+    "missing_required_metrics": [],
+    "threshold_violations": [],
+    "metric_mode": "observed"
+  },
+  "metrics": {
+    "bootstrap_success_rate": 0.96,
+    "daily_run_success_rate": 0.99,
+    "doctor_fix_recovery_rate": 0.9,
+    "time_to_first_success_p95_ms": 350000,
+    "offline_safe_latency_p95_ms": 120,
+    "breaking_contract_changes": 0,
+    "governance_gate_passed": true,
+    "long_lived_exemptions": 0,
+    "top_level_command_count": 36,
+    "top_level_command_baseline": null,
+    "extension_over_new_command_ratio": 0.85
+  },
+  "thresholds": {
+    "bootstrap_success_rate": ">=0.95",
+    "daily_run_success_rate": ">=0.99",
+    "doctor_fix_recovery_rate": ">=0.85",
+    "time_to_first_success_p95_ms": "<=600000",
+    "offline_safe_latency_p95_ms": "<300",
+    "breaking_contract_changes": "==0",
+    "governance_gate_passed": "==true",
+    "long_lived_exemptions": "==0",
+    "extension_over_new_command_ratio": ">=0.70",
+    "top_level_command_freeze": "equals baseline when baseline is provided"
+  },
+  "sources": {
+    "contract_report": "artifacts\\cli-contract-report.json",
+    "capabilities_report": "artifacts\\cli-capabilities-report.json",
+    "governance_index": "schemas\\cli\\governance-index.json",
+    "command_spec": "crates\\envr-cli\\src\\cli\\command_spec.rs",
+    "observed_metrics": "artifacts/cli-observed-metrics.json"
+  }
+}

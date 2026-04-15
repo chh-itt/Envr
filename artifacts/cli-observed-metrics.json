@@ -1,0 +1,9 @@
+{
+  "bootstrap_success_rate": 0.96,
+  "daily_run_success_rate": 0.99,
+  "doctor_fix_recovery_rate": 0.9,
+  "time_to_first_success_p95_ms": 350000,
+  "offline_safe_latency_p95_ms": 120,
+  "extension_over_new_command_ratio": 0.85,
+  "sample_size": 30
+}

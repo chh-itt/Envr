@@ -5,6 +5,7 @@
   "required": [
     "phase",
     "output_mode",
+    "persona",
     "success",
     "exit_code",
     "error_code"
@@ -23,6 +24,14 @@
       "enum": [
         "text",
         "json"
+      ]
+    },
+    "persona": {
+      "type": "string",
+      "enum": [
+        "automation",
+        "operator",
+        "onboarding"
       ]
     },
     "success": {

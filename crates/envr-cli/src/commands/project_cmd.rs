@@ -20,6 +20,50 @@ use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
 
+fn next_steps_for_project_validate_ok(check_remote: bool) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    if !check_remote {
+        steps.push((
+            "validate_with_remote_check",
+            envr_core::i18n::tr_key(
+                "cli.next_step.project_validate.remote_check",
+                "可执行 `envr project validate --check-remote` 增加远端可用性校验。",
+                "Run `envr project validate --check-remote` for extra remote availability checks.",
+            ),
+        ));
+    }
+    steps.push((
+        "sync_project_pins",
+        envr_core::i18n::tr_key(
+            "cli.next_step.project_validate.sync_pins",
+            "可执行 `envr project sync --install` 对齐并安装项目 pin。",
+            "Run `envr project sync --install` to align and install pinned runtimes.",
+        ),
+    ));
+    steps
+}
+
+fn next_steps_for_project_validate_failure() -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "fix_project_config",
+            envr_core::i18n::tr_key(
+                "cli.next_step.project_validate.fix_config",
+                "请修复 `.envr.toml` 中无效版本或运行时键后重试。",
+                "Fix invalid runtime keys/versions in `.envr.toml`, then retry.",
+            ),
+        ),
+        (
+            "run_project_sync",
+            envr_core::i18n::tr_key(
+                "cli.next_step.project_validate.run_sync",
+                "可执行 `envr project sync --install` 自动安装缺失版本。",
+                "Run `envr project sync --install` to install missing versions.",
+            ),
+        ),
+    ]
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(g: &GlobalArgs, service: &RuntimeService, cmd: ProjectCmd) -> EnvrResult<CliExit> {
     match cmd {
@@ -292,11 +336,12 @@ fn validate_inner(
             "项目校验失败",
             "project validation failed",
         );
-        let data = json!({
+        let mut data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "issues": issues,
             "remote_warnings": remote_warnings,
         });
+        data = output::with_next_steps(data, next_steps_for_project_validate_failure());
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_VALIDATE_FAILED,
@@ -313,12 +358,13 @@ fn validate_inner(
         return Ok(code);
     }
 
-    let data = json!({
+    let mut data = json!({
         "config_dir": loc.dir.to_string_lossy(),
         "issues": issues,
         "remote_warnings": remote_warnings,
         "check_remote": check_remote,
     });
+    data = output::with_next_steps(data, next_steps_for_project_validate_ok(check_remote));
     let root_s = loc.dir.display().to_string();
     Ok(output::emit_ok(g, crate::codes::ok::PROJECT_VALIDATED, data, || {
         if CliUxPolicy::from_global(g).human_text_primary() {

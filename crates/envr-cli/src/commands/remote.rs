@@ -89,6 +89,31 @@ fn format_remote_node_line(g: &GlobalArgs, row: &NodeRemoteRow) -> String {
     format!("  {}{tags}", row.version)
 }
 
+fn next_steps_for_remote(refreshing: bool, prefix_fallback: bool) -> Vec<(&'static str, String)> {
+    let mut steps = Vec::new();
+    if refreshing {
+        steps.push((
+            "re_run_after_refresh",
+            envr_core::i18n::tr_key(
+                "cli.next_step.remote.re_run_after_refresh",
+                "稍后重试 `envr remote`，获取最新远程索引结果。",
+                "Re-run `envr remote` shortly to get refreshed index results.",
+            ),
+        ));
+    }
+    if prefix_fallback {
+        steps.push((
+            "retry_prefix_query",
+            envr_core::i18n::tr_key(
+                "cli.next_step.remote.retry_prefix_query",
+                "当前为本地快照前缀过滤结果；稍后重试可获取更完整远程匹配。",
+                "Current result is from local snapshot prefix filter; retry shortly for fuller remote matches.",
+            ),
+        ));
+    }
+    steps
+}
+
 fn filtered_cached_snapshot(service: &RuntimeService, kind: RuntimeKind, filter: &RemoteFilter) -> Vec<String> {
     let mut versions: Vec<String> = service
         .try_load_remote_latest_per_major_from_disk(kind)
@@ -210,12 +235,13 @@ pub(crate) fn run_inner(
             })
         })
         .collect();
-    let data = serde_json::json!({
+    let mut data = serde_json::json!({
         "remote_runtimes": runtimes,
         "cached_snapshot": used_cached_snapshot,
         "remote_refreshing": remote_refreshing,
         "prefix_fallback": prefix_fallback,
     });
+    data = output::with_next_steps(data, next_steps_for_remote(remote_refreshing, prefix_fallback));
 
     Ok(output::emit_ok(g, crate::codes::ok::LIST_REMOTE, data, || {
         if CliUxPolicy::from_global(g).wants_porcelain_lines() {

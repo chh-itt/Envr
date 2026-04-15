@@ -2,7 +2,8 @@
 use crate::CliExit;
 
 use crate::cli::GlobalArgs;
-use crate::commands::doctor::{self, DoctorReport};
+use crate::commands::doctor::DoctorReport;
+use crate::commands::doctor_analyzer;
 use crate::output;
 
 use envr_core::logging::resolve_log_dir;
@@ -26,7 +27,7 @@ pub(crate) fn export_zip_inner(
     service: &RuntimeService,
     output: Option<PathBuf>,
 ) -> EnvrResult<CliExit> {
-    let report = doctor::build_doctor_report(service)?;
+    let report = doctor_analyzer::build_doctor_report(service)?;
 
     let zip_path = match output {
         Some(p) => p,

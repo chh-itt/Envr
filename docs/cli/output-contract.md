@@ -45,9 +45,9 @@ If both flags are provided, JSON mode wins:
 - **`RUST_LOG`** (e.g. `info`, `debug`) therefore only affects **stderr**, so **stdout** stays a single JSON line (or porcelain lines) for automation. Regression: `crates/envr-cli/tests/json_stdout_with_rust_log.rs`.
 - Each dispatched subcommand runs under span **`envr.cli.command`** with field **`command`** = stable snake_case (see [`Command::trace_name`](../../crates/envr-cli/src/cli/command/mod.rs) / `cli::command_trace_tests`).
 - CLI metrics on target **`envr_cli_metrics`** include phase-level events:
-  - `phase=parse`: fields include `output_mode`, `quiet`, `success`, `exit_code`, `error_code`. Parse metrics are buffered during argv parsing and flushed after logging init; parse-failure early exits do a best-effort logging init + flush before process exit.
-  - `phase=dispatch`: fields include `command`, `output_mode`, `success`, `exit_code`, `error_code`, `elapsed_ms`.
-  - `phase=finish`: fields include `output_mode`, `success`, `exit_code`, `error_code`.
+  - `phase=parse`: fields include `output_mode`, `persona`, `quiet`, `success`, `exit_code`, `error_code`. Parse metrics are buffered during argv parsing and flushed after logging init; parse-failure early exits do a best-effort logging init + flush before process exit.
+  - `phase=dispatch`: fields include `command`, `output_mode`, `persona`, `success`, `exit_code`, `error_code`, `elapsed_ms`.
+  - `phase=finish`: fields include `output_mode`, `persona`, `success`, `exit_code`, `error_code`.
 - Machine-readable schema: [`schemas/cli/metrics-event.json`](../../schemas/cli/metrics-event.json). Regression test: `crates/envr-cli/tests/metrics_contract.rs`.
 - Metrics payload policy:
   - `output_mode` uses stable lowercase tokens: `text` / `json`.
@@ -59,6 +59,7 @@ If both flags are provided, JSON mode wins:
 |-------|------|----------|--------|-------------------------------|
 | `phase` | string | yes | all | `parse` \| `dispatch` \| `finish` |
 | `output_mode` | string | yes | all | `text` \| `json` |
+| `persona` | string | yes | all | `automation` \| `operator` \| `onboarding` |
 | `success` | boolean | yes | all | `true` \| `false` |
 | `exit_code` | integer | yes | all | process exit code |
 | `error_code` | string | yes | all | snake_case token on failure; success uses empty string `""` |
@@ -162,6 +163,21 @@ All JSON responses use a single-line envelope:
 - `message`: human-facing text (may be localized); use `code` + `data` for logic
 - `data`: command-specific payload
 - `diagnostics`: string array (error chain / hints)
+
+### `next_steps` persona policy
+
+Some success payloads include `data.next_steps` as an array of:
+
+```json
+{ "id": "stable_step_id", "text": "localized guidance text" }
+```
+
+- `id` is the stable automation key; `text` is human-facing copy and may be localized.
+- `ENVR_CLI_PERSONA` controls curation:
+  - `operator` (default): keeps the full command-provided list in original order.
+  - `automation`: prefers deterministic probe/verification steps and truncates to a concise subset.
+  - `onboarding`: prefers setup/remediation steps and keeps a short guided subset.
+- Unknown persona values fall back to `operator`.
 
 ### JSON Schema
 

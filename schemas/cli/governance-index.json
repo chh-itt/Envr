@@ -82,6 +82,14 @@
       "row_key": "config",
       "network_skip_allowed": false
     },
+    "config_edit": {
+      "row_key": "config",
+      "network_skip_allowed": false
+    },
+    "doctor": {
+      "row_key": "doctor",
+      "network_skip_allowed": false
+    },
     "deactivate": {
       "row_key": "deactivate / hook prompt / template / update",
       "network_skip_allowed": false
@@ -122,7 +130,15 @@
       "row_key": "bundle",
       "network_skip_allowed": false
     },
+    "shim_sync": {
+      "row_key": "shim",
+      "network_skip_allowed": false
+    },
     "project_add": {
+      "row_key": "project / prune",
+      "network_skip_allowed": false
+    },
+    "project_sync": {
       "row_key": "project / prune",
       "network_skip_allowed": false
     },
@@ -131,30 +147,7 @@
       "network_skip_allowed": false
     }
   },
-  "offline_coverage_exempt": {
-    "alias_add": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for alias add JSON/offline behavior" },
-    "alias_list": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for alias list JSON/offline behavior" },
-    "alias_remove": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for alias remove JSON/offline behavior" },
-    "config_edit": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config edit JSON/offline behavior" },
-    "config_schema": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config schema JSON/offline behavior" },
-    "config_validate": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config validate JSON/offline behavior" },
-    "debug_info": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for debug info JSON/offline behavior" },
-    "diagnostics_export": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for diagnostics export JSON/offline behavior" },
-    "doctor": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add offline-safe guard tests for doctor JSON paths" },
-    "env": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for env JSON/offline behavior" },
-    "export": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for export JSON/offline behavior" },
-    "hook_bash": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook bash JSON/offline behavior" },
-    "hook_keys": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook keys JSON/offline behavior" },
-    "hook_zsh": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook zsh JSON/offline behavior" },
-    "import": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for import JSON/offline behavior" },
-    "init": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for init JSON/offline behavior" },
-    "profile_list": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for profile list JSON/offline behavior" },
-    "profile_show": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for profile show JSON/offline behavior" },
-    "project_sync": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for project sync JSON/offline behavior" },
-    "shell": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for shell JSON/offline behavior" },
-    "shim_sync": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for shim sync JSON/offline behavior" },
-    "why": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for why JSON/offline behavior" }
-  },
+  "offline_coverage_exempt": {},
   "capability_test_rows": {
     "list": { "phase_a_row_key": "list", "json_ok_required": true, "porcelain_required": true },
     "current": { "phase_a_row_key": "current", "json_ok_required": true, "porcelain_required": true },
@@ -169,6 +162,7 @@
     "config_get": { "phase_a_row_key": "config", "json_ok_required": true, "porcelain_required": false },
     "config_show": { "phase_a_row_key": "config", "json_ok_required": true, "porcelain_required": false },
     "config_set": { "phase_a_row_key": "config", "json_ok_required": true, "porcelain_required": false },
+    "config_edit": { "phase_a_row_key": "config", "json_ok_required": true, "porcelain_required": false },
     "deactivate": { "phase_a_row_key": "deactivate / hook prompt / template / update", "json_ok_required": true, "porcelain_required": false },
     "hook_prompt": { "phase_a_row_key": "deactivate / hook prompt / template / update", "json_ok_required": true, "porcelain_required": false },
     "template": { "phase_a_row_key": "deactivate / hook prompt / template / update", "json_ok_required": true, "porcelain_required": false },
@@ -180,35 +174,14 @@
     "uninstall": { "phase_a_row_key": "use / uninstall", "json_ok_required": true, "porcelain_required": false },
     "cache_clean": { "phase_a_row_key": "cache", "json_ok_required": true, "porcelain_required": false },
     "cache_index_status": { "phase_a_row_key": "cache", "json_ok_required": true, "porcelain_required": false },
+    "shim_sync": { "phase_a_row_key": "shim", "json_ok_required": true, "porcelain_required": false },
+    "rust_install_managed": { "phase_a_row_key": "rust", "json_ok_required": true, "porcelain_required": false },
     "bundle_create": { "phase_a_row_key": "bundle", "json_ok_required": true, "porcelain_required": false },
     "bundle_apply": { "phase_a_row_key": "bundle", "json_ok_required": true, "porcelain_required": false },
     "project_add": { "phase_a_row_key": "project / prune", "json_ok_required": true, "porcelain_required": false },
+    "project_sync": { "phase_a_row_key": "project / prune", "json_ok_required": true, "porcelain_required": false },
     "project_validate": { "phase_a_row_key": "project / prune", "json_ok_required": true, "porcelain_required": false },
     "prune": { "phase_a_row_key": "project / prune", "json_ok_required": true, "porcelain_required": false }
   },
-  "capability_test_exempt": {
-    "alias_add": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and JSON/porcelain tests for alias add" },
-    "alias_list": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and JSON/porcelain tests for alias list" },
-    "alias_remove": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and JSON/porcelain tests for alias remove" },
-    "cache_index_sync": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add deterministic cache index sync contract test coverage" },
-    "config_edit": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config edit" },
-    "config_schema": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config schema" },
-    "config_validate": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for config validate" },
-    "debug_info": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for debug info" },
-    "diagnostics_export": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for diagnostics export" },
-    "env": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for env" },
-    "export": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for export" },
-    "hook_bash": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook bash" },
-    "hook_keys": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook keys" },
-    "hook_zsh": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for hook zsh" },
-    "import": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for import" },
-    "init": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for init" },
-    "profile_list": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for profile list" },
-    "profile_show": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for profile show" },
-    "project_sync": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for project sync" },
-    "rust_install_managed": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for rust install managed" },
-    "shell": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for shell" },
-    "shim_sync": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for shim sync" },
-    "why": { "reason": "phase_a_coverage_pending", "owner": "cli-contract", "due": "2026-05-15", "exit_criteria": "add Phase A row and tests for why" }
-  }
+  "capability_test_exempt": {}
 }

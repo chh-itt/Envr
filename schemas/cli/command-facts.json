@@ -1,0 +1,979 @@
+{
+  "version": 1,
+  "commands": {
+    "alias_add": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "alias",
+        "add"
+      ],
+      "success_messages": [
+        "alias_added"
+      ]
+    },
+    "alias_list": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "alias",
+        "list"
+      ],
+      "success_messages": [
+        "alias_list"
+      ]
+    },
+    "alias_remove": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "alias",
+        "remove"
+      ],
+      "success_messages": [
+        "alias_removed"
+      ]
+    },
+    "bundle_apply": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "bundle",
+        "apply"
+      ],
+      "success_messages": [
+        "bundle_applied"
+      ]
+    },
+    "bundle_create": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "bundle",
+        "create"
+      ],
+      "success_messages": [
+        "bundle_created"
+      ]
+    },
+    "cache_clean": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "cache",
+        "clean"
+      ],
+      "success_messages": [
+        "cache_cleaned"
+      ]
+    },
+    "cache_index_status": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "cache",
+        "index",
+        "status"
+      ],
+      "success_messages": [
+        "cache_index_status"
+      ]
+    },
+    "cache_index_sync": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "cache",
+        "index",
+        "sync"
+      ],
+      "success_messages": [
+        "cache_index_synced"
+      ]
+    },
+    "check": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "check"
+      ],
+      "success_messages": [
+        "project_config_ok"
+      ]
+    },
+    "completion": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "none"
+      },
+      "help_path": [
+        "completion"
+      ],
+      "success_messages": []
+    },
+    "config_edit": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "edit"
+      ],
+      "success_messages": [
+        "config_edit_ok"
+      ]
+    },
+    "config_get": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "get"
+      ],
+      "success_messages": [
+        "config_get"
+      ]
+    },
+    "config_keys": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "keys"
+      ],
+      "success_messages": [
+        "config_keys"
+      ]
+    },
+    "config_path": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "path"
+      ],
+      "success_messages": [
+        "config_path"
+      ]
+    },
+    "config_schema": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "schema"
+      ],
+      "success_messages": [
+        "config_schema"
+      ]
+    },
+    "config_set": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "set"
+      ],
+      "success_messages": [
+        "config_set"
+      ]
+    },
+    "config_show": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "show"
+      ],
+      "success_messages": [
+        "config_show"
+      ]
+    },
+    "config_validate": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "config",
+        "validate"
+      ],
+      "success_messages": [
+        "config_validate_ok"
+      ]
+    },
+    "current": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "both"
+      },
+      "help_path": [
+        "current"
+      ],
+      "success_messages": [
+        "show_current"
+      ]
+    },
+    "deactivate": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "deactivate"
+      ],
+      "success_messages": [
+        "deactivate_hint"
+      ]
+    },
+    "debug_info": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "debug",
+        "info"
+      ],
+      "success_messages": [
+        "debug_info"
+      ]
+    },
+    "diagnostics_export": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "diagnostics",
+        "export"
+      ],
+      "success_messages": [
+        "diagnostics_export_ok"
+      ]
+    },
+    "doctor": {
+      "legacy_json_flag": "--json",
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "doctor"
+      ],
+      "success_messages": [
+        "doctor_ok",
+        "doctor_issues"
+      ]
+    },
+    "env": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "env"
+      ],
+      "success_messages": [
+        "project_env"
+      ]
+    },
+    "exec": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "exec"
+      ],
+      "success_messages": [
+        "child_completed",
+        "dry_run",
+        "dry_run_diff"
+      ]
+    },
+    "export": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "export"
+      ],
+      "success_messages": [
+        "config_exported"
+      ]
+    },
+    "help_shortcuts": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "none"
+      },
+      "help_path": [
+        "help",
+        "shortcuts"
+      ],
+      "success_messages": [
+        "help_shortcuts"
+      ]
+    },
+    "hook_bash": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "hook",
+        "bash"
+      ],
+      "success_messages": [
+        "shell_hook"
+      ]
+    },
+    "hook_keys": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "hook",
+        "keys"
+      ],
+      "success_messages": [
+        "hook_keys"
+      ]
+    },
+    "hook_prompt": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "hook",
+        "prompt"
+      ],
+      "success_messages": [
+        "hook_prompt"
+      ]
+    },
+    "hook_zsh": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "hook",
+        "zsh"
+      ],
+      "success_messages": [
+        "shell_hook"
+      ]
+    },
+    "import": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "import"
+      ],
+      "success_messages": [
+        "config_imported"
+      ]
+    },
+    "init": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "init"
+      ],
+      "success_messages": [
+        "project_config_init"
+      ]
+    },
+    "install": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "install"
+      ],
+      "success_messages": [
+        "installed"
+      ]
+    },
+    "list": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "both"
+      },
+      "help_path": [
+        "list"
+      ],
+      "success_messages": [
+        "list_installed"
+      ]
+    },
+    "profile_list": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "profile",
+        "list"
+      ],
+      "success_messages": [
+        "profiles_list"
+      ]
+    },
+    "profile_show": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "profile",
+        "show"
+      ],
+      "success_messages": [
+        "profile_show"
+      ]
+    },
+    "project_add": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "project",
+        "add"
+      ],
+      "success_messages": [
+        "project_pin_added"
+      ]
+    },
+    "project_sync": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "project",
+        "sync"
+      ],
+      "success_messages": [
+        "project_synced"
+      ]
+    },
+    "project_validate": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "project",
+        "validate"
+      ],
+      "success_messages": [
+        "project_validated"
+      ]
+    },
+    "prune": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Project",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "prune"
+      ],
+      "success_messages": [
+        "prune_dry_run",
+        "prune_executed"
+      ]
+    },
+    "remote": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Misc",
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "remote"
+      ],
+      "success_messages": [
+        "list_remote"
+      ]
+    },
+    "resolve": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "both"
+      },
+      "help_path": [
+        "resolve"
+      ],
+      "success_messages": [
+        "runtime_resolved"
+      ]
+    },
+    "run": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "run"
+      ],
+      "success_messages": [
+        "child_completed",
+        "dry_run",
+        "dry_run_diff"
+      ]
+    },
+    "rust_install_managed": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "rust",
+        "install-managed"
+      ],
+      "success_messages": [
+        "rust_managed_installed"
+      ]
+    },
+    "shell": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "shell"
+      ],
+      "success_messages": [
+        "shell_exited"
+      ]
+    },
+    "shim_sync": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "shim",
+        "sync"
+      ],
+      "success_messages": [
+        "shims_synced"
+      ]
+    },
+    "status": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "status"
+      ],
+      "success_messages": [
+        "project_status"
+      ]
+    },
+    "template": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "template"
+      ],
+      "success_messages": [
+        "template_rendered"
+      ]
+    },
+    "uninstall": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "uninstall"
+      ],
+      "success_messages": [
+        "uninstalled"
+      ]
+    },
+    "update": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "update"
+      ],
+      "success_messages": [
+        "update_info"
+      ]
+    },
+    "use": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": true,
+      "runtime_group": "Installation",
+      "capabilities": {
+        "may_network": true,
+        "offline_safe": false,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "use"
+      ],
+      "success_messages": [
+        "current_runtime_set"
+      ]
+    },
+    "which": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "both"
+      },
+      "help_path": [
+        "which"
+      ],
+      "success_messages": [
+        "resolved_executable"
+      ]
+    },
+    "why": {
+      "legacy_json_flag": null,
+      "legacy_json_shorthand": false,
+      "runtime_required": false,
+      "runtime_group": null,
+      "capabilities": {
+        "may_network": false,
+        "offline_safe": true,
+        "contract_surface": "json"
+      },
+      "help_path": [
+        "why"
+      ],
+      "success_messages": [
+        "why_runtime"
+      ]
+    }
+  },
+  "runtime_groups": {
+    "Installation": [
+      "current",
+      "install",
+      "list",
+      "uninstall",
+      "use"
+    ],
+    "Project": [
+      "project_add",
+      "project_sync",
+      "project_validate",
+      "prune"
+    ],
+    "Misc": [
+      "diagnostics_export",
+      "doctor",
+      "remote"
+    ]
+  }
+}

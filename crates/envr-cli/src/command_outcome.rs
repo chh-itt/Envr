@@ -26,6 +26,7 @@
 
 use crate::cli::GlobalArgs;
 use crate::commands::common;
+use crate::presenter::CliPersona;
 use envr_error::{EnvrError, EnvrResult};
 
 /// Process exit status with an optional **business** metrics token (JSON envelope `code`, not [`ErrorCode`](envr_error::ErrorCode)).
@@ -107,6 +108,7 @@ impl CommandOutcome {
             target: "envr_cli_metrics",
             phase = "finish",
             output_mode = crate::output::output_mode_token(g.effective_output_format()),
+            persona = CliPersona::from_env().token(),
             success = success,
             exit_code = exit_code,
             error_code = error_code.unwrap_or(""),
