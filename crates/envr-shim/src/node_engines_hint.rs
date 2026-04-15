@@ -7,6 +7,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::shim_i18n;
+
 const THROTTLE_SECS: u64 = 2 * 3600;
 
 fn parse_version_triple_dir(name: &str) -> Option<semver::Version> {
@@ -124,12 +126,6 @@ pub fn maybe_emit(ctx: &ShimContext) {
     if !throttle_allows_emit(&cache_dir, &key) {
         return;
     }
-    let msg = envr_core::i18n::tr_key(
-        "cli.shim.hint.node_engines",
-        "envr 提示：package.json 中 engines.node（{spec}）不满足当前 Node（{active}）。可用 `envr project add node@…` 对齐版本，或修改 package.json。",
-        "envr hint: package.json engines.node ({spec}) does not include the active Node ({active}). Align with: envr project add node@… or adjust engines in package.json.",
-    )
-    .replace("{spec}", &spec)
-    .replace("{active}", &active_label);
+    let msg = shim_i18n::node_engines_hint(&spec, &active_label);
     eprintln!("{msg}");
 }

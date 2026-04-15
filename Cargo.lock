@@ -1187,7 +1187,6 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "envr-config",
- "envr-core",
  "envr-error",
  "envr-platform",
  "envr-shim-core",

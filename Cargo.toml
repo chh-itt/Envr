@@ -53,3 +53,8 @@ source_doc = "refactor docs/07-依赖选择与原则.md"
 default_features = "disabled_by_default"
 tls_backend = "reqwest:rustls-tls"
 forbidden_default_features = ["native-tls", "reqwest/default-tls"]
+
+[profile.release.package.envr-shim]
+opt-level = "z"
+codegen-units = 1
+strip = "symbols"

@@ -2,15 +2,56 @@
 
 use std::sync::OnceLock;
 
-static INIT: OnceLock<()> = OnceLock::new();
+use envr_config::settings::LocaleMode;
+
+static PREFER_ZH: OnceLock<bool> = OnceLock::new();
 
 pub fn bootstrap() {
-    INIT.get_or_init(|| {
-        if let Ok(paths) = envr_platform::paths::current_platform_paths() {
-            let p = envr_config::settings::settings_path_from_platform(&paths);
-            if let Ok(st) = envr_config::settings::Settings::load_or_default_from(&p) {
-                envr_core::i18n::init_from_settings(&st);
-            }
+    let _ = prefer_zh();
+}
+
+fn prefer_zh() -> bool {
+    *PREFER_ZH.get_or_init(|| {
+        let Ok(paths) = envr_platform::paths::current_platform_paths() else {
+            return false;
+        };
+        let p = envr_config::settings::settings_path_from_platform(&paths);
+        let Ok(st) = envr_config::settings::Settings::load_or_default_from(&p) else {
+            return false;
+        };
+        match st.i18n.locale {
+            LocaleMode::ZhCn => true,
+            LocaleMode::EnUs => false,
+            LocaleMode::FollowSystem => envr_config::settings::system_locale_suggests_chinese(),
         }
-    });
+    })
+}
+
+pub fn tr_key(zh_cn: &str, en_us: &str) -> String {
+    if prefer_zh() {
+        zh_cn.to_string()
+    } else {
+        en_us.to_string()
+    }
+}
+
+pub fn node_engines_hint(spec: &str, active: &str) -> String {
+    tr_key(
+        "envr 提示：package.json 中 engines.node（{spec}）不满足当前 Node（{active}）。可用 `envr project add node@…` 对齐版本，或修改 package.json。",
+        "envr hint: package.json engines.node ({spec}) does not include the active Node ({active}). Align with: envr project add node@… or adjust engines in package.json.",
+    )
+    .replace("{spec}", spec)
+    .replace("{active}", active)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn node_hint_formats_placeholders() {
+        let msg = node_engines_hint("^20", "18.19.0");
+        assert!(msg.contains("^20"));
+        assert!(msg.contains("18.19.0"));
+    }
 }

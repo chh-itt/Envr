@@ -6,7 +6,6 @@ license.workspace = true
 
 [dependencies]
 envr-config = { path = "../envr-config" }
-envr-core = { path = "../envr-core" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-shim-core = { path = "../envr-shim-core" }
