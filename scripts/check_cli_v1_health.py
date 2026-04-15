@@ -42,6 +42,18 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", default=str(DEFAULT_REPORT.relative_to(ROOT)))
     ap.add_argument("--schema", default=str(DEFAULT_SCHEMA.relative_to(ROOT)))
+    ap.add_argument(
+        "--require-metric-mode",
+        choices=("proxy", "observed"),
+        default=None,
+        help="require summary.metric_mode to be the given value",
+    )
+    ap.add_argument(
+        "--require-observed-source",
+        choices=("ci_real_run", "smoke_fixture", "flat_jsonl"),
+        default=None,
+        help="require summary.observed_metrics_source to be the given value",
+    )
     args = ap.parse_args()
 
     report_path = ROOT / args.report
@@ -61,6 +73,21 @@ def main() -> int:
             reasons = []
         joined = ", ".join(str(x) for x in reasons) if reasons else "unknown reason"
         bad.append(f"hard guard failed: {joined}")
+
+    metric_mode = summary.get("metric_mode")
+    if args.require_metric_mode is not None and metric_mode != args.require_metric_mode:
+        bad.append(
+            "metric_mode mismatch: "
+            f"required `{args.require_metric_mode}`, got `{metric_mode}`"
+        )
+
+    if args.require_observed_source is not None:
+        src = summary.get("observed_metrics_source")
+        if src != args.require_observed_source:
+            bad.append(
+                "observed_metrics_source mismatch: "
+                f"required `{args.require_observed_source}`, got `{src}`"
+            )
 
     if bad:
         print("cli v1 health check failed:")

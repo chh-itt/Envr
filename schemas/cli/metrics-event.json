@@ -48,6 +48,16 @@
       "type": "string",
       "pattern": "^[a-z0-9_]+$"
     },
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Stable per-process invocation token shared by parse/dispatch/finish events."
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Epoch milliseconds when the event was emitted."
+    },
     "elapsed_ms": {
       "type": "integer",
       "minimum": 0

@@ -83,6 +83,33 @@ def _required_metric_names() -> list[str]:
     ]
 
 
+def _is_valid_observed_metrics(metrics: dict, min_sample_size: int) -> tuple[bool, list[str]]:
+    bad: list[str] = []
+    for key in _required_metric_names():
+        if key not in metrics:
+            bad.append(f"missing `{key}`")
+    for key in (
+        "bootstrap_success_rate",
+        "daily_run_success_rate",
+        "doctor_fix_recovery_rate",
+        "extension_over_new_command_ratio",
+    ):
+        value = metrics.get(key)
+        if not isinstance(value, (int, float)) or not (0.0 <= float(value) <= 1.0):
+            bad.append(f"`{key}` out of range [0,1]: {value!r}")
+    for key in ("time_to_first_success_p95_ms", "offline_safe_latency_p95_ms"):
+        value = metrics.get(key)
+        if not isinstance(value, int) or value < 0:
+            bad.append(f"`{key}` must be non-negative integer: {value!r}")
+
+    sample_size = metrics.get("sample_size")
+    if not isinstance(sample_size, int) or sample_size < min_sample_size:
+        bad.append(
+            f"`sample_size` too small or invalid ({sample_size!r} < {min_sample_size})"
+        )
+    return (len(bad) == 0, bad)
+
+
 def _threshold_violations(metrics: dict) -> list[str]:
     out: list[str] = []
     if metrics["bootstrap_success_rate"] < 0.95:
@@ -215,6 +242,12 @@ def main() -> int:
         help="optional sample size for the reporting window",
     )
     ap.add_argument(
+        "--min-observed-sample-size",
+        type=int,
+        default=20,
+        help="minimum observed sample size to trust observed metric mode",
+    )
+    ap.add_argument(
         "--governance-gate-passed",
         choices=("true", "false"),
         default="true",
@@ -233,17 +266,32 @@ def main() -> int:
     capabilities_report_path = ROOT / args.capabilities_report
     governance_index_path = ROOT / args.governance_index
     command_spec_path = ROOT / args.command_spec
-    observed_metrics_path = ROOT / args.observed_metrics_json if args.observed_metrics_json else OBSERVED_METRICS_PATH
+    if args.observed_metrics_json:
+        observed_metrics_path = Path(args.observed_metrics_json)
+        if not observed_metrics_path.is_absolute():
+            observed_metrics_path = ROOT / observed_metrics_path
+    else:
+        observed_metrics_path = OBSERVED_METRICS_PATH
 
     contract_report = _load_json(contract_report_path)
     capabilities_report = _load_json(capabilities_report_path)
     governance_index = _load_json(governance_index_path)
     command_spec_src = command_spec_path.read_text(encoding="utf-8")
     observed_metrics: dict = {}
+    observed_metrics_valid = False
+    observed_metrics_rejected_reasons: list[str] = []
+    observed_metrics_source: str = ""
     if observed_metrics_path.is_file():
         loaded = _load_json(observed_metrics_path)
         if isinstance(loaded, dict):
-            observed_metrics = loaded
+            observed_metrics_valid, observed_metrics_rejected_reasons = _is_valid_observed_metrics(
+                loaded, args.min_observed_sample_size
+            )
+            if observed_metrics_valid:
+                observed_metrics = loaded
+                src = loaded.get("observed_source")
+                if isinstance(src, str):
+                    observed_metrics_source = src
 
     breaking_contract_changes = len(contract_report.get("breaking_schema_files", []))
     governance_gate_passed = args.governance_gate_passed == "true"
@@ -339,13 +387,19 @@ def main() -> int:
     all_explicit = all(v is not None for v in explicit_fields.values())
     all_observed = len(observed_fields) == len(explicit_fields)
 
+    window_sample_size = args.sample_size
+    if window_sample_size is None:
+        observed_sample_size = observed_metrics.get("sample_size")
+        if isinstance(observed_sample_size, int) and observed_sample_size >= 0:
+            window_sample_size = observed_sample_size
+
     report = {
         "report_version": 1,
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "window": {
             "from": args.window_from,
             "to": args.window_to,
-            "sample_size": args.sample_size,
+            "sample_size": window_sample_size,
         },
         "summary": {
             "hard_guard_passed": hard_guard_passed,
@@ -358,6 +412,9 @@ def main() -> int:
                 if not missing_required_metrics and (all_explicit or all_observed)
                 else "proxy"
             ),
+            "observed_metrics_valid": observed_metrics_valid,
+            "observed_metrics_rejected_reasons": observed_metrics_rejected_reasons,
+            "observed_metrics_source": observed_metrics_source,
         },
         "metrics": metrics,
         "thresholds": {

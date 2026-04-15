@@ -63,6 +63,8 @@ If both flags are provided, JSON mode wins:
 | `success` | boolean | yes | all | `true` \| `false` |
 | `exit_code` | integer | yes | all | process exit code |
 | `error_code` | string | yes | all | snake_case token on failure; success uses empty string `""` |
+| `invocation_id` | string | no | all | stable token for one CLI process invocation; present on metrics events |
+| `timestamp_ms` | integer >= 0 | no | all | epoch milliseconds when event emitted |
 | `quiet` | boolean | yes | parse | omitted on non-`parse` phases |
 | `command` | string | yes | dispatch | snake_case `Command::trace_name`; omitted on non-`dispatch` phases |
 | `elapsed_ms` | integer >= 0 | yes | dispatch | non-negative elapsed milliseconds; omitted on non-`dispatch` phases |

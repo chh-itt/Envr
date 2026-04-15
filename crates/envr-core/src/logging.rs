@@ -1,10 +1,14 @@
 use envr_error::{EnvrError, EnvrResult};
 use std::{env, error::Error, fs, path::PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::fmt::writer::BoxMakeWriter;
+use tracing_subscriber::Layer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub struct LoggingGuard {
     _file_guard: WorkerGuard,
+    _metrics_guard: Option<WorkerGuard>,
 }
 
 /// Options for [`init_logging_with`].
@@ -50,7 +54,44 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
+    // Optional: emit `envr_cli_metrics` events as JSONL for CI / observed metrics aggregation.
+    //
+    // When `ENVR_CLI_METRICS_JSONL` is set, we write JSON objects (one per line) to that path.
+    // This is intentionally separate from normal app logs so automation can consume it directly.
+    //
+    // Note: we build the layer inside each branch so type inference stays consistent for the
+    // chosen console writer (stdout vs stderr).
+    let metrics_path = env::var("ENVR_CLI_METRICS_JSONL").ok().filter(|p| !p.trim().is_empty());
+
     if opts.log_to_stderr {
+        let (metrics_layer, metrics_guard) = if let Some(ref p) = metrics_path {
+            let path = PathBuf::from(p);
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(EnvrError::from)?;
+            let (writer, guard) = tracing_appender::non_blocking(file);
+            let layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(false)
+                .with_current_span(false)
+                .with_writer(BoxMakeWriter::new(writer))
+                .with_filter(Targets::new().with_target("envr_cli_metrics", tracing::Level::INFO));
+            (layer, Some(guard))
+        } else {
+            let (writer, guard) = tracing_appender::non_blocking(std::io::sink());
+            let layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(false)
+                .with_current_span(false)
+                .with_writer(BoxMakeWriter::new(writer))
+                .with_filter(Targets::new());
+            (layer, Some(guard))
+        };
         let file_layer = tracing_subscriber::fmt::layer()
             .with_ansi(false)
             .with_target(true)
@@ -63,9 +104,42 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
                     .with_writer(std::io::stderr),
             )
             .with(file_layer)
+            .with(metrics_layer)
             .try_init()
             .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+        return Ok(LoggingGuard {
+            _file_guard: file_guard,
+            _metrics_guard: metrics_guard,
+        });
     } else {
+        let (metrics_layer, metrics_guard) = if let Some(ref p) = metrics_path {
+            let path = PathBuf::from(p);
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(EnvrError::from)?;
+            let (writer, guard) = tracing_appender::non_blocking(file);
+            let layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(false)
+                .with_current_span(false)
+                .with_writer(BoxMakeWriter::new(writer))
+                .with_filter(Targets::new().with_target("envr_cli_metrics", tracing::Level::INFO));
+            (layer, Some(guard))
+        } else {
+            let (writer, guard) = tracing_appender::non_blocking(std::io::sink());
+            let layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(false)
+                .with_current_span(false)
+                .with_writer(BoxMakeWriter::new(writer))
+                .with_filter(Targets::new());
+            (layer, Some(guard))
+        };
         let file_layer = tracing_subscriber::fmt::layer()
             .with_ansi(false)
             .with_target(true)
@@ -78,15 +152,14 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
                     .with_writer(std::io::stdout),
             )
             .with(file_layer)
+            .with(metrics_layer)
             .try_init()
             .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+        return Ok(LoggingGuard {
+            _file_guard: file_guard,
+            _metrics_guard: metrics_guard,
+        });
     }
-
-    tracing::info!(app = app_name, log_dir = %log_dir.display(), "logging initialized");
-
-    Ok(LoggingGuard {
-        _file_guard: file_guard,
-    })
 }
 
 pub fn format_error_chain(err: &(dyn Error + 'static)) -> String {

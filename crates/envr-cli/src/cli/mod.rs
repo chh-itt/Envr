@@ -34,6 +34,7 @@ use envr_platform::paths::current_platform_paths;
 use crate::presenter::CliPersona;
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -72,9 +73,32 @@ pub(crate) struct ParseMetricsEvent {
 }
 
 static PENDING_PARSE_METRICS: OnceLock<Mutex<Option<ParseMetricsEvent>>> = OnceLock::new();
+static METRICS_INVOCATION_ID: OnceLock<String> = OnceLock::new();
 
 fn pending_parse_metrics() -> &'static Mutex<Option<ParseMetricsEvent>> {
     PENDING_PARSE_METRICS.get_or_init(|| Mutex::new(None))
+}
+
+fn build_metrics_invocation_id() -> String {
+    let pid = std::process::id();
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("p{pid}-t{now_ms}")
+}
+
+pub(crate) fn metrics_invocation_id() -> &'static str {
+    METRICS_INVOCATION_ID
+        .get_or_init(build_metrics_invocation_id)
+        .as_str()
+}
+
+fn now_timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 impl Cli {
@@ -323,6 +347,8 @@ pub fn emit_pending_parse_metrics() {
     tracing::info!(
         target: "envr_cli_metrics",
         phase = "parse",
+        invocation_id = metrics_invocation_id(),
+        timestamp_ms = now_timestamp_ms(),
         output_mode = output_mode,
         persona = CliPersona::from_env().token(),
         quiet = event.quiet,

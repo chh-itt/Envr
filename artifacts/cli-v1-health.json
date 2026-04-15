@@ -1,10 +1,10 @@
 {
   "report_version": 1,
-  "generated_at": "2026-04-15T09:09:53+00:00",
+  "generated_at": "2026-04-15T11:02:41+00:00",
   "window": {
     "from": "2026-04-15",
     "to": "2026-04-15",
-    "sample_size": null
+    "sample_size": 30
   },
   "summary": {
     "hard_guard_passed": true,
@@ -12,20 +12,23 @@
     "blocking_reasons": [],
     "missing_required_metrics": [],
     "threshold_violations": [],
-    "metric_mode": "observed"
+    "metric_mode": "observed",
+    "observed_metrics_valid": true,
+    "observed_metrics_rejected_reasons": [],
+    "observed_metrics_source": "smoke_fixture"
   },
   "metrics": {
-    "bootstrap_success_rate": 0.96,
-    "daily_run_success_rate": 0.99,
-    "doctor_fix_recovery_rate": 0.9,
-    "time_to_first_success_p95_ms": 350000,
-    "offline_safe_latency_p95_ms": 120,
+    "bootstrap_success_rate": 1.0,
+    "daily_run_success_rate": 1.0,
+    "doctor_fix_recovery_rate": 1.0,
+    "time_to_first_success_p95_ms": 0,
+    "offline_safe_latency_p95_ms": 100,
     "breaking_contract_changes": 0,
     "governance_gate_passed": true,
     "long_lived_exemptions": 0,
     "top_level_command_count": 36,
-    "top_level_command_baseline": null,
-    "extension_over_new_command_ratio": 0.85
+    "top_level_command_baseline": 36,
+    "extension_over_new_command_ratio": 1.0
   },
   "thresholds": {
     "bootstrap_success_rate": ">=0.95",

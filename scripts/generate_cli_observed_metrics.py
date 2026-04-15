@@ -21,10 +21,12 @@ BOOTSTRAP_COMMANDS = {"install", "use", "init", "check"}
 DAILY_COMMANDS = {"run", "exec"}
 RECOVERY_COMMANDS = {"doctor", "check", "status"}
 OFFLINE_COMMANDS = {"status", "current", "which", "resolve"}
+SESSION_KEYS = ("session_id", "invocation_id", "request_id", "trace_id", "span_id")
 
 
-def _read_jsonl(path: Path) -> list[dict]:
+def _read_jsonl(path: Path) -> tuple[list[dict], str]:
     rows: list[dict] = []
+    saw_tracing_wrapper = False
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line:
@@ -34,8 +36,23 @@ def _read_jsonl(path: Path) -> list[dict]:
         except json.JSONDecodeError:
             continue
         if isinstance(item, dict):
-            rows.append(item)
-    return rows
+            # Support both:
+            # - flat event objects (already extracted)
+            # - tracing-subscriber JSON format: {"timestamp","level","fields":{...}}
+            fields = item.get("fields")
+            if isinstance(fields, dict):
+                saw_tracing_wrapper = True
+                rows.append(fields)
+            else:
+                rows.append(item)
+    # Determine observed source for audit / gating.
+    if saw_tracing_wrapper:
+        source = "ci_real_run"
+    elif any(isinstance(r.get("invocation_id"), str) and r.get("invocation_id", "").startswith("ci-smoke-") for r in rows):
+        source = "smoke_fixture"
+    else:
+        source = "flat_jsonl"
+    return rows, source
 
 
 def _safe_rate(successes: int, total: int) -> float:
@@ -52,14 +69,40 @@ def _percentile_95(values: list[int]) -> int:
     return values[idx]
 
 
+def _event_sort_key(event: dict) -> tuple[int, int]:
+    ts = event.get("timestamp_ms")
+    if isinstance(ts, int):
+        return (0, ts)
+    return (1, 0)
+
+
 def _session_groups(events: list[dict]) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
-    for idx, event in enumerate(events):
-        session = event.get("session_id")
-        if not isinstance(session, str) or not session:
-            session = f"__synthetic_{idx}"
+    for event in events:
+        session = None
+        for key in SESSION_KEYS:
+            value = event.get(key)
+            if isinstance(value, str) and value:
+                session = value
+                break
+            if isinstance(value, int):
+                session = str(value)
+                break
+        if session is None:
+            # Keep events analyzable even when session_id isn't wired yet.
+            # A shared fallback avoids dispatch/finish fragmentation.
+            session = "__global__"
         out.setdefault(session, []).append(event)
+    for rows in out.values():
+        rows.sort(key=_event_sort_key)
     return out
+
+
+def _event_ts(event: dict, fallback: int) -> int:
+    ts = event.get("timestamp_ms")
+    if isinstance(ts, int):
+        return ts
+    return fallback
 
 
 def main() -> int:
@@ -79,11 +122,13 @@ def main() -> int:
     input_path = Path(args.metrics_jsonl)
     if not input_path.is_absolute():
         input_path = ROOT / input_path
-    rows = _read_jsonl(input_path)
+    rows, observed_source = _read_jsonl(input_path)
 
     dispatch_rows = [r for r in rows if r.get("phase") == "dispatch"]
     finish_rows = [r for r in rows if r.get("phase") == "finish"]
 
+    # Command-level success rates are derived from `dispatch` events since they always contain `command`.
+    # `finish` currently does not include `command` for all paths.
     bootstrap_total = 0
     bootstrap_ok = 0
     for row in dispatch_rows:
@@ -104,30 +149,35 @@ def main() -> int:
         if row.get("success") is True:
             daily_ok += 1
 
-    # Recovery proxy from observed events:
-    # a session counts recovered if any doctor dispatch exists and later a recovery command succeeds.
+    # Recovery proxy from observed events (dispatch-based):
+    # a session counts recovered if any doctor dispatch exists and a later dispatch of
+    # doctor/check/status succeeds in the same session.
     recovered = 0
     recoverable = 0
-    by_session = _session_groups(dispatch_rows)
-    for session_rows in by_session.values():
-        has_doctor = any(r.get("command") == "doctor" for r in session_rows)
-        if not has_doctor:
+    dispatch_by_session = _session_groups(dispatch_rows)
+    for session, d_rows in dispatch_by_session.items():
+        d_rows = dispatch_by_session.get(session, [])
+        if not d_rows:
             continue
+        doctor_dispatch_ts = [_event_ts(r, idx) for idx, r in enumerate(d_rows) if r.get("command") == "doctor"]
+        if not doctor_dispatch_ts:
+            continue
+        first_doctor_ts = min(doctor_dispatch_ts)
         recoverable += 1
         ok = any(
-            (isinstance(r.get("command"), str) and r.get("command") in RECOVERY_COMMANDS and r.get("success") is True)
-            for r in session_rows
+            (
+                isinstance(r.get("command"), str)
+                and r.get("command") in RECOVERY_COMMANDS
+                and r.get("success") is True
+                and _event_ts(r, idx) >= first_doctor_ts
+            )
+            for idx, r in enumerate(d_rows)
         )
         if ok:
             recovered += 1
 
     elapsed_first_success: list[int] = []
-    finish_by_session = _session_groups(finish_rows)
-    for session_rows in finish_by_session.values():
-        ordered = sorted(
-            session_rows,
-            key=lambda r: int(r.get("timestamp_ms", 0)) if isinstance(r.get("timestamp_ms"), int) else 0,
-        )
+    for ordered in dispatch_by_session.values():
         if not ordered:
             continue
         first_ts = ordered[0].get("timestamp_ms")
@@ -160,6 +210,7 @@ def main() -> int:
         # Needs issue tracker context; keep sentinel so health script can override if provided.
         "extension_over_new_command_ratio": 1.0,
         "sample_size": len(rows),
+        "observed_source": observed_source,
     }
 
     out = Path(args.output)

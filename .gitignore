@@ -15,3 +15,6 @@ experiments/
 # Python caches
 __pycache__/
 *.pyc
+
+# CI / observed metrics intermediate
+artifacts/envr-cli-metrics.jsonl

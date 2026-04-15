@@ -7,6 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  REQUIRE_OBSERVED_ON_MAIN: "true"
 
 jobs:
   fmt:
@@ -60,11 +61,18 @@ jobs:
   cli-contract:
     name: CLI Contract Governance
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Download envr-cli metrics JSONL (from tests)
+        uses: actions/download-artifact@v4
+        with:
+          name: envr-cli-metrics-jsonl
+          path: artifacts
 
       - name: Fetch base branch for contract gate
         if: github.event_name == 'pull_request'
@@ -93,21 +101,41 @@ jobs:
 
       - name: Generate observed CLI metrics (if JSONL exists)
         run: |
-          if [ -f artifacts/envr-cli-metrics.jsonl ]; then
-            python scripts/generate_cli_observed_metrics.py --metrics-jsonl artifacts/envr-cli-metrics.jsonl --output artifacts/cli-observed-metrics.json
-          else
-            echo "skip observed metrics: artifacts/envr-cli-metrics.jsonl not found"
+          if [ ! -f artifacts/envr-cli-metrics.jsonl ]; then
+            echo "envr-cli-metrics.jsonl not found; generating CI smoke metrics fixture"
+            python scripts/generate_cli_metrics_smoke_jsonl.py --output artifacts/envr-cli-metrics.jsonl
+          fi
+          python scripts/generate_cli_observed_metrics.py --metrics-jsonl artifacts/envr-cli-metrics.jsonl --output artifacts/cli-observed-metrics.json
+
+      - name: Enforce observed metrics artifact on main (optional)
+        if: github.ref == 'refs/heads/main' && env.REQUIRE_OBSERVED_ON_MAIN == 'true'
+        run: |
+          if [ ! -f artifacts/cli-observed-metrics.json ]; then
+            echo "observed metrics required on main, but artifacts/cli-observed-metrics.json was not found"
+            exit 1
           fi
 
       - name: Check observed CLI metrics quality (if exists)
         if: hashFiles('artifacts/cli-observed-metrics.json') != ''
-        run: python scripts/check_cli_observed_metrics.py --report artifacts/cli-observed-metrics.json --min-sample-size 20
+        run: |
+          python scripts/check_cli_observed_metrics.py --report artifacts/cli-observed-metrics.json --min-sample-size 20
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            python scripts/check_cli_observed_metrics.py --report artifacts/cli-observed-metrics.json --min-sample-size 20 --require-source ci_real_run
+          fi
 
       - name: Generate CLI v1 health report
-        run: python scripts/generate_cli_v1_health_report.py --output artifacts/cli-v1-health.json --observed-metrics-json artifacts/cli-observed-metrics.json
+        run: python scripts/generate_cli_v1_health_report.py --output artifacts/cli-v1-health.json --observed-metrics-json artifacts/cli-observed-metrics.json --top-level-command-baseline 36
 
       - name: Check CLI v1 health hard guards
         run: python scripts/check_cli_v1_health.py --report artifacts/cli-v1-health.json
+
+      - name: Enforce observed metric mode when observed metrics exist
+        if: hashFiles('artifacts/cli-observed-metrics.json') != ''
+        run: python scripts/check_cli_v1_health.py --report artifacts/cli-v1-health.json --require-metric-mode observed
+
+      - name: Enforce real-run observed source on main
+        if: github.ref == 'refs/heads/main' && hashFiles('artifacts/cli-observed-metrics.json') != ''
+        run: python scripts/check_cli_v1_health.py --report artifacts/cli-v1-health.json --require-observed-source ci_real_run
 
       - name: Upload CLI contract report artifact
         uses: actions/upload-artifact@v4
@@ -155,6 +183,38 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace --all-targets
+
+      - name: Generate envr-cli metrics JSONL (real runs)
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          rm -f artifacts/envr-cli-metrics.jsonl
+          export ENVR_CLI_METRICS_JSONL="artifacts/envr-cli-metrics.jsonl"
+          export ENVR_LOG_DIR="${{ runner.temp }}/envr-logs"
+          export ENVR_RUNTIME_ROOT="${{ runner.temp }}/envr-runtime-root"
+          mkdir -p "${ENVR_LOG_DIR}" "${ENVR_RUNTIME_ROOT}"
+
+          # Create a small project dir for init/status.
+          proj="${{ runner.temp }}/envr-ci-proj"
+          rm -rf "${proj}"
+          mkdir -p "${proj}"
+
+          # Ensure sufficient sample size; each invocation emits parse/dispatch/finish.
+          for i in $(seq 1 8); do
+            cargo run -p envr-cli --bin envr -- --format json status >/dev/null
+          done
+
+          cargo run -p envr-cli --bin envr -- --format json init --path "${proj}" >/dev/null
+          # Daily command path (should be stable without requiring installed runtimes).
+          cargo run -p envr-cli --bin envr -- --format json run echo ok >/dev/null
+
+          test -f artifacts/envr-cli-metrics.jsonl
+
+      - name: Upload envr-cli metrics JSONL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: envr-cli-metrics-jsonl
+          path: artifacts/envr-cli-metrics.jsonl
 
   coverage:
     name: Coverage (T044 / cargo envr-cov)

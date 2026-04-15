@@ -6,6 +6,7 @@ use crate::cli::{CliContext, GlobalArgs};
 use crate::presenter::CliPersona;
 use crate::CommandOutcome;
 use std::time::{Duration, Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Route a parsed [`crate::cli::Cli`] to the appropriate handler.
 ///
@@ -54,6 +55,11 @@ fn emit_dispatch_metrics(
     tracing::info!(
         target: "envr_cli_metrics",
         phase = "dispatch",
+        invocation_id = crate::cli::metrics_invocation_id(),
+        timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
         command = command,
         output_mode = crate::output::output_mode_token(output_format),
         persona = CliPersona::from_env().token(),

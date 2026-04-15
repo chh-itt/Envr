@@ -32,6 +32,12 @@ def main() -> int:
         default=20,
         help="minimum sample_size required for observed metrics to be trusted",
     )
+    ap.add_argument(
+        "--require-source",
+        choices=("ci_real_run", "smoke_fixture", "flat_jsonl"),
+        default=None,
+        help="require observed_source to match (for gating on main)",
+    )
     args = ap.parse_args()
 
     report_path = Path(args.report)
@@ -75,6 +81,13 @@ def main() -> int:
             f"`sample_size` too small for observed mode ({sample_size} < {args.min_sample_size}); "
             "use proxy mode or provide larger observed sample"
         )
+
+    if args.require_source is not None:
+        src = data.get("observed_source")
+        if src != args.require_source:
+            bad.append(
+                f"`observed_source` mismatch: required {args.require_source!r}, got {src!r}"
+            )
 
     if bad:
         print("cli observed metrics check failed:")

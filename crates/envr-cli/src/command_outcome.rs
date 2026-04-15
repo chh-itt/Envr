@@ -28,6 +28,7 @@ use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::presenter::CliPersona;
 use envr_error::{EnvrError, EnvrResult};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Process exit status with an optional **business** metrics token (JSON envelope `code`, not [`ErrorCode`](envr_error::ErrorCode)).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +108,11 @@ impl CommandOutcome {
         tracing::info!(
             target: "envr_cli_metrics",
             phase = "finish",
+            invocation_id = crate::cli::metrics_invocation_id(),
+            timestamp_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
             output_mode = crate::output::output_mode_token(g.effective_output_format()),
             persona = CliPersona::from_env().token(),
             success = success,
