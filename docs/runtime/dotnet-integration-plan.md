@@ -133,6 +133,62 @@ Estimated effort: 20-30 min.
 - Dotnet distribution differences by OS/arch could require runtime-specific exceptions not modeled in generic installer flow.
 - Potential conflict between "runtime only" abstraction and dotnet SDK/workload reality.
 
+## 5.1) Dotnet strategy decisions (agreed before implementation)
+
+These decisions are binding for MVP unless a blocker is recorded in section 7.
+
+### A) Windows/system dotnet PATH competition
+
+- When envr resolves `dotnet` via shim/runtime path (non-bypass mode), child process must inject:
+  - `DOTNET_ROOT=<resolved envr runtime home>`
+  - `DOTNET_MULTILEVEL_LOOKUP=0`
+- This ensures envr-managed SDK selection is deterministic and does not silently fall back to system-wide `C:\Program Files\dotnet`.
+- `dotnet.path_proxy_enabled` should follow existing path-proxy policy:
+  - enabled (default): envr-managed dotnet is used.
+  - disabled: explicit system PATH bypass is allowed and reflected in `which` source metadata.
+
+### B) Post-install layout validation (mandatory)
+
+- Install succeeds only when all checks pass:
+  - `dotnet` executable exists under the installed home (`dotnet.exe` on Windows, `dotnet` on Unix).
+  - `sdk/` directory exists and has at least one SDK version entry.
+  - `dotnet --version` (or `dotnet --info`) succeeds under injected env (`DOTNET_ROOT` + `DOTNET_MULTILEVEL_LOOKUP=0`).
+- Any failed check must abort commit of staging dir and return a clear validation/runtime error.
+
+### C) `.envr.toml` vs `global.json` precedence policy
+
+- `.envr.toml` defines envr-level runtime intent and chooses SDK root (`current` / pinned home).
+- `global.json` remains respected by `dotnet` within that chosen root.
+- Preflight check for `envr exec/run`:
+  - Resolve `.envr.toml` dotnet spec.
+  - Execute `dotnet --version` in target project context.
+  - If resolved version does not satisfy `.envr.toml` constraint, treat as policy mismatch:
+    - `warn`: continue with warning.
+    - `error`: fail command.
+- Default recommendation for dotnet enforce mode: `error` (deterministic CI/local behavior).
+
+### D) Workload storage and version switching
+
+- MVP policy: workloads are SDK-local; no automatic migration between SDK versions.
+- On SDK switch (or when mismatch detected), surface guidance:
+  - "workloads may differ by SDK version; run `dotnet workload list` to verify."
+- Post-MVP command candidates:
+  - workload snapshot export/import per SDK.
+  - workload replay when switching SDK versions.
+
+### E) Additional pitfalls to guard
+
+- Global tool isolation:
+  - evaluate setting dedicated `DOTNET_CLI_HOME` for envr-managed runs to reduce cross-contamination with system-level global tools.
+- Architecture correctness:
+  - ensure artifact selection honors host arch; avoid mixing x64/x86/arm64 SDK payloads.
+- First-time experience side effects:
+  - consider opt-in/opt-out setting for `DOTNET_SKIP_FIRST_TIME_EXPERIENCE`.
+- Network diagnostics:
+  - preserve upstream stderr and include actionable hints for proxy/cert/mirror failures.
+- Safe uninstall:
+  - keep uninstall dry-run target reporting and avoid deleting shared directories.
+
 ## 6) Time budget (target)
 
 - Total target: 2.0-3.0 hours (MVP only).
@@ -163,6 +219,14 @@ Use one entry per meaningful implementation step:
 - Coupling hotspot: Predicted around runtime enum + shim command branching.
 - Decision: Start from Phase A -> B -> C to reduce integration risk.
 - Follow-up: Begin Phase A in next implementation step.
+
+## [2026-04-16 12:00] strategy decisions locked
+- Change: Added explicit dotnet MVP policy for PATH contention, install validation, `global.json` precedence, workload behavior, and hidden pitfalls.
+- Result: Implementation can proceed with deterministic behavior rules and conflict handling criteria.
+- Friction: Need to reconcile envr enforcement semantics with dotnet's native `global.json` resolver without confusing users.
+- Coupling hotspot: Shim env injection + resolver/enforce checks span `envr-shim-core`, `envr-resolver`, and CLI command execution flow.
+- Decision: Keep MVP strict/deterministic (`DOTNET_MULTILEVEL_LOOKUP=0`, preflight mismatch checks) and defer workload migration automation.
+- Follow-up: Start Phase A with these rules as acceptance constraints.
 
 ## 8) Post-MVP refactor candidates (triggered by observed friction)
 
