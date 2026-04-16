@@ -11,7 +11,7 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
-use crate::widget_styles::{ButtonVariant, button_style};
+use crate::widget_styles::{ButtonVariant, button_content_centered, button_style};
 
 /// Card width matches layout geometry / persistence (`tasks_gui.md` GUI-061).
 pub const DOWNLOAD_PANEL_SHELL_W: f32 = 320.0;
@@ -40,10 +40,10 @@ pub fn floating_download_panel(
         .spacing(sp.xs as f32)
         .align_y(Alignment::Center);
         return container(
-            button(open_lbl)
+            button(button_content_centered(open_lbl.into()))
                 .on_press(Message::Download(DownloadMsg::ToggleVisible))
                 .height(Length::Fixed(btn_h))
-                .padding([0, sp.sm + 2])
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
                 .style(button_style(tokens, ButtonVariant::Secondary)),
         )
         .into();

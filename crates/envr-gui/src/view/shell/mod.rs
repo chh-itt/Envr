@@ -31,7 +31,9 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
     .height(Length::Fill)
     .spacing(sp.sm as f32);
 
-    let page = if matches!(state.route(), Route::Dashboard | Route::About) {
+    // Dashboard should use full width (avoid large-window right-side whitespace).
+    // About stays centered for readability.
+    let page = if matches!(state.route(), Route::About) {
         container(page_scroll)
             .width(Length::Fill)
             .max_width(t.content_max_width())
