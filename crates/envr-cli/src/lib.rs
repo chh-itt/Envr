@@ -48,12 +48,21 @@ pub fn bootstrap_i18n() {
 ///
 /// Console tracing always uses **stderr** so stdout stays reserved for normal command output and
 /// `--format json` envelopes even when `RUST_LOG` is set. The `debug` flag only affects default
-/// filter setup via [`apply_global`](crate::cli::apply_global) (e.g. `RUST_LOG=debug` when unset).
+/// filter setup (used only when `RUST_LOG` is unset or invalid).
 pub fn run_cli_with_logging(cli: cli::Cli, debug_enabled: bool) -> i32 {
+    let globals = cli.effective_global_args();
+    let default_filter = if globals.quiet {
+        Some("error")
+    } else if debug_enabled {
+        Some("debug")
+    } else {
+        None
+    };
     let _logging_guard = match envr_core::logging::init_logging_with(
         "envr-cli",
         envr_core::logging::LoggingInitOptions {
             log_to_stderr: true,
+            default_filter,
         },
     ) {
         Ok(guard) => guard,
@@ -86,6 +95,7 @@ pub fn flush_parse_metrics_on_early_exit() {
         "envr-cli",
         envr_core::logging::LoggingInitOptions {
             log_to_stderr: true,
+            default_filter: None,
         },
     ) {
         cli::emit_pending_parse_metrics();

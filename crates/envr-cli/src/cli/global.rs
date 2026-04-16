@@ -38,7 +38,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub verbose: bool,
 
-    /// Override runtime root directory (sets `ENVR_RUNTIME_ROOT`).
+    /// Override runtime root directory for this process.
     #[arg(long, global = true, value_name = "PATH")]
     pub runtime_root: Option<String>,
 }

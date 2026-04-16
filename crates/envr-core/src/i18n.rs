@@ -2,6 +2,7 @@ use envr_config::settings::{LocaleMode, Settings};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::cell::Cell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Locale {
@@ -20,7 +21,14 @@ impl Locale {
 
 static CURRENT: AtomicU8 = AtomicU8::new(1); // default en-US
 
+thread_local! {
+    static OVERRIDE: Cell<Option<Locale>> = const { Cell::new(None) };
+}
+
 pub fn current() -> Locale {
+    if let Some(loc) = OVERRIDE.with(|c| c.get()) {
+        return loc;
+    }
     match CURRENT.load(Ordering::Relaxed) {
         0 => Locale::ZhCn,
         _ => Locale::EnUs,
@@ -33,6 +41,18 @@ pub fn set(locale: Locale) {
         Locale::EnUs => 1,
     };
     CURRENT.store(v, Ordering::Relaxed);
+}
+
+/// Temporarily override the locale for the current thread (does not mutate the process-global [`CURRENT`]).
+pub fn with_locale<T>(locale: Locale, f: impl FnOnce() -> T) -> T {
+    let prev = OVERRIDE.with(|c| {
+        let p = c.get();
+        c.set(Some(locale));
+        p
+    });
+    let out = f();
+    OVERRIDE.with(|c| c.set(prev));
+    out
 }
 
 pub fn init_from_settings(settings: &Settings) {
@@ -267,18 +287,16 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn set_and_tr_follow_current_locale() {
-        let _lock = lock_locale_for_test();
-        let _restore = RestoreLocale::new();
-        set(Locale::ZhCn);
-        assert_eq!(tr("中文", "English"), "中文");
-        set(Locale::EnUs);
-        assert_eq!(tr("中文", "English"), "English");
+        with_locale(Locale::ZhCn, || {
+            assert_eq!(tr("中文", "English"), "中文");
+        });
+        with_locale(Locale::EnUs, || {
+            assert_eq!(tr("中文", "English"), "English");
+        });
     }
 
     #[test]
     fn init_from_settings_uses_explicit_locale() {
-        let _lock = lock_locale_for_test();
-        let _restore = RestoreLocale::new();
         let mut s = Settings {
             i18n: I18nSettings {
                 locale: LocaleMode::ZhCn,
@@ -307,44 +325,44 @@ HKEY_CURRENT_USER\Control Panel\International
 
     #[test]
     fn tr_key_uses_locales_and_falls_back() {
-        let _lock = lock_locale_for_test();
-        let _restore = RestoreLocale::new();
-        set(Locale::EnUs);
-        assert_eq!(tr_key("gui.action.install", "安装", "Install"), "Install");
-        assert_eq!(
-            tr_key(
-                "__envr_no_such_message_key__",
-                "中文默认",
-                "English default",
-            ),
-            "English default"
-        );
-        set(Locale::ZhCn);
-        assert_eq!(tr_key("gui.action.install", "安装", "Install"), "安装");
+        with_locale(Locale::EnUs, || {
+            assert_eq!(tr_key("gui.action.install", "安装", "Install"), "Install");
+            assert_eq!(
+                tr_key(
+                    "__envr_no_such_message_key__",
+                    "中文默认",
+                    "English default",
+                ),
+                "English default"
+            );
+        });
+        with_locale(Locale::ZhCn, || {
+            assert_eq!(tr_key("gui.action.install", "安装", "Install"), "安装");
+        });
     }
 
     #[test]
     fn tr_key_loads_cli_locale_entries() {
-        let _lock = lock_locale_for_test();
-        let _restore = RestoreLocale::new();
-        set(Locale::EnUs);
-        assert_eq!(
-            tr_key(
-                "cli.bootstrap.logging_failed",
-                "初始化日志失败",
-                "failed to init logging",
-            ),
-            "failed to init logging"
-        );
-        set(Locale::ZhCn);
-        assert_eq!(
-            tr_key(
-                "cli.bootstrap.logging_failed",
-                "初始化日志失败",
-                "failed to init logging",
-            ),
-            "初始化日志失败"
-        );
+        with_locale(Locale::EnUs, || {
+            assert_eq!(
+                tr_key(
+                    "cli.bootstrap.logging_failed",
+                    "初始化日志失败",
+                    "failed to init logging",
+                ),
+                "failed to init logging"
+            );
+        });
+        with_locale(Locale::ZhCn, || {
+            assert_eq!(
+                tr_key(
+                    "cli.bootstrap.logging_failed",
+                    "初始化日志失败",
+                    "failed to init logging",
+                ),
+                "初始化日志失败"
+            );
+        });
     }
 
     #[test]

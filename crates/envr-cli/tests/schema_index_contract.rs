@@ -60,25 +60,29 @@ fn parse_code_registry(path: &Path) -> (BTreeMap<String, String>, BTreeMap<Strin
 
 fn command_spec_success_messages(path: &Path) -> BTreeSet<String> {
     let raw = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    let spec_row_re = Regex::new(
-        r#"(?s)CommandSpec::new\(\s*"[^"]+"\s*,.*?,\s*&\[[^\]]*\]\s*,\s*&\[(?P<messages>[^\]]*)\]\s*\)\s*\),"#,
-    )
-    .expect("command spec row regex");
     let msg_re = Regex::new(r#""([a-zA-Z0-9_]+)""#).expect("message regex");
 
     let mut out = BTreeSet::new();
-    for row in spec_row_re.captures_iter(&raw) {
-        let list = row
-            .name("messages")
-            .expect("messages capture")
-            .as_str()
-            .trim();
-        if list.is_empty() {
-            continue;
+    // Parse the `success_messages` array for each `CommandSpec::new` row.
+    //
+    // In `src/cli/command_spec.rs`, `help_path` and `success_messages` are both passed as `&[...]`,
+    // and `success_messages` is immediately followed by a line containing `),`.
+    let lines: Vec<&str> = raw.lines().collect();
+    let mut i = 0usize;
+    while i < lines.len() {
+        let t = lines[i].trim();
+        if t.starts_with("&[") && t.contains('"') {
+            let mut j = i + 1;
+            while j < lines.len() && lines[j].trim().is_empty() {
+                j += 1;
+            }
+            if j < lines.len() && lines[j].trim_start().starts_with("),") {
+                for m in msg_re.captures_iter(t) {
+                    out.insert(m[1].to_string());
+                }
+            }
         }
-        for m in msg_re.captures_iter(list) {
-            out.insert(m[1].to_string());
-        }
+        i += 1;
     }
     out
 }

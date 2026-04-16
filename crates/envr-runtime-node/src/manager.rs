@@ -122,7 +122,11 @@ fn set_current_pointer_file(cur: &Path, abs_target_dir: &Path) -> EnvrResult<()>
     if let Some(parent) = cur.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
-    fs::write(cur, abs_target_dir.to_string_lossy().to_string()).map_err(EnvrError::from)?;
+    envr_platform::fs_atomic::write_atomic(
+        cur,
+        abs_target_dir.to_string_lossy().to_string().as_bytes(),
+    )
+    .map_err(EnvrError::from)?;
     Ok(())
 }
 

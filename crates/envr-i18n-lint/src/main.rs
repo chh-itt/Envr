@@ -184,9 +184,24 @@ fn cli_tr_extract_re() -> Regex {
     .expect("cli tr regex")
 }
 
+/// `I18n("k","zh","en")` in CLI help registry tables.
+fn i18n_tuple_extract_re() -> Regex {
+    Regex::new(
+        r#"(?s)\bI18n\s*\(\s*"([^"]+)"\s*,\s*"((?:\\.|[^"\\])*)"\s*,\s*"((?:\\.|[^"\\])*)"\s*,?\s*\)"#,
+    )
+    .expect("I18n tuple regex")
+}
+
 fn extract_tr_pairs(text: &str, path: &Path, out: &mut HashMap<String, (String, String)>) {
     let tr_key_re = tr_key_extract_re();
     for cap in tr_key_re.captures_iter(text) {
+        let key = cap[1].to_string();
+        let zh = unescape_rust_string(&cap[2]);
+        let en = unescape_rust_string(&cap[3]);
+        out.insert(key, (zh, en));
+    }
+    let i18n_re = i18n_tuple_extract_re();
+    for cap in i18n_re.captures_iter(text) {
         let key = cap[1].to_string();
         let zh = unescape_rust_string(&cap[2]);
         let en = unescape_rust_string(&cap[3]);
@@ -534,8 +549,8 @@ mod tests {
     #[test]
     fn extract_cli_help_rs_includes_why() {
         let root = workspace_root();
-        let p = root.join("crates/envr-cli/src/cli_help.rs");
-        let text = fs::read_to_string(&p).expect("cli_help.rs");
+        let p = root.join("crates/envr-cli/src/cli/help_registry/table.inc");
+        let text = fs::read_to_string(&p).expect("help_registry/table.inc");
         let mut out = HashMap::new();
         extract_tr_pairs(&text, &p, &mut out);
         assert!(

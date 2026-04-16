@@ -362,38 +362,15 @@ pub fn emit_pending_parse_metrics() {
         "cli parse completed"
     );
 }
-/// Apply global flags to the process environment before logging and core calls.
+/// Apply global flags to process-wide runtime configuration.
 ///
-/// Uses [`Cli::resolved_output_format`] so `ENVR_OUTPUT_FORMAT` matches subcommand shorthands such as
-/// `doctor --json`.
-///
-/// # Safety
-///
-/// Mutates process environment during single-threaded startup before any other
-/// threads read these variables (see `std::env::set_var` safety contract in Rust 2024).
+/// This function intentionally avoids mutating the process environment (and therefore avoids
+/// `unsafe` in Rust 2024). Environment variables remain supported as **inputs** (e.g.
+/// `ENVR_RUNTIME_ROOT`, `RUST_LOG`) when set by the user or parent process.
 pub fn apply_global(cli: &Cli) {
     let args = cli.effective_global_args();
-    // SAFETY: CLI entry point runs before worker threads; env is read by logging/core after this.
-    unsafe {
-        if args.no_color {
-            std::env::set_var("NO_COLOR", "1");
-        }
-        if let Some(ref p) = args.runtime_root {
-            std::env::set_var("ENVR_RUNTIME_ROOT", p);
-        }
-        match args.effective_output_format() {
-            OutputFormat::Json => {
-                std::env::set_var("ENVR_OUTPUT_FORMAT", "json");
-            }
-            OutputFormat::Text => {
-                std::env::remove_var("ENVR_OUTPUT_FORMAT");
-            }
-        }
-        if args.quiet {
-            std::env::set_var("RUST_LOG", "error");
-        } else if args.debug && std::env::var("RUST_LOG").is_err() {
-            std::env::set_var("RUST_LOG", "debug");
-        }
+    if let Some(ref p) = args.runtime_root {
+        let _ = envr_config::settings::set_process_runtime_root_override(p.trim().into());
     }
 }
 

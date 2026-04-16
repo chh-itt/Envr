@@ -17,6 +17,10 @@ pub struct LoggingInitOptions {
     /// When `true`, emit the console tracing layer to **stderr**; when `false`, to **stdout**.
     /// The `envr` CLI uses `true` so machine-readable stdout (`--format json`, porcelain) is never mixed with logs.
     pub log_to_stderr: bool,
+    /// Default filter used when `RUST_LOG` is not set or invalid.
+    ///
+    /// When `None`, falls back to `"info"`.
+    pub default_filter: Option<&'static str>,
 }
 
 fn default_log_dir() -> EnvrResult<PathBuf> {
@@ -52,7 +56,9 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
     let file_appender = tracing_appender::rolling::daily(&log_dir, format!("{app_name}.log"));
     let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(opts.default_filter.unwrap_or("info"))
+    });
 
     // Optional: emit `envr_cli_metrics` events as JSONL for CI / observed metrics aggregation.
     //

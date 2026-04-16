@@ -32,14 +32,9 @@ impl AliasesFile {
 
     pub fn save_to(&self, path: impl AsRef<Path>) -> EnvrResult<()> {
         let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(EnvrError::from)?;
-        }
-        let tmp = path.with_extension("toml.tmp");
         let content = toml::to_string_pretty(self)
             .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
-        fs::write(&tmp, content).map_err(EnvrError::from)?;
-        fs::rename(&tmp, path).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(path, content.as_bytes()).map_err(EnvrError::from)?;
         Ok(())
     }
 }

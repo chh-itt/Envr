@@ -46,23 +46,30 @@ _envr_hook_restore() {
 }
 
 _envr_hook_main() {
-	local root
-	root="$(_envr_hook_find_root)" || root=""
-	if [[ "${root:-}" == "${_ENVR_HOOK_ROOT:-}" ]]; then
+	local next_root out
+	next_root="$(_envr_hook_find_root)" || next_root=""
+	if [[ "${next_root:-}" == "${_ENVR_HOOK_ROOT:-}" ]]; then
 		return 0
 	fi
 	if [[ -n "${_ENVR_HOOK_ROOT:-}" ]]; then
 		_envr_hook_restore
 	fi
-	_ENVR_HOOK_ROOT="${root:-}"
-	if [[ -z "${root:-}" ]]; then
+	if [[ -z "${next_root:-}" ]]; then
+		unset _ENVR_HOOK_ROOT 2>/dev/null || true
 		return 0
 	fi
-	_envr_hook_capture "$root"
+	_envr_hook_capture "$next_root"
 	if [[ -n "${ENVR_HOOK_VERBOSE:-}" ]]; then
-		echo "envr hook: applying $root" >&2
+		echo "envr hook: applying $next_root" >&2
 	fi
-	eval "$(envr env --shell posix --path "$root" 2>/dev/null)" || true
+	out="$(envr env --shell posix --path "$next_root" 2>/dev/null)" || out=""
+	if [[ -n "${out:-}" ]]; then
+		_ENVR_HOOK_ROOT="${next_root:-}"
+		eval "$out" || true
+	else
+		_envr_hook_restore
+		unset _ENVR_HOOK_ROOT 2>/dev/null || true
+	fi
 }
 
 # After `eval "$(envr hook zsh)"`, `envr deactivate` / `envr off` restores saved vars.

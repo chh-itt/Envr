@@ -501,7 +501,11 @@ impl BunManager {
                 if let Some(parent) = link.parent() {
                     fs::create_dir_all(parent).map_err(EnvrError::from)?;
                 }
-                fs::write(&link, target.display().to_string()).map_err(EnvrError::from)?;
+                envr_platform::fs_atomic::write_atomic(
+                    &link,
+                    target.display().to_string().as_bytes(),
+                )
+                .map_err(EnvrError::from)?;
                 return Ok(());
             }
             #[cfg(not(windows))]

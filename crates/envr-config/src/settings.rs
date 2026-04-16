@@ -6,6 +6,7 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    sync::OnceLock,
     time::SystemTime,
 };
 
@@ -808,16 +809,10 @@ impl Settings {
         self.validate()?;
 
         let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(EnvrError::from)?;
-        }
-
-        let tmp_path = tmp_path_for(path);
         let content = toml::to_string_pretty(self)
             .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
-
-        fs::write(&tmp_path, content).map_err(EnvrError::from)?;
-        replace_file(&tmp_path, path)?;
+        envr_platform::fs_atomic::write_atomic_with_backup(path, content.as_bytes(), "bak")
+            .map_err(EnvrError::from)?;
         let pb = path.to_path_buf();
         SETTINGS_FILE_CACHE.with(|c| {
             c.borrow_mut().remove(&pb);
@@ -835,6 +830,26 @@ thread_local! {
 thread_local! {
     static RESOLVE_RUNTIME_ROOT_CACHE: RefCell<Option<(PathBuf, Option<SystemTime>, PathBuf)>> =
         const { RefCell::new(None) };
+}
+
+static PROCESS_RUNTIME_ROOT_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set a process-wide runtime root override (preferred over `ENVR_RUNTIME_ROOT` and `settings.toml`).
+///
+/// Intended for early startup configuration (CLI global `--runtime-root`) without mutating the
+/// process environment.
+///
+/// Returns `true` when the override was set by this call; `false` when it was already set.
+pub fn set_process_runtime_root_override(path: PathBuf) -> bool {
+    let trimmed = path.to_string_lossy().trim().to_string();
+    if trimmed.is_empty() {
+        return false;
+    }
+    PROCESS_RUNTIME_ROOT_OVERRIDE.set(PathBuf::from(trimmed)).is_ok()
+}
+
+pub fn process_runtime_root_override() -> Option<&'static PathBuf> {
+    PROCESS_RUNTIME_ROOT_OVERRIDE.get()
 }
 
 /// Clears in-process caches for [`Settings::load_or_default_from`] and [`resolve_runtime_root`].
@@ -983,6 +998,9 @@ pub fn settings_path_from_platform(paths: &EnvrPaths) -> PathBuf {
 /// Effective runtime data root: `ENVR_RUNTIME_ROOT` wins, then `settings.toml` `paths.runtime_root`,
 /// then the platform default (`EnvrPaths::runtime_root`).
 pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
+    if let Some(p) = process_runtime_root_override() {
+        return Ok(p.clone());
+    }
     if let Ok(p) = std::env::var("ENVR_RUNTIME_ROOT") {
         let t = p.trim();
         if !t.is_empty() {
@@ -1376,26 +1394,6 @@ fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
     let meta = fs::metadata(path).map_err(EnvrError::from)?;
     meta.modified()
         .map_err(|e| EnvrError::Io(std::io::Error::other(e)))
-}
-
-fn tmp_path_for(path: &Path) -> PathBuf {
-    let mut tmp = path.to_path_buf();
-    let ext = match path.extension().and_then(|s| s.to_str()) {
-        Some(e) if !e.is_empty() => format!("{e}.tmp"),
-        _ => "tmp".to_string(),
-    };
-    tmp.set_extension(ext);
-    tmp
-}
-
-fn replace_file(tmp_path: &Path, final_path: &Path) -> EnvrResult<()> {
-    if final_path.exists() {
-        let bak = final_path.with_extension("bak");
-        let _ = fs::remove_file(&bak);
-        fs::rename(final_path, &bak).map_err(EnvrError::from)?;
-    }
-    fs::rename(tmp_path, final_path).map_err(EnvrError::from)?;
-    Ok(())
 }
 
 fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {

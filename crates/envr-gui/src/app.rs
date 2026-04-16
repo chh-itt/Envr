@@ -1515,6 +1515,11 @@ fn sync_bun_env_center_drafts_from_settings(state: &mut AppState) {
     state.env_center.bun_global_bin_dir_draft = b.global_bin_dir.clone().unwrap_or_default();
 }
 
+fn recompute_env_center_derived(state: &mut AppState) {
+    let distro = state.settings.cache.snapshot().runtime.java.current_distro;
+    state.env_center.recompute_derived_lists(distro);
+}
+
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
     match msg {
         EnvCenterMsg::PickKind(k) => {
@@ -1551,6 +1556,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             if k == envr_domain::runtime::RuntimeKind::Node {
                 state.env_center.node_remote_refreshing = true;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1558,6 +1564,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 ])
             } else if k == envr_domain::runtime::RuntimeKind::Python {
                 state.env_center.python_remote_refreshing = true;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1568,6 +1575,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
                 state.env_center.java_remote_refreshing = true;
                 state.env_center.go_remote_refreshing = false;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1579,6 +1587,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.python_remote_refreshing = false;
                 state.env_center.java_remote_refreshing = false;
                 state.env_center.php_remote_refreshing = false;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1590,6 +1599,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.python_remote_refreshing = false;
                 state.env_center.java_remote_refreshing = false;
                 state.env_center.go_remote_refreshing = false;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1602,6 +1612,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.java_remote_refreshing = false;
                 state.env_center.go_remote_refreshing = false;
                 state.env_center.php_remote_refreshing = false;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1615,6 +1626,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.go_remote_refreshing = false;
                 state.env_center.php_remote_refreshing = false;
                 state.env_center.deno_remote_refreshing = false;
+                recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
@@ -1623,12 +1635,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             } else {
                 if k == envr_domain::runtime::RuntimeKind::Rust {
                     state.env_center.busy = true;
+                    recompute_env_center_derived(state);
                     Task::batch([
                         gui_ops::rust_refresh(),
                         gui_ops::rust_load_components(),
                         gui_ops::rust_load_targets(),
                     ])
                 } else {
+                    recompute_env_center_derived(state);
                     Task::batch([gui_ops::refresh_runtimes(k)])
                 }
             }
@@ -1636,6 +1650,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input =
                 sanitize_runtime_filter_input(state.env_center.kind, &s);
+            recompute_env_center_derived(state);
             Task::none()
         }
         EnvCenterMsg::DirectInstallInput(s) => {
@@ -1652,6 +1667,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
                 Err(e) => state.error = Some(e),
             }
+            recompute_env_center_derived(state);
             Task::none()
         }
         EnvCenterMsg::RemoteLatestDiskSnapshot(kind, rows) => {
@@ -1707,6 +1723,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
                 _ => {}
             }
+            recompute_env_center_derived(state);
             Task::none()
         }
         EnvCenterMsg::RemoteLatestRefreshed(kind, res) => {
@@ -1774,6 +1791,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     }
                 }
             }
+            recompute_env_center_derived(state);
             Task::none()
         }
         EnvCenterMsg::SubmitDirectInstall => {
