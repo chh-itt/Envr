@@ -83,8 +83,18 @@ Initial desired support:
 
 Recommendation:
 
-- Resolve from official Ruby release metadata if stable enough for automation.
-- If upstream metadata is too inconsistent, use a curated parsing strategy with explicit tests.
+- Do not assume Ruby has a Node-style `index.json` or `.NET`-style releases index.
+- Preferred discovery order:
+  - official structured source if one can be proven stable enough
+  - official HTML pages such as `ruby-lang.org/en/downloads/` or `.../downloads/releases/`
+  - official tarball directory / mirror listing such as `cache.ruby-lang.org/pub/ruby/`
+- If official sources are still not structured enough, use a curated parser with explicit tests rather
+  than depending on Git tags as the first choice.
+
+Implementation note:
+
+- Git tags from `ruby/ruby` may be useful as a fallback research source, but should not be the first
+  production metadata source unless official release pages prove too brittle.
 
 ### C. Install layout
 
@@ -99,7 +109,18 @@ Validation after install should require:
 
 - `ruby` executable exists
 - `gem` executable exists
+- `bundle` executable presence is checked explicitly for the chosen distribution artifact
 - basic `ruby --version` succeeds under envr-managed execution
+
+Windows packaging note:
+
+- Do not assume the Windows path can use the same artifact type as Unix.
+- Official Ruby release pages primarily point to source releases, while Windows distribution commonly
+  comes from RubyInstaller.
+- RubyInstaller provides `.exe` installers, but also downloadable `7z` archives; MVP should prefer
+  archive artifacts over interactive installers when possible.
+- If Windows archive artifacts are insufficient for a portable envr layout, record that as a hard
+  blocker instead of silently switching to an interactive installer flow.
 
 ### D. Core command surface
 
@@ -112,8 +133,10 @@ MVP core commands:
 
 Open question to confirm during implementation:
 
-- Does `bundle` always ship with the target distribution, or do we need fallback logic / clearer
-  post-install diagnostics?
+- Modern Ruby includes Bundler as a default gem, but we still need to confirm whether the chosen
+  artifact/distribution exposes a working `bundle` executable consistently on each target platform.
+- If `bundle` is missing in a target artifact, fail validation with a clear diagnostic rather than
+  silently degrading the command surface.
 
 ### E. Runtime-home env policy
 
@@ -152,6 +175,9 @@ Recommended policy:
 - If both exist and disagree:
   - MVP recommendation: warn clearly
   - possible future stricter mode: error
+- If only `.ruby-version` exists and `.envr.toml` does not:
+  - do not silently treat it as an envr pin in MVP
+  - optional future UX: offer import/sync guidance
 
 ### H. Bundler and gem behavior
 
@@ -191,10 +217,14 @@ Target files:
 
 - [ ] Create `crates/envr-runtime-ruby/`
 - [ ] Implement release metadata fetch and version resolution
+- [ ] Decide and document production metadata source by platform:
+  - official release HTML / tarball listing for Unix-like installs
+  - RubyInstaller archive source for Windows installs
 - [ ] Implement install pipeline and validation
 - [ ] Implement current pointer behavior with Windows fallback if needed
 - [ ] Implement installed/current/uninstall flows
 - [ ] Add focused unit tests for version resolution and layout validation
+- [ ] Add explicit validation/tests for `bundle` command availability
 
 ### Phase C - Resolver / run / exec integration
 
@@ -236,6 +266,10 @@ This phase must explicitly re-check the omissions seen in `.NET`:
   - `exec --dry-run`
   - `run --dry-run`
   - project pin path
+- [ ] Add precedence tests for:
+  - `.envr.toml` only
+  - `.ruby-version` only
+  - both present and conflicting
 - [ ] Manual smoke test:
   - `envr remote ruby`
   - `envr install ruby <spec>`
@@ -258,8 +292,10 @@ This phase must explicitly re-check the omissions seen in `.NET`:
 ## 7) Risk watchlist
 
 - Upstream Ruby release metadata may be less automation-friendly than Node or `.NET`
+- Ruby may require different artifact acquisition strategies by platform, especially Windows
 - Windows artifact layout may differ from Unix enough to require special validation logic
-- `bundle` availability may vary by distribution/version
+- `bundle` should usually exist on modern Ruby, but executable availability may still vary by chosen
+  artifact/distribution and must be validated explicitly
 - Gem install location semantics may expose another abstraction gap not covered by current MVP
 - `.ruby-version` precedence may become a product decision hotspot
 
