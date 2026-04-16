@@ -6,7 +6,7 @@ use crate::commands::common::{emit_verbose_step, kind_label, runtime_service};
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RemoteFilter, RuntimeKind};
+use envr_domain::runtime::{RemoteFilter, RuntimeKind, runtime_descriptor, runtime_kinds_all};
 use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodeRemoteRow, list_node_remote_rows, parse_node_index};
@@ -14,15 +14,6 @@ use serde_json::{Value, json};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-
-// Keep defaults limited to runtimes that support remote listing across platforms.
-const ALL_KINDS: [RuntimeKind; 5] = [
-    RuntimeKind::Node,
-    RuntimeKind::Python,
-    RuntimeKind::Java,
-    RuntimeKind::Go,
-    RuntimeKind::Bun,
-];
 
 fn node_index_cache_path() -> Option<std::path::PathBuf> {
     let platform = current_platform_paths().ok()?;
@@ -160,7 +151,9 @@ pub(crate) fn run_inner(
 ) -> EnvrResult<CliExit> {
     let filter = RemoteFilter { prefix };
     let kinds: Vec<RuntimeKind> = match runtime {
-        None => ALL_KINDS.to_vec(),
+        None => runtime_kinds_all()
+            .filter(|k| runtime_descriptor(*k).supports_remote_latest)
+            .collect(),
         Some(l) => vec![app::runtime_installation::parse_kind(&l)?],
     };
     let kinds_for_refresh = kinds.clone();

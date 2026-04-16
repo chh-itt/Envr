@@ -8,7 +8,7 @@ use crate::commands::common::{
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, runtime_kinds_all};
 use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodePaths, normalize_node_version, parse_node_index};
@@ -73,17 +73,6 @@ fn remote_latest_by_line(kind: RuntimeKind, remote: &[RuntimeVersion]) -> HashMa
     }
     m
 }
-
-const ALL_KINDS: [RuntimeKind; 8] = [
-    RuntimeKind::Node,
-    RuntimeKind::Python,
-    RuntimeKind::Java,
-    RuntimeKind::Go,
-    RuntimeKind::Rust,
-    RuntimeKind::Php,
-    RuntimeKind::Deno,
-    RuntimeKind::Bun,
-];
 
 /// Normalized semver (no leading `v`) → optional LTS codename; empty string = LTS without codename.
 fn try_node_lts_map() -> Option<HashMap<String, String>> {
@@ -271,7 +260,7 @@ pub(crate) fn run_inner(
     outdated: bool,
 ) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match runtime {
-        None => ALL_KINDS.to_vec(),
+        None => runtime_kinds_all().collect(),
         Some(l) => vec![app::runtime_installation::parse_kind(&l)?],
     };
 

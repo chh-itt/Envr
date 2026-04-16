@@ -1,7 +1,7 @@
 use iced::widget::{button, row, scrollable, text};
 use iced::{Alignment, Element, Length};
 
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::Message;
@@ -20,17 +20,7 @@ pub fn runtime_nav_bar(
     let on_primary = gui_theme::contrast_on_primary(tokens);
     let mut r = row![].spacing(sp.sm as f32).align_y(Alignment::Center);
 
-    for kind in [
-        RuntimeKind::Node,
-        RuntimeKind::Python,
-        RuntimeKind::Java,
-        RuntimeKind::Go,
-        RuntimeKind::Rust,
-        RuntimeKind::Php,
-        RuntimeKind::Deno,
-        RuntimeKind::Bun,
-        RuntimeKind::Dotnet,
-    ] {
+    for kind in runtime_kinds_all() {
         let icon_c = if kind == active { on_primary } else { txt };
         let label = row![
             Lucide::Package.view(14.0, icon_c),

@@ -55,6 +55,25 @@ fn write_node_layout(runtime_root: &Path, version: &str) {
     fs::write(bin.join("node"), []).expect("touch node");
 }
 
+fn write_go_layout(runtime_root: &Path, version: &str) {
+    let ver = runtime_root.join("runtimes/go/versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create go bin");
+    #[cfg(windows)]
+    fs::write(bin.join("go.exe"), []).expect("touch go.exe");
+    #[cfg(not(windows))]
+    fs::write(bin.join("go"), []).expect("touch go");
+}
+
+fn write_dotnet_layout(runtime_root: &Path, version: &str) {
+    let ver = runtime_root.join("runtimes/dotnet/versions").join(version);
+    fs::create_dir_all(&ver).expect("create dotnet dir");
+    #[cfg(windows)]
+    fs::write(ver.join("dotnet.exe"), []).expect("touch dotnet.exe");
+    #[cfg(not(windows))]
+    fs::write(ver.join("dotnet"), []).expect("touch dotnet");
+}
+
 fn project_with_node_pin(project: &Path, runtime_root: &Path, version: &str) {
     fs::create_dir_all(project).expect("project dir");
     write_node_layout(runtime_root, version);
@@ -63,6 +82,20 @@ fn project_with_node_pin(project: &Path, runtime_root: &Path, version: &str) {
         format!(
             r#"
 [runtimes.node]
+version = "{version}"
+"#
+        ),
+    )
+    .expect("write .envr.toml");
+}
+
+fn project_with_runtime_pin(project: &Path, key: &str, version: &str) {
+    fs::create_dir_all(project).expect("project dir");
+    fs::write(
+        project.join(".envr.toml"),
+        format!(
+            r#"
+[runtimes.{key}]
 version = "{version}"
 "#
         ),
@@ -293,6 +326,52 @@ fn exec_output_redirects_child_streams() {
 }
 
 #[test]
+fn exec_dry_run_dotnet_includes_runtime_home_env() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_dotnet_layout(&runtime_root, "8.0.420");
+    project_with_runtime_pin(&project, "dotnet", "8.0.420");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "dotnet",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &["exec", "--lang", "dotnet", "--dry-run", "sh", "-c", "echo noop"],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("DOTNET_ROOT="),
+        "dry-run should include DOTNET_ROOT; stdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("DOTNET_MULTILEVEL_LOOKUP=0"),
+        "dry-run should disable multilevel lookup; stdout:\n{stdout}"
+    );
+}
+
+#[test]
 fn run_dry_run_includes_env_overrides() {
     let tmp = tempfile::tempdir().expect("tmp");
     let runtime_root = tmp.path().join("runtime-root");
@@ -391,6 +470,35 @@ fn run_dry_run_env_file_applies_before_command() {
     assert!(
         stdout.contains("ENVR_IT_RUNFILE=from_file"),
         "run dry-run should list env from file; stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn run_dry_run_go_pin_includes_goroot() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_go_layout(&runtime_root, "1.22.5");
+    project_with_runtime_pin(&project, "go", "1.22.5");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &["run", "--dry-run", "cmd", "/c", "echo", "noop"],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(&["run", "--dry-run", "sh", "-c", "echo noop"], &runtime_root, &project)
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("GOROOT="),
+        "run dry-run should include GOROOT for pinned go; stdout:\n{stdout}"
     );
 }
 

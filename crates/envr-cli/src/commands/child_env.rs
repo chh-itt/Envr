@@ -20,7 +20,7 @@ use envr_resolver::{
     extend_env_with_tooling_settings, plan_missing_installable_pins, resolve_exec_lang_home,
     resolve_run_lang_home,
 };
-use envr_shim_core::ShimContext;
+use envr_shim_core::{ShimContext, runtime_home_env_for_key};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
@@ -152,7 +152,8 @@ pub fn resolve_exec_home_for_lang(
     })
 }
 
-/// Single-language resolution: prepend that runtime's bin dirs to `PATH`, set `JAVA_HOME` for Java.
+/// Single-language resolution: prepend that runtime's bin dirs to `PATH`, then apply runtime-home
+/// env keys from shared policy hooks.
 pub fn collect_exec_env(
     ctx: &ShimContext,
     lang: &str,
@@ -178,15 +179,8 @@ pub fn collect_exec_env(
                 let bins = dedup_paths(runtime_bin_dirs(&home, lang));
                 let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
                 env.insert("PATH".into(), prepend_path(&bins, old_path));
-                if lang == "java" {
-                    env.insert("JAVA_HOME".into(), home.display().to_string());
-                }
-                if lang == "go" {
-                    env.insert("GOROOT".into(), home.display().to_string());
-                }
-                if lang == "dotnet" {
-                    env.insert("DOTNET_ROOT".into(), home.display().to_string());
-                    env.insert("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into());
+                for (k, v) in runtime_home_env_for_key(&home, lang) {
+                    env.insert(k, v);
                 }
                 let st = load_settings()?;
                 extend_env_with_tooling_settings(
@@ -229,8 +223,7 @@ fn collect_run_env_impl(
         }
     }
     let mut path_entries: Vec<PathBuf> = Vec::new();
-    let mut java_home: Option<PathBuf> = None;
-    let mut go_home: Option<PathBuf> = None;
+    let mut runtime_home_env: HashMap<String, String> = HashMap::new();
     let mut deno_on_path = false;
     let mut bun_on_path = false;
     let stack = RunEnvStack::new(ctx, cfg, install_if_missing);
@@ -251,11 +244,8 @@ fn collect_run_env_impl(
                     let ver = version_label_from_runtime_home(&home);
                     template_keys.insert(key.to_string(), ver);
                 }
-                if lang == "java" {
-                    java_home = Some(home.clone());
-                }
-                if lang == "go" {
-                    go_home = Some(home.clone());
+                for (k, v) in runtime_home_env_for_key(&home, &lang) {
+                    runtime_home_env.insert(k, v);
                 }
                 if lang == "deno" {
                     deno_on_path = true;
@@ -270,18 +260,16 @@ fn collect_run_env_impl(
     path_entries = dedup_paths(path_entries);
     let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
     env.insert("PATH".into(), prepend_path(&path_entries, old_path));
-    if let Some(jh) = java_home {
-        env.insert("JAVA_HOME".into(), jh.display().to_string());
-    }
-    if let Some(gh) = go_home {
-        env.insert("GOROOT".into(), gh.display().to_string());
+    for (k, v) in runtime_home_env {
+        env.insert(k, v);
     }
     let st = load_settings()?;
     extend_env_with_tooling_settings(&mut env, &st, true, deno_on_path, bun_on_path);
     Ok(env)
 }
 
-/// Multi-runtime PATH (node, python, java, go) plus one `JAVA_HOME` when Java resolves.
+/// Multi-runtime PATH plus runtime-home environment keys such as `JAVA_HOME`, `GOROOT`, and
+/// `.NET` root variables when the corresponding runtimes resolve.
 ///
 /// When `install_if_missing` is true, resolution failures for languages pinned in `.envr.toml`
 /// are propagated instead of silently omitting that runtime from `PATH`.
@@ -318,6 +306,8 @@ pub fn hook_env_restore_keys(ctx: &ShimContext) -> EnvrResult<Vec<String>> {
         "PATH",
         "JAVA_HOME",
         "GOROOT",
+        "DOTNET_ROOT",
+        "DOTNET_MULTILEVEL_LOOKUP",
         "GOPROXY",
         "GOPRIVATE",
         "GOSUMDB",

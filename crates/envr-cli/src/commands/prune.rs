@@ -6,19 +6,8 @@ use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, parse_runtime_kind, runtime_kinds_all};
 use envr_error::EnvrResult;
-
-const ALL_KINDS: [RuntimeKind; 8] = [
-    RuntimeKind::Node,
-    RuntimeKind::Python,
-    RuntimeKind::Java,
-    RuntimeKind::Go,
-    RuntimeKind::Rust,
-    RuntimeKind::Php,
-    RuntimeKind::Deno,
-    RuntimeKind::Bun,
-];
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
@@ -28,7 +17,7 @@ pub(crate) fn run_inner(
     execute: bool,
 ) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match lang {
-        None => ALL_KINDS.to_vec(),
+        None => runtime_kinds_all().collect(),
         Some(l) => vec![parse_runtime_kind(l.trim())?],
     };
 

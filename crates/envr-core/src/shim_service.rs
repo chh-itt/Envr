@@ -4,7 +4,7 @@
 //! packages get small stubs that `call` / symlink the real file under `npm bin -g`.
 
 use envr_config::settings::{Settings, settings_path_from_platform};
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{CoreCommand, core_tool_executable};
 use std::collections::HashSet;
@@ -53,17 +53,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
 
 fn core_stems_set() -> HashSet<String> {
     let mut s = HashSet::new();
-    for k in [
-        RuntimeKind::Node,
-        RuntimeKind::Python,
-        RuntimeKind::Java,
-        RuntimeKind::Go,
-        RuntimeKind::Rust,
-        RuntimeKind::Php,
-        RuntimeKind::Deno,
-        RuntimeKind::Bun,
-        RuntimeKind::Dotnet,
-    ] {
+    for k in runtime_kinds_all() {
         for (_, d) in core_shim_entries(k) {
             s.insert((*d).to_ascii_lowercase());
         }

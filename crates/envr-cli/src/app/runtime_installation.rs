@@ -4,7 +4,9 @@
 //! can present via `output` + `presenter`.
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
+use envr_domain::runtime::{
+    RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind, runtime_descriptor,
+};
 use envr_error::{EnvrError, EnvrResult};
 
 /// Parse the runtime kind (shared by multiple commands).
@@ -43,15 +45,5 @@ fn enrich_not_installed_error(err: EnvrError, kind: RuntimeKind, version: &str) 
 
 #[inline]
 fn kind_label(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "node",
-        RuntimeKind::Python => "python",
-        RuntimeKind::Java => "java",
-        RuntimeKind::Go => "go",
-        RuntimeKind::Rust => "rust",
-        RuntimeKind::Php => "php",
-        RuntimeKind::Deno => "deno",
-        RuntimeKind::Bun => "bun",
-        RuntimeKind::Dotnet => "dotnet",
-    }
+    runtime_descriptor(kind).key
 }

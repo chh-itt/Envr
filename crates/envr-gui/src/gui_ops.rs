@@ -1,7 +1,9 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
 use envr_core::shim_service::ShimService;
-use envr_domain::runtime::{InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec};
+use envr_domain::runtime::{
+    InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec, runtime_kinds_all,
+};
 use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
 use std::sync::Arc;
@@ -627,17 +629,7 @@ pub fn refresh_dashboard() -> Task<Message> {
                 }
 
                 let mut rows = Vec::new();
-                for kind in [
-                    RuntimeKind::Node,
-                    RuntimeKind::Python,
-                    RuntimeKind::Java,
-                    RuntimeKind::Go,
-                    RuntimeKind::Rust,
-                    RuntimeKind::Php,
-                    RuntimeKind::Deno,
-                    RuntimeKind::Bun,
-                    RuntimeKind::Dotnet,
-                ] {
+                for kind in runtime_kinds_all() {
                     // Lazy-load Rust: probing Rust calls `rustup`, which creates
                     // `{runtime_root}/runtimes/rust/rustup/settings.toml` on first run.
                     // We only want that side-effect when the user actually opens the Rust page.

@@ -12,7 +12,7 @@ use envr_config::project_config::ProjectConfig;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
-use envr_shim_core::ShimContext;
+use envr_shim_core::{ShimContext, core_tool_executable, parse_core_command};
 use serde_json::json;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -69,37 +69,6 @@ fn collect_exec_env_maybe_install(
             Ok((m, vec![meta]))
         }
         Err(e) => Err(e),
-    }
-}
-
-fn go_tool_executable(home: &std::path::Path, tool: &str) -> Option<std::path::PathBuf> {
-    let bin = home.join("bin");
-    #[cfg(windows)]
-    {
-        match tool {
-            "go" => Some(bin.join("go.exe")),
-            "gofmt" => Some(bin.join("gofmt.exe")),
-            _ => None,
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        match tool {
-            "go" => Some(bin.join("go")),
-            "gofmt" => Some(bin.join("gofmt")),
-            _ => None,
-        }
-    }
-}
-
-fn dotnet_tool_executable(home: &std::path::Path) -> std::path::PathBuf {
-    #[cfg(windows)]
-    {
-        home.join("dotnet.exe")
-    }
-    #[cfg(not(windows))]
-    {
-        home.join("dotnet")
     }
 }
 
@@ -179,24 +148,16 @@ pub(crate) fn run_inner(
     }
 
     // On Windows, executable lookup may happen before applying the child's environment block
-    // (including PATH). Prefer an absolute core tool path when we can derive it from the runtime home.
+    // (including PATH). Prefer an absolute core tool path when it matches the selected runtime.
     let mut resolved_cmd = command.clone();
-    if lang == "go"
-        && (command == "go" || command == "gofmt")
+    if let Some(core_cmd) = parse_core_command(&command)
+        && core_cmd.project_runtime_key() == lang
         && let Ok(home) = child_env::resolve_exec_home_for_lang(ctx, &lang, spec.as_deref(), pc)
     {
         let home = std::fs::canonicalize(&home).unwrap_or(home);
-        if let Some(p) = go_tool_executable(&home, &command) {
+        if let Ok(p) = core_tool_executable(&home, core_cmd) {
             resolved_cmd = p.display().to_string();
         }
-    }
-    if lang == "dotnet"
-        && command == "dotnet"
-        && let Ok(home) = child_env::resolve_exec_home_for_lang(ctx, &lang, spec.as_deref(), pc)
-    {
-        let home = std::fs::canonicalize(&home).unwrap_or(home);
-        let p = dotnet_tool_executable(&home);
-        resolved_cmd = p.display().to_string();
     }
 
     let mut child = crate::commands::common::build_child_command(

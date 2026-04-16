@@ -10,5 +10,5 @@ pub use resolve::{
     resolve_core_shim_command, resolve_core_shim_command_with_settings,
     resolve_runtime_home_for_lang, resolve_runtime_home_for_lang_with_project,
     resolve_runtime_home_for_lang_with_project_and_settings, runtime_version_label_from_executable,
-    which_runtime_detail,
+    runtime_bin_dirs_for_key, runtime_home_env_for_key, which_runtime_detail,
 };

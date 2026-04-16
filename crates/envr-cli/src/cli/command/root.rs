@@ -135,7 +135,7 @@ pub enum Command {
         )]
         args: Vec<String>,
     },
-    /// Print shell snippets setting PATH / JAVA_HOME / project env (merged runtimes)
+    /// Print shell snippets setting PATH / runtime-home env / project env (merged runtimes)
     Env {
         #[command(flatten)]
         project: ProjectPathProfileArgs,

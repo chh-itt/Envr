@@ -6,20 +6,9 @@ use crate::commands::common::kind_label;
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use envr_error::EnvrResult;
 use serde_json::Value;
-
-const ALL_KINDS: [RuntimeKind; 8] = [
-    RuntimeKind::Node,
-    RuntimeKind::Python,
-    RuntimeKind::Java,
-    RuntimeKind::Go,
-    RuntimeKind::Rust,
-    RuntimeKind::Php,
-    RuntimeKind::Deno,
-    RuntimeKind::Bun,
-];
 
 fn next_steps_for_current() -> Vec<(&'static str, String)> {
     vec![(
@@ -39,7 +28,7 @@ pub(crate) fn run_inner(
     runtime: Option<String>,
 ) -> EnvrResult<CliExit> {
     let kinds: Vec<RuntimeKind> = match runtime {
-        None => ALL_KINDS.to_vec(),
+        None => runtime_kinds_all().collect(),
         Some(l) => vec![app::runtime_installation::parse_kind(&l)?],
     };
 

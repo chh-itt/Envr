@@ -16,6 +16,102 @@ pub enum RuntimeKind {
     Dotnet,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeDescriptor {
+    pub kind: RuntimeKind,
+    pub key: &'static str,
+    pub label_en: &'static str,
+    pub label_zh: &'static str,
+    pub supports_remote_latest: bool,
+    pub supports_path_proxy: bool,
+}
+
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 9] = [
+    RuntimeDescriptor {
+        kind: RuntimeKind::Node,
+        key: "node",
+        label_en: "Node",
+        label_zh: "Node",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Python,
+        key: "python",
+        label_en: "Python",
+        label_zh: "Python",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Java,
+        key: "java",
+        label_en: "Java",
+        label_zh: "Java",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Go,
+        key: "go",
+        label_en: "Go",
+        label_zh: "Go",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Rust,
+        key: "rust",
+        label_en: "Rust",
+        label_zh: "Rust",
+        supports_remote_latest: false,
+        supports_path_proxy: false,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Php,
+        key: "php",
+        label_en: "PHP",
+        label_zh: "PHP",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Deno,
+        key: "deno",
+        label_en: "Deno",
+        label_zh: "Deno",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Bun,
+        key: "bun",
+        label_en: "Bun",
+        label_zh: "Bun",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Dotnet,
+        key: "dotnet",
+        label_en: ".NET",
+        label_zh: ".NET",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+];
+
+pub fn runtime_descriptor(kind: RuntimeKind) -> &'static RuntimeDescriptor {
+    RUNTIME_DESCRIPTORS
+        .iter()
+        .find(|d| d.kind == kind)
+        .expect("runtime descriptor must exist for kind")
+}
+
+pub fn runtime_kinds_all() -> impl Iterator<Item = RuntimeKind> {
+    RUNTIME_DESCRIPTORS.iter().map(|d| d.kind)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionSpec(pub String);
 
@@ -81,17 +177,15 @@ pub trait RuntimeProvider: Send + Sync {
 }
 
 pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {
-    match s.to_ascii_lowercase().as_str() {
-        "node" => Ok(RuntimeKind::Node),
-        "python" => Ok(RuntimeKind::Python),
-        "java" => Ok(RuntimeKind::Java),
-        "go" => Ok(RuntimeKind::Go),
-        "rust" => Ok(RuntimeKind::Rust),
-        "php" => Ok(RuntimeKind::Php),
-        "deno" => Ok(RuntimeKind::Deno),
-        "bun" => Ok(RuntimeKind::Bun),
-        "dotnet" => Ok(RuntimeKind::Dotnet),
-        _ => Err(EnvrError::Validation(format!("unknown runtime kind: {s}"))),
+    let normalized = s.to_ascii_lowercase();
+    if let Some(kind) = RUNTIME_DESCRIPTORS
+        .iter()
+        .find(|d| d.key == normalized.as_str())
+        .map(|d| d.kind)
+    {
+        Ok(kind)
+    } else {
+        Err(EnvrError::Validation(format!("unknown runtime kind: {s}")))
     }
 }
 
@@ -112,5 +206,12 @@ mod tests {
     fn parse_runtime_kind_rejects_unknown() {
         let err = parse_runtime_kind("ruby").expect_err("unknown");
         assert!(matches!(err, EnvrError::Validation(_)));
+    }
+
+    #[test]
+    fn descriptors_cover_all_runtime_kinds() {
+        let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
+        assert_eq!(kinds.len(), 9);
+        assert!(kinds.contains(&RuntimeKind::Dotnet));
     }
 }

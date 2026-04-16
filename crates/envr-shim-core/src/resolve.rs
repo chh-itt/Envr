@@ -176,7 +176,7 @@ pub enum CoreCommand {
 }
 
 impl CoreCommand {
-    fn project_runtime_key(self) -> &'static str {
+    pub fn project_runtime_key(self) -> &'static str {
         match self {
             CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => "node",
             CoreCommand::Python | CoreCommand::Pip => "python",
@@ -187,6 +187,36 @@ impl CoreCommand {
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
             CoreCommand::Dotnet => "dotnet",
         }
+    }
+}
+
+/// Bin / root dirs to put on `PATH` for a resolved runtime home (order matters).
+pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
+    match key {
+        "node" => vec![home.join("bin"), home.to_path_buf()],
+        "python" => vec![home.join("Scripts"), home.join("bin")],
+        "java" => vec![home.join("bin")],
+        "go" => vec![home.join("bin")],
+        "rust" => vec![home.to_path_buf()],
+        "php" => vec![home.to_path_buf(), home.join("bin")],
+        "deno" => vec![home.to_path_buf(), home.join("bin")],
+        "bun" => vec![home.to_path_buf(), home.join("bin")],
+        "dotnet" => vec![home.to_path_buf(), home.join("bin")],
+        _ => vec![],
+    }
+}
+
+/// Environment variables that should point at the selected runtime home.
+pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)> {
+    match key {
+        "java" => vec![("JAVA_HOME".into(), home.display().to_string())],
+        // Override stale parent env values so the selected runtime stays authoritative.
+        "go" => vec![("GOROOT".into(), home.display().to_string())],
+        "dotnet" => vec![
+            ("DOTNET_ROOT".into(), home.display().to_string()),
+            ("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()),
+        ],
+        _ => Vec::new(),
     }
 }
 
@@ -991,20 +1021,13 @@ pub fn resolve_core_shim_command_with_settings(
     let key = cmd.project_runtime_key();
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, settings)?;
 
-    let mut extra_env = Vec::new();
+    let mut extra_env = runtime_home_env_for_key(&home, key);
 
     let executable = match cmd {
         CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(&home, cmd)?,
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(&home, cmd)?,
-        CoreCommand::Java | CoreCommand::Javac => {
-            extra_env.push(("JAVA_HOME".into(), home.display().to_string()));
-            java_tool_path(&home, cmd)?
-        }
-        CoreCommand::Go | CoreCommand::Gofmt => {
-            // Override stale GOROOT from the parent environment (e.g. old tests or manual exports).
-            extra_env.push(("GOROOT".into(), home.display().to_string()));
-            go_tool_path(&home, cmd)?
-        }
+        CoreCommand::Java | CoreCommand::Javac => java_tool_path(&home, cmd)?,
+        CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {
             extra_env.extend(settings.deno_registry_env.clone());
@@ -1014,11 +1037,7 @@ pub fn resolve_core_shim_command_with_settings(
             extra_env.extend(settings.bun_registry_env.clone());
             bun_tool_path(&home, cmd)?
         }
-        CoreCommand::Dotnet => {
-            extra_env.push(("DOTNET_ROOT".into(), home.display().to_string()));
-            extra_env.push(("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()));
-            dotnet_tool_path(&home, cmd)?
-        }
+        CoreCommand::Dotnet => dotnet_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1240,6 +1259,25 @@ mod tests {
         let home = tmp.path();
         let err = core_tool_executable(home, CoreCommand::Bun).expect_err("missing bun");
         assert!(err.to_string().contains("bun missing under"));
+    }
+
+    #[test]
+    fn runtime_helpers_cover_dotnet_and_go_env_policy() {
+        let home = Path::new("/tmp/envr-runtime");
+        let dotnet_bins = runtime_bin_dirs_for_key(home, "dotnet");
+        assert_eq!(dotnet_bins, vec![home.to_path_buf(), home.join("bin")]);
+
+        let go_env = runtime_home_env_for_key(home, "go");
+        assert_eq!(go_env, vec![("GOROOT".into(), home.display().to_string())]);
+
+        let dotnet_env = runtime_home_env_for_key(home, "dotnet");
+        assert_eq!(
+            dotnet_env,
+            vec![
+                ("DOTNET_ROOT".into(), home.display().to_string()),
+                ("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()),
+            ]
+        );
     }
 
     #[cfg(windows)]

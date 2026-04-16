@@ -7,7 +7,7 @@ use crate::runtime_session::CliRuntimeSession;
 use envr_config::project_config::{ProjectConfig, RustEnforceMode};
 use envr_config::settings::resolve_runtime_root;
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_descriptor};
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::ShimContext;
 use serde_json::Value;
@@ -44,17 +44,7 @@ pub fn shim_context_for(path: PathBuf, profile_cli: Option<String>) -> EnvrResul
 }
 
 pub fn kind_label(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "node",
-        RuntimeKind::Python => "python",
-        RuntimeKind::Java => "java",
-        RuntimeKind::Go => "go",
-        RuntimeKind::Rust => "rust",
-        RuntimeKind::Php => "php",
-        RuntimeKind::Deno => "deno",
-        RuntimeKind::Bun => "bun",
-        RuntimeKind::Dotnet => "dotnet",
-    }
+    runtime_descriptor(kind).key
 }
 
 /// [`RuntimeService`] for the **process default** runtime root (see [`CliRuntimeSession::connect`]).

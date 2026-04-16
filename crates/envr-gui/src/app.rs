@@ -1028,53 +1028,22 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
 }
 
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
-    match state.env_center.kind {
-        envr_domain::runtime::RuntimeKind::Node => {
-            !state
-                .settings
-                .cache
-                .snapshot()
-                .runtime
-                .node
-                .path_proxy_enabled
-        }
-        envr_domain::runtime::RuntimeKind::Python => {
-            !state
-                .settings
-                .cache
-                .snapshot()
-                .runtime
-                .python
-                .path_proxy_enabled
-        }
-        envr_domain::runtime::RuntimeKind::Java => {
-            !state
-                .settings
-                .cache
-                .snapshot()
-                .runtime
-                .java
-                .path_proxy_enabled
-        }
-        envr_domain::runtime::RuntimeKind::Go => {
-            !state
-                .settings
-                .cache
-                .snapshot()
-                .runtime
-                .go
-                .path_proxy_enabled
-        }
-        envr_domain::runtime::RuntimeKind::Dotnet => {
-            !state
-                .settings
-                .cache
-                .snapshot()
-                .runtime
-                .dotnet
-                .path_proxy_enabled
-        }
-        _ => false,
+    let kind = state.env_center.kind;
+    if !envr_domain::runtime::runtime_descriptor(kind).supports_path_proxy {
+        return false;
+    }
+    let snap = &state.settings.cache.snapshot().runtime;
+    match kind {
+        envr_domain::runtime::RuntimeKind::Node => !snap.node.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Python => !snap.python.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Java => !snap.java.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Go => !snap.go.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Php => !snap.php.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Deno => !snap.deno.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Bun => !snap.bun.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
+        // Rust is not expected to support path proxy, but keep this explicit.
+        envr_domain::runtime::RuntimeKind::Rust => false,
     }
 }
 
@@ -1095,30 +1064,48 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
     }
     state.downloads.maybe_progress_tick_on_motion_frame();
     let waiting_installed_list = state.env_center.busy && state.env_center.installed.is_empty();
-    let waiting_node_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-        && state.env_center.node_remote_refreshing
-        && state.env_center.node_remote_latest.is_empty()
-        && state.env_center.installed.is_empty();
-    let waiting_python_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Python
-        && state.env_center.python_remote_refreshing
-        && state.env_center.python_remote_latest.is_empty()
-        && state.env_center.installed.is_empty();
-    let waiting_java_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Java
-        && state.env_center.java_remote_refreshing
-        && state.env_center.java_remote_latest.is_empty()
-        && state.env_center.installed.is_empty();
-    let waiting_go_remote = state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
-        && state.env_center.go_remote_refreshing
-        && state.env_center.go_remote_latest.is_empty()
-        && state.env_center.installed.is_empty();
+    let waiting_remote = envr_domain::runtime::runtime_descriptor(state.env_center.kind)
+        .supports_remote_latest
+        && state.env_center.installed.is_empty()
+        && match state.env_center.kind {
+            envr_domain::runtime::RuntimeKind::Node => {
+                state.env_center.node_remote_refreshing
+                    && state.env_center.node_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Python => {
+                state.env_center.python_remote_refreshing
+                    && state.env_center.python_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Java => {
+                state.env_center.java_remote_refreshing
+                    && state.env_center.java_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Go => {
+                state.env_center.go_remote_refreshing
+                    && state.env_center.go_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Php => {
+                state.env_center.php_remote_refreshing
+                    && state.env_center.php_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Deno => {
+                state.env_center.deno_remote_refreshing
+                    && state.env_center.deno_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Bun => {
+                state.env_center.bun_remote_refreshing
+                    && state.env_center.bun_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Dotnet => {
+                state.env_center.dotnet_remote_refreshing
+                    && state.env_center.dotnet_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Rust => false,
+        };
     if !state.reduce_motion
         && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
-        && (waiting_installed_list
-            || waiting_node_remote
-            || waiting_python_remote
-            || waiting_java_remote
-            || waiting_go_remote)
+        && (waiting_installed_list || waiting_remote)
     {
         state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
     }

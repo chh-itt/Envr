@@ -750,8 +750,8 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         path: &["env"],
         about: I18n(
             "cli.help.cmd.env",
-            "打印设置 PATH / JAVA_HOME / 项目 env 的 shell 片段（合并运行时）",
-            "Print shell snippets setting PATH / JAVA_HOME / project env (merged runtimes)",
+            "打印设置 PATH / 运行时 HOME 环境变量 / 项目 env 的 shell 片段（合并运行时）",
+            "Print shell snippets setting PATH / runtime-home env / project env (merged runtimes)",
         ),
         after_long_help: None,
         args: &[

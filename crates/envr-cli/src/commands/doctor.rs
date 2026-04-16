@@ -6,20 +6,13 @@ use crate::commands::doctor_presenter;
 use crate::output;
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-pub(crate) const ALL_KINDS: [RuntimeKind; 8] = [
-    RuntimeKind::Node,
-    RuntimeKind::Python,
-    RuntimeKind::Java,
-    RuntimeKind::Go,
-    RuntimeKind::Rust,
-    RuntimeKind::Php,
-    RuntimeKind::Deno,
-    RuntimeKind::Bun,
-];
+pub(crate) fn all_kinds() -> impl Iterator<Item = RuntimeKind> {
+    runtime_kinds_all()
+}
 
 /// When a tool on PATH resolves outside envr shims (machine-readable detail for JSON).
 #[derive(Debug, Clone)]

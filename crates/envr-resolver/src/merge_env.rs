@@ -7,6 +7,7 @@ use envr_config::settings::{
     GoProxyMode, Settings, bun_package_registry_env, deno_package_registry_env,
     prefer_china_mirror_locale,
 };
+use envr_shim_core::runtime_bin_dirs_for_key;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -44,18 +45,7 @@ pub fn prepend_path(entries: &[PathBuf], existing: &str) -> String {
 
 /// Bin / root dirs to put on `PATH` for a resolved runtime home (order matters).
 pub fn runtime_bin_dirs(home: &Path, lang: &str) -> Vec<PathBuf> {
-    match lang {
-        "node" => vec![home.join("bin"), home.to_path_buf()],
-        "python" => vec![home.join("Scripts"), home.join("bin")],
-        "java" => vec![home.join("bin")],
-        "go" => vec![home.join("bin")],
-        "rust" => vec![home.to_path_buf()],
-        "php" => vec![home.to_path_buf(), home.join("bin")],
-        "deno" => vec![home.to_path_buf(), home.join("bin")],
-        "bun" => vec![home.to_path_buf(), home.join("bin")],
-        "dotnet" => vec![home.to_path_buf(), home.join("bin")],
-        _ => vec![],
-    }
+    runtime_bin_dirs_for_key(home, lang)
 }
 
 /// First-seen wins; stable order preserved.

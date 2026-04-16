@@ -1,7 +1,7 @@
 use iced::widget::{button, column, container, row, space, text};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
-use envr_domain::runtime::RuntimeKind;
+use envr_domain::runtime::{RuntimeKind, runtime_descriptor};
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::{Message, Route};
@@ -399,15 +399,5 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
 }
 
 fn kind_label(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "Node",
-        RuntimeKind::Python => "Python",
-        RuntimeKind::Java => "Java",
-        RuntimeKind::Go => "Go",
-        RuntimeKind::Rust => "Rust",
-        RuntimeKind::Php => "PHP",
-        RuntimeKind::Deno => "Deno",
-        RuntimeKind::Bun => "Bun",
-        RuntimeKind::Dotnet => ".NET",
-    }
+    runtime_descriptor(kind).label_en
 }

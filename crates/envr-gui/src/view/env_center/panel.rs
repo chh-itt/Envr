@@ -7,7 +7,7 @@ use envr_config::settings::{
     PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
     RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
 };
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, runtime_descriptor};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
 use iced::widget::{button, column, container, row, rule, space, text, text_input, toggler};
@@ -424,32 +424,12 @@ impl EnvCenterState {
 // (scroll_y is clamped locally during rendering; no persistent clamping helper needed)
 
 pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "Node",
-        RuntimeKind::Python => "Python",
-        RuntimeKind::Java => "Java",
-        RuntimeKind::Go => "Go",
-        RuntimeKind::Rust => "Rust",
-        RuntimeKind::Php => "PHP",
-        RuntimeKind::Deno => "Deno",
-        RuntimeKind::Bun => "Bun",
-        RuntimeKind::Dotnet => ".NET",
-    }
+    runtime_descriptor(kind).label_en
 }
 
 /// Display name for download-panel install tasks (Chinese UI copy).
 pub(crate) fn kind_label_zh(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "Node.js",
-        RuntimeKind::Python => "Python",
-        RuntimeKind::Java => "Java",
-        RuntimeKind::Go => "Go",
-        RuntimeKind::Rust => "Rust",
-        RuntimeKind::Php => "PHP",
-        RuntimeKind::Deno => "Deno",
-        RuntimeKind::Bun => "Bun",
-        RuntimeKind::Dotnet => ".NET",
-    }
+    runtime_descriptor(kind).label_zh
 }
 
 fn node_runtime_settings_section(
@@ -1874,57 +1854,42 @@ pub fn env_center_view(
 
     let show_keys = show_keys.as_slice();
 
-    let node_waiting_remote = state.kind == RuntimeKind::Node
-        && state.node_remote_latest.is_empty()
-        && state.node_remote_refreshing;
-    let python_waiting_remote = state.kind == RuntimeKind::Python
-        && state.python_remote_latest.is_empty()
-        && state.python_remote_refreshing;
-    let java_waiting_remote = state.kind == RuntimeKind::Java
-        && state.java_remote_latest.is_empty()
-        && state.java_remote_refreshing;
-    let go_waiting_remote = state.kind == RuntimeKind::Go
-        && state.go_remote_latest.is_empty()
-        && state.go_remote_refreshing;
-    let php_waiting_remote = state.kind == RuntimeKind::Php
-        && state.php_remote_latest.is_empty()
-        && state.php_remote_refreshing;
-    let deno_waiting_remote = state.kind == RuntimeKind::Deno
-        && state.deno_remote_latest.is_empty()
-        && state.deno_remote_refreshing;
-    let bun_waiting_remote = state.kind == RuntimeKind::Bun
-        && state.bun_remote_latest.is_empty()
-        && state.bun_remote_refreshing;
-    let dotnet_waiting_remote = state.kind == RuntimeKind::Dotnet
-        && state.dotnet_remote_latest.is_empty()
-        && state.dotnet_remote_refreshing;
+    let waiting_remote = runtime_descriptor(state.kind).supports_remote_latest
+        && match state.kind {
+            RuntimeKind::Node => {
+                state.node_remote_latest.is_empty() && state.node_remote_refreshing
+            }
+            RuntimeKind::Python => {
+                state.python_remote_latest.is_empty() && state.python_remote_refreshing
+            }
+            RuntimeKind::Java => {
+                state.java_remote_latest.is_empty() && state.java_remote_refreshing
+            }
+            RuntimeKind::Go => {
+                state.go_remote_latest.is_empty() && state.go_remote_refreshing
+            }
+            RuntimeKind::Php => {
+                state.php_remote_latest.is_empty() && state.php_remote_refreshing
+            }
+            RuntimeKind::Deno => {
+                state.deno_remote_latest.is_empty() && state.deno_remote_refreshing
+            }
+            RuntimeKind::Bun => {
+                state.bun_remote_latest.is_empty() && state.bun_remote_refreshing
+            }
+            RuntimeKind::Dotnet => {
+                state.dotnet_remote_latest.is_empty() && state.dotnet_remote_refreshing
+            }
+            RuntimeKind::Rust => false,
+        };
 
     if let Some(err) = state.remote_error.as_deref()
-        && matches!(
-            state.kind,
-            RuntimeKind::Node
-                | RuntimeKind::Python
-                | RuntimeKind::Java
-                | RuntimeKind::Go
-                | RuntimeKind::Php
-                | RuntimeKind::Deno
-                | RuntimeKind::Bun
-                | RuntimeKind::Dotnet
-        )
+        && runtime_descriptor(state.kind).supports_remote_latest
     {
         list_col = list_col.push(remote_error_inline(tokens, err));
     }
 
-    if (busy && show_keys.is_empty())
-        || (node_waiting_remote && show_keys.is_empty())
-        || (python_waiting_remote && show_keys.is_empty())
-        || (java_waiting_remote && show_keys.is_empty())
-        || (go_waiting_remote && show_keys.is_empty())
-        || (php_waiting_remote && show_keys.is_empty())
-        || (deno_waiting_remote && show_keys.is_empty())
-        || (bun_waiting_remote && show_keys.is_empty())
-        || (dotnet_waiting_remote && show_keys.is_empty())
-    {
+    if (busy && show_keys.is_empty()) || (waiting_remote && show_keys.is_empty()) {
         list_col = list_col.push(loading_skeleton(
             tokens,
             state.skeleton_phase,

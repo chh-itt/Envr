@@ -1,6 +1,6 @@
 use crate::commands::common::{self, kind_label};
 use crate::commands::doctor::{
-    ALL_KINDS, DoctorFinding, DoctorReport, PathAnalysis, PathShadowingInfo,
+    DoctorFinding, DoctorReport, PathAnalysis, PathShadowingInfo, all_kinds,
 };
 use crate::commands::doctor_presenter;
 use crate::output::fmt_template;
@@ -142,7 +142,7 @@ pub(crate) fn build_doctor_report(service: &RuntimeService) -> Result<DoctorRepo
     }
 
     let mut kinds: Vec<(String, usize, Option<String>)> = Vec::new();
-    for kind in ALL_KINDS {
+    for kind in all_kinds() {
         let label = kind_label(kind).to_string();
         let installed = match service.list_installed(kind) {
             Ok(v) => v,

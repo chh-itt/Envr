@@ -563,11 +563,20 @@ fn index_sync_inner(
             envr_domain::runtime::RuntimeKind::Deno,
             envr_domain::runtime::RuntimeKind::Bun,
         ],
-        Some("node") => vec![envr_domain::runtime::RuntimeKind::Node],
-        Some("deno") => vec![envr_domain::runtime::RuntimeKind::Deno],
-        Some("bun") => vec![envr_domain::runtime::RuntimeKind::Bun],
-        Some(other) => {
-            return Err(EnvrError::Validation(format!("unknown runtime: {other}")));
+        Some(runtime_s) => {
+            let kind = envr_domain::runtime::parse_runtime_kind(runtime_s)?;
+            let supported = matches!(
+                kind,
+                envr_domain::runtime::RuntimeKind::Node
+                    | envr_domain::runtime::RuntimeKind::Deno
+                    | envr_domain::runtime::RuntimeKind::Bun
+            );
+            if !supported {
+                return Err(EnvrError::Validation(format!(
+                    "index cache sync supports only node/deno/bun, got: {runtime_s}"
+                )));
+            }
+            vec![kind]
         }
     };
 
