@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 envr-error = { path = "../envr-error" }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

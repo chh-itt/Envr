@@ -421,7 +421,8 @@ pub fn sync_java_home_export(paths: &JavaPaths) -> EnvrResult<()> {
     if let Some(parent) = marker.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
-    fs::write(&marker, format!("{}\n", abs.display())).map_err(EnvrError::from)?;
+    envr_platform::fs_atomic::write_atomic(&marker, format!("{}\n", abs.display()).as_bytes())
+        .map_err(EnvrError::from)?;
     sync_user_java_home(Some(&abs))?;
     Ok(())
 }

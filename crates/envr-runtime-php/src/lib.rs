@@ -23,7 +23,7 @@ use envr_domain::runtime::{
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct PhpRuntimeProvider {
     runtime_root_override: Option<std::path::PathBuf>,
@@ -75,22 +75,6 @@ impl PhpRuntimeProvider {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT)
-    }
-
-    fn file_is_within_ttl(path: &Path, ttl_secs: u64) -> bool {
-        if ttl_secs == 0 {
-            return false;
-        }
-        let Ok(meta) = std::fs::metadata(path) else {
-            return false;
-        };
-        let Ok(mtime) = meta.modified() else {
-            return false;
-        };
-        let Ok(age) = std::time::SystemTime::now().duration_since(mtime) else {
-            return false;
-        };
-        age.as_secs() <= ttl_secs
     }
 
     fn remote_latest_per_major_cache_path(&self) -> EnvrResult<PathBuf> {
@@ -164,10 +148,9 @@ impl RuntimeProvider for PhpRuntimeProvider {
         let Ok(path) = self.remote_latest_per_major_cache_path() else {
             return Vec::new();
         };
-        let Ok(s) = std::fs::read_to_string(&path) else {
-            return Vec::new();
-        };
-        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+        let Some(list) =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+        else {
             return Vec::new();
         };
         list.into_iter().map(RuntimeVersion).collect()
@@ -179,11 +162,11 @@ impl RuntimeProvider for PhpRuntimeProvider {
         }
         let ttl_secs = Self::remote_cache_ttl_secs();
         let cache_file = self.remote_latest_per_major_cache_path()?;
-        if Self::file_is_within_ttl(&cache_file, ttl_secs)
-            && let Ok(s) = std::fs::read_to_string(&cache_file)
-            && let Ok(list) = serde_json::from_str::<Vec<String>>(&s)
-            && !list.is_empty()
-        {
+        if let Some(list) = envr_platform::cache_recovery::read_json_string_list(
+            &cache_file,
+            Some(ttl_secs),
+            |xs| !xs.is_empty(),
+        ) {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
 
@@ -197,7 +180,7 @@ impl RuntimeProvider for PhpRuntimeProvider {
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
             let s = serde_json::to_string(&strings)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
         Ok(list)

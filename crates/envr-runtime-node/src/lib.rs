@@ -136,7 +136,7 @@ impl NodeRuntimeProvider {
             if let Some(parent) = index_cache.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&index_cache, &body)?;
+            envr_platform::fs_atomic::write_atomic(&index_cache, body.as_bytes())?;
             Ok(())
         })();
         Ok(body)
@@ -262,7 +262,7 @@ impl RuntimeProvider for NodeRuntimeProvider {
             std::fs::create_dir_all(paths.cache_dir())?;
             let s = serde_json::to_string(&majors)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
 
@@ -273,10 +273,9 @@ impl RuntimeProvider for NodeRuntimeProvider {
         let Some(path) = self.remote_latest_per_major_cache_file() else {
             return Vec::new();
         };
-        let Ok(s) = std::fs::read_to_string(&path) else {
-            return Vec::new();
-        };
-        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+        let Some(list) =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+        else {
             return Vec::new();
         };
         list.into_iter().map(RuntimeVersion).collect()
@@ -291,13 +290,12 @@ impl RuntimeProvider for NodeRuntimeProvider {
             .cache_dir()
             .join(format!("remote_latest_per_major_{os}_{arch}.json"));
 
-        if Self::file_is_within_ttl(&cache_file, ttl_secs)
-            && let Ok(s) = std::fs::read_to_string(&cache_file)
-        {
-            if let Ok(list) = serde_json::from_str::<Vec<String>>(&s) {
-                return Ok(list.into_iter().map(RuntimeVersion).collect());
-            }
-            let _ = std::fs::remove_file(&cache_file);
+        if let Some(list) = envr_platform::cache_recovery::read_json_string_list(
+            &cache_file,
+            Some(ttl_secs),
+            |xs| !xs.is_empty(),
+        ) {
+            return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
 
         let body = self.load_index_body_cached()?;
@@ -309,7 +307,7 @@ impl RuntimeProvider for NodeRuntimeProvider {
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
             let s = serde_json::to_string(&strings)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
 

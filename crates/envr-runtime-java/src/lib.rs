@@ -130,22 +130,6 @@ impl JavaRuntimeProvider {
             .unwrap_or(DEFAULT)
     }
 
-    fn file_is_within_ttl(path: &std::path::Path, ttl_secs: u64) -> bool {
-        if ttl_secs == 0 {
-            return false;
-        }
-        let Ok(meta) = std::fs::metadata(path) else {
-            return false;
-        };
-        let Ok(mtime) = meta.modified() else {
-            return false;
-        };
-        let Ok(age) = std::time::SystemTime::now().duration_since(mtime) else {
-            return false;
-        };
-        age.as_secs() <= ttl_secs
-    }
-
     fn remote_latest_per_major_cache_file(
         &self,
         os: &str,
@@ -207,15 +191,12 @@ impl RuntimeProvider for JavaRuntimeProvider {
         let arch = std::env::consts::ARCH;
         let ttl_secs = Self::remote_cache_ttl_secs();
         let cache_file = self.remote_latest_per_major_cache_file(os, arch)?;
-        if Self::file_is_within_ttl(&cache_file, ttl_secs)
-            && let Ok(s) = std::fs::read_to_string(&cache_file)
-            && let Ok(list) = serde_json::from_str::<Vec<String>>(&s)
-        {
-            if !list.is_empty() {
-                return Ok(list.into_iter().map(RuntimeVersion).collect());
-            }
-            // Legacy/bad empty cache: force rebuild now instead of waiting TTL.
-            let _ = std::fs::remove_file(&cache_file);
+        if let Some(list) = envr_platform::cache_recovery::read_json_string_list(
+            &cache_file,
+            Some(ttl_secs),
+            |xs| !xs.is_empty(),
+        ) {
+            return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
 
         let index = self.load_index()?;
@@ -231,7 +212,7 @@ impl RuntimeProvider for JavaRuntimeProvider {
             let strings: Vec<String> = out.iter().map(|v| v.0.clone()).collect();
             let s = serde_json::to_string(&strings)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
         Ok(out)
@@ -243,10 +224,11 @@ impl RuntimeProvider for JavaRuntimeProvider {
         let Ok(cache_file) = self.remote_latest_per_major_cache_file(os, arch) else {
             return Vec::new();
         };
-        let Ok(s) = std::fs::read_to_string(&cache_file) else {
-            return Vec::new();
-        };
-        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+        let Some(list) = envr_platform::cache_recovery::read_json_string_list(
+            &cache_file,
+            None,
+            |xs| !xs.is_empty(),
+        ) else {
             return Vec::new();
         };
         list.into_iter().map(RuntimeVersion).collect()

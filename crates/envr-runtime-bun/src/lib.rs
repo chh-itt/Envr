@@ -63,10 +63,13 @@ impl BunRuntimeProvider {
 
         if (offline || Self::file_is_within_ttl(&cache_file, ttl_secs))
             && let Ok(body) = std::fs::read_to_string(&cache_file)
-            && let Ok(tags) = parse_tags(&body)
-            && !tags.is_empty()
         {
-            return Ok(tags);
+            match parse_tags(&body) {
+                Ok(tags) if !tags.is_empty() => return Ok(tags),
+                _ => {
+                    let _ = std::fs::remove_file(&cache_file);
+                }
+            }
         }
 
         if offline {
@@ -83,7 +86,7 @@ impl BunRuntimeProvider {
             std::fs::create_dir_all(&base)?;
             let s = serde_json::to_string(&tags)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
         Ok(tags)
@@ -172,10 +175,9 @@ impl RuntimeProvider for BunRuntimeProvider {
         let Ok(path) = self.remote_latest_per_major_cache_path() else {
             return Vec::new();
         };
-        let Ok(s) = std::fs::read_to_string(&path) else {
-            return Vec::new();
-        };
-        let Ok(list) = serde_json::from_str::<Vec<String>>(&s) else {
+        let Some(list) =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+        else {
             return Vec::new();
         };
         list.into_iter().map(RuntimeVersion).collect()
@@ -184,11 +186,11 @@ impl RuntimeProvider for BunRuntimeProvider {
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let ttl_secs = Self::remote_cache_ttl_secs();
         let cache_file = self.remote_latest_per_major_cache_path()?;
-        if Self::file_is_within_ttl(&cache_file, ttl_secs)
-            && let Ok(s) = std::fs::read_to_string(&cache_file)
-            && let Ok(list) = serde_json::from_str::<Vec<String>>(&s)
-            && !list.is_empty()
-        {
+        if let Some(list) = envr_platform::cache_recovery::read_json_string_list(
+            &cache_file,
+            Some(ttl_secs),
+            |xs| !xs.is_empty(),
+        ) {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
 
@@ -200,7 +202,7 @@ impl RuntimeProvider for BunRuntimeProvider {
             std::fs::create_dir_all(paths.cache_dir())?;
             let s = serde_json::to_string(&list)
                 .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-            std::fs::write(&cache_file, s)?;
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
 
