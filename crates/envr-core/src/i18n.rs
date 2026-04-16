@@ -56,12 +56,16 @@ pub fn with_locale<T>(locale: Locale, f: impl FnOnce() -> T) -> T {
 }
 
 pub fn init_from_settings(settings: &Settings) {
-    let loc = match settings.i18n.locale {
+    set(locale_from_settings(settings));
+}
+
+/// Pure mapping from `settings.toml` to effective locale (no global mutation).
+pub fn locale_from_settings(settings: &Settings) -> Locale {
+    match settings.i18n.locale {
         LocaleMode::ZhCn => Locale::ZhCn,
         LocaleMode::EnUs => Locale::EnUs,
         LocaleMode::FollowSystem => detect_system_locale(),
-    };
-    set(loc);
+    }
 }
 
 pub fn detect_system_locale() -> Locale {

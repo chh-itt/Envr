@@ -34,6 +34,17 @@ pub use presenter::{CliPresenter, CliUxPolicy};
 pub use run_context::{CliPathProfile, CliProjectContext, RunExecContext};
 pub use runtime_session::CliRuntimeSession;
 
+/// Resolve the effective locale for this process from `settings.toml` (no global mutation).
+pub fn bootstrap_locale() -> envr_core::i18n::Locale {
+    if let Ok(paths) = envr_platform::paths::current_platform_paths() {
+        let settings_path = envr_config::settings::settings_path_from_platform(&paths);
+        let st = envr_config::settings::Settings::load_or_default_from(&settings_path)
+            .unwrap_or_default();
+        return envr_core::i18n::locale_from_settings(&st);
+    }
+    envr_core::i18n::Locale::EnUs
+}
+
 /// Match `settings.toml` / platform locale before parsing argv (same as the `envr` binary).
 pub fn bootstrap_i18n() {
     if let Ok(paths) = envr_platform::paths::current_platform_paths() {

@@ -59,6 +59,7 @@ impl Route {
 }
 
 pub struct AppState {
+    locale: envr_core::i18n::Locale,
     route: Route,
     error: Option<String>,
     /// Last main window **inner** size (physical px) for panel geometry (`tasks_gui.md` GUI-061).
@@ -80,7 +81,10 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let gui_defaults = load_gui_downloads_panel_settings_cached();
+        let startup = STARTUP_SETTINGS.get().cloned().unwrap_or_default();
+        let locale = envr_core::i18n::locale_from_settings(&startup);
         Self {
+            locale,
             route: Route::default(),
             error: None,
             window_inner_px: None,
@@ -207,10 +211,11 @@ pub fn run() -> iced::Result {
     }
 
     let startup = load_startup_settings();
-    envr_core::i18n::init_from_settings(&startup);
+    let locale = envr_core::i18n::locale_from_settings(&startup);
     application(
-        || {
+        move || {
             let mut state = AppState::default();
+            state.locale = locale;
             state.dashboard.busy = true;
             state.dashboard.last_error = None;
             (state, gui_ops::refresh_dashboard())
@@ -318,7 +323,8 @@ fn configured_default_font(st: &Settings) -> iced::Font {
 }
 
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
-    match message {
+    let locale = state.locale;
+    envr_core::i18n::with_locale(locale, || match message {
         Message::ThemePollTick => Task::none(),
         Message::A11yPollTick => {
             state.reduce_motion = envr_platform::a11y::prefers_reduced_motion();
@@ -375,7 +381,7 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::Dashboard(msg) => handle_dashboard(state, msg),
         Message::Download(msg) => handle_download(state, msg),
         Message::Settings(msg) => handle_settings(state, msg),
-    }
+    })
 }
 
 fn handle_dashboard(state: &mut AppState, msg: DashboardMsg) -> Task<Message> {
@@ -516,7 +522,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             // Apply immediately so all views re-render with new language.
             let mut st = state.settings.draft.clone();
             st.i18n.locale = m;
-            envr_core::i18n::init_from_settings(&st);
+            state.locale = envr_core::i18n::locale_from_settings(&st);
             Task::none()
         }
         SettingsMsg::Save => {
@@ -2543,5 +2549,5 @@ fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &
 }
 
 fn view(state: &AppState) -> Element<'_, Message> {
-    shell::app_view(state)
+    envr_core::i18n::with_locale(state.locale, || shell::app_view(state))
 }
