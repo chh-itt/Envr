@@ -154,6 +154,9 @@ fn add_error_object_if_possible(
     mut data: Value,
     diagnostics: &[String],
 ) -> Value {
+    if data.is_null() {
+        data = Value::Object(Map::new());
+    }
     let Value::Object(ref mut m) = data else {
         return data;
     };
@@ -664,6 +667,24 @@ mod tests {
         assert_eq!(err["kind"], "validation");
         assert_eq!(err["diagnostics_len"], 1);
         assert!(err["source_chain"].is_array());
+    }
+
+    #[test]
+    fn build_failure_envelope_value_non_quiet_adds_error_object_even_when_data_is_null() {
+        let g = GlobalArgs {
+            output_format: Some(OutputFormat::Json),
+            porcelain: false,
+            quiet: false,
+            no_color: true,
+            debug: false,
+            verbose: false,
+            runtime_root: None,
+        };
+        let v = build_failure_envelope_value(&g, "validation", "missing args", Value::Null, &[]);
+        assert!(v["data"].is_object());
+        assert_eq!(v["data"]["error"]["code"], "validation");
+        assert!(v["data"]["error"]["kind"].is_string());
+        assert!(v["data"]["error"]["message"].is_string());
     }
 
     #[test]

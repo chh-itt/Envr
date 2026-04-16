@@ -166,6 +166,18 @@ All JSON responses use a single-line envelope:
 - `data`: command-specific payload
 - `diagnostics`: string array (error chain / hints)
 
+### Failure `data.error` object (v3+)
+
+In JSON failure envelopes (`success: false`) when not `--quiet`, `envr` will add a normalized object at:
+
+- `data.error.code`: same stable snake_case token as envelope `code`
+- `data.error.kind`: coarse category (see `schemas/cli/error-kind-map.json`)
+- `data.error.message`: human-facing summary (may be localized)
+- `data.error.source_chain`: array of `{ "message": "<string>" }` derived from `diagnostics` for convenience
+
+If the command already provides a `data.error` object, it is preserved as-is.
+When the failure path would otherwise have `data: null`, `envr` will emit an object and attach `data.error` (so automation can always locate structured error info).
+
 ### `next_steps` persona policy
 
 Some success payloads include `data.next_steps` as an array of:
