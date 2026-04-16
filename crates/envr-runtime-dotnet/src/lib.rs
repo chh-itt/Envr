@@ -1,0 +1,147 @@
+mod index;
+mod manager;
+
+pub use index::{DEFAULT_RELEASES_INDEX_URL, DotnetFile, DotnetSdkRelease, resolve_dotnet_version};
+pub use manager::{DotnetManager, DotnetPaths, dotnet_installation_valid, list_installed_versions, read_current};
+
+use envr_domain::runtime::{
+    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
+    VersionSpec,
+};
+use envr_error::EnvrResult;
+use envr_platform::paths::current_platform_paths;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+pub struct DotnetRuntimeProvider {
+    releases_index_url: String,
+    runtime_root_override: Option<PathBuf>,
+}
+
+impl DotnetRuntimeProvider {
+    pub fn new() -> Self {
+        Self {
+            releases_index_url: DEFAULT_RELEASES_INDEX_URL.to_string(),
+            runtime_root_override: None,
+        }
+    }
+
+    pub fn with_releases_index_url(mut self, url: impl Into<String>) -> Self {
+        self.releases_index_url = url.into();
+        self
+    }
+
+    pub fn with_runtime_root(mut self, root: PathBuf) -> Self {
+        self.runtime_root_override = Some(root);
+        self
+    }
+
+    fn runtime_root(&self) -> EnvrResult<PathBuf> {
+        Ok(match &self.runtime_root_override {
+            Some(p) => p.clone(),
+            None => current_platform_paths()?.runtime_root,
+        })
+    }
+
+    fn manager(&self) -> EnvrResult<DotnetManager> {
+        DotnetManager::try_new(self.runtime_root()?, self.releases_index_url.clone())
+    }
+}
+
+impl Default for DotnetRuntimeProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RuntimeProvider for DotnetRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Dotnet
+    }
+
+    fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let paths = DotnetPaths::new(self.runtime_root()?);
+        list_installed_versions(&paths)
+    }
+
+    fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
+        let paths = DotnetPaths::new(self.runtime_root()?);
+        read_current(&paths)
+    }
+
+    fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.manager()?.set_current(version)
+    }
+
+    fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        let releases = self.manager()?.load_releases()?;
+        let mut out: Vec<RuntimeVersion> = releases
+            .into_iter()
+            .map(|r| RuntimeVersion(r.version))
+            .filter(|v| {
+                filter
+                    .prefix
+                    .as_deref()
+                    .is_none_or(|p| v.0.starts_with(p.trim()))
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out.dedup_by(|a, b| a.0 == b.0);
+        Ok(out)
+    }
+
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        let mut majors = Vec::<String>::new();
+        for v in self.list_remote(&RemoteFilter { prefix: None })? {
+            if let Some(m) = v.0.split('.').next()
+                && !m.is_empty()
+            {
+                majors.push(m.to_string());
+            }
+        }
+        majors.sort();
+        majors.dedup();
+        Ok(majors)
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let all = self.list_remote(&RemoteFilter { prefix: None })?;
+        let mut by_major = BTreeMap::<String, RuntimeVersion>::new();
+        for v in all {
+            let Some(major) = v.0.split('.').next() else {
+                continue;
+            };
+            match by_major.get(major) {
+                None => {
+                    by_major.insert(major.to_string(), v);
+                }
+                Some(old) if v.0 > old.0 => {
+                    by_major.insert(major.to_string(), v);
+                }
+                _ => {}
+            }
+        }
+        Ok(by_major.into_values().collect())
+    }
+
+    fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
+        let v = self.manager()?.resolve_spec(&spec.0)?;
+        Ok(ResolvedVersion { version: v })
+    }
+
+    fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        self.manager()?.install_from_spec(request)
+    }
+
+    fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.manager()?.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        let paths = DotnetPaths::new(self.runtime_root()?);
+        Ok((vec![paths.version_dir(&version.0)], None))
+    }
+}

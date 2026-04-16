@@ -951,6 +951,7 @@ dependencies = [
  "envr-platform",
  "envr-runtime-bun",
  "envr-runtime-deno",
+ "envr-runtime-dotnet",
  "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-node",
@@ -1082,6 +1083,20 @@ name = "envr-runtime-deno"
 version = "0.1.0"
 dependencies = [
  "envr-config",
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-dotnet"
+version = "0.1.0"
+dependencies = [
  "envr-domain",
  "envr-download",
  "envr-error",

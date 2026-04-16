@@ -22,6 +22,6 @@ pub use missing_pins::{
 pub use pin_spec::{RuntimePinSpec, parse_runtime_pin_spec, runtime_kind_toml_key};
 pub use project_file::upsert_runtime_pin;
 pub use run_home::{
-    resolve_bun_home, resolve_deno_home, resolve_exec_lang_home, resolve_go_home, resolve_php_home,
-    resolve_run_lang_home,
+    resolve_bun_home, resolve_deno_home, resolve_dotnet_home, resolve_exec_lang_home,
+    resolve_go_home, resolve_php_home, resolve_run_lang_home,
 };

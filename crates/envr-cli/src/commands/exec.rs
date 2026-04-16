@@ -92,6 +92,17 @@ fn go_tool_executable(home: &std::path::Path, tool: &str) -> Option<std::path::P
     }
 }
 
+fn dotnet_tool_executable(home: &std::path::Path) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        home.join("dotnet.exe")
+    }
+    #[cfg(not(windows))]
+    {
+        home.join("dotnet")
+    }
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -178,6 +189,14 @@ pub(crate) fn run_inner(
         if let Some(p) = go_tool_executable(&home, &command) {
             resolved_cmd = p.display().to_string();
         }
+    }
+    if lang == "dotnet"
+        && command == "dotnet"
+        && let Ok(home) = child_env::resolve_exec_home_for_lang(ctx, &lang, spec.as_deref(), pc)
+    {
+        let home = std::fs::canonicalize(&home).unwrap_or(home);
+        let p = dotnet_tool_executable(&home);
+        resolved_cmd = p.display().to_string();
     }
 
     let mut child = crate::commands::common::build_child_command(

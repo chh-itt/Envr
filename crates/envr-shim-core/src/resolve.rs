@@ -17,6 +17,7 @@ pub struct ShimSettingsSnapshot {
     php_path_proxy_enabled: bool,
     deno_path_proxy_enabled: bool,
     bun_path_proxy_enabled: bool,
+    dotnet_path_proxy_enabled: bool,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
@@ -32,6 +33,7 @@ impl Default for ShimSettingsSnapshot {
             php_path_proxy_enabled: true,
             deno_path_proxy_enabled: true,
             bun_path_proxy_enabled: true,
+            dotnet_path_proxy_enabled: true,
             php_windows_build_want_ts: false,
             deno_registry_env: Vec::new(),
             bun_registry_env: Vec::new(),
@@ -49,6 +51,7 @@ impl ShimSettingsSnapshot {
             php_path_proxy_enabled: settings.runtime.php.path_proxy_enabled,
             deno_path_proxy_enabled: settings.runtime.deno.path_proxy_enabled,
             bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
+            dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
             php_windows_build_want_ts: matches!(
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
@@ -97,6 +100,9 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         return true;
     }
     if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !settings.bun_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Dotnet) && !settings.dotnet_path_proxy_enabled {
         return true;
     }
     false
@@ -166,6 +172,7 @@ pub enum CoreCommand {
     Deno,
     Bun,
     Bunx,
+    Dotnet,
 }
 
 impl CoreCommand {
@@ -178,6 +185,7 @@ impl CoreCommand {
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
+            CoreCommand::Dotnet => "dotnet",
         }
     }
 }
@@ -293,6 +301,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "deno" => Some(CoreCommand::Deno),
         "bun" => Some(CoreCommand::Bun),
         "bunx" => Some(CoreCommand::Bunx),
+        "dotnet" => Some(CoreCommand::Dotnet),
         _ => None,
     }
 }
@@ -752,6 +761,18 @@ fn php_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Dotnet => Ok(first_existing(&[
+            home.join("dotnet.exe"),
+            home.join("dotnet"),
+            home.join("bin").join("dotnet"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("dotnet missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a dotnet tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -762,6 +783,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
+        CoreCommand::Dotnet => dotnet_tool_path(home, cmd),
     }
 }
 
@@ -992,6 +1014,11 @@ pub fn resolve_core_shim_command_with_settings(
             extra_env.extend(settings.bun_registry_env.clone());
             bun_tool_path(&home, cmd)?
         }
+        CoreCommand::Dotnet => {
+            extra_env.push(("DOTNET_ROOT".into(), home.display().to_string()));
+            extra_env.push(("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()));
+            dotnet_tool_path(&home, cmd)?
+        }
     };
 
     Ok(ResolvedShim {
@@ -1011,7 +1038,24 @@ fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
         CoreCommand::Php => resolve_php_tool_bypass_envr(cmd),
         CoreCommand::Deno => resolve_deno_tool_bypass_envr(cmd),
         CoreCommand::Bun | CoreCommand::Bunx => resolve_bun_tool_bypass_envr(cmd),
+        CoreCommand::Dotnet => resolve_dotnet_tool_bypass_envr(cmd),
     }
+}
+
+fn resolve_dotnet_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Dotnet => "dotnet",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports dotnet tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
 }
 
 /// Resolve from argv0 basename only (when the shim binary is a copy named `node`, etc.).

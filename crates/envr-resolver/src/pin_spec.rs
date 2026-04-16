@@ -39,6 +39,7 @@ pub fn runtime_kind_toml_key(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Php => "php",
         RuntimeKind::Deno => "deno",
         RuntimeKind::Bun => "bun",
+        RuntimeKind::Dotnet => "dotnet",
     }
 }
 

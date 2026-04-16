@@ -408,5 +408,6 @@ fn kind_label(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Php => "PHP",
         RuntimeKind::Deno => "Deno",
         RuntimeKind::Bun => "Bun",
+        RuntimeKind::Dotnet => ".NET",
     }
 }

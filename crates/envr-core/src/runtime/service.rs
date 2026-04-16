@@ -35,6 +35,7 @@ impl RuntimeService {
             Box::new(envr_runtime_php::PhpRuntimeProvider::new()),
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new()),
             Box::new(envr_runtime_bun::BunRuntimeProvider::new()),
+            Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new()),
         ])
     }
 
@@ -50,7 +51,8 @@ impl RuntimeService {
             Box::new(envr_runtime_rust::RustRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_php::PhpRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_bun::BunRuntimeProvider::new().with_runtime_root(root)),
+            Box::new(envr_runtime_bun::BunRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new().with_runtime_root(root)),
         ])
     }
 

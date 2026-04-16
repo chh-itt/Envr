@@ -47,6 +47,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Php => &[(CoreCommand::Php, "php")],
         RuntimeKind::Deno => &[(CoreCommand::Deno, "deno")],
         RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
+        RuntimeKind::Dotnet => &[(CoreCommand::Dotnet, "dotnet")],
     }
 }
 
@@ -61,6 +62,7 @@ fn core_stems_set() -> HashSet<String> {
         RuntimeKind::Php,
         RuntimeKind::Deno,
         RuntimeKind::Bun,
+        RuntimeKind::Dotnet,
     ] {
         for (_, d) in core_shim_entries(k) {
             s.insert((*d).to_ascii_lowercase());
@@ -596,6 +598,7 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "php"
             | "bun"
             | "bunx"
+            | "dotnet"
     )
 }
 
@@ -715,7 +718,7 @@ mod tests {
         let s = core_stems_set();
         for k in [
             "node", "npm", "npx", "python", "pip", "java", "javac", "go", "gofmt", "php", "bun",
-            "bunx",
+            "bunx", "dotnet",
         ] {
             assert!(s.contains(k), "missing {k}");
         }

@@ -184,6 +184,10 @@ pub fn collect_exec_env(
                 if lang == "go" {
                     env.insert("GOROOT".into(), home.display().to_string());
                 }
+                if lang == "dotnet" {
+                    env.insert("DOTNET_ROOT".into(), home.display().to_string());
+                    env.insert("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into());
+                }
                 let st = load_settings()?;
                 extend_env_with_tooling_settings(
                     &mut env,

@@ -118,3 +118,7 @@ path_proxy_enabled = true
 package_source = "auto"
 path_proxy_enabled = true
 # global_bin_dir = "自定义 bun 全局 bin，用于 shim 同步"
+
+[runtime.dotnet]
+# 当为 false 时，dotnet shim 将透传到系统 PATH 中的 dotnet 可执行文件
+path_proxy_enabled = true

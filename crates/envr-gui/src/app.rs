@@ -721,6 +721,20 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                                     ),
                                 ]);
                             }
+                            envr_domain::runtime::RuntimeKind::Dotnet => {
+                                state.env_center.dotnet_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Dotnet,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Dotnet,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Dotnet,
+                                    ),
+                                ]);
+                            }
                             _ => {}
                         }
                     }
@@ -1049,6 +1063,15 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
                 .snapshot()
                 .runtime
                 .go
+                .path_proxy_enabled
+        }
+        envr_domain::runtime::RuntimeKind::Dotnet => {
+            !state
+                .settings
+                .cache
+                .snapshot()
+                .runtime
+                .dotnet
                 .path_proxy_enabled
         }
         _ => false,
@@ -1548,6 +1571,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.deno_remote_refreshing = false;
             state.env_center.bun_remote_latest.clear();
             state.env_center.bun_remote_refreshing = false;
+            // Keep dotnet remote rows cached across tab switches to avoid "blank then reload".
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
             state.env_center.rust_targets.clear();
@@ -1632,6 +1656,21 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.go_remote_refreshing = false;
                 state.env_center.php_remote_refreshing = false;
                 state.env_center.deno_remote_refreshing = false;
+                recompute_env_center_derived(state);
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Dotnet {
+                state.env_center.dotnet_remote_refreshing = true;
+                state.env_center.node_remote_refreshing = false;
+                state.env_center.python_remote_refreshing = false;
+                state.env_center.java_remote_refreshing = false;
+                state.env_center.go_remote_refreshing = false;
+                state.env_center.php_remote_refreshing = false;
+                state.env_center.deno_remote_refreshing = false;
+                state.env_center.bun_remote_refreshing = false;
                 recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
@@ -1727,6 +1766,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         state.env_center.bun_remote_latest = rows;
                     }
                 }
+                envr_domain::runtime::RuntimeKind::Dotnet => {
+                    if state.env_center.dotnet_remote_latest.is_empty()
+                        || rows.len() > state.env_center.dotnet_remote_latest.len()
+                    {
+                        state.env_center.dotnet_remote_latest = rows;
+                    }
+                }
                 _ => {}
             }
             recompute_env_center_derived(state);
@@ -1765,6 +1811,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                             state.env_center.bun_remote_refreshing = false;
                             state.env_center.bun_remote_latest = rows;
                         }
+                        envr_domain::runtime::RuntimeKind::Dotnet => {
+                            state.env_center.dotnet_remote_refreshing = false;
+                            state.env_center.dotnet_remote_latest = rows;
+                        }
                         _ => {}
                     }
                 }
@@ -1792,6 +1842,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         }
                         envr_domain::runtime::RuntimeKind::Bun => {
                             state.env_center.bun_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Dotnet => {
+                            state.env_center.dotnet_remote_refreshing = false;
                         }
                         _ => {}
                     }
@@ -2281,6 +2334,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 Task::batch([
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Bun),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SetDotnetPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.dotnet.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Dotnet),
                 ])
             } else {
                 persist_settings_clone_task(st)

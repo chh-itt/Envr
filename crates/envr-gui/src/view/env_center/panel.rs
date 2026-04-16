@@ -5,7 +5,7 @@ use envr_config::settings::{
     GoRuntimeSettings, JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource,
     NodeRuntimeSettings, NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings,
     PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
-    RustDownloadSource, RustRuntimeSettings,
+    RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion};
 use envr_ui::theme::ThemeTokens;
@@ -71,6 +71,7 @@ pub enum EnvCenterMsg {
     SetDenoPathProxy(bool),
     SetBunPackageSource(NpmRegistryMode),
     SetBunPathProxy(bool),
+    SetDotnetPathProxy(bool),
     BunGlobalBinDirEdit(String),
     ApplyBunGlobalBinDir,
 
@@ -142,6 +143,9 @@ pub struct EnvCenterState {
     /// Bun: latest patch per major from tags cache/network.
     pub bun_remote_latest: Vec<RuntimeVersion>,
     pub bun_remote_refreshing: bool,
+    /// .NET: latest patch per major from releases metadata/cache.
+    pub dotnet_remote_latest: Vec<RuntimeVersion>,
+    pub dotnet_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -193,6 +197,8 @@ impl Default for EnvCenterState {
             deno_remote_refreshing: false,
             bun_remote_latest: Vec::new(),
             bun_remote_refreshing: false,
+            dotnet_remote_latest: Vec::new(),
+            dotnet_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -295,6 +301,13 @@ impl EnvCenterState {
                     if let Some(k) = parse_major_from_ver(&v.0)
                         && bun_major_supported_on_host(&k)
                     {
+                        keys_set.insert(k);
+                    }
+                }
+            }
+            RuntimeKind::Dotnet => {
+                for v in &self.dotnet_remote_latest {
+                    if let Some(k) = parse_major_from_ver(&v.0) {
                         keys_set.insert(k);
                     }
                 }
@@ -420,6 +433,7 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Php => "PHP",
         RuntimeKind::Deno => "Deno",
         RuntimeKind::Bun => "Bun",
+        RuntimeKind::Dotnet => ".NET",
     }
 }
 
@@ -434,6 +448,7 @@ pub(crate) fn kind_label_zh(kind: RuntimeKind) -> &'static str {
         RuntimeKind::Php => "PHP",
         RuntimeKind::Deno => "Deno",
         RuntimeKind::Bun => "Bun",
+        RuntimeKind::Dotnet => ".NET",
     }
 }
 
@@ -1597,6 +1612,51 @@ fn bun_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Runtim
         .cloned()
 }
 
+fn dotnet_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .dotnet_remote_latest
+        .iter()
+        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
+fn dotnet_runtime_settings_section(
+    dotnet: &DotnetRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.dotnet.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.dotnet.path_proxy.hint",
+            "开启时由 envr 接管 dotnet；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages dotnet; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(dotnet.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetDotnetPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.dotnet.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(column![proxy_toggle, proxy_note].spacing(sp.sm as f32).width(Length::Fill))
+        .padding(Padding::from([sp.md as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn env_center_view(
     state: &EnvCenterState,
@@ -1608,6 +1668,7 @@ pub fn env_center_view(
     php_runtime: Option<&PhpRuntimeSettings>,
     deno_runtime: Option<&DenoRuntimeSettings>,
     bun_runtime: Option<&BunRuntimeSettings>,
+    dotnet_runtime: Option<&DotnetRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -1627,6 +1688,7 @@ pub fn env_center_view(
         RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Dotnet => dotnet_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
@@ -1661,6 +1723,7 @@ pub fn env_center_view(
             | RuntimeKind::Php
             | RuntimeKind::Deno
             | RuntimeKind::Bun
+            | RuntimeKind::Dotnet
     );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -1743,6 +1806,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Bun {
         bun_runtime
             .map(|b| bun_runtime_settings_section(b, &state.bun_global_bin_dir_draft, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Dotnet {
+        dotnet_runtime
+            .map(|d| dotnet_runtime_settings_section(d, tokens))
             .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
@@ -1828,6 +1895,9 @@ pub fn env_center_view(
     let bun_waiting_remote = state.kind == RuntimeKind::Bun
         && state.bun_remote_latest.is_empty()
         && state.bun_remote_refreshing;
+    let dotnet_waiting_remote = state.kind == RuntimeKind::Dotnet
+        && state.dotnet_remote_latest.is_empty()
+        && state.dotnet_remote_refreshing;
 
     if let Some(err) = state.remote_error.as_deref()
         && matches!(
@@ -1839,6 +1909,7 @@ pub fn env_center_view(
                 | RuntimeKind::Php
                 | RuntimeKind::Deno
                 | RuntimeKind::Bun
+                | RuntimeKind::Dotnet
         )
     {
         list_col = list_col.push(remote_error_inline(tokens, err));
@@ -1852,6 +1923,7 @@ pub fn env_center_view(
         || (php_waiting_remote && show_keys.is_empty())
         || (deno_waiting_remote && show_keys.is_empty())
         || (bun_waiting_remote && show_keys.is_empty())
+        || (dotnet_waiting_remote && show_keys.is_empty())
     {
         list_col = list_col.push(loading_skeleton(
             tokens,
@@ -1946,6 +2018,10 @@ pub fn env_center_view(
                     bun_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Dotnet {
+                    dotnet_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
                 } else {
                     key.clone()
                 }
@@ -2018,15 +2094,19 @@ pub fn env_center_view(
                     .padding([sp.sm as f32, sp.sm as f32])
                     .style(button_style(tokens, ButtonVariant::Danger));
 
-                    rows = rows.push(
-                        container(
-                            row![text(ver_text).width(Length::Fill), use_btn, uninstall_btn]
-                                .spacing(sp.sm as f32)
-                                .align_y(Alignment::Center)
-                                .width(Length::Fill),
-                        )
-                        .padding([sp.xs as f32, sp.md as f32]),
-                    );
+                    let line_row = if is_current_exact {
+                        row![text(ver_text).width(Length::Fill)]
+                            .spacing(sp.sm as f32)
+                            .align_y(Alignment::Center)
+                            .width(Length::Fill)
+                    } else {
+                        row![text(ver_text).width(Length::Fill), use_btn, uninstall_btn]
+                            .spacing(sp.sm as f32)
+                            .align_y(Alignment::Center)
+                            .width(Length::Fill)
+                    };
+
+                    rows = rows.push(container(line_row).padding([sp.xs as f32, sp.md as f32]));
                 }
                 container(rows).width(Length::Fill).into()
             } else {

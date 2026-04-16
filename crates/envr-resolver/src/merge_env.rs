@@ -53,6 +53,7 @@ pub fn runtime_bin_dirs(home: &Path, lang: &str) -> Vec<PathBuf> {
         "php" => vec![home.to_path_buf(), home.join("bin")],
         "deno" => vec![home.to_path_buf(), home.join("bin")],
         "bun" => vec![home.to_path_buf(), home.join("bin")],
+        "dotnet" => vec![home.to_path_buf(), home.join("bin")],
         _ => vec![],
     }
 }

@@ -636,6 +636,7 @@ pub fn refresh_dashboard() -> Task<Message> {
                     RuntimeKind::Php,
                     RuntimeKind::Deno,
                     RuntimeKind::Bun,
+                    RuntimeKind::Dotnet,
                 ] {
                     // Lazy-load Rust: probing Rust calls `rustup`, which creates
                     // `{runtime_root}/runtimes/rust/rustup/settings.toml` on first run.

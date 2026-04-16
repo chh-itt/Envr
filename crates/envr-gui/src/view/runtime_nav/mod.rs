@@ -29,6 +29,7 @@ pub fn runtime_nav_bar(
         RuntimeKind::Php,
         RuntimeKind::Deno,
         RuntimeKind::Bun,
+        RuntimeKind::Dotnet,
     ] {
         let icon_c = if kind == active { on_primary } else { txt };
         let label = row![

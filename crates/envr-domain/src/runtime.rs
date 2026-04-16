@@ -13,6 +13,7 @@ pub enum RuntimeKind {
     Php,
     Deno,
     Bun,
+    Dotnet,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +90,7 @@ pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {
         "php" => Ok(RuntimeKind::Php),
         "deno" => Ok(RuntimeKind::Deno),
         "bun" => Ok(RuntimeKind::Bun),
+        "dotnet" => Ok(RuntimeKind::Dotnet),
         _ => Err(EnvrError::Validation(format!("unknown runtime kind: {s}"))),
     }
 }

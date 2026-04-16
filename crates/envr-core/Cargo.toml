@@ -21,6 +21,7 @@ envr-runtime-rust = { path = "../envr-runtime-rust" }
 envr-runtime-php = { path = "../envr-runtime-php" }
 envr-runtime-deno = { path = "../envr-runtime-deno" }
 envr-runtime-bun = { path = "../envr-runtime-bun" }
+envr-runtime-dotnet = { path = "../envr-runtime-dotnet" }
 envr-shim-core = { path = "../envr-shim-core" }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
