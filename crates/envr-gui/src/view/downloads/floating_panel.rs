@@ -2,7 +2,6 @@ use super::model::{DownloadPanelState, JobState};
 use super::panel::DownloadMsg;
 use super::panel::format_job_state_line;
 use envr_ui::theme::ThemeTokens;
-use iced::mouse;
 use iced::widget::{
     button, column, container, mouse_area, progress_bar, row, scrollable, space, text,
 };
@@ -50,33 +49,75 @@ pub fn floating_download_panel(
         .into();
     }
 
+    let running = state
+        .jobs
+        .iter()
+        .filter(|j| j.state == JobState::Running)
+        .count();
+    let summary_line = if running > 0 {
+        format!(
+            "{} {}",
+            running,
+            envr_core::i18n::tr_key(
+                "gui.downloads.running_summary",
+                "个任务进行中…",
+                "task(s) running…",
+            )
+        )
+    } else if state.jobs.is_empty() {
+        envr_core::i18n::tr_key(
+            "gui.downloads.idle_summary",
+            "暂无任务",
+            "No active tasks",
+        )
+    } else {
+        envr_core::i18n::tr_key(
+            "gui.downloads.done_summary",
+            "查看最近任务",
+            "View recent tasks",
+        )
+    };
+    let title_row = row![
+        Lucide::Download.view(16.0, txt),
+        text(summary_line).size(ty.body).width(Length::Fill),
+        button(Lucide::ChevronsUpDown.view(16.0, txt))
+            .on_press(Message::Download(DownloadMsg::ToggleExpand))
+            .width(Length::Fixed(btn_h))
+            .height(Length::Fixed(btn_h))
+            .padding(0)
+            .style(button_style(tokens, ButtonVariant::Ghost)),
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+    let title_bar = mouse_area(container(title_row).width(Length::Fill).clip(true))
+        .on_press(Message::Download(DownloadMsg::ToggleExpand));
+
     let title_txt = envr_core::i18n::tr_key("gui.downloads.panel_title", "下载任务", "Downloads");
-    let title_row = container(
+    let title_drag_row = container(
         row![
-            Lucide::Menu.view(16.0, txt),
+            Lucide::Menu.view(14.0, txt),
             text(title_txt).size(ty.body).width(Length::Fill),
+            text(envr_core::i18n::tr_key(
+                "gui.downloads.drag_hint",
+                "拖动",
+                "Drag",
+            ))
+            .size(ty.tiny),
         ]
         .spacing(sp.sm as f32)
         .align_y(Alignment::Center),
     )
     .width(Length::Fill)
     .clip(true);
-
-    let title_drag_strip = mouse_area(title_row)
+    let title_drag_strip = mouse_area(title_drag_row)
         .on_press(Message::Download(DownloadMsg::TitleBarPress))
-        .interaction(mouse::Interaction::Grab);
+        .interaction(iced::mouse::Interaction::Grab);
 
     // Icon-only actions scroll horizontally (`tasks_gui.md` GUI-060).
     let toolbar = scrollable(
         row![
             button(Lucide::Download.view(16.0, txt))
                 .on_press(Message::Download(DownloadMsg::EnqueueDemo))
-                .width(Length::Fixed(btn_h))
-                .height(Length::Fixed(btn_h))
-                .padding(0)
-                .style(button_style(tokens, ButtonVariant::Secondary)),
-            button(Lucide::ChevronsUpDown.view(16.0, txt))
-                .on_press(Message::Download(DownloadMsg::ToggleExpand))
                 .width(Length::Fixed(btn_h))
                 .height(Length::Fixed(btn_h))
                 .padding(0)
@@ -97,7 +138,7 @@ pub fn floating_download_panel(
     .width(Length::Fill)
     .height(Length::Fixed(btn_h));
 
-    let header = column![title_drag_strip, toolbar]
+    let header = column![title_bar, title_drag_strip, toolbar]
         .spacing(sp.xs as f32)
         .width(Length::Fill);
 
@@ -131,7 +172,22 @@ pub fn floating_download_panel(
             ));
         } else {
             let mut list = column![].spacing((sp.sm + 2) as f32);
-            for j in state.jobs.iter().rev().take(6) {
+            let mut running_jobs: Vec<_> = state
+                .jobs
+                .iter()
+                .rev()
+                .filter(|j| j.state == JobState::Running)
+                .take(4)
+                .collect();
+            let mut recent_done: Vec<_> = state
+                .jobs
+                .iter()
+                .rev()
+                .filter(|j| j.state != JobState::Running)
+                .take(2)
+                .collect();
+            running_jobs.append(&mut recent_done);
+            for j in running_jobs {
                 let ratio = j.progress_ratio();
                 let line = format_job_state_line(j);
                 let mut actions = row![].spacing(sp.sm as f32);
@@ -161,14 +217,16 @@ pub fn floating_download_panel(
                         .style(button_style(tokens, ButtonVariant::Secondary)),
                     );
                 }
-                let title_line = if j.url.is_empty() {
-                    j.label.clone()
-                } else {
-                    format!("{} — {}", j.label, j.url)
+                let status_icon = match j.state {
+                    JobState::Done => "✅",
+                    JobState::Failed => "⚠️",
+                    JobState::Cancelled => "🚫",
+                    JobState::Running => "•",
                 };
+                let title_line = format!("{status_icon} {}", j.label);
                 let bar = container(progress_bar(0.0..=100.0, ratio))
                     .width(Length::Fill)
-                    .height(Length::Fixed(8.0));
+                    .height(Length::Fixed(2.0));
                 list = list.push(
                     column![
                         text(title_line).size(ty.micro).width(Length::Fill),

@@ -616,7 +616,7 @@ pub fn resolve_runtime_home_for_lang_with_project_and_settings(
     project_config: Option<&ProjectConfig>,
     settings: &ShimSettingsSnapshot,
 ) -> EnvrResult<PathBuf> {
-    runtime_home_for_key(ctx, lang_key, project_config, spec_override, &settings)
+    runtime_home_for_key(ctx, lang_key, project_config, spec_override, settings)
 }
 
 /// Runtime installation directory for `lang_key` (`node` / `python` / `java`), matching shim routing:
@@ -967,7 +967,7 @@ pub fn resolve_core_shim_command_with_settings(
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 
     let key = cmd.project_runtime_key();
-    let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, &settings)?;
+    let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, settings)?;
 
     let mut extra_env = Vec::new();
 

@@ -133,7 +133,7 @@ impl Default for DownloadPanelState {
         Self {
             jobs: Vec::new(),
             next_id: 1,
-            expanded: true,
+            expanded: false,
             visible: true,
             reveal: 1.0,
             reveal_anim: None,

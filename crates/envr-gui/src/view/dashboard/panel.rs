@@ -10,6 +10,7 @@ use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
 use crate::view::downloads::{DownloadPanelState, JobState};
 use crate::view::empty_state::{EmptyTone, illustrative_block, illustrative_block_compact};
+use crate::view::loading::loading_skeleton;
 use crate::widget_styles::{
     ButtonVariant, button_content_centered, button_style, card_container_style,
 };
@@ -120,6 +121,19 @@ pub fn dashboard_view(
             title,
             body,
             hint,
+        ));
+        return col.into();
+    }
+
+    if state.busy {
+        col = col.push(card(
+            envr_core::i18n::tr_key(
+                "gui.dashboard.loading_card",
+                "正在加载仪表盘",
+                "Loading dashboard",
+            ),
+            loading_skeleton(tokens, 0.35, tokens.list_skeleton_rows()),
+            tokens,
         ));
         return col.into();
     }

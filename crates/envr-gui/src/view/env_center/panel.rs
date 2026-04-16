@@ -19,8 +19,10 @@ use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
+use crate::view::loading::loading_skeleton;
 use crate::widget_styles::{
-    ButtonVariant, button_content_centered, button_style, card_container_style, text_input_style,
+    ButtonVariant, button_content_centered, button_style, card_container_style, contrast_text_on,
+    segmented_button_style, setting_row, SegmentPosition, text_input_style,
 };
 
 type EnvCenterDataLoad =
@@ -69,6 +71,8 @@ pub enum EnvCenterMsg {
     SetDenoPathProxy(bool),
     SetBunPackageSource(NpmRegistryMode),
     SetBunPathProxy(bool),
+    BunGlobalBinDirEdit(String),
+    ApplyBunGlobalBinDir,
 
     // Rust page (specialized).
     RustRefresh,
@@ -150,6 +154,8 @@ pub struct EnvCenterState {
     pub go_proxy_custom_draft: String,
     /// Draft for `runtime.go.private_patterns`.
     pub go_private_patterns_draft: String,
+    /// Draft for `runtime.bun.global_bin_dir` (applied via [`EnvCenterMsg::ApplyBunGlobalBinDir`]).
+    pub bun_global_bin_dir_draft: String,
 
     // Rust page state.
     pub rust_status: Option<RustStatus>,
@@ -188,6 +194,7 @@ impl Default for EnvCenterState {
             op_job_id: None,
             go_proxy_custom_draft: String::new(),
             go_private_patterns_draft: String::new(),
+            bun_global_bin_dir_draft: String::new(),
 
             rust_status: None,
             rust_tab: RustTab::Components,
@@ -234,14 +241,7 @@ fn node_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let dl_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.node.download_source",
-        "Node 下载源",
-        "Node download source",
-    ))
-    .size(ty.body);
-
-    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    let mut dl_buttons = row![].spacing(-1.0);
     for src in [
         NodeDownloadSource::Auto,
         NodeDownloadSource::Domestic,
@@ -272,21 +272,24 @@ fn node_runtime_settings_section(
         };
         let b = button(button_content_centered(text(lab).into()))
             .on_press(Message::EnvCenter(EnvCenterMsg::SetNodeDownloadSource(src)))
-            .width(Length::FillPortion(1))
+            .width(Length::Shrink)
             .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
+            .padding([sp.sm as f32, (sp.sm + 2) as f32])
             .style(button_style(tokens, variant));
-        dl_row = dl_row.push(b);
+        dl_buttons = dl_buttons.push(b);
     }
+    let dl_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.runtime.node.download_source",
+            "Node 下载源",
+            "Node download source",
+        ),
+        None,
+        dl_buttons.into(),
+    );
 
-    let npm_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.node.npm_registry",
-        "npm 源",
-        "npm registry",
-    ))
-    .size(ty.body);
-
-    let mut npm_row = row![npm_title].spacing(sp.sm as f32);
+    let mut npm_buttons = row![].spacing(-1.0);
     for mode in [
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
@@ -323,42 +326,44 @@ fn node_runtime_settings_section(
         };
         let b = button(button_content_centered(text(lab).into()))
             .on_press(Message::EnvCenter(EnvCenterMsg::SetNpmRegistryMode(mode)))
-            .width(Length::FillPortion(1))
+            .width(Length::Shrink)
             .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
+            .padding([sp.sm as f32, (sp.sm + 2) as f32])
             .style(button_style(tokens, variant));
-        npm_row = npm_row.push(b);
+        npm_buttons = npm_buttons.push(b);
     }
+    let npm_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.node.npm_registry", "npm 源", "npm registry"),
+        None,
+        npm_buttons.into(),
+    );
 
-    let proxy_label = text(envr_core::i18n::tr_key(
-        "gui.runtime.node.path_proxy.label",
-        "PATH 代理",
-        "PATH proxy",
-    ))
-    .size(ty.body);
-
-    let proxy_toggle = toggler(node.path_proxy_enabled)
-        .label(envr_core::i18n::tr_key(
-            "gui.runtime.node.path_proxy.hint",
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.node.path_proxy.label", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.node.path_proxy.hint_short",
             "开启时由 envr 接管 node/npm/npx；关闭时 shim 透传到系统 PATH。",
-            "When on, envr manages node/npm/npx; when off, shims delegate to your system PATH.",
-        ))
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetNodePathProxy(v)));
-
+            "When on, envr manages node/npm/npx; when off, shims passthrough to system PATH.",
+        )),
+        toggler(node.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetNodePathProxy(v)))
+            .into(),
+    );
     let proxy_note = text(envr_core::i18n::tr_key(
         "gui.runtime.node.path_proxy.note",
-        "关闭时无法使用「切换」「安装并切换」；再次开启后不会自动恢复上次版本，需手动切换。",
-        "While off, Use / Install & Use are disabled; turning on again does not auto-restore the previous version.",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
     ))
     .size(ty.micro)
     .color(muted);
 
-    let proxy_block = column![proxy_label, proxy_toggle, proxy_note]
-        .spacing((sp.xs + 2) as f32)
-        .width(Length::Fill);
-
     container(
-        column![dl_row, npm_row, proxy_block,]
+        column![dl_row, npm_row, proxy_toggle, proxy_note]
             .spacing(sp.sm as f32)
             .width(Length::Fill),
     )
@@ -375,13 +380,7 @@ fn python_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let dl_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.python.download_source",
-        "Python 下载源（影响 Python 安装包与 get-pip.py）",
-        "Python download source (affects Python artifacts + get-pip.py)",
-    ))
-    .size(ty.body);
-    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
+    let mut dl_buttons = row![].spacing(-1.0);
     for src in [
         PythonDownloadSource::Auto,
         PythonDownloadSource::Domestic,
@@ -412,25 +411,33 @@ fn python_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        dl_row = dl_row.push(
+        dl_buttons = dl_buttons.push(
             button(button_content_centered(text(lab).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetPythonDownloadSource(
                     src,
                 )))
-                .width(Length::FillPortion(1))
+                .width(Length::Shrink)
                 .height(Length::Fixed(h))
-                .padding([sp.sm as f32, sp.sm as f32])
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
                 .style(button_style(tokens, variant)),
         );
     }
+    let dl_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.runtime.python.download_source",
+            "Python 下载源",
+            "Python download source",
+        ),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.python.download_source_hint",
+            "影响 Python 安装包与 get-pip.py 下载来源。",
+            "Affects Python artifacts and get-pip.py source.",
+        )),
+        dl_buttons.into(),
+    );
 
-    let pip_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.python.pip_registry",
-        "pip 引导源",
-        "pip bootstrap index",
-    ))
-    .size(ty.body);
-    let mut pip_row = row![pip_title].spacing(sp.sm as f32);
+    let mut pip_buttons = row![].spacing(-1.0);
     for mode in [
         PipRegistryMode::Auto,
         PipRegistryMode::Domestic,
@@ -467,24 +474,37 @@ fn python_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        pip_row = pip_row.push(
+        pip_buttons = pip_buttons.push(
             button(button_content_centered(text(lab).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetPipRegistryMode(mode)))
-                .width(Length::FillPortion(1))
+                .width(Length::Shrink)
                 .height(Length::Fixed(h))
-                .padding([sp.sm as f32, sp.sm as f32])
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
                 .style(button_style(tokens, variant)),
         );
     }
+    let pip_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.python.pip_registry", "pip 引导源", "pip bootstrap"),
+        None,
+        pip_buttons.into(),
+    );
 
-    let proxy_toggle = toggler(py.path_proxy_enabled)
-        .label(envr_core::i18n::tr_key(
-            "gui.runtime.python.path_proxy.hint",
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.python.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.python.path_proxy.hint_short",
             "开启时由 envr 接管 python/pip；关闭时 shim 透传到系统 PATH。",
-            "When on, envr manages python/pip; when off, shims delegate to your system PATH.",
-        ))
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPythonPathProxy(v)));
-
+            "When on, envr manages python/pip; when off, shims passthrough to system PATH.",
+        )),
+        toggler(py.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPythonPathProxy(v)))
+            .into(),
+    );
     let proxy_note = text(envr_core::i18n::tr_key(
         "gui.runtime.python.path_proxy.note",
         "关闭时无法使用「切换」「安装并切换」。",
@@ -515,58 +535,81 @@ fn java_runtime_settings_section(
     java: &JavaRuntimeSettings,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
-    let ty = tokens.typography();
     let sp = tokens.space();
-    let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let mut dl_row = row![text("Java 下载源").size(ty.body)].spacing(sp.sm as f32);
-    for src in [
+    let sources = [
         JavaDownloadSource::Auto,
         JavaDownloadSource::Domestic,
         JavaDownloadSource::Official,
-    ] {
+    ];
+    let mut dl_buttons = row![].spacing(-1.0);
+    for (idx, src) in sources.iter().copied().enumerate() {
         let label = match src {
-            JavaDownloadSource::Auto => "自动（随区域语言）",
-            JavaDownloadSource::Domestic => "国内优先（可回退）",
-            JavaDownloadSource::Official => "官方",
+            JavaDownloadSource::Auto => envr_core::i18n::tr_key(
+                "gui.runtime.java.ds.auto",
+                "自动",
+                "Auto",
+            ),
+            JavaDownloadSource::Domestic => envr_core::i18n::tr_key(
+                "gui.runtime.java.ds.domestic",
+                "国内优先",
+                "China-first",
+            ),
+            JavaDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.java.ds.official", "官方", "Official")
+            }
         };
         let variant = if src == java.download_source {
             ButtonVariant::Primary
         } else {
             ButtonVariant::Secondary
         };
-        dl_row = dl_row.push(
+        let pos = if sources.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == sources.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        dl_buttons = dl_buttons.push(
             button(button_content_centered(text(label).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetJavaDownloadSource(src)))
-                .width(Length::FillPortion(1))
+                .width(Length::Shrink)
                 .height(Length::Fixed(tokens.control_height_secondary))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, variant)),
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
         );
     }
+    let dl_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.java.download_source", "Java 下载源", "Java source"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.java.download_source_hint",
+            "仅支持 LTS（8/11/17/21/25）；部分发行版可能固定官方源。",
+            "LTS only (8/11/17/21/25); some distros may always use official upstream.",
+        )),
+        dl_buttons.into(),
+    );
 
-    let proxy_row = row![
-        text("PATH 代理").size(ty.body),
+    let proxy_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.java.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.java.path_proxy_hint_short",
+            "开启时由 envr 接管 java/javac；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages java/javac; when off, shims passthrough to system PATH.",
+        )),
         toggler(java.path_proxy_enabled)
             .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetJavaPathProxy(v)))
             .size(20.0)
-            .spacing(sp.sm as f32),
-    ]
-    .spacing(sp.sm as f32)
-    .align_y(Alignment::Center);
+            .spacing(sp.sm as f32)
+            .into(),
+    );
 
     container(
-        column![
-            dl_row,
-            proxy_row,
-            text("仅支持 LTS（8/11/17/21/25）；JAVA_HOME 仅写入用户环境变量。")
-                .size(ty.micro)
-                .color(muted),
-            text("镜像仅对 Temurin 与 Oracle OpenJDK 提供；其他发行版固定使用官方源。")
-                .size(ty.micro)
-                .color(muted),
-        ]
-        .spacing(sp.sm as f32),
+        column![dl_row, proxy_row].spacing(sp.md as f32),
     )
     .padding(Padding::from([sp.sm as f32, sp.sm as f32]))
     .style(card_container_style(tokens, 1))
@@ -583,18 +626,9 @@ fn go_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let (proxy_draft, private_draft) = drafts;
 
-    let dl_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.go.download_source",
-        "Go 下载源",
-        "Go download source",
-    ))
-    .size(ty.body);
-    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
-    for src in [
-        GoDownloadSource::Auto,
-        GoDownloadSource::Domestic,
-        GoDownloadSource::Official,
-    ] {
+    let dl_sources = [GoDownloadSource::Auto, GoDownloadSource::Domestic, GoDownloadSource::Official];
+    let mut dl_buttons = row![].spacing(-1.0);
+    for (idx, src) in dl_sources.iter().copied().enumerate() {
         let lab = match src {
             GoDownloadSource::Auto => envr_core::i18n::tr_key(
                 "gui.runtime.go.ds.auto",
@@ -622,30 +656,40 @@ fn go_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        dl_row = dl_row.push(
+        let pos = if dl_sources.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == dl_sources.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        dl_buttons = dl_buttons.push(
             button(button_content_centered(text(lab).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetGoDownloadSource(src)))
-                .width(Length::FillPortion(1))
+                .width(Length::Shrink)
                 .height(Length::Fixed(h))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, variant)),
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
         );
     }
+    let dl_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.go.download_source", "Go 下载源", "Go download source"),
+        None,
+        dl_buttons.into(),
+    );
 
-    let gp_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.go.goproxy_mode",
-        "GOPROXY（模块代理）",
-        "GOPROXY (module proxy)",
-    ))
-    .size(ty.body);
-    let mut gp_row = row![gp_title].spacing(sp.sm as f32);
-    for mode in [
+    let gp_modes = [
         GoProxyMode::Auto,
         GoProxyMode::Domestic,
         GoProxyMode::Official,
         GoProxyMode::Direct,
         GoProxyMode::Custom,
-    ] {
+    ];
+    let mut gp_buttons = row![].spacing(-1.0);
+    for (idx, mode) in gp_modes.iter().copied().enumerate() {
         let lab = match mode {
             GoProxyMode::Auto => envr_core::i18n::tr_key("gui.runtime.go.gp.auto", "自动", "Auto"),
             GoProxyMode::Domestic => {
@@ -671,15 +715,34 @@ fn go_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        gp_row = gp_row.push(
+        let pos = if gp_modes.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == gp_modes.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        gp_buttons = gp_buttons.push(
             button(button_content_centered(text(lab).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetGoProxyMode(mode)))
-                .width(Length::FillPortion(1))
+                .width(Length::Shrink)
                 .height(Length::Fixed(h))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, variant)),
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
         );
     }
+    let gp_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.runtime.go.goproxy_mode",
+            "GOPROXY（模块代理）",
+            "GOPROXY (module proxy)",
+        ),
+        None,
+        gp_buttons.into(),
+    );
 
     let custom_block: Element<'static, Message> = if go.proxy_mode == GoProxyMode::Custom {
         row![
@@ -750,13 +813,18 @@ fn go_runtime_settings_section(
     .size(ty.micro)
     .color(muted);
 
-    let proxy_toggle = toggler(go.path_proxy_enabled)
-        .label(envr_core::i18n::tr_key(
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.go.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
             "gui.runtime.go.path_proxy.hint",
             "开启时由 envr 接管 go/gofmt；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages go/gofmt; when off, shims delegate to your system PATH.",
-        ))
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetGoPathProxy(v)));
+        )),
+        toggler(go.path_proxy_enabled)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetGoPathProxy(v)))
+            .into(),
+    );
 
     let proxy_note = text(envr_core::i18n::tr_key(
         "gui.runtime.go.path_proxy.note",
@@ -798,83 +866,95 @@ fn php_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let mut ds_row = row![text("PHP 下载源").size(ty.body)].spacing(sp.sm as f32);
-    for src in [
-        PhpDownloadSource::Auto,
-        PhpDownloadSource::Domestic,
-        PhpDownloadSource::Official,
-    ] {
-        let (label, active) = (
-            match src {
-                PhpDownloadSource::Auto => "自动（随区域语言）",
-                PhpDownloadSource::Domestic => "国内镜像",
-                PhpDownloadSource::Official => "官方",
-            },
-            src == php.download_source,
-        );
-        ds_row = ds_row.push(
+    let ds_sources = [PhpDownloadSource::Auto, PhpDownloadSource::Domestic, PhpDownloadSource::Official];
+    let mut ds_buttons = row![].spacing(-1.0);
+    for (idx, src) in ds_sources.iter().copied().enumerate() {
+        let label = match src {
+            PhpDownloadSource::Auto => envr_core::i18n::tr_key("gui.runtime.php.ds.auto", "自动", "Auto"),
+            PhpDownloadSource::Domestic => envr_core::i18n::tr_key("gui.runtime.php.ds.domestic", "国内镜像", "China mirror"),
+            PhpDownloadSource::Official => envr_core::i18n::tr_key("gui.runtime.php.ds.official", "官方", "Official"),
+        };
+        let active = src == php.download_source;
+        let variant = if active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+        let pos = if ds_sources.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == ds_sources.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        ds_buttons = ds_buttons.push(
             button(button_content_centered(text(label).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpDownloadSource(src)))
-                .width(Length::FillPortion(1))
-                .height(Length::Fixed(if active {
-                    tokens.control_height_primary
-                } else {
-                    tokens.control_height_secondary
-                }))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(
-                    tokens,
-                    if active {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Secondary
-                    },
-                )),
+                .width(Length::Shrink)
+                .height(Length::Fixed(if active { tokens.control_height_primary } else { tokens.control_height_secondary }))
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
         );
     }
+    let ds_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.php.download_source", "PHP 下载源", "PHP download source"),
+        None,
+        ds_buttons.into(),
+    );
 
-    let mut build_row = row![text("Windows 构建").size(ty.body)].spacing(sp.sm as f32);
-    for flavor in [PhpWindowsBuildFlavor::Nts, PhpWindowsBuildFlavor::Ts] {
-        let (label, active) = (
-            match flavor {
+    let build_row: Element<'static, Message> = if cfg!(windows) {
+        let builds = [PhpWindowsBuildFlavor::Nts, PhpWindowsBuildFlavor::Ts];
+        let mut build_buttons = row![].spacing(-1.0);
+        for (idx, flavor) in builds.iter().copied().enumerate() {
+            let label = match flavor {
                 PhpWindowsBuildFlavor::Nts => "NTS",
                 PhpWindowsBuildFlavor::Ts => "TS",
-            },
-            flavor == php.windows_build,
-        );
-        build_row = build_row.push(
-            button(button_content_centered(text(label).into()))
-                .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
-                .width(Length::FillPortion(1))
-                .height(Length::Fixed(if active {
-                    tokens.control_height_primary
-                } else {
-                    tokens.control_height_secondary
-                }))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(
-                    tokens,
-                    if active {
-                        ButtonVariant::Primary
-                    } else {
-                        ButtonVariant::Secondary
-                    },
-                )),
-        );
-    }
-
-    let proxy_toggle = toggler(php.path_proxy_enabled)
-        .label("开启时由 envr 接管 php；关闭时 shim 透传到系统 PATH。")
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPhpPathProxy(v)));
-
-    let build_scope = match php.windows_build {
-        PhpWindowsBuildFlavor::Nts => {
-            "左侧版本列表与安装包均为 NTS（与 TS 列表独立，切换后列表会刷新）。"
+            };
+            let active = flavor == php.windows_build;
+            let variant = if active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+            let pos = if builds.len() == 1 {
+                SegmentPosition::Single
+            } else if idx == 0 {
+                SegmentPosition::Start
+            } else if idx + 1 == builds.len() {
+                SegmentPosition::End
+            } else {
+                SegmentPosition::Middle
+            };
+            build_buttons = build_buttons.push(
+                button(button_content_centered(text(label).into()))
+                    .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
+                    .width(Length::Shrink)
+                    .height(Length::Fixed(if active { tokens.control_height_primary } else { tokens.control_height_secondary }))
+                    .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                    .style(segmented_button_style(tokens, variant, pos)),
+            );
         }
-        PhpWindowsBuildFlavor::Ts => {
-            "左侧版本列表与安装包均为 TS（与 NTS 列表独立，切换后列表会刷新）。"
-        }
+        setting_row(
+            tokens,
+            envr_core::i18n::tr_key("gui.runtime.php.windows_build", "Windows 构建", "Windows build"),
+            Some(envr_core::i18n::tr_key(
+                "gui.runtime.php.windows_build_hint",
+                "切换后列表会刷新（NTS/TS 独立）。",
+                "Switching refreshes the list (NTS/TS are independent).",
+            )),
+            build_buttons.into(),
+        )
+    } else {
+        column![].into()
     };
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.php.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.php.path_proxy_hint",
+            "开启时由 envr 接管 php；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages php; when off, shims passthrough to system PATH.",
+        )),
+        toggler(php.path_proxy_enabled)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPhpPathProxy(v)))
+            .into(),
+    );
 
     let unix_blurb = text(
         envr_core::i18n::tr_key(
@@ -890,7 +970,6 @@ fn php_runtime_settings_section(
         column![
             ds_row,
             build_row,
-            text(build_scope).size(ty.micro).color(muted),
             proxy_toggle,
             text("关闭时无法使用「切换」「安装并切换」。")
                 .size(ty.micro)
@@ -920,18 +999,9 @@ fn deno_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let dl_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.deno.download_source",
-        "Deno 下载源",
-        "Deno download source",
-    ))
-    .size(ty.body);
-    let mut dl_row = row![dl_title].spacing(sp.sm as f32);
-    for src in [
-        DenoDownloadSource::Auto,
-        DenoDownloadSource::Domestic,
-        DenoDownloadSource::Official,
-    ] {
+    let dl_sources = [DenoDownloadSource::Auto, DenoDownloadSource::Domestic, DenoDownloadSource::Official];
+    let mut dl_buttons = row![].spacing(-1.0);
+    for (idx, src) in dl_sources.iter().copied().enumerate() {
         let lab = match src {
             DenoDownloadSource::Auto => envr_core::i18n::tr_key(
                 "gui.runtime.deno.ds.auto",
@@ -955,28 +1025,43 @@ fn deno_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        let b = button(button_content_centered(text(lab).into()))
-            .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoDownloadSource(src)))
-            .width(Length::FillPortion(1))
-            .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
-            .style(button_style(tokens, variant));
-        dl_row = dl_row.push(b);
+        let pos = if dl_sources.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == dl_sources.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        dl_buttons = dl_buttons.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoDownloadSource(src)))
+                .width(Length::Shrink)
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
+        );
     }
+    let dl_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.deno.download_source", "Deno 下载源", "Deno source"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.deno.download_source_hint",
+            "控制二进制 zip 来源（dl.deno.land / npmmirror）。",
+            "Controls where the release zip is downloaded from (dl.deno.land / npmmirror).",
+        )),
+        dl_buttons.into(),
+    );
 
-    let pkg_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.deno.package_source",
-        "包源（npm + JSR）",
-        "Package source (npm + JSR)",
-    ))
-    .size(ty.body);
-    let mut pkg_row = row![pkg_title].spacing(sp.sm as f32);
-    for mode in [
+    let pkg_modes = [
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
         NpmRegistryMode::Official,
         NpmRegistryMode::Restore,
-    ] {
+    ];
+    let mut pkg_buttons = row![].spacing(-1.0);
+    for (idx, mode) in pkg_modes.iter().copied().enumerate() {
         let lab = match mode {
             NpmRegistryMode::Auto => envr_core::i18n::tr_key(
                 "gui.runtime.deno.pkg.auto",
@@ -1005,40 +1090,55 @@ fn deno_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        let b = button(button_content_centered(text(lab).into()))
-            .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoPackageSource(mode)))
-            .width(Length::FillPortion(1))
-            .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
-            .style(button_style(tokens, variant));
-        pkg_row = pkg_row.push(b);
+        let pos = if pkg_modes.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == pkg_modes.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        pkg_buttons = pkg_buttons.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetDenoPackageSource(mode)))
+                .width(Length::Shrink)
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
+        );
     }
-
-    let proxy_toggle = toggler(deno.path_proxy_enabled)
-        .label(envr_core::i18n::tr_key(
-            "gui.runtime.deno.path_proxy.label",
-            "开启时由 envr 接管 deno；关闭时 shim 透传到系统 PATH。",
-            "When on, envr manages deno; when off, shims passthrough to system PATH.",
-        ))
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetDenoPathProxy(v)));
-
-    let main_col = column![
-        dl_row,
-        text(envr_core::i18n::tr_key(
-            "gui.runtime.deno.download_source_hint",
-            "控制二进制 zip 来源（dl.deno.land / npmmirror）。",
-            "Controls where the release zip is downloaded from (dl.deno.land / npmmirror).",
-        ))
-        .size(ty.micro)
-        .color(muted),
-        pkg_row,
-        text(envr_core::i18n::tr_key(
+    let pkg_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.runtime.deno.package_source",
+            "包源（npm + JSR）",
+            "Package source (npm + JSR)",
+        ),
+        Some(envr_core::i18n::tr_key(
             "gui.runtime.deno.package_source_hint",
             "同时设置 NPM_CONFIG_REGISTRY 与 JSR_URL。",
             "Sets both NPM_CONFIG_REGISTRY and JSR_URL.",
-        ))
-        .size(ty.micro)
-        .color(muted),
+        )),
+        pkg_buttons.into(),
+    );
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.deno.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.deno.path_proxy.label",
+            "开启时由 envr 接管 deno；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages deno; when off, shims passthrough to system PATH.",
+        )),
+        toggler(deno.path_proxy_enabled)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetDenoPathProxy(v)))
+            .into(),
+    );
+
+    let main_col = column![
+        dl_row,
+        pkg_row,
         proxy_toggle,
         text(envr_core::i18n::tr_key(
             "gui.runtime.deno.path_proxy.off_hint",
@@ -1057,25 +1157,54 @@ fn deno_runtime_settings_section(
 
 fn bun_runtime_settings_section(
     bun: &BunRuntimeSettings,
+    global_bin_dir_draft: &str,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let pkg_title = text(envr_core::i18n::tr_key(
-        "gui.runtime.bun.package_source",
-        "包源（npm）",
-        "Package source (npm)",
-    ))
-    .size(ty.body);
-    let mut pkg_row = row![pkg_title].spacing(sp.sm as f32);
-    for mode in [
+    let bin_dir_row = {
+        let input = container(
+            text_input("runtime.bun.global_bin_dir", global_bin_dir_draft)
+                .on_input(|s| Message::EnvCenter(EnvCenterMsg::BunGlobalBinDirEdit(s)))
+                .padding(sp.sm)
+                .width(Length::Fixed(240.0))
+                .style(text_input_style(tokens)),
+        )
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .align_y(iced::alignment::Vertical::Center);
+        let apply = button(button_content_centered(
+            text(envr_core::i18n::tr_key("gui.action.apply", "应用", "Apply")).into(),
+        ))
+        .on_press(Message::EnvCenter(EnvCenterMsg::ApplyBunGlobalBinDir))
+        .height(Length::Fixed(tokens.control_height_secondary))
+        .padding([sp.sm as f32, sp.md as f32])
+        .style(button_style(tokens, ButtonVariant::Secondary));
+        setting_row(
+            tokens,
+            envr_core::i18n::tr_key(
+                "gui.runtime.bun.global_bin_dir",
+                "全局 bin 目录",
+                "Global bin dir",
+            ),
+            Some(envr_core::i18n::tr_key(
+                "gui.runtime.bun.global_bin_dir_hint",
+                "可选：覆盖 `bun pm bin -g`，用于 shim 同步全局 Bun 可执行文件。",
+                "Optional: overrides `bun pm bin -g` result for syncing global Bun executables.",
+            )),
+            row![input, apply].spacing(sp.sm as f32).into(),
+        )
+    };
+
+    let pkg_modes = [
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
         NpmRegistryMode::Official,
         NpmRegistryMode::Restore,
-    ] {
+    ];
+    let mut pkg_buttons = row![].spacing(-1.0);
+    for (idx, mode) in pkg_modes.iter().copied().enumerate() {
         let lab = match mode {
             NpmRegistryMode::Auto => envr_core::i18n::tr_key(
                 "gui.runtime.bun.pkg.auto",
@@ -1104,32 +1233,55 @@ fn bun_runtime_settings_section(
         } else {
             tokens.control_height_secondary
         };
-        let b = button(button_content_centered(text(lab).into()))
-            .on_press(Message::EnvCenter(EnvCenterMsg::SetBunPackageSource(mode)))
-            .width(Length::FillPortion(1))
-            .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
-            .style(button_style(tokens, variant));
-        pkg_row = pkg_row.push(b);
+        let pos = if pkg_modes.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == pkg_modes.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        pkg_buttons = pkg_buttons.push(
+            button(button_content_centered(text(lab).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetBunPackageSource(mode)))
+                .width(Length::Shrink)
+                .height(Length::Fixed(h))
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
+        );
     }
-
-    let proxy_toggle = toggler(bun.path_proxy_enabled)
-        .label(envr_core::i18n::tr_key(
-            "gui.runtime.bun.path_proxy.label",
-            "开启时由 envr 接管 bun/bunx；关闭时 shim 透传到系统 PATH。",
-            "When on, envr manages bun/bunx; when off, shims passthrough to system PATH.",
-        ))
-        .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetBunPathProxy(v)));
-
-    let main_col = column![
-        pkg_row,
-        text(envr_core::i18n::tr_key(
+    let pkg_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.runtime.bun.package_source",
+            "包源（npm）",
+            "Package source (npm)",
+        ),
+        Some(envr_core::i18n::tr_key(
             "gui.runtime.bun.package_source_hint",
             "设置 NPM_CONFIG_REGISTRY（restore 时不注入）。",
             "Sets NPM_CONFIG_REGISTRY (no injection on restore).",
-        ))
-        .size(ty.micro)
-        .color(muted),
+        )),
+        pkg_buttons.into(),
+    );
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.bun.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.bun.path_proxy.label",
+            "开启时由 envr 接管 bun/bunx；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages bun/bunx; when off, shims passthrough to system PATH.",
+        )),
+        toggler(bun.path_proxy_enabled)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetBunPathProxy(v)))
+            .into(),
+    );
+
+    let main_col = column![
+        bin_dir_row,
+        pkg_row,
         text(envr_core::i18n::tr_key(
             "gui.runtime.bun.win_support_note",
             "Windows 仅支持 Bun 1.x+（0.x 无官方 Windows 发布资产，已在列表中隐藏）。",
@@ -1386,7 +1538,7 @@ pub fn env_center_view(
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Bun {
         bun_runtime
-            .map(|b| bun_runtime_settings_section(b, tokens))
+            .map(|b| bun_runtime_settings_section(b, &state.bun_global_bin_dir_draft, tokens))
             .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
@@ -1660,7 +1812,11 @@ pub fn env_center_view(
         || (deno_waiting_remote && show_keys.is_empty())
         || (bun_waiting_remote && show_keys.is_empty())
     {
-        list_col = list_col.push(list_loading_skeleton(tokens, state.skeleton_phase));
+        list_col = list_col.push(loading_skeleton(
+            tokens,
+            state.skeleton_phase,
+            tokens.list_skeleton_rows(),
+        ));
     } else if show_keys.is_empty() {
         list_col = list_col.push(matches_empty_hint());
     } else {
@@ -1796,7 +1952,10 @@ pub fn env_center_view(
 
                     let uninstall_btn = button(button_content_centered(
                         row![
-                            Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                            Lucide::X.view(
+                                14.0,
+                                contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
+                            ),
                             text(envr_core::i18n::tr_key(
                                 "gui.action.uninstall",
                                 "卸载",
@@ -1819,9 +1978,13 @@ pub fn env_center_view(
                     .style(button_style(tokens, ButtonVariant::Danger));
 
                     rows = rows.push(
-                        row![text(ver_text).width(Length::Fill), use_btn, uninstall_btn]
-                            .spacing(sp.sm as f32)
-                            .align_y(Alignment::Center),
+                        container(
+                            row![text(ver_text).width(Length::Fill), use_btn, uninstall_btn]
+                                .spacing(sp.sm as f32)
+                                .align_y(Alignment::Center)
+                                .width(Length::Fill),
+                        )
+                        .padding([sp.xs as f32, sp.md as f32]),
                     );
                 }
                 container(rows).width(Length::Fill).into()
@@ -1888,8 +2051,10 @@ pub fn env_center_view(
                 container(
                     row![text(left_text).width(Length::Fill), action_btn,]
                         .spacing(sp.sm as f32)
-                        .align_y(Alignment::Center),
+                        .align_y(Alignment::Center)
+                        .width(Length::Fill),
                 )
+                .padding([sp.xs as f32, sp.md as f32])
                 .style(card_container_style(tokens, 1)),
             );
         }
@@ -2305,7 +2470,10 @@ fn rust_env_center_view(
         Some(
             button(button_content_centered(
                 row![
-                    Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                    Lucide::X.view(
+                        14.0,
+                        contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
+                    ),
                     text(envr_core::i18n::tr_key(
                         "gui.action.uninstall",
                         "卸载",
@@ -2490,7 +2658,10 @@ fn rust_kv_list(
         let action: Element<'static, Message> = if installed {
             button(button_content_centered(
                 row![
-                    Lucide::X.view(14.0, gui_theme::to_color(tokens.colors.danger)),
+                    Lucide::X.view(
+                        14.0,
+                        contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
+                    ),
                     text(envr_core::i18n::tr_key(
                         "gui.action.uninstall",
                         "卸载",
@@ -2710,29 +2881,3 @@ fn parse_go_key_sort(k: &str) -> (u64, u64) {
     parse_python_key_sort(k)
 }
 
-fn list_loading_skeleton(tokens: ThemeTokens, phase: f32) -> Element<'static, Message> {
-    use iced::Background;
-
-    let pulse = (phase * std::f32::consts::TAU).sin() * 0.5 + 0.5;
-    let fill = gui_theme::to_color(tokens.colors.text_muted).scale_alpha(0.07 + 0.16 * pulse);
-    let row_h = tokens.list_row_height();
-    let bar_h = row_h * 0.42;
-    let n = tokens.list_skeleton_rows();
-    let mut col = column![].spacing(0);
-    for i in 0..n {
-        col = col.push(
-            container(space().width(Length::Fill).height(Length::Fixed(bar_h)))
-                .width(Length::Fill)
-                .height(Length::Fixed(row_h))
-                .align_y(iced::alignment::Vertical::Center)
-                .padding([0, tokens.space().md])
-                .style(move |_theme: &Theme| {
-                    iced::widget::container::Style::default().background(Background::Color(fill))
-                }),
-        );
-        if i + 1 < n {
-            col = col.push(rule::horizontal(1.0));
-        }
-    }
-    col.into()
-}

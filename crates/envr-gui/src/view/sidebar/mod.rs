@@ -20,7 +20,7 @@ fn route_icon(route: Route) -> Lucide {
 pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message> {
     let panel = gui_theme::panel_container_style(tokens);
     let sp = tokens.space();
-    let txt = gui_theme::to_color(tokens.colors.text);
+    let txt = gui_theme::to_color(tokens.colors.text_muted);
     let mut col = column![].spacing(sp.sm as f32);
     for route in Route::ALL {
         let selected = route == current;

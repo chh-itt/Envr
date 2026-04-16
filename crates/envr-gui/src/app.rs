@@ -26,7 +26,6 @@ use crate::view::downloads::{
     DOWNLOAD_PANEL_SHELL_W, DownloadJob, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
 };
 use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
-use crate::view::runtime_settings::{RuntimeSettingsMsg, RuntimeSettingsState};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
 
@@ -76,7 +75,6 @@ pub struct AppState {
     pub downloads: DownloadPanelState,
     pub settings: SettingsViewState,
     pub dashboard: DashboardState,
-    pub runtime_settings: RuntimeSettingsState,
 }
 
 impl Default for AppState {
@@ -104,7 +102,6 @@ impl Default for AppState {
             },
             settings: SettingsViewState::new(),
             dashboard: DashboardState::default(),
-            runtime_settings: RuntimeSettingsState::default(),
         }
     }
 }
@@ -196,7 +193,6 @@ pub enum Message {
     Dashboard(DashboardMsg),
     Download(DownloadMsg),
     Settings(SettingsMsg),
-    RuntimeSettings(RuntimeSettingsMsg),
 }
 
 pub fn run() -> iced::Result {
@@ -379,119 +375,6 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::Dashboard(msg) => handle_dashboard(state, msg),
         Message::Download(msg) => handle_download(state, msg),
         Message::Settings(msg) => handle_settings(state, msg),
-        Message::RuntimeSettings(msg) => handle_runtime_settings(state, msg),
-    }
-}
-
-fn handle_runtime_settings(state: &mut AppState, msg: RuntimeSettingsMsg) -> Task<Message> {
-    match msg {
-        RuntimeSettingsMsg::ToggleExpand => {
-            state.runtime_settings.expanded = !state.runtime_settings.expanded;
-            Task::none()
-        }
-        RuntimeSettingsMsg::ReloadDisk => {
-            state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
-                "gui.app.loading",
-                "正在加载…",
-                "Loading…",
-            ));
-            let path = settings_path();
-            Task::perform(
-                async move {
-                    envr_config::settings::Settings::load_or_default_from(&path)
-                        .map_err(|e| e.to_string())
-                },
-                |res| Message::RuntimeSettings(RuntimeSettingsMsg::DiskLoaded(res)),
-            )
-        }
-        RuntimeSettingsMsg::GoGoproxyEdit(s) => {
-            state.runtime_settings.go_goproxy_draft = s;
-            Task::none()
-        }
-        RuntimeSettingsMsg::BunGlobalBinDirEdit(s) => {
-            state.runtime_settings.bun_global_bin_dir_draft = s;
-            Task::none()
-        }
-        RuntimeSettingsMsg::Save => {
-            state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
-                "gui.app.saving",
-                "正在保存…",
-                "Saving…",
-            ));
-            let path = settings_path();
-            let next = state
-                .runtime_settings
-                .build_settings()
-                .map_err(|e| e.to_string());
-            Task::perform(
-                async move {
-                    let next = next?;
-                    next.save_to(&path).map_err(|e| e.to_string())?;
-                    Ok(next)
-                },
-                |res| Message::RuntimeSettings(RuntimeSettingsMsg::DiskSaved(res)),
-            )
-        }
-        RuntimeSettingsMsg::DiskLoaded(res) => {
-            match res {
-                Ok(st) => {
-                    state.runtime_settings.cache.set_cached(st);
-                    if let Err(e) = state.runtime_settings.sync_from_cache() {
-                        state.runtime_settings.last_message = Some(format!(
-                            "{}: {e}",
-                            envr_core::i18n::tr_key(
-                                "gui.app.sync_failed",
-                                "同步失败",
-                                "Sync failed"
-                            )
-                        ));
-                    } else {
-                        state.runtime_settings.last_message = None;
-                    }
-                }
-                Err(e) => {
-                    state.runtime_settings.last_message = Some(format!(
-                        "{}: {e}",
-                        envr_core::i18n::tr_key(
-                            "gui.app.reload_failed",
-                            "重新加载失败",
-                            "Reload failed"
-                        )
-                    ));
-                }
-            }
-            Task::none()
-        }
-        RuntimeSettingsMsg::DiskSaved(res) => {
-            match res {
-                Ok(st) => {
-                    state.runtime_settings.cache.set_cached(st);
-                    if let Err(e) = state.runtime_settings.sync_from_cache() {
-                        state.runtime_settings.last_message = Some(format!(
-                            "{}: {e}",
-                            envr_core::i18n::tr_key(
-                                "gui.app.sync_failed",
-                                "同步失败",
-                                "Sync failed"
-                            )
-                        ));
-                    } else {
-                        state.runtime_settings.last_message = Some(envr_core::i18n::tr_key(
-                            "gui.app.saved_short",
-                            "已保存。",
-                            "Saved.",
-                        ));
-                    }
-                }
-                Err(e) => {
-                    state.runtime_settings.last_message = Some(format!(
-                        "{}: {e}",
-                        envr_core::i18n::tr_key("gui.app.save_failed", "保存失败", "Save failed")
-                    ));
-                }
-            }
-            Task::none()
-        }
     }
 }
 
@@ -688,9 +571,7 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                         let mut merged = state.settings.cache.snapshot().clone();
                         merged.paths.runtime_root = Some(unsaved_rr);
                         state.settings.cache.set_cached(merged.clone());
-                        state.runtime_settings.cache.set_cached(merged);
                         let _ = state.settings.sync_from_cache();
-                        let _ = state.runtime_settings.sync_from_cache();
                         state.settings.last_message = None;
                     } else {
                         state.settings.last_message = Some(envr_core::i18n::tr_key(
@@ -717,7 +598,6 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             match res {
                 Ok(st) => {
                     state.settings.cache.set_cached(st.clone());
-                    state.runtime_settings.cache.set_cached(st.clone());
                     if let Err(e) = state.settings.sync_from_cache() {
                         state.settings.last_message = Some(format!(
                             "{}: {e}",
@@ -728,7 +608,6 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             )
                         ));
                     } else {
-                        let _ = state.runtime_settings.sync_from_cache();
                         state.settings.last_message = Some(envr_core::i18n::tr_key(
                             "gui.app.saved_settings_toml",
                             "已保存到 settings.toml。",
@@ -1382,9 +1261,7 @@ fn persist_download_panel_settings(state: &mut AppState) -> Result<(), envr_erro
     );
     st.save_to(&settings_path)?;
     state.settings.cache.set_cached(st.clone());
-    state.runtime_settings.cache.set_cached(st);
     let _ = state.settings.sync_from_cache();
-    let _ = state.runtime_settings.sync_from_cache();
     Ok(())
 }
 
@@ -1633,6 +1510,11 @@ fn sync_go_env_center_drafts_from_settings(state: &mut AppState) {
     state.env_center.go_private_patterns_draft = g.private_patterns.clone().unwrap_or_default();
 }
 
+fn sync_bun_env_center_drafts_from_settings(state: &mut AppState) {
+    let b = &state.settings.cache.snapshot().runtime.bun;
+    state.env_center.bun_global_bin_dir_draft = b.global_bin_dir.clone().unwrap_or_default();
+}
+
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
     match msg {
         EnvCenterMsg::PickKind(k) => {
@@ -1663,6 +1545,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.runtime_settings_expanded = false;
             if k == envr_domain::runtime::RuntimeKind::Go {
                 sync_go_env_center_drafts_from_settings(state);
+            }
+            if k == envr_domain::runtime::RuntimeKind::Bun {
+                sync_bun_env_center_drafts_from_settings(state);
             }
             if k == envr_domain::runtime::RuntimeKind::Node {
                 state.env_center.node_remote_refreshing = true;
@@ -2376,6 +2261,24 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             } else {
                 persist_settings_clone_task(st)
             }
+        }
+        EnvCenterMsg::BunGlobalBinDirEdit(s) => {
+            state.env_center.bun_global_bin_dir_draft = s;
+            Task::none()
+        }
+        EnvCenterMsg::ApplyBunGlobalBinDir => {
+            let mut st = state.settings.cache.snapshot().clone();
+            let t = state.env_center.bun_global_bin_dir_draft.trim();
+            st.runtime.bun.global_bin_dir = if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            };
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            persist_settings_clone_task(st)
         }
         EnvCenterMsg::RustRefresh => {
             state.env_center.busy = true;

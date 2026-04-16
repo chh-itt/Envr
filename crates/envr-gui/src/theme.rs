@@ -93,9 +93,9 @@ pub fn download_panel_container_style(
     let r = tokens.download_panel_corner_radius();
     let surf = to_color(tokens.colors.surface);
     let page = to_color(tokens.colors.background);
-    let blend = 0.78 + (tokens.backdrop_blur_hint.min(24.0) / 24.0) * 0.12;
+    let blend = 0.80 + (tokens.backdrop_blur_hint.min(24.0) / 24.0) * 0.12;
     let inv = 1.0 - blend;
-    let base_a = 0.88_f32;
+    let base_a = 0.85_f32;
     let line = to_color(tokens.colors.text_muted).scale_alpha(0.2);
     let shadow_alpha = (tokens.shadow.color_alpha * 0.9).min(0.35) * reveal.clamp(0.0, 1.0);
     move |_theme: &Theme| {

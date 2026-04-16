@@ -11,7 +11,6 @@ use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::floating_download_panel;
 use crate::view::env_center::env_center_view;
 use crate::view::runtime_nav::runtime_nav_bar;
-use crate::view::runtime_settings::runtime_settings_view;
 use crate::view::settings::settings_view;
 use crate::widget_styles::{ButtonVariant, button_content_centered, button_style};
 
@@ -32,10 +31,14 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
     .height(Length::Fill)
     .spacing(sp.sm as f32);
 
-    let page = container(page_scroll)
-        .width(Length::Fill)
-        .max_width(t.content_max_width())
-        .align_x(Alignment::Center);
+    let page = if matches!(state.route(), Route::Dashboard | Route::About) {
+        container(page_scroll)
+            .width(Length::Fill)
+            .max_width(t.content_max_width())
+            .align_x(Alignment::Center)
+    } else {
+        container(page_scroll).width(Length::Fill)
+    };
 
     let main_row = row![
         crate::view::sidebar::sidebar(state.route(), t),
@@ -134,15 +137,6 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 state.env_center.busy,
                 tokens,
             ));
-            // Only show the extra per-runtime settings panel when there are
-            // actually runtime-specific options to configure.
-            if matches!(state.env_center.kind, RuntimeKind::Bun) {
-                col = col.push(runtime_settings_view(
-                    &state.runtime_settings,
-                    state.env_center.kind,
-                    tokens,
-                ));
-            }
             col = col.push(env_center_view(
                 &state.env_center,
                 matches!(state.env_center.kind, RuntimeKind::Node)

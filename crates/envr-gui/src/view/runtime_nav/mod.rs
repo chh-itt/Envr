@@ -1,4 +1,4 @@
-use iced::widget::{button, row, text};
+use iced::widget::{button, row, scrollable, text};
 use iced::{Alignment, Element, Length};
 
 use envr_domain::runtime::RuntimeKind;
@@ -16,7 +16,8 @@ pub fn runtime_nav_bar(
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let sp = tokens.space();
-    let txt = gui_theme::to_color(tokens.colors.text);
+    let txt = gui_theme::to_color(tokens.colors.text_muted);
+    let on_primary = gui_theme::contrast_on_primary(tokens);
     let mut r = row![].spacing(sp.sm as f32).align_y(Alignment::Center);
 
     for kind in [
@@ -29,8 +30,9 @@ pub fn runtime_nav_bar(
         RuntimeKind::Deno,
         RuntimeKind::Bun,
     ] {
+        let icon_c = if kind == active { on_primary } else { txt };
         let label = row![
-            Lucide::Package.view(14.0, txt),
+            Lucide::Package.view(14.0, icon_c),
             text(crate::view::env_center::kind_label(kind)),
         ]
         .spacing(sp.xs as f32)
@@ -54,5 +56,10 @@ pub fn runtime_nav_bar(
         r = r.push(b);
     }
 
-    r.into()
+    scrollable(r)
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::default(),
+        ))
+        .width(Length::Fill)
+        .into()
 }

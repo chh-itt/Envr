@@ -109,10 +109,10 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
             .with(metrics_layer)
             .try_init()
             .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
-        return Ok(LoggingGuard {
+        Ok(LoggingGuard {
             _file_guard: file_guard,
             _metrics_guard: metrics_guard,
-        });
+        })
     } else {
         let (metrics_layer, metrics_guard) = if let Some(ref p) = metrics_path {
             let path = PathBuf::from(p);
@@ -157,10 +157,10 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
             .with(metrics_layer)
             .try_init()
             .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
-        return Ok(LoggingGuard {
+        Ok(LoggingGuard {
             _file_guard: file_guard,
             _metrics_guard: metrics_guard,
-        });
+        })
     }
 }
 

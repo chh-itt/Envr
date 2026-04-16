@@ -10,8 +10,8 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::settings::state::SettingsViewState;
 use crate::widget_styles::{
-    ButtonVariant, button_content_centered, button_label_for_variant, button_style, section_card,
-    text_input_style,
+    ButtonVariant, SegmentPosition, button_content_centered, button_label_for_variant, button_style,
+    section_card, segmented_button_style, setting_row, text_input_style,
 };
 
 #[derive(Debug, Clone)]
@@ -115,21 +115,14 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
 
-    let mut mirror_row = row![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.mirror_strategy",
-            "镜像策略",
-            "Mirror strategy",
-        ))
-        .size(ty.body),
-    ]
-    .spacing(sp.sm as f32);
-    for mode in [
+    let mut mirror_buttons = row![].spacing(-1.0);
+    let mirror_modes = [
         MirrorMode::Official,
         MirrorMode::Auto,
         MirrorMode::Manual,
         MirrorMode::Offline,
-    ] {
+    ];
+    for (idx, mode) in mirror_modes.iter().copied().enumerate() {
         let lab = SettingsViewState::mirror_mode_label(mode);
         let variant = if mode == state.draft.mirror.mode {
             ButtonVariant::Primary
@@ -141,13 +134,22 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
+        let pos = if mirror_modes.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == mirror_modes.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
         let b = button(button_content_centered(text(lab).into()))
             .on_press(Message::Settings(SettingsMsg::SetMirrorMode(mode)))
-            .width(Length::FillPortion(1))
+            .width(Length::Shrink)
             .height(Length::Fixed(h))
-            .padding([sp.sm as f32, sp.sm as f32])
-            .style(button_style(tokens, variant));
-        mirror_row = mirror_row.push(b);
+            .padding([sp.sm as f32, (sp.sm + 2) as f32])
+            .style(segmented_button_style(tokens, variant, pos));
+        mirror_buttons = mirror_buttons.push(b);
     }
 
     let manual = if state.draft.mirror.mode == MirrorMode::Manual {
@@ -182,16 +184,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         ))
         .on_toggle(|v| Message::Settings(SettingsMsg::SetCleanup(v)));
 
-    let mut font_mode_row = row![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.font_section",
-            "字体",
-            "Font"
-        ))
-        .size(ty.body)
-    ]
-    .spacing(sp.sm as f32);
-    for (mode, key, zh, en) in [
+    let font_options = [
         (
             FontMode::Auto,
             "gui.settings.font.auto",
@@ -204,7 +197,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "自定义",
             "Custom",
         ),
-    ] {
+    ];
+    let mut font_mode_row = row![].spacing(-1.0);
+    for (idx, (mode, key, zh, en)) in font_options.iter().copied().enumerate() {
         let variant = if mode == state.draft.appearance.font.mode {
             ButtonVariant::Primary
         } else {
@@ -215,16 +210,25 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
+        let pos = if font_options.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == font_options.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
         let b = button(button_content_centered(button_label_for_variant(
             envr_core::i18n::tr_key(key, zh, en),
             tokens,
             variant,
         )))
         .on_press(Message::Settings(SettingsMsg::SetFontMode(mode)))
-        .width(Length::FillPortion(1))
+        .width(Length::Shrink)
         .height(Length::Fixed(h))
-        .padding([sp.sm as f32, sp.sm as f32])
-        .style(button_style(tokens, variant));
+        .padding([sp.sm as f32, (sp.sm + 2) as f32])
+        .style(segmented_button_style(tokens, variant, pos));
         font_mode_row = font_mode_row.push(b);
     }
 
@@ -249,7 +253,8 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                     "gui.settings.font.pick_placeholder",
                     "从候选字体中选择",
                     "Pick from candidates",
-                )),
+                ))
+                .width(Length::Fixed(240.0)),
                 container(
                     text_input(
                         &envr_core::i18n::tr_key(
@@ -287,16 +292,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         .spacing((sp.xs + 2) as f32)
     };
 
-    let mut theme_mode_row = row![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.theme_section",
-            "主题",
-            "Theme"
-        ))
-        .size(ty.body)
-    ]
-    .spacing(sp.sm as f32);
-    for (mode, key, zh, en) in [
+    let theme_options = [
         (
             ThemeMode::FollowSystem,
             "gui.settings.theme.follow",
@@ -310,7 +306,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "Light",
         ),
         (ThemeMode::Dark, "gui.settings.theme.dark", "深色", "Dark"),
-    ] {
+    ];
+    let mut theme_mode_row = row![].spacing(-1.0);
+    for (idx, (mode, key, zh, en)) in theme_options.iter().copied().enumerate() {
         let variant = if mode == state.draft.appearance.theme_mode {
             ButtonVariant::Primary
         } else {
@@ -321,16 +319,25 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
+        let pos = if theme_options.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == theme_options.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
         let b = button(button_content_centered(button_label_for_variant(
             envr_core::i18n::tr_key(key, zh, en),
             tokens,
             variant,
         )))
         .on_press(Message::Settings(SettingsMsg::SetThemeMode(mode)))
-        .width(Length::FillPortion(1))
+        .width(Length::Shrink)
         .height(Length::Fixed(h))
-        .padding([sp.sm as f32, sp.sm as f32])
-        .style(button_style(tokens, variant));
+        .padding([sp.sm as f32, (sp.sm + 2) as f32])
+        .style(segmented_button_style(tokens, variant, pos));
         theme_mode_row = theme_mode_row.push(b);
     }
 
@@ -444,16 +451,7 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     ]
     .spacing((sp.sm + 2) as f32);
 
-    let mut locale_row = row![
-        text(envr_core::i18n::tr_key(
-            "gui.settings.language",
-            "语言",
-            "Language"
-        ))
-        .size(ty.body)
-    ]
-    .spacing(sp.sm as f32);
-    for (mode, key, zh, en) in [
+    let locale_options = [
         (
             LocaleMode::FollowSystem,
             "gui.settings.locale.follow",
@@ -472,7 +470,9 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "English",
             "English",
         ),
-    ] {
+    ];
+    let mut locale_row = row![].spacing(-1.0);
+    for (idx, (mode, key, zh, en)) in locale_options.iter().copied().enumerate() {
         let variant = if mode == state.locale_mode_draft {
             ButtonVariant::Primary
         } else {
@@ -483,16 +483,25 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         } else {
             tokens.control_height_secondary
         };
+        let pos = if locale_options.len() == 1 {
+            SegmentPosition::Single
+        } else if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == locale_options.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
         let b = button(button_content_centered(button_label_for_variant(
             envr_core::i18n::tr_key(key, zh, en),
             tokens,
             variant,
         )))
         .on_press(Message::Settings(SettingsMsg::SetLocaleMode(mode)))
-        .width(Length::FillPortion(1))
+        .width(Length::Shrink)
         .height(Length::Fixed(h))
-        .padding([sp.sm as f32, sp.sm as f32])
-        .style(button_style(tokens, variant));
+        .padding([sp.sm as f32, (sp.sm + 2) as f32])
+        .style(segmented_button_style(tokens, variant, pos));
         locale_row = locale_row.push(b);
     }
 
@@ -503,7 +512,26 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "存储路径与镜像",
             "Storage & mirrors",
         ),
-        column![env_note, rr_row, mirror_row, manual, cleanup,]
+        column![
+            env_note,
+            rr_row,
+            setting_row(
+                tokens,
+                envr_core::i18n::tr_key(
+                    "gui.settings.mirror_strategy",
+                    "镜像策略",
+                    "Mirror strategy",
+                ),
+                Some(envr_core::i18n::tr_key(
+                    "gui.settings.mirror_strategy_desc",
+                    "控制运行时下载镜像选择方式。",
+                    "Choose how runtime mirrors are selected.",
+                )),
+                mirror_buttons.into(),
+            ),
+            manual,
+            cleanup,
+        ]
             .spacing(sp.md as f32)
             .into(),
     );
@@ -516,11 +544,38 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "Appearance, font & language",
         ),
         column![
-            font_mode_row,
+            setting_row(
+                tokens,
+                envr_core::i18n::tr_key(
+                    "gui.settings.font_section",
+                    "字体",
+                    "Font",
+                ),
+                None,
+                font_mode_row.into(),
+            ),
             font_custom,
-            theme_mode_row,
+            setting_row(
+                tokens,
+                envr_core::i18n::tr_key(
+                    "gui.settings.theme_section",
+                    "主题",
+                    "Theme",
+                ),
+                None,
+                theme_mode_row.into(),
+            ),
             accent_row,
-            locale_row,
+            setting_row(
+                tokens,
+                envr_core::i18n::tr_key(
+                    "gui.settings.language",
+                    "语言",
+                    "Language",
+                ),
+                None,
+                locale_row.into(),
+            ),
         ]
         .spacing(sp.md as f32)
         .into(),

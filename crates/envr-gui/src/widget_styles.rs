@@ -5,6 +5,7 @@ use iced::border;
 use iced::widget::button;
 use iced::widget::column;
 use iced::widget::container;
+use iced::widget::row;
 use iced::widget::text;
 use iced::widget::text_input;
 use iced::{Background, Color, Element, Length, Padding, Theme};
@@ -37,7 +38,18 @@ fn lighten(c: Color, amount: f32) -> Color {
     }
 }
 
-fn contrast_text_on(bg: Color) -> Color {
+fn mix(a: Color, b: Color, t: f32) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    let inv = 1.0 - t;
+    Color {
+        r: a.r * inv + b.r * t,
+        g: a.g * inv + b.g * t,
+        b: a.b * inv + b.b * t,
+        a: a.a * inv + b.a * t,
+    }
+}
+
+pub fn contrast_text_on(bg: Color) -> Color {
     let lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
     if lum > 0.55 {
         Color::from_rgb(0.15, 0.15, 0.16)
@@ -48,6 +60,14 @@ fn contrast_text_on(bg: Color) -> Color {
 
 fn pill_border(r: f32) -> iced::Border {
     border::rounded(r).width(0.0).color(Color::TRANSPARENT)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SegmentPosition {
+    Single,
+    Start,
+    Middle,
+    End,
 }
 
 /// Token-aware button (hover / pressed / disabled).
@@ -136,6 +156,60 @@ pub fn button_style(
     }
 }
 
+/// Segmented variant of [`button_style`] to build compact option groups.
+pub fn segmented_button_style(
+    tokens: ThemeTokens,
+    variant: ButtonVariant,
+    position: SegmentPosition,
+) -> impl Fn(&Theme, button::Status) -> button::Style + Copy {
+    move |_theme: &Theme, status: button::Status| {
+        let mut base = button_style(tokens, variant)(_theme, status);
+        let split = to_color(tokens.colors.text_muted).scale_alpha(0.28);
+        let r = tokens.radius_sm;
+        let radius = match position {
+            SegmentPosition::Single => border::Radius::new(r),
+            SegmentPosition::Start => border::Radius::new(0.0).left(r),
+            SegmentPosition::Middle => border::Radius::new(0.0),
+            SegmentPosition::End => border::Radius::new(0.0).right(r),
+        };
+        let active = matches!(variant, ButtonVariant::Primary | ButtonVariant::Danger);
+        let border_c = if active {
+            split.scale_alpha(1.35)
+        } else {
+            split
+        };
+        let shadow = if active {
+            // Subtle elevation cue so the active segment reads as a "pill" inset in the group.
+            // Iced does not support true inner shadows; we use a tiny outer shadow.
+            iced::Shadow {
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: (tokens.shadow.color_alpha * 0.55).min(0.22),
+                },
+                offset: iced::Vector::new(0.0, 0.75),
+                blur_radius: (tokens.shadow.blur_radius * 0.35).max(3.0),
+            }
+        } else {
+            Default::default()
+        };
+
+        // "Glass" highlight approximation: iced buttons cannot draw gradients.
+        // We instead blend the active background slightly towards surface and lift brightness.
+        if active && let Some(Background::Color(bg)) = base.background {
+            let surf = to_color(tokens.colors.surface);
+            let blended = mix(bg, surf, 0.14);
+            base.background = Some(Background::Color(lighten(blended, 0.02)));
+        }
+        button::Style {
+            border: base.border.width(1.0).color(border_c).rounded(radius),
+            shadow,
+            ..base
+        }
+    }
+}
+
 /// Label with a color matching [`button_style`] so text stays visible inside nested layouts
 /// (iced 0.13 often does not propagate `button::Style::text_color` to [`text`] under [`container`]).
 pub fn button_label_for_variant<Message: 'static>(
@@ -179,6 +253,35 @@ pub fn section_card<Message: 'static>(
     .padding(inset)
     .width(Length::Fill)
     .style(move |theme: &Theme| card_s(theme))
+    .into()
+}
+
+/// Standardized "title + optional description + right control" row for settings cards.
+pub fn setting_row<Message: 'static>(
+    tokens: ThemeTokens,
+    title: impl Into<String>,
+    description: Option<String>,
+    control: Element<'static, Message>,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = to_color(tokens.colors.text_muted);
+    let title = title.into();
+    let left = if let Some(desc) = description {
+        column![
+            text(title.clone()).size(ty.body_small),
+            text(desc).size(ty.micro).color(muted),
+        ]
+        .spacing(2.0)
+    } else {
+        column![text(title).size(ty.body_small)].spacing(0)
+    };
+    row![
+        left.width(Length::Fill),
+        container(control).width(Length::Shrink).align_y(iced::alignment::Vertical::Center),
+    ]
+    .spacing(sp.md as f32)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 
