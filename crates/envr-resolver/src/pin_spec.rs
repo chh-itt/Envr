@@ -1,4 +1,4 @@
-use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
+use envr_domain::runtime::{RuntimeKind, parse_runtime_kind, runtime_descriptor};
 use envr_error::{EnvrError, EnvrResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,17 +30,7 @@ pub fn parse_runtime_pin_spec(raw: &str) -> EnvrResult<RuntimePinSpec> {
 }
 
 pub fn runtime_kind_toml_key(kind: RuntimeKind) -> &'static str {
-    match kind {
-        RuntimeKind::Node => "node",
-        RuntimeKind::Python => "python",
-        RuntimeKind::Java => "java",
-        RuntimeKind::Go => "go",
-        RuntimeKind::Rust => "rust",
-        RuntimeKind::Php => "php",
-        RuntimeKind::Deno => "deno",
-        RuntimeKind::Bun => "bun",
-        RuntimeKind::Dotnet => "dotnet",
-    }
+    runtime_descriptor(kind).key
 }
 
 #[cfg(test)]

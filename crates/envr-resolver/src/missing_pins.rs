@@ -8,7 +8,7 @@ use envr_error::EnvrError;
 
 /// Languages considered by `envr run` / `envr project sync` when checking pins (fixed order).
 pub const RUNTIME_PLAN_ORDER: &[&str] = &[
-    "node", "python", "java", "go", "php", "deno", "bun", "dotnet",
+    "node", "python", "java", "go", "ruby", "php", "deno", "bun", "dotnet",
 ];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and

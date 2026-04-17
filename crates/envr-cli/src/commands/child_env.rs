@@ -202,6 +202,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "python" => Some("ENVR_PYTHON_VERSION"),
         "java" => Some("ENVR_JAVA_VERSION"),
         "go" => Some("ENVR_GO_VERSION"),
+        "ruby" => Some("ENVR_RUBY_VERSION"),
         "php" => Some("ENVR_PHP_VERSION"),
         "deno" => Some("ENVR_DENO_VERSION"),
         "bun" => Some("ENVR_BUN_VERSION"),

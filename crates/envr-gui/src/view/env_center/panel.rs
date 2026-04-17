@@ -5,7 +5,7 @@ use envr_config::settings::{
     GoRuntimeSettings, JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource,
     NodeRuntimeSettings, NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings,
     PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
-    RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
+    RubyRuntimeSettings, RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
 };
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, runtime_descriptor};
 use envr_ui::theme::ThemeTokens;
@@ -72,6 +72,7 @@ pub enum EnvCenterMsg {
     SetBunPackageSource(NpmRegistryMode),
     SetBunPathProxy(bool),
     SetDotnetPathProxy(bool),
+    SetRubyPathProxy(bool),
     BunGlobalBinDirEdit(String),
     ApplyBunGlobalBinDir,
 
@@ -146,6 +147,9 @@ pub struct EnvCenterState {
     /// .NET: latest patch per major from releases metadata/cache.
     pub dotnet_remote_latest: Vec<RuntimeVersion>,
     pub dotnet_remote_refreshing: bool,
+    /// Ruby: latest patch per major from releases index/cache.
+    pub ruby_remote_latest: Vec<RuntimeVersion>,
+    pub ruby_remote_refreshing: bool,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -199,6 +203,8 @@ impl Default for EnvCenterState {
             bun_remote_refreshing: false,
             dotnet_remote_latest: Vec::new(),
             dotnet_remote_refreshing: false,
+            ruby_remote_latest: Vec::new(),
+            ruby_remote_refreshing: false,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -307,6 +313,13 @@ impl EnvCenterState {
             }
             RuntimeKind::Dotnet => {
                 for v in &self.dotnet_remote_latest {
+                    if let Some(k) = parse_major_from_ver(&v.0) {
+                        keys_set.insert(k);
+                    }
+                }
+            }
+            RuntimeKind::Ruby => {
+                for v in &self.ruby_remote_latest {
                     if let Some(k) = parse_major_from_ver(&v.0) {
                         keys_set.insert(k);
                     }
@@ -1600,6 +1613,52 @@ fn dotnet_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<Run
         .cloned()
 }
 
+fn ruby_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
+    state
+        .ruby_remote_latest
+        .iter()
+        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+        .cloned()
+}
+
+fn ruby_runtime_settings_section(
+    ruby: &RubyRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.ruby.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.ruby.path_proxy.hint",
+            "开启时由 envr 接管 ruby/gem/bundle/irb；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages ruby/gem/bundle/irb; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(ruby.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetRubyPathProxy(v)))
+            .into(),
+    );
+
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.ruby.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(column![proxy_toggle, proxy_note].spacing(sp.sm as f32).width(Length::Fill))
+        .padding(Padding::from([sp.md as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
+}
+
 fn dotnet_runtime_settings_section(
     dotnet: &DotnetRuntimeSettings,
     tokens: ThemeTokens,
@@ -1645,6 +1704,7 @@ pub fn env_center_view(
     java_runtime: Option<&JavaRuntimeSettings>,
     go_runtime: Option<&GoRuntimeSettings>,
     rust_runtime: Option<&RustRuntimeSettings>,
+    ruby_runtime: Option<&RubyRuntimeSettings>,
     php_runtime: Option<&PhpRuntimeSettings>,
     deno_runtime: Option<&DenoRuntimeSettings>,
     bun_runtime: Option<&BunRuntimeSettings>,
@@ -1665,6 +1725,7 @@ pub fn env_center_view(
         RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Ruby => ruby_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
@@ -1700,6 +1761,7 @@ pub fn env_center_view(
             | RuntimeKind::Python
             | RuntimeKind::Java
             | RuntimeKind::Go
+            | RuntimeKind::Ruby
             | RuntimeKind::Php
             | RuntimeKind::Deno
             | RuntimeKind::Bun
@@ -1774,6 +1836,10 @@ pub fn env_center_view(
                     tokens,
                 )
             })
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Ruby {
+        ruby_runtime
+            .map(|r| ruby_runtime_settings_section(r, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Php {
         php_runtime
@@ -1880,6 +1946,9 @@ pub fn env_center_view(
             RuntimeKind::Dotnet => {
                 state.dotnet_remote_latest.is_empty() && state.dotnet_remote_refreshing
             }
+            RuntimeKind::Ruby => {
+                state.ruby_remote_latest.is_empty() && state.ruby_remote_refreshing
+            }
             RuntimeKind::Rust => false,
         };
 
@@ -1985,6 +2054,10 @@ pub fn env_center_view(
                         .unwrap_or_else(|| key.clone())
                 } else if state.kind == RuntimeKind::Dotnet {
                     dotnet_remote_latest_for_key(state, key)
+                        .map(|v| v.0)
+                        .unwrap_or_else(|| key.clone())
+                } else if state.kind == RuntimeKind::Ruby {
+                    ruby_remote_latest_for_key(state, key)
                         .map(|v| v.0)
                         .unwrap_or_else(|| key.clone())
                 } else {

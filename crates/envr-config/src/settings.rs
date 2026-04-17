@@ -485,6 +485,8 @@ pub struct RuntimeSettings {
     #[serde(default)]
     pub rust: RustRuntimeSettings,
     #[serde(default)]
+    pub ruby: RubyRuntimeSettings,
+    #[serde(default)]
     pub php: PhpRuntimeSettings,
     #[serde(default)]
     pub deno: DenoRuntimeSettings,
@@ -499,6 +501,22 @@ pub struct RustRuntimeSettings {
     /// Rust toolchain download source choice (used for `rustup` env injection).
     #[serde(default)]
     pub download_source: RustDownloadSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RubyRuntimeSettings {
+    /// When false, ruby/gem/bundle/irb shims resolve to the next matching binary on PATH
+    /// outside envr shims.
+    #[serde(default = "defaults::ruby_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for RubyRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::ruby_path_proxy_enabled(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1407,6 +1425,17 @@ pub fn dotnet_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`RubyRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn ruby_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.ruby.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
 pub fn php_windows_build_want_ts_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1508,6 +1537,10 @@ mod defaults {
     pub fn dotnet_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn ruby_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1569,6 +1602,7 @@ mod tests {
             },
             runtime: RuntimeSettings {
                 node: NodeRuntimeSettings::default(),
+                ruby: RubyRuntimeSettings::default(),
                 python: PythonRuntimeSettings::default(),
                 java: JavaRuntimeSettings::default(),
                 go: GoRuntimeSettings {

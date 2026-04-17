@@ -292,3 +292,40 @@ What is still intentionally explicit:
 - provider-specific install/index logic
 
 That explicit work is acceptable. Hidden omissions are not.
+
+## 8) Lessons from Ruby (Windows / RubyInstaller)
+
+Ruby integration surfaced repeatable gaps. Treat this as an addendum to sections **B**, **H**, and **§4 anti-omission** for any runtime whose **installable artifact set** is not identical to a separate “upstream release index”.
+
+### 8.1 Single source of truth for versions users can install
+
+If installation downloads from **vendor A** (e.g. RubyInstaller `.7z` links on the downloads page), then on Windows:
+
+- **`resolve` / `install` / `list_remote` / `list_remote_latest_per_major`** should not rely only on **vendor B** (e.g. ruby-lang.org release HTML) unless you explicitly intersect or merge the two.
+- Otherwise users see versions in lists or GUI that **cannot** be installed yet (“language released, installer not published”), especially on trailing minors.
+
+**Concrete checks:**
+
+- [ ] Remote “latest per major” rows match artifacts your parser can actually download.
+- [ ] Full GUI Env Center wiring for `supports_remote_latest`: dedicated `*_remote_latest` / `*_refreshing` state, `recompute_derived_lists` merge branch, `PickKind`, `runtime_page_enter_tasks`, `RemoteLatestDiskSnapshot` / `RemoteLatestRefreshed`, and motion/skeleton subscription—not only `refresh_runtimes` in a catch-all `else`.
+
+### 8.2 Large binary downloads and HTTP resume
+
+If the provider uses **HTTP Range** resume for archives:
+
+- [ ] On **`416 Range Not Satisfiable`**, retry without `Range` after deleting or truncating the partial file (stale length vs CDN/object).
+
+### 8.3 Shim bypass error copy
+
+Shared helpers like `find_on_path_outside_envr_shims` are used by **all** runtimes. Avoid hardcoding one runtime name (e.g. “Node”) in user-visible strings.
+
+### 8.4 GUI: what “one row per major” looks like
+
+For runtimes that expose **latest installable version per semver major** (e.g. Ruby from installer artifacts), the left column may show **Ruby 4**, **Ruby 3**, etc.—only majors for which at least one installable artifact exists. Missing **Ruby 2** simply means the installer index no longer lists that line (or your filter excludes it). This is expected, not a broken remote list.
+
+### 8.5 Architecture friction worth improving later
+
+These are not blockers, but they increased integration cost:
+
+- **GUI Env Center** still requires a **per-runtime** branch for remote-latest state and tasks; easy to forget for a new `RuntimeKind` even when `supports_remote_latest` is true in the descriptor. A descriptor-driven or table-driven “remote latest wiring” would reduce omission.
+- **Two indices** (language releases vs installer artifacts) without a shared abstraction forced a second pass (RubyInstaller-only lists + download resume fix). A small internal contract (“install candidate versions”) per provider would make the rule explicit in code.

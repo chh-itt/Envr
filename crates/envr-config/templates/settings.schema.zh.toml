@@ -103,6 +103,10 @@ path_proxy_enabled = true
 [runtime.rust]
 download_source = "auto"
 
+[runtime.ruby]
+# ruby 运行时：shim 是否劫持 PATH（会影响 ruby/gem/bundle/irb 的解析）
+path_proxy_enabled = true
+
 [runtime.php]
 download_source = "auto"
 # windows_build：nts | ts

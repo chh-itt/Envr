@@ -5,13 +5,15 @@
 
 use envr_config::project_config::ProjectConfig;
 use envr_error::{EnvrError, EnvrResult};
-use envr_resolver::{resolve_bun_home, resolve_deno_home, resolve_go_home, resolve_php_home};
+use envr_resolver::{
+    resolve_bun_home, resolve_deno_home, resolve_go_home, resolve_php_home, resolve_ruby_home,
+};
 use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
 use std::path::PathBuf;
 
 /// Languages merged for `envr run` / `run --verbose` (fixed order; includes rust).
 pub(crate) const RUN_STACK_LANG_ORDER: &[&str] =
-    &["node", "python", "java", "go", "rust", "php", "deno", "bun"];
+    &["node", "python", "java", "go", "rust", "ruby", "php", "deno", "bun"];
 
 fn project_has_runtime_pin(cfg: Option<&ProjectConfig>, lang: &str) -> bool {
     cfg.and_then(|c| c.runtimes.get(lang))
@@ -122,6 +124,22 @@ impl<'a> RunEnvStack<'a> {
                 home,
             }));
         }
+        if lang == "ruby" {
+            let Some(home) = run_resolve_home_or_skip(
+                self.install_if_missing,
+                self.cfg,
+                lang,
+                resolve_ruby_home(self.ctx, self.cfg, None),
+            )?
+            else {
+                return Ok(None);
+            };
+            let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
+            return Ok(Some(RunStackLang::Runtime {
+                lang: lang.to_string(),
+                home,
+            }));
+        }
         let home_res = if lang == "go" {
             resolve_go_home(self.ctx, self.cfg, None)
         } else {
@@ -214,6 +232,11 @@ pub(crate) fn resolve_exec_lang_layer(
             spec_override,
         )?)),
         "go" => Ok(ExecLangResolution::Home(resolve_go_home(
+            ctx,
+            cfg,
+            spec_override,
+        )?)),
+        "ruby" => Ok(ExecLangResolution::Home(resolve_ruby_home(
             ctx,
             cfg,
             spec_override,

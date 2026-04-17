@@ -10,6 +10,7 @@ pub enum RuntimeKind {
     Java,
     Go,
     Rust,
+    Ruby,
     Php,
     Deno,
     Bun,
@@ -26,7 +27,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 9] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 10] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -66,6 +67,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 9] = [
         label_zh: "Rust",
         supports_remote_latest: false,
         supports_path_proxy: false,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Ruby,
+        key: "ruby",
+        label_en: "Ruby",
+        label_zh: "Ruby",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Php,
@@ -204,14 +213,15 @@ mod tests {
 
     #[test]
     fn parse_runtime_kind_rejects_unknown() {
-        let err = parse_runtime_kind("ruby").expect_err("unknown");
+        let err = parse_runtime_kind("elixir").expect_err("unknown");
         assert!(matches!(err, EnvrError::Validation(_)));
     }
 
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 9);
+        assert_eq!(kinds.len(), 10);
+        assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
     }
 }

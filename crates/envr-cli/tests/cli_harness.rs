@@ -25,6 +25,26 @@ fn write_node_layout(runtime_root: &Path, version: &str) {
     fs::write(bin.join("node"), []).expect("touch node");
 }
 
+fn write_ruby_layout(runtime_root: &Path, version: &str) {
+    let ver = runtime_root.join("runtimes/ruby/versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create ruby bin");
+    #[cfg(windows)]
+    {
+        fs::write(bin.join("ruby.exe"), []).expect("touch ruby.exe");
+        fs::write(bin.join("gem.exe"), []).expect("touch gem.exe");
+        fs::write(bin.join("bundle.exe"), []).expect("touch bundle.exe");
+        fs::write(bin.join("irb.exe"), []).expect("touch irb.exe");
+    }
+    #[cfg(not(windows))]
+    {
+        fs::write(bin.join("ruby"), []).expect("touch ruby");
+        fs::write(bin.join("gem"), []).expect("touch gem");
+        fs::write(bin.join("bundle"), []).expect("touch bundle");
+        fs::write(bin.join("irb"), []).expect("touch irb");
+    }
+}
+
 #[test]
 fn list_node_text_lists_mock_version() {
     let tmp = tempfile::tempdir().expect("tmp");
@@ -97,6 +117,48 @@ fn which_node_resolves_with_project_pin() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.to_lowercase().contains("20.10.0"), "stdout={stdout}");
+}
+
+#[test]
+fn which_ruby_resolves_with_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_ruby_layout(&runtime_root, "3.3.11");
+    fs::write(
+        project.join(".envr.toml"),
+        "[runtimes.ruby]\nversion = \"3.3.11\"\n",
+    )
+    .expect("envr.toml");
+
+    let out = run_envr(&["which", "ruby"], &runtime_root, &project);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("3.3.11"), "stdout={stdout}");
+}
+
+#[test]
+fn which_ruby_uses_ruby_version_file_when_no_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_ruby_layout(&runtime_root, "3.3.11");
+    fs::write(project.join(".ruby-version"), "3.3.11\n").expect(".ruby-version");
+
+    let out = run_envr(&["which", "ruby"], &runtime_root, &project);
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("3.3.11"), "stdout={stdout}");
 }
 
 #[test]

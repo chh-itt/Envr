@@ -202,10 +202,10 @@ Legend:
 
 ### Phase A - Runtime surface registration
 
-- [ ] Add `RuntimeKind::Ruby` and descriptor entry
-- [ ] Register provider in runtime service defaults
-- [ ] Add crate wiring to workspace/consumers
-- [ ] Ensure generic CLI parsing recognizes `ruby`
+- [x] Add `RuntimeKind::Ruby` and descriptor entry
+- [x] Register provider in runtime service defaults
+- [x] Add crate wiring to workspace/consumers
+- [x] Ensure generic CLI parsing recognizes `ruby`
 
 Target files:
 
@@ -215,42 +215,42 @@ Target files:
 
 ### Phase B - Provider crate
 
-- [ ] Create `crates/envr-runtime-ruby/`
-- [ ] Implement release metadata fetch and version resolution
+- [x] Create `crates/envr-runtime-ruby/`
+- [~] Implement release metadata fetch and version resolution
 - [ ] Decide and document production metadata source by platform:
   - official release HTML / tarball listing for Unix-like installs
   - RubyInstaller archive source for Windows installs
 - [ ] Implement install pipeline and validation
-- [ ] Implement current pointer behavior with Windows fallback if needed
-- [ ] Implement installed/current/uninstall flows
-- [ ] Add focused unit tests for version resolution and layout validation
+- [x] Implement current pointer behavior with Windows fallback if needed
+- [~] Implement installed/current/uninstall flows
+- [~] Add focused unit tests for version resolution and layout validation
 - [ ] Add explicit validation/tests for `bundle` command availability
 
 ### Phase C - Resolver / run / exec integration
 
-- [ ] Add runtime-home resolution for `ruby`
-- [ ] Add missing-pin planning participation if appropriate
-- [ ] Ensure PATH layout flows through shared runtime policy hooks
+- [x] Add runtime-home resolution for `ruby`
+- [x] Add missing-pin planning participation if appropriate
+- [x] Ensure PATH layout flows through shared runtime policy hooks
 - [ ] Decide whether Ruby needs extra runtime-home env keys
-- [ ] Ensure `envr exec --lang ruby` and project-pinned `run` both work
+- [~] Ensure `envr exec --lang ruby` and project-pinned `run` both work
 
 ### Phase D - Shim integration
 
-- [ ] Extend `CoreCommand` for `ruby`, `gem`, `bundle`, `irb`
-- [ ] Add tool resolution under runtime home
-- [ ] Add path-proxy bypass support
-- [ ] Confirm `envr which` source reporting stays correct
-- [ ] Confirm `shim_service` generates expected command stems
+- [x] Extend `CoreCommand` for `ruby`, `gem`, `bundle`, `irb`
+- [x] Add tool resolution under runtime home
+- [x] Add path-proxy bypass support
+- [~] Confirm `envr which` source reporting stays correct
+- [x] Confirm `shim_service` generates expected command stems
 
 ### Phase E - Settings and GUI
 
-- [ ] Add `runtime.ruby.path_proxy_enabled`
-- [ ] Add defaults and schema docs
-- [ ] Add runtime nav/dashboard labels
-- [ ] Add env center rendering
-- [ ] Add Ruby settings section if needed
+- [x] Add `runtime.ruby.path_proxy_enabled`
+- [x] Add defaults and schema docs
+- [~] Add runtime nav/dashboard labels
+- [~] Add env center rendering
+- [x] Add Ruby settings section if needed
 - [ ] Confirm GUI remote list cache behavior
-- [ ] Confirm current-version row button parity
+- [~] Confirm current-version row button parity
 
 This phase must explicitly re-check the omissions seen in `.NET`:
 
@@ -261,12 +261,12 @@ This phase must explicitly re-check the omissions seen in `.NET`:
 ### Phase F - Validation and docs
 
 - [ ] Add `docs/runtime/ruby.md`
-- [ ] Update this plan with actual friction notes
+- [x] Update this plan with actual friction notes
 - [ ] Add focused integration tests:
   - `exec --dry-run`
   - `run --dry-run`
   - project pin path
-- [ ] Add precedence tests for:
+- [x] Add precedence tests for:
   - `.envr.toml` only
   - `.ruby-version` only
   - both present and conflicting
@@ -317,6 +317,86 @@ Use the same format as `.NET`:
 - Decision:
 - Follow-up:
 ```
+
+## 11) Development log
+
+## [2026-04-16 00:00] phase-a runtime skeleton wired
+- Change: Added `RuntimeKind::Ruby`, descriptor catalog entry, `envr-runtime-ruby` crate skeleton, and runtime service registration.
+- Result: Workspace now recognizes Ruby as a first-class runtime kind; the minimal provider skeleton compiles.
+- Friction: A compile error still appeared in `envr-core/src/shim_service.rs` because core shim entries remain explicitly matched by runtime kind.
+- Coupling hotspot: `shim_service` still requires one manual edit per new runtime even after descriptor/catalog refactor.
+- Decision: Keep `RuntimeKind::Ruby => &[]` for now, then add real Ruby core command entries in shim phase instead of over-centralizing too early.
+- Follow-up: Continue into provider/index work and measure whether additional hidden hardcoded runtime lists still surface.
+
+## [2026-04-16 00:05] phase-a refactor effect check
+- Change: Compared this Ruby bring-up against the `.NET` bring-up starting from descriptor/runtime-policy refactor state.
+- Result: Phase A was narrower than before; labels, most full-runtime iteration flows, and run/exec/shim env policy did not require repeated edits just to recognize the new kind.
+- Friction: The remaining manual runtime-touchpoints are now more localized, but not eliminated.
+- Coupling hotspot: Core shim command registration is still distributed separately from runtime descriptor metadata.
+- Decision: Treat this as acceptable for now and record it as a real remaining abstraction seam rather than trying to solve it prematurely mid-runtime.
+- Follow-up: Revisit after Ruby core commands are fully wired; if the same seam hurts again in Phase D, promote it into a follow-up architecture task.
+
+## [2026-04-16 00:20] phase-b metadata and local manager baseline
+- Change: Replaced the Ruby provider skeleton with a real baseline implementation for remote version parsing, version resolution, local installed-version discovery, `current` reading, `set_current`, and `uninstall`.
+- Result: Ruby now has a usable provider baseline instead of all-`not implemented` stubs; `envr-runtime-ruby` and `envr-core` compile with the new code.
+- Friction: Official Ruby release discovery is immediately less structured than Node or `.NET`; parsing the official releases HTML is workable, but clearly more fragile than a JSON index.
+- Coupling hotspot: None serious in the refactored runtime registration path; the main complexity moved into runtime-specific metadata parsing, which is expected and acceptable.
+- Decision: Use the official Ruby releases page as the first remote-version source for now, while keeping Windows artifact acquisition as a separate explicit decision for the install phase.
+- Follow-up: Add focused tests and then move into install artifact selection, especially the Windows RubyInstaller archive path.
+
+## [2026-04-16 00:23] phase-b implementation friction classification
+- Change: Classified the first non-architectural implementation bug encountered while wiring Ruby semver comparison.
+- Result: The issue was a local helper mistake, fixed quickly without touching shared runtime abstractions.
+- Friction: This did not reveal new architecture debt; it was ordinary implementation churn.
+- Coupling hotspot: None.
+- Decision: Do not over-interpret routine coding mistakes as refactor failure signals.
+- Follow-up: Keep distinguishing between "normal implementation bug" and "multi-file architecture friction" in later Ruby logs.
+
+## [2026-04-16 00:35] phase-b remote cache behavior probe
+- Change: Smoke-tested `envr remote ruby` and `envr remote ruby --prefix 3.3` against the new provider.
+- Result: Prefix queries work and return real official Ruby versions; no-prefix remote rows still show empty on a cold cache because the CLI path prefers disk snapshot + background refresh semantics.
+- Friction: This is a subtle UX friction point for new runtimes: implementing remote discovery is not enough, the cached latest-per-major path must also be exercised through the caller behavior.
+- Coupling hotspot: CLI remote UX still has implicit expectations about on-disk snapshot availability and process lifetime of background refresh work.
+- Decision: Record this as a real integration friction, but do not broaden scope into a CLI remote command redesign during Ruby provider bring-up.
+- Follow-up: Keep Ruby cache persistence implemented and revisit whether the caller-side cold-cache UX needs a later global fix.
+
+## [2026-04-16 00:45] phase-cd resolver and shim command wiring
+- Change: Added Ruby to run-home resolution, missing-pin planning, run/exec env stack ordering, `CoreCommand`, shim executable resolution, and generated shim stems (`ruby`, `gem`, `bundle`, `irb`).
+- Result: The Ruby command surface is now wired through resolver, shim-core, core shim generation, and CLI compile paths.
+- Friction: The remaining edits were focused and localized; the refactor noticeably reduced the number of unrelated runtime list/label/capability files touched at this stage.
+- Coupling hotspot: Core command registration is still an explicit seam spanning `envr-shim-core` and `envr-core::shim_service`, but it behaved predictably.
+- Decision: Keep this seam explicit for now because Ruby is a good test of a multi-command runtime and the current cost was acceptable.
+- Follow-up: Add focused tests around `parse_core_command`, fake runtime-home tool lookup, and then continue toward install pipeline / real end-to-end smoke validation.
+
+## [2026-04-16 11:45] phase-b windows install robustness
+- Change: For Windows RubyInstaller `.7z` installs, increased HTTP timeout to `180s`, added Range-based resume and up-to-3 retry attempts on request/read failures, and auto-promoted single-root extraction layouts (to avoid nested `ruby/` discovery failures).
+- Result: `cargo test -p envr-runtime-ruby` passes; the provider install path is now resilient to slow/unstable large-asset downloads.
+- Friction: End-to-end `envr install ruby <ver>` is still sensitive to the environment's connectivity to GitHub release assets (not an abstraction-layer issue).
+- Coupling hotspot: Ruby install provider still uses its own synchronous download implementation, so it does not automatically inherit the project's async GUI download / mirror probe behavior.
+- Decision: Keep the change localized to provider correctness + robustness; revisit shared download abstractions later if installs remain flaky.
+- Follow-up: Re-run `envr install ruby 3.3.11` + `current/exec` smoke; if it still fails, capture the exact reqwest error type and decide whether to implement shared download/mirror logic in the Ruby provider.
+
+## [2026-04-16 12:20] phase-d ruby path-proxy bypass + shim routing
+- Change: Extended `ShimSettingsSnapshot` with `ruby_path_proxy_enabled` and wired `uses_path_proxy_bypass` for `CoreCommand::{Ruby,Gem,Bundle,Irb}`; updated pinned runtime-home selection so `.ruby-version` acts as a Ruby-only fallback when `.envr.toml` does not pin.
+- Result: Ruby PATH proxy toggle now affects shim routing; `envr which` source can report `PathProxyBypass` for ruby/gem/bundle/irb when configured.
+- Friction: A Rust lifetime mismatch appeared while adapting the Ruby pinned-spec fallback; fixed by switching to an owned `Option<String>` internally.
+- Coupling hotspot: PATH-proxy bypass behavior requires extending the shim settings snapshot per runtime, not only GUI toggles.
+- Decision: Keep the Ruby `.ruby-version` fallback logic local to `runtime_home_for_key` (no new global env policy yet).
+- Follow-up: Add/extend `envr which` behavior tests (not just the bypass predicate) once the integration harness is expanded.
+
+## [2026-04-16 12:35] phase-e GUI: ruby settings block + persisted toggle
+- Change: Added `RuntimeSettings.runtime.ruby.path_proxy_enabled`, updated `settings.schema.zh.toml` template with `[runtime.ruby]`, and implemented the runtime settings section in `envr-gui` for the PATH proxy toggle (including `EnvCenterMsg::SetRubyPathProxy` + shim sync when enabled).
+- Result: GUI now persists and applies the Ruby PATH proxy toggle consistently with other runtimes.
+- Friction: `envr-gui` contains several explicit `match RuntimeKind` branches (remote skeleton/refresh + view layout) that required Ruby arms to keep compilation exhaustive.
+- Coupling hotspot: GUI view code still has “explicit per-runtime match arms” in a few places, so new runtime kinds can cause multiple localized edits.
+- Decision: For MVP, keep Ruby remote list behavior minimal in the env center UI (no additional Ruby-specific remote state was added yet).
+- Follow-up: When adding full Ruby remote caching, revisit `EnvCenterState` to track `ruby_remote_latest*` like other runtimes.
+
+## [2026-04-16 12:55] phase-f regression test: ruby proxy bypass from disk
+- Change: Added `ruby_path_proxy_bypass_follows_settings_disk` unit test in `envr-shim-core`, toggling `[runtime.ruby].path_proxy_enabled` via a temporary `ENVR_ROOT/config/settings.toml` and asserting bypass for `ruby/gem/bundle/irb`.
+- Result: Prevents regressions where GUI/app toggles are wired but shim bypass logic forgets to check the Ruby setting.
+- Friction: Rust marked env var writes as `unsafe` in this workspace; handled safely in the test by using a global mutex.
+- Coupling hotspot: Shim-core tests depend on the settings path resolution via `ENVR_ROOT`.
 
 ## 10) Success criteria for the refactor itself
 

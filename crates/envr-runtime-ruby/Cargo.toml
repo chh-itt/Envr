@@ -1,0 +1,14 @@
+[package]
+name = "envr-runtime-ruby"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
+envr-error = { path = "../envr-error" }
+envr-platform = { path = "../envr-platform" }
+regex = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+serde_json = { workspace = true }

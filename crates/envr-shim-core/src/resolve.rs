@@ -18,6 +18,7 @@ pub struct ShimSettingsSnapshot {
     deno_path_proxy_enabled: bool,
     bun_path_proxy_enabled: bool,
     dotnet_path_proxy_enabled: bool,
+    ruby_path_proxy_enabled: bool,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
@@ -34,6 +35,7 @@ impl Default for ShimSettingsSnapshot {
             deno_path_proxy_enabled: true,
             bun_path_proxy_enabled: true,
             dotnet_path_proxy_enabled: true,
+            ruby_path_proxy_enabled: true,
             php_windows_build_want_ts: false,
             deno_registry_env: Vec::new(),
             bun_registry_env: Vec::new(),
@@ -52,6 +54,7 @@ impl ShimSettingsSnapshot {
             deno_path_proxy_enabled: settings.runtime.deno.path_proxy_enabled,
             bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
+            ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
             php_windows_build_want_ts: matches!(
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
@@ -103,6 +106,13 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         return true;
     }
     if matches!(cmd, CoreCommand::Dotnet) && !settings.dotnet_path_proxy_enabled {
+        return true;
+    }
+    if matches!(
+        cmd,
+        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb
+    ) && !settings.ruby_path_proxy_enabled
+    {
         return true;
     }
     false
@@ -173,6 +183,10 @@ pub enum CoreCommand {
     Bun,
     Bunx,
     Dotnet,
+    Ruby,
+    Gem,
+    Bundle,
+    Irb,
 }
 
 impl CoreCommand {
@@ -186,6 +200,9 @@ impl CoreCommand {
             CoreCommand::Deno => "deno",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
             CoreCommand::Dotnet => "dotnet",
+            CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
+                "ruby"
+            }
         }
     }
 }
@@ -198,6 +215,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "java" => vec![home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
+        "ruby" => vec![home.join("bin"), home.to_path_buf()],
         "php" => vec![home.to_path_buf(), home.join("bin")],
         "deno" => vec![home.to_path_buf(), home.join("bin")],
         "bun" => vec![home.to_path_buf(), home.join("bin")],
@@ -266,6 +284,17 @@ pub fn runtime_version_label_from_executable(executable: &Path) -> Option<String
     envr_version_dir_from_executable(executable)
 }
 
+fn ruby_version_from_version_file(working_dir: &Path) -> Option<String> {
+    let p = working_dir.join(".ruby-version");
+    let s = std::fs::read_to_string(&p).ok()?;
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
+    }
+}
+
 /// Metadata for `envr which` (no subprocess; aligns with [`resolve_core_shim_command`] routing).
 pub fn which_runtime_detail(
     cmd: CoreCommand,
@@ -285,12 +314,20 @@ pub fn which_runtime_detail(
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
 
-    let from_project = cfg
+    let from_project_cfg = cfg
         .as_ref()
         .and_then(|c| c.runtimes.get(key))
         .and_then(|r| r.version.as_deref())
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
+
+    let from_project = from_project_cfg || {
+        if key == "ruby" {
+            ruby_version_from_version_file(&ctx.working_dir).is_some()
+        } else {
+            false
+        }
+    };
 
     let home = resolve_runtime_home_for_lang(ctx, key, None)?;
     let version = home
@@ -332,6 +369,10 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "bun" => Some(CoreCommand::Bun),
         "bunx" => Some(CoreCommand::Bunx),
         "dotnet" => Some(CoreCommand::Dotnet),
+        "ruby" => Some(CoreCommand::Ruby),
+        "gem" => Some(CoreCommand::Gem),
+        "bundle" => Some(CoreCommand::Bundle),
+        "irb" => Some(CoreCommand::Irb),
         _ => None,
     }
 }
@@ -612,16 +653,28 @@ fn runtime_home_for_key(
     let versions_dir = ctx.runtime_root.join("runtimes").join(key).join("versions");
     let current_link = ctx.runtime_root.join("runtimes").join(key).join("current");
 
-    let pinned = spec_override
+    let pinned: Option<String> = spec_override
         .map(str::trim)
         .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
         .or_else(|| {
             config
                 .and_then(|c| c.runtimes.get(key))
                 .and_then(|r| r.version.as_deref())
+                .map(|s| s.to_string())
         });
 
-    if let Some(spec) = pinned {
+    let pinned = pinned.or_else(|| {
+        // Project-local Ruby convention: use `.ruby-version` when `.envr.toml`
+        // doesn't pin ruby. `.envr.toml` still wins on conflict.
+        if key == "ruby" {
+            ruby_version_from_version_file(&ctx.working_dir)
+        } else {
+            None
+        }
+    });
+
+    if let Some(spec) = pinned.as_deref() {
         pick_version_home(&versions_dir, spec)
     } else if !current_link.exists() {
         Err(EnvrError::Runtime(format!(
@@ -791,6 +844,41 @@ fn php_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn ruby_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Ruby => Ok(first_existing(&[
+            bin.join("ruby.exe"),
+            bin.join("ruby.cmd"),
+            bin.join("ruby.bat"),
+            bin.join("ruby"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("ruby missing under {}", home.display())))?),
+        CoreCommand::Gem => Ok(first_existing(&[
+            bin.join("gem.cmd"),
+            bin.join("gem.bat"),
+            bin.join("gem.exe"),
+            bin.join("gem"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("gem missing under {}", home.display())))?),
+        CoreCommand::Bundle => Ok(first_existing(&[
+            bin.join("bundle.cmd"),
+            bin.join("bundle.bat"),
+            bin.join("bundle.exe"),
+            bin.join("bundle"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("bundle missing under {}", home.display())))?),
+        CoreCommand::Irb => Ok(first_existing(&[
+            bin.join("irb.cmd"),
+            bin.join("irb.bat"),
+            bin.join("irb.exe"),
+            bin.join("irb"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("irb missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a ruby tool".into())),
+    }
+}
+
 fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Dotnet => Ok(first_existing(&[
@@ -814,6 +902,9 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Deno => deno_tool_path(home, cmd),
         CoreCommand::Bun | CoreCommand::Bunx => bun_tool_path(home, cmd),
         CoreCommand::Dotnet => dotnet_tool_path(home, cmd),
+        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
+            ruby_tool_path(home, cmd)
+        }
     }
 }
 
@@ -855,7 +946,9 @@ fn is_likely_envr_shims_dir(dir: &Path) -> bool {
 
 fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
     let path_os = std::env::var_os("PATH").ok_or_else(|| {
-        EnvrError::Runtime("PATH is not set; cannot bypass envr Node shims".into())
+        EnvrError::Runtime(
+            "PATH is not set; cannot search for host executables outside envr shims".into(),
+        )
     })?;
     #[cfg(windows)]
     let suffixes: &[&str] = &[".cmd", ".exe", ".bat", ""];
@@ -878,7 +971,7 @@ fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
         }
     }
     Err(EnvrError::Runtime(format!(
-        "could not find `{tool_stem}` on PATH outside envr shims (enable PATH proxy in settings if you use envr-managed Node)"
+        "could not find `{tool_stem}` on PATH outside envr shims (enable PATH proxy in settings if this command should come from an envr-managed runtime)"
     )))
 }
 
@@ -1000,6 +1093,25 @@ fn resolve_bun_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
     })
 }
 
+fn resolve_ruby_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = match cmd {
+        CoreCommand::Ruby => "ruby",
+        CoreCommand::Gem => "gem",
+        CoreCommand::Bundle => "bundle",
+        CoreCommand::Irb => "irb",
+        _ => {
+            return Err(EnvrError::Runtime(
+                "internal: bypass only supports ruby tools".into(),
+            ));
+        }
+    };
+    let executable = find_on_path_outside_envr_shims(stem)?;
+    Ok(ResolvedShim {
+        executable,
+        extra_env: vec![],
+    })
+}
+
 /// Resolve a core tool to a filesystem executable path.
 pub fn resolve_core_shim_command(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     let settings = load_shim_settings_snapshot();
@@ -1038,6 +1150,9 @@ pub fn resolve_core_shim_command_with_settings(
             bun_tool_path(&home, cmd)?
         }
         CoreCommand::Dotnet => dotnet_tool_path(&home, cmd)?,
+        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
+            ruby_tool_path(&home, cmd)?
+        }
     };
 
     Ok(ResolvedShim {
@@ -1058,6 +1173,9 @@ fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
         CoreCommand::Deno => resolve_deno_tool_bypass_envr(cmd),
         CoreCommand::Bun | CoreCommand::Bunx => resolve_bun_tool_bypass_envr(cmd),
         CoreCommand::Dotnet => resolve_dotnet_tool_bypass_envr(cmd),
+        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
+            resolve_ruby_tool_bypass_envr(cmd)
+        }
     }
 }
 
@@ -1094,6 +1212,9 @@ mod tests {
     use std::ffi::OsString;
     use std::fs;
     use std::path::Path;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn envr_version_dir_from_executable_finds_segment() {
@@ -1146,6 +1267,10 @@ mod tests {
         assert_eq!(parse_core_command("gofmt"), Some(CoreCommand::Gofmt));
         assert_eq!(parse_core_command("php"), Some(CoreCommand::Php));
         assert_eq!(parse_core_command("deno"), Some(CoreCommand::Deno));
+        assert_eq!(parse_core_command("ruby"), Some(CoreCommand::Ruby));
+        assert_eq!(parse_core_command("gem"), Some(CoreCommand::Gem));
+        assert_eq!(parse_core_command("bundle"), Some(CoreCommand::Bundle));
+        assert_eq!(parse_core_command("irb"), Some(CoreCommand::Irb));
         assert_eq!(parse_core_command("unknown"), None);
     }
 
@@ -1227,6 +1352,57 @@ mod tests {
         };
         let err = resolve_runtime_home_for_lang(&ctx, "node", None).expect_err("must fail");
         assert!(err.to_string().contains("no global current for node"));
+    }
+
+    #[test]
+    fn resolve_runtime_home_for_lang_uses_ruby_version_file_when_no_project_pin() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let prj = root.join("prj");
+        fs::create_dir_all(&prj).expect("prj");
+
+        let versions = root.join("runtimes/ruby/versions");
+        fs::create_dir_all(versions.join("3.3.11")).expect("ruby 3.3.11 dir");
+
+        fs::write(prj.join(".ruby-version"), "3.3.11").expect("write .ruby-version");
+
+        let ctx = ShimContext {
+            runtime_root: root.to_path_buf(),
+            working_dir: prj,
+            profile: None,
+        };
+        let got = resolve_runtime_home_for_lang(&ctx, "ruby", None).expect("resolve");
+        assert!(got.ends_with("3.3.11"), "{got:?}");
+    }
+
+    #[test]
+    fn resolve_runtime_home_for_lang_ruby_version_file_ignored_when_project_pin_present() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let prj = root.join("prj");
+        fs::create_dir_all(&prj).expect("prj");
+
+        let versions = root.join("runtimes/ruby/versions");
+        fs::create_dir_all(versions.join("3.3.11")).expect("ruby 3.3.11 dir");
+        fs::create_dir_all(versions.join("3.3.12")).expect("ruby 3.3.12 dir");
+
+        fs::write(
+            prj.join(".envr.toml"),
+            r#"
+[runtimes.ruby]
+version = "3.3.12"
+"#,
+        )
+        .expect("write .envr.toml");
+        fs::write(prj.join(".ruby-version"), "3.3.11").expect("write .ruby-version");
+
+        let ctx = ShimContext {
+            runtime_root: root.to_path_buf(),
+            working_dir: prj,
+            profile: None,
+        };
+        let got = resolve_runtime_home_for_lang(&ctx, "ruby", None).expect("resolve");
+        assert!(got.ends_with("3.3.12"), "{got:?}");
     }
 
     #[test]
@@ -1398,5 +1574,48 @@ version = "20"
             .map(|(_, v)| v)
             .expect("JAVA_HOME");
         assert!(jh.contains("17.0.2"));
+    }
+
+    #[test]
+    fn ruby_path_proxy_bypass_follows_settings_disk() {
+        let _guard = ENV_LOCK.lock().expect("lock");
+
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let cfg_dir = tmp.path().join("config");
+        fs::create_dir_all(&cfg_dir).expect("config dir");
+        let cfg = cfg_dir.join("settings.toml");
+
+        let old = std::env::var_os("ENVR_ROOT");
+        unsafe { std::env::set_var("ENVR_ROOT", tmp.path()) };
+
+        // Restore even if assertions fail.
+        struct RestoreEnv {
+            key: &'static str,
+            prev: Option<std::ffi::OsString>,
+        }
+        impl Drop for RestoreEnv {
+            fn drop(&mut self) {
+                match self.prev.take() {
+                    Some(v) => unsafe { std::env::set_var(self.key, v) },
+                    None => unsafe { std::env::remove_var(self.key) },
+                }
+            }
+        }
+        let _restore = RestoreEnv {
+            key: "ENVR_ROOT",
+            prev: old,
+        };
+
+        fs::write(&cfg, "[runtime.ruby]\npath_proxy_enabled = false\n").expect("write");
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Irb));
+
+        fs::write(&cfg, "[runtime.ruby]\npath_proxy_enabled = true\n").expect("write");
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Irb));
     }
 }

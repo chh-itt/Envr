@@ -124,6 +124,15 @@ pub fn resolve_dotnet_home(
     resolve_runtime_home_for_lang(ctx, "dotnet", spec_override)
 }
 
+/// Ruby uses the same pin/current rules as other shims via [`resolve_runtime_home_for_lang`].
+pub fn resolve_ruby_home(
+    ctx: &ShimContext,
+    _cfg: Option<&ProjectConfig>,
+    spec_override: Option<&str>,
+) -> EnvrResult<PathBuf> {
+    resolve_runtime_home_for_lang(ctx, "ruby", spec_override)
+}
+
 /// Languages considered by `envr run` / missing-pin planning (no spec override).
 pub fn resolve_run_lang_home(
     ctx: &ShimContext,
@@ -135,6 +144,7 @@ pub fn resolve_run_lang_home(
         "deno" => resolve_deno_home(ctx, cfg, None),
         "bun" => resolve_bun_home(ctx, cfg, None),
         "dotnet" => resolve_dotnet_home(ctx, cfg, None),
+        "ruby" => resolve_ruby_home(ctx, cfg, None),
         "go" => resolve_go_home(ctx, cfg, None),
         "node" | "python" | "java" => resolve_runtime_home_for_lang(ctx, lang, None),
         _ => Err(EnvrError::Validation(format!(
@@ -159,6 +169,8 @@ pub fn resolve_exec_lang_home(
         resolve_php_home(ctx, cfg, spec_override)
     } else if lang == "go" {
         resolve_go_home(ctx, cfg, spec_override)
+    } else if lang == "ruby" {
+        resolve_ruby_home(ctx, cfg, spec_override)
     } else if lang == "dotnet" {
         resolve_dotnet_home(ctx, cfg, spec_override)
     } else {

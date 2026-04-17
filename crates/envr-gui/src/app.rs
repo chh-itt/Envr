@@ -235,7 +235,10 @@ pub fn run() -> iced::Result {
                     && state.env_center.node_remote_latest.is_empty())
                 || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
                     && state.env_center.go_remote_refreshing
-                    && state.env_center.go_remote_latest.is_empty()));
+                    && state.env_center.go_remote_latest.is_empty())
+                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Ruby
+                    && state.env_center.ruby_remote_refreshing
+                    && state.env_center.ruby_remote_latest.is_empty()));
         let need_motion = state.downloads.needs_motion_tick()
             || state.downloads.title_drag_armed_since.is_some()
             || runtime_skeleton;
@@ -735,6 +738,20 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                                     ),
                                 ]);
                             }
+                            envr_domain::runtime::RuntimeKind::Ruby => {
+                                state.env_center.ruby_remote_refreshing = true;
+                                return Task::batch([
+                                    gui_ops::refresh_runtimes(
+                                        envr_domain::runtime::RuntimeKind::Ruby,
+                                    ),
+                                    gui_ops::load_remote_latest_disk_snapshot(
+                                        envr_domain::runtime::RuntimeKind::Ruby,
+                                    ),
+                                    gui_ops::refresh_remote_latest_per_major(
+                                        envr_domain::runtime::RuntimeKind::Ruby,
+                                    ),
+                                ]);
+                            }
                             _ => {}
                         }
                     }
@@ -1041,6 +1058,7 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
         envr_domain::runtime::RuntimeKind::Php => !snap.php.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Deno => !snap.deno.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Bun => !snap.bun.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Ruby => !snap.ruby.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
         // Rust is not expected to support path proxy, but keep this explicit.
         envr_domain::runtime::RuntimeKind::Rust => false,
@@ -1099,6 +1117,10 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
             envr_domain::runtime::RuntimeKind::Dotnet => {
                 state.env_center.dotnet_remote_refreshing
                     && state.env_center.dotnet_remote_latest.is_empty()
+            }
+            envr_domain::runtime::RuntimeKind::Ruby => {
+                state.env_center.ruby_remote_refreshing
+                    && state.env_center.ruby_remote_latest.is_empty()
             }
             envr_domain::runtime::RuntimeKind::Rust => false,
         };
@@ -1495,6 +1517,22 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
                 gui_ops::rust_load_targets(),
             ])
         }
+        envr_domain::runtime::RuntimeKind::Ruby => {
+            state.env_center.node_remote_refreshing = false;
+            state.env_center.python_remote_refreshing = false;
+            state.env_center.java_remote_refreshing = false;
+            state.env_center.go_remote_refreshing = false;
+            state.env_center.php_remote_refreshing = false;
+            state.env_center.deno_remote_refreshing = false;
+            state.env_center.bun_remote_refreshing = false;
+            state.env_center.dotnet_remote_refreshing = false;
+            state.env_center.ruby_remote_refreshing = true;
+            Task::batch([
+                gui_ops::refresh_runtimes(kind),
+                gui_ops::load_remote_latest_disk_snapshot(kind),
+                gui_ops::refresh_remote_latest_per_major(kind),
+            ])
+        }
         _ => {
             state.env_center.node_remote_refreshing = false;
             state.env_center.python_remote_refreshing = false;
@@ -1558,6 +1596,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.deno_remote_refreshing = false;
             state.env_center.bun_remote_latest.clear();
             state.env_center.bun_remote_refreshing = false;
+            state.env_center.ruby_remote_latest.clear();
+            state.env_center.ruby_remote_refreshing = false;
             // Keep dotnet remote rows cached across tab switches to avoid "blank then reload".
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
@@ -1658,6 +1698,23 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.env_center.php_remote_refreshing = false;
                 state.env_center.deno_remote_refreshing = false;
                 state.env_center.bun_remote_refreshing = false;
+                state.env_center.ruby_remote_refreshing = false;
+                recompute_env_center_derived(state);
+                Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ])
+            } else if k == envr_domain::runtime::RuntimeKind::Ruby {
+                state.env_center.ruby_remote_refreshing = true;
+                state.env_center.node_remote_refreshing = false;
+                state.env_center.python_remote_refreshing = false;
+                state.env_center.java_remote_refreshing = false;
+                state.env_center.go_remote_refreshing = false;
+                state.env_center.php_remote_refreshing = false;
+                state.env_center.deno_remote_refreshing = false;
+                state.env_center.bun_remote_refreshing = false;
+                state.env_center.dotnet_remote_refreshing = false;
                 recompute_env_center_derived(state);
                 Task::batch([
                     gui_ops::refresh_runtimes(k),
@@ -1760,6 +1817,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         state.env_center.dotnet_remote_latest = rows;
                     }
                 }
+                envr_domain::runtime::RuntimeKind::Ruby => {
+                    if state.env_center.ruby_remote_latest.is_empty()
+                        || rows.len() > state.env_center.ruby_remote_latest.len()
+                    {
+                        state.env_center.ruby_remote_latest = rows;
+                    }
+                }
                 _ => {}
             }
             recompute_env_center_derived(state);
@@ -1802,6 +1866,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                             state.env_center.dotnet_remote_refreshing = false;
                             state.env_center.dotnet_remote_latest = rows;
                         }
+                        envr_domain::runtime::RuntimeKind::Ruby => {
+                            state.env_center.ruby_remote_refreshing = false;
+                            state.env_center.ruby_remote_latest = rows;
+                        }
                         _ => {}
                     }
                 }
@@ -1832,6 +1900,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         }
                         envr_domain::runtime::RuntimeKind::Dotnet => {
                             state.env_center.dotnet_remote_refreshing = false;
+                        }
+                        envr_domain::runtime::RuntimeKind::Ruby => {
+                            state.env_center.ruby_remote_refreshing = false;
                         }
                         _ => {}
                     }
@@ -2337,6 +2408,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 Task::batch([
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Dotnet),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SetRubyPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.ruby.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Ruby),
                 ])
             } else {
                 persist_settings_clone_task(st)
