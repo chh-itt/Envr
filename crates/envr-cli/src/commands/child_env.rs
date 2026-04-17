@@ -210,6 +210,32 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
     }
 }
 
+fn join_path_entries(entries: &[PathBuf]) -> String {
+    let sep = path_sep().to_string();
+    entries
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(&sep)
+}
+
+#[cfg(windows)]
+fn compose_run_path(front_entries: &[PathBuf], old_path: &str, java_suffix_entries: &[PathBuf]) -> String {
+    let mut merged = prepend_path(front_entries, old_path);
+    if !java_suffix_entries.is_empty() {
+        if !merged.is_empty() {
+            merged.push(path_sep());
+        }
+        merged.push_str(&join_path_entries(java_suffix_entries));
+    }
+    merged
+}
+
+#[cfg(not(windows))]
+fn compose_run_path(front_entries: &[PathBuf], old_path: &str, _java_suffix_entries: &[PathBuf]) -> String {
+    prepend_path(front_entries, old_path)
+}
+
 fn collect_run_env_impl(
     ctx: &ShimContext,
     install_if_missing: bool,
@@ -225,6 +251,7 @@ fn collect_run_env_impl(
     }
     let mut path_entries: Vec<PathBuf> = Vec::new();
     let mut runtime_home_env: HashMap<String, String> = HashMap::new();
+    let mut java_suffix_entries: Vec<PathBuf> = Vec::new();
     let mut deno_on_path = false;
     let mut bun_on_path = false;
     let stack = RunEnvStack::new(ctx, cfg, install_if_missing);
@@ -254,19 +281,49 @@ fn collect_run_env_impl(
                 if lang == "bun" {
                     bun_on_path = true;
                 }
-                path_entries.extend(runtime_bin_dirs(&home, &lang));
+                let dirs = runtime_bin_dirs(&home, &lang);
+                #[cfg(windows)]
+                if lang == "java" {
+                    java_suffix_entries.extend(dirs);
+                } else {
+                    path_entries.extend(dirs);
+                }
+                #[cfg(not(windows))]
+                {
+                    path_entries.extend(dirs);
+                }
             }
         }
     }
     path_entries = dedup_paths(path_entries);
+    java_suffix_entries = dedup_paths(java_suffix_entries);
     let old_path = env.get("PATH").map(|s| s.as_str()).unwrap_or("");
-    env.insert("PATH".into(), prepend_path(&path_entries, old_path));
+    env.insert(
+        "PATH".into(),
+        compose_run_path(&path_entries, old_path, &java_suffix_entries),
+    );
     for (k, v) in runtime_home_env {
         env.insert(k, v);
     }
     let st = load_settings()?;
     extend_env_with_tooling_settings(&mut env, &st, true, deno_on_path, bun_on_path);
     Ok(env)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn compose_run_path_puts_java_dirs_at_tail_on_windows() {
+        let front = vec![PathBuf::from(r"D:\envr\shims"), PathBuf::from(r"D:\envr\node\bin")];
+        let old = r"C:\Windows\System32;C:\Windows";
+        let java_tail = vec![PathBuf::from(r"D:\envr\java\bin")];
+        let merged = compose_run_path(&front, old, &java_tail);
+        assert!(merged.starts_with(r"D:\envr\shims;D:\envr\node\bin;"));
+        assert!(merged.ends_with(r";D:\envr\java\bin"));
+    }
 }
 
 /// Multi-runtime PATH plus runtime-home environment keys such as `JAVA_HOME`, `GOROOT`, and

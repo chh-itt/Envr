@@ -114,7 +114,8 @@ impl ShimService {
     ///
     /// - For Node: scans `npm bin -g` (or package.json fallback)
     /// - For Python: scans `Scripts` / `bin`
-    /// - For Java: scans `java/current/bin`
+    /// - Java is intentionally excluded: scanning JDK `bin` can create unsafe
+    ///   forwards for generic names (e.g. `net`) that conflict with system commands.
     /// - For Bun: scans `bun pm bin -g`
     ///
     /// Removes stale forwards across all supported global-bin sources to avoid deleting
@@ -132,12 +133,14 @@ impl ShimService {
         }
     }
 
-    /// Sync global executable forwards for Node + Python + Java + Bun, then drop stale non-core stubs.
+    /// Sync global executable forwards for Node + Python + Bun, then drop stale non-core stubs.
+    ///
+    /// Java `bin` is excluded from global-forward scanning to avoid collisions with
+    /// built-in shell commands (e.g. `net` on Windows).
     pub fn sync_all_global_package_shims(&self) -> EnvrResult<()> {
         let mut seen = HashSet::<String>::new();
         seen.extend(self.scan_node_global_bins()?);
         seen.extend(self.scan_python_global_bins()?);
-        seen.extend(self.scan_java_global_bins()?);
         seen.extend(self.scan_bun_global_bins()?);
         self.remove_stale_non_core_shims(&seen)?;
         Ok(())
@@ -170,14 +173,6 @@ impl ShimService {
 
     fn try_current_python_home(&self) -> Option<PathBuf> {
         let link = self.runtime_root.join("runtimes/python/current");
-        if !link.exists() {
-            return None;
-        }
-        fs::canonicalize(&link).ok()
-    }
-
-    fn try_current_java_home(&self) -> Option<PathBuf> {
-        let link = self.runtime_root.join("runtimes/java/current");
         if !link.exists() {
             return None;
         }
@@ -239,7 +234,7 @@ impl ShimService {
                 continue;
             }
             let stem = normalized_stem(&path);
-            if is_global_skip_stem(&stem) {
+            if should_skip_global_forward(&stem, &path) {
                 continue;
             }
             seen.insert(stem.clone());
@@ -381,7 +376,7 @@ impl ShimService {
         node_exe: &Path,
         seen: &mut HashSet<String>,
     ) -> EnvrResult<()> {
-        if is_global_skip_stem(stem) {
+        if should_skip_global_forward(stem, target) {
             return Ok(());
         }
         if !target.is_file() {
@@ -452,15 +447,10 @@ impl ShimService {
     }
 
     pub fn sync_java_global_package_shims_fast(&self) -> EnvrResult<()> {
-        let _ = self.scan_java_global_bins()?;
-        Ok(())
-    }
-
-    fn scan_java_global_bins(&self) -> EnvrResult<HashSet<String>> {
-        let Some(java_home) = self.try_current_java_home() else {
-            return Ok(HashSet::new());
-        };
-        self.scan_bin_dir(&java_home.join("bin"))
+        // Keep API shape for callers, but no longer scan Java `bin`.
+        // We still trigger stale cleanup to remove historical unsafe forwards
+        // such as `net.cmd`.
+        self.sync_all_global_package_shims()
     }
 
     fn bun_global_bin_dir_from_settings(&self) -> Option<PathBuf> {
@@ -603,6 +593,39 @@ fn is_global_skip_stem(stem: &str) -> bool {
     )
 }
 
+fn should_skip_global_forward(stem: &str, target: &Path) -> bool {
+    if is_global_skip_stem(stem) {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        if target
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("dll"))
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        if is_windows_system_command_stem(stem) {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(windows)]
+fn is_windows_system_command_stem(stem: &str) -> bool {
+    let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
+    let system32 = PathBuf::from(windir).join("System32");
+    for ext in ["exe", "cmd", "bat", "com"] {
+        if system32.join(format!("{stem}.{ext}")).is_file() {
+            return true;
+        }
+    }
+    false
+}
+
 fn npm_path_env(node_home: &Path) -> EnvrResult<String> {
     let node_bin = node_home.join("bin");
     let rest = std::env::var("PATH").unwrap_or_default();
@@ -712,6 +735,13 @@ mod tests {
         assert!(is_global_skip_stem("bunx"));
         assert!(!is_global_skip_stem("tsx"));
         assert!(!is_global_skip_stem("mytool"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn should_skip_global_forward_blocks_dll_targets() {
+        let target = PathBuf::from(r"C:\runtime\java\bin\net.dll");
+        assert!(should_skip_global_forward("net", &target));
     }
 
     #[test]
