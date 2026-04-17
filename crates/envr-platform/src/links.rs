@@ -98,7 +98,7 @@ fn create_symlink(src: &Path, dst: &Path) -> EnvrResult<()> {
 
 #[cfg(windows)]
 fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
-    use std::process::Command;
+    use std::process::{Command, Stdio};
 
     fn normalize_for_cmd(p: &Path) -> String {
         let s = p.to_string_lossy().to_string();
@@ -111,7 +111,11 @@ fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
     // `mklink /J <dst> <src>` creates a junction.
     // We intentionally run through `cmd /C` to let Windows handle quoting.
     let cmdline = format!("mklink /J \"{}\" \"{}\"", dst_s, src_s);
-    let status = Command::new("cmd").args(["/C", &cmdline]).status();
+    let status = Command::new("cmd")
+        .args(["/C", &cmdline])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 
     match status {
         Ok(st) if st.success() => Ok(true),
@@ -124,6 +128,8 @@ fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
             );
             let status2 = Command::new("powershell")
                 .args(["-NoProfile", "-Command", &ps])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .status();
             Ok(matches!(status2, Ok(st) if st.success()))
         }

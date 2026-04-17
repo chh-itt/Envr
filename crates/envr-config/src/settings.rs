@@ -489,6 +489,8 @@ pub struct RuntimeSettings {
     #[serde(default)]
     pub elixir: ElixirRuntimeSettings,
     #[serde(default)]
+    pub erlang: ErlangRuntimeSettings,
+    #[serde(default)]
     pub php: PhpRuntimeSettings,
     #[serde(default)]
     pub deno: DenoRuntimeSettings,
@@ -533,6 +535,22 @@ impl Default for ElixirRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::elixir_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErlangRuntimeSettings {
+    /// When false, erl/erlc/escript shims resolve to the next matching binary on PATH
+    /// outside envr shims.
+    #[serde(default = "defaults::erlang_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for ErlangRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::erlang_path_proxy_enabled(),
         }
     }
 }
@@ -1459,6 +1477,17 @@ pub fn elixir_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`ErlangRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn erlang_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.erlang.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
 pub fn php_windows_build_want_ts_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1568,6 +1597,10 @@ mod defaults {
     pub fn elixir_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn erlang_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1631,6 +1664,7 @@ mod tests {
                 node: NodeRuntimeSettings::default(),
                 ruby: RubyRuntimeSettings::default(),
                 elixir: ElixirRuntimeSettings::default(),
+                erlang: ErlangRuntimeSettings::default(),
                 python: PythonRuntimeSettings::default(),
                 java: JavaRuntimeSettings::default(),
                 go: GoRuntimeSettings {

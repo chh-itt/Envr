@@ -12,6 +12,7 @@ pub enum RuntimeKind {
     Rust,
     Ruby,
     Elixir,
+    Erlang,
     Php,
     Deno,
     Bun,
@@ -28,7 +29,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 11] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 12] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -82,6 +83,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 11] = [
         key: "elixir",
         label_en: "Elixir",
         label_zh: "Elixir",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Erlang,
+        key: "erlang",
+        label_en: "Erlang/OTP",
+        label_zh: "Erlang/OTP",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -251,16 +260,17 @@ mod tests {
 
     #[test]
     fn parse_runtime_kind_rejects_unknown() {
-        let err = parse_runtime_kind("elixir").expect_err("unknown");
+        let err = parse_runtime_kind("unknown-runtime").expect_err("unknown");
         assert!(matches!(err, EnvrError::Validation(_)));
     }
 
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 11);
+        assert_eq!(kinds.len(), 12);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
+        assert!(kinds.contains(&RuntimeKind::Erlang));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
     }
 }

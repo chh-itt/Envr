@@ -366,3 +366,43 @@ Recent follow-up optimizations produced two practical rules for future runtime b
     - key grouping for line-based runtimes (e.g. `major.minor`),
     - query matching rules (major/minor input behavior),
     - remote-only rows still producing visible keys.
+
+### 8.8 Erlang/OTP bring-up notes (GitHub tag + release asset model)
+
+Erlang integration validated the current provider abstraction on another runtime with non-trivial release naming:
+
+- **Tag-to-installable mapping must be explicit**:
+  - Upstream tags are `OTP-x.y.z(.p)` while install assets are `otp_win64_x.y.z(.p).zip`.
+  - Do not assume “tag string == filename”; keep a dedicated normalization + URL builder layer.
+
+- **Platform support should fail fast in provider/index layer**:
+  - Current managed install path is Windows-first (`otp_win64_*.zip`).
+  - Non-Windows hosts should return a clear platform error before download/extract logic starts.
+
+- **RuntimeKind expansion is still multi-point for PATH-proxy runtimes**:
+  - Adding a new proxy-enabled runtime requires synchronized updates in:
+    - settings snapshot + disk-read helper,
+    - shim core command enum + parser + bypass map + executable resolver,
+    - GUI Env Center settings message/section + `path_proxy_on` branching.
+  - Compile-time exhaustiveness catches misses, but repetitive wiring remains a future refactor target.
+
+- **Minimum provider test bar should stay mandatory**:
+  - Parse/normalize test (tag formats),
+  - resolver test (major/minor/full specs),
+  - latest-per-major selection test,
+  - manager-level install-layout sanity checks (binary existence + current pointer read).
+
+### 8.9 Erlang follow-up friction (remote coverage + version-key parsing)
+
+Post-integration real-machine validation surfaced two subtle but important guardrails:
+
+- **Remote "latest-per-major" data depends on upstream page coverage**:
+  - GitHub tags are recency-ordered. If page cap is too small, GUI may only show newest major (for example OTP 28) and appear to "lose" older still-supported majors (OTP 27).
+  - Runtime providers that build "latest per major" from paginated tags should use a safe default page window and keep an env override for constrained environments.
+
+- **Version-key parsing must match runtime version shape, not generic SemVer assumptions**:
+  - Erlang uses `major.minor.patch.build` (e.g. `27.3.4.10`); strict 3-segment parsing can silently drop installed/current entries from grouped GUI lists.
+  - Grouping/parsing helpers should accept additional numeric segments when only major/minor (or major) keys are needed.
+
+- **Current-version visibility should be resilient to transient installed-scan lag**:
+  - Even if installed scan is temporarily empty, active `current` version should still be merged into derived list keys to avoid "Current shown, but row missing" UX breaks.

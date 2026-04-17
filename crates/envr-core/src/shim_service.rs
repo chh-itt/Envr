@@ -55,6 +55,11 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Mix, "mix"),
             (CoreCommand::Iex, "iex"),
         ],
+        RuntimeKind::Erlang => &[
+            (CoreCommand::Erl, "erl"),
+            (CoreCommand::Erlc, "erlc"),
+            (CoreCommand::Escript, "escript"),
+        ],
         RuntimeKind::Php => &[(CoreCommand::Php, "php")],
         RuntimeKind::Deno => &[(CoreCommand::Deno, "deno")],
         RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
@@ -590,6 +595,9 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "bun"
             | "bunx"
             | "dotnet"
+            | "erl"
+            | "erlc"
+            | "escript"
     )
 }
 
@@ -749,7 +757,7 @@ mod tests {
         let s = core_stems_set();
         for k in [
             "node", "npm", "npx", "python", "pip", "java", "javac", "go", "gofmt", "php", "bun",
-            "bunx", "dotnet",
+            "bunx", "dotnet", "erl", "erlc", "escript",
         ] {
             assert!(s.contains(k), "missing {k}");
         }

@@ -155,6 +155,8 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .then_some(&state.settings.cache.snapshot().runtime.ruby),
                 matches!(state.env_center.kind, RuntimeKind::Elixir)
                     .then_some(&state.settings.cache.snapshot().runtime.elixir),
+                matches!(state.env_center.kind, RuntimeKind::Erlang)
+                    .then_some(&state.settings.cache.snapshot().runtime.erlang),
                 matches!(state.env_center.kind, RuntimeKind::Php)
                     .then_some(&state.settings.cache.snapshot().runtime.php),
                 matches!(state.env_center.kind, RuntimeKind::Deno)

@@ -34,6 +34,7 @@ impl RuntimeService {
             Box::new(envr_runtime_rust::RustRuntimeProvider::new()),
             Box::new(envr_runtime_ruby::RubyRuntimeProvider::new()),
             Box::new(envr_runtime_elixir::ElixirRuntimeProvider::new()),
+            Box::new(envr_runtime_erlang::ErlangRuntimeProvider::new()),
             Box::new(envr_runtime_php::PhpRuntimeProvider::new()),
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new()),
             Box::new(envr_runtime_bun::BunRuntimeProvider::new()),
@@ -54,6 +55,9 @@ impl RuntimeService {
             Box::new(envr_runtime_ruby::RubyRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(
                 envr_runtime_elixir::ElixirRuntimeProvider::new().with_runtime_root(root.clone()),
+            ),
+            Box::new(
+                envr_runtime_erlang::ErlangRuntimeProvider::new().with_runtime_root(root.clone()),
             ),
             Box::new(envr_runtime_php::PhpRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new().with_runtime_root(root.clone())),

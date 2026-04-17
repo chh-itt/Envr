@@ -20,6 +20,7 @@ pub struct ShimSettingsSnapshot {
     dotnet_path_proxy_enabled: bool,
     ruby_path_proxy_enabled: bool,
     elixir_path_proxy_enabled: bool,
+    erlang_path_proxy_enabled: bool,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
@@ -38,6 +39,7 @@ impl Default for ShimSettingsSnapshot {
             dotnet_path_proxy_enabled: true,
             ruby_path_proxy_enabled: true,
             elixir_path_proxy_enabled: true,
+            erlang_path_proxy_enabled: true,
             php_windows_build_want_ts: false,
             deno_registry_env: Vec::new(),
             bun_registry_env: Vec::new(),
@@ -58,6 +60,7 @@ impl ShimSettingsSnapshot {
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
             ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
             elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
+            erlang_path_proxy_enabled: settings.runtime.erlang.path_proxy_enabled,
             php_windows_build_want_ts: matches!(
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
@@ -122,6 +125,13 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         cmd,
         CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex
     ) && !settings.elixir_path_proxy_enabled
+    {
+        return true;
+    }
+    if matches!(
+        cmd,
+        CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript
+    ) && !settings.erlang_path_proxy_enabled
     {
         return true;
     }
@@ -200,6 +210,9 @@ pub enum CoreCommand {
     Elixir,
     Mix,
     Iex,
+    Erl,
+    Erlc,
+    Escript,
 }
 
 impl CoreCommand {
@@ -215,6 +228,7 @@ impl CoreCommand {
             CoreCommand::Dotnet => "dotnet",
             CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => "ruby",
             CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => "elixir",
+            CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
         }
     }
 }
@@ -229,6 +243,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
         "elixir" => vec![home.join("bin"), home.to_path_buf()],
+        "erlang" => vec![home.join("bin"), home.to_path_buf()],
         "php" => vec![home.to_path_buf(), home.join("bin")],
         "deno" => vec![home.to_path_buf(), home.join("bin")],
         "bun" => vec![home.to_path_buf(), home.join("bin")],
@@ -295,6 +310,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
             ("DOTNET_ROOT".into(), home_env),
             ("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()),
         ],
+        "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         _ => Vec::new(),
     }
 }
@@ -437,6 +453,9 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "elixir" => Some(CoreCommand::Elixir),
         "mix" => Some(CoreCommand::Mix),
         "iex" => Some(CoreCommand::Iex),
+        "erl" => Some(CoreCommand::Erl),
+        "erlc" => Some(CoreCommand::Erlc),
+        "escript" => Some(CoreCommand::Escript),
         _ => None,
     }
 }
@@ -971,6 +990,34 @@ fn elixir_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn erlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Erl => Ok(first_existing(&[
+            bin.join("erl.exe"),
+            bin.join("erl.cmd"),
+            bin.join("erl.bat"),
+            bin.join("erl"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("erl missing under {}", home.display())))?),
+        CoreCommand::Erlc => Ok(first_existing(&[
+            bin.join("erlc.exe"),
+            bin.join("erlc.cmd"),
+            bin.join("erlc.bat"),
+            bin.join("erlc"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("erlc missing under {}", home.display())))?),
+        CoreCommand::Escript => Ok(first_existing(&[
+            bin.join("escript.exe"),
+            bin.join("escript.cmd"),
+            bin.join("escript.bat"),
+            bin.join("escript"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("escript missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not an erlang tool".into())),
+    }
+}
+
 fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Dotnet => Ok(first_existing(&[
@@ -998,6 +1045,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
             ruby_tool_path(home, cmd)
         }
         CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(home, cmd),
+        CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
     }
 }
 
@@ -1091,6 +1139,9 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Elixir => "elixir",
         CoreCommand::Mix => "mix",
         CoreCommand::Iex => "iex",
+        CoreCommand::Erl => "erl",
+        CoreCommand::Erlc => "erlc",
+        CoreCommand::Escript => "escript",
     }
 }
 
@@ -1145,6 +1196,9 @@ pub fn resolve_core_shim_command_with_settings(
             ruby_tool_path(&home, cmd)?
         }
         CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(&home, cmd)?,
+        CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => {
+            erlang_tool_path(&home, cmd)?
+        }
     };
 
     Ok(ResolvedShim {
@@ -1232,6 +1286,9 @@ mod tests {
         assert_eq!(parse_core_command("elixir"), Some(CoreCommand::Elixir));
         assert_eq!(parse_core_command("mix"), Some(CoreCommand::Mix));
         assert_eq!(parse_core_command("iex"), Some(CoreCommand::Iex));
+        assert_eq!(parse_core_command("erl"), Some(CoreCommand::Erl));
+        assert_eq!(parse_core_command("erlc"), Some(CoreCommand::Erlc));
+        assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
         assert_eq!(parse_core_command("unknown"), None);
     }
 
@@ -1569,7 +1626,7 @@ version = "20"
 
         fs::write(
             &cfg,
-            "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n",
+            "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n[runtime.erlang]\npath_proxy_enabled = false\n",
         )
         .expect("write");
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
@@ -1579,10 +1636,13 @@ version = "20"
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Mix));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Iex));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erl));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Escript));
 
         fs::write(
             &cfg,
-            "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n",
+            "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n[runtime.erlang]\npath_proxy_enabled = true\n",
         )
         .expect("write");
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
@@ -1592,5 +1652,8 @@ version = "20"
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Mix));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Iex));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erl));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Escript));
     }
 }

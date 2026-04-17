@@ -2,7 +2,7 @@
 
 use envr_config::settings::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
-    ElixirRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
+    ElixirRuntimeSettings, ErlangRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RustDownloadSource,
@@ -83,6 +83,7 @@ pub enum EnvCenterMsg {
     SetDotnetPathProxy(bool),
     SetRubyPathProxy(bool),
     SetElixirPathProxy(bool),
+    SetErlangPathProxy(bool),
     BunGlobalBinDirEdit(String),
     ApplyBunGlobalBinDir,
 
@@ -215,9 +216,18 @@ impl EnvCenterState {
         let key_mode = key_mode_for_kind(self.kind, &self.installed, remote_rows);
         let query_key = query_key_for_kind(self.kind, key_mode, query_norm);
 
+        // Build effective installed list; include current as a safety net so UI never
+        // drops the active version row due to transient scan lag.
+        let mut installed_effective = self.installed.clone();
+        if let Some(cur) = self.current.as_ref()
+            && !installed_effective.iter().any(|v| v.0 == cur.0)
+        {
+            installed_effective.push(cur.clone());
+        }
+
         // Group installed versions by display key (major / major.minor / go minor line).
         let mut installed_by_key: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
-        for v in &self.installed {
+        for v in &installed_effective {
             if let Some(k) = grouped_version_key(self.kind, key_mode, &v.0)
                 && key_supported_on_host(self.kind, &k)
             {
@@ -282,6 +292,7 @@ fn key_mode_for_kind(
         RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => VersionKeyMode::MajorMinor,
         RuntimeKind::Ruby
         | RuntimeKind::Elixir
+        | RuntimeKind::Erlang
         | RuntimeKind::Deno
         | RuntimeKind::Bun
         | RuntimeKind::Dotnet => {
@@ -1605,6 +1616,10 @@ fn env_remote_latest_for_key(
             .iter()
             .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
             .cloned(),
+        RuntimeKind::Erlang => rows
+            .iter()
+            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
+            .cloned(),
         RuntimeKind::Rust => None,
     }
 }
@@ -1733,6 +1748,47 @@ fn elixir_runtime_settings_section(
     .into()
 }
 
+fn erlang_runtime_settings_section(
+    erlang: &ErlangRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.erlang.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.erlang.path_proxy.hint",
+            "开启时由 envr 接管 erl/erlc/escript；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages erl/erlc/escript; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(erlang.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetErlangPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.erlang.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn env_center_view(
     state: &EnvCenterState,
@@ -1743,6 +1799,7 @@ pub fn env_center_view(
     rust_runtime: Option<&RustRuntimeSettings>,
     ruby_runtime: Option<&RubyRuntimeSettings>,
     elixir_runtime: Option<&ElixirRuntimeSettings>,
+    erlang_runtime: Option<&ErlangRuntimeSettings>,
     php_runtime: Option<&PhpRuntimeSettings>,
     deno_runtime: Option<&DenoRuntimeSettings>,
     bun_runtime: Option<&BunRuntimeSettings>,
@@ -1765,6 +1822,7 @@ pub fn env_center_view(
         RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Ruby => ruby_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Elixir => elixir_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Erlang => erlang_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
@@ -1802,6 +1860,7 @@ pub fn env_center_view(
             | RuntimeKind::Go
             | RuntimeKind::Ruby
             | RuntimeKind::Elixir
+            | RuntimeKind::Erlang
             | RuntimeKind::Php
             | RuntimeKind::Deno
             | RuntimeKind::Bun
@@ -1907,6 +1966,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Elixir {
         elixir_runtime
             .map(|r| elixir_runtime_settings_section(r, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Erlang {
+        erlang_runtime
+            .map(|r| erlang_runtime_settings_section(r, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Php {
         php_runtime
@@ -2947,8 +3010,12 @@ fn semver_parts(s: &str) -> Option<(u64, u64, u64)> {
     let a: u64 = it.next()?.parse().ok()?;
     let b: u64 = it.next()?.parse().ok()?;
     let c: u64 = it.next()?.parse().ok()?;
-    if it.next().is_some() {
-        return None;
+    // Accept versions with extra numeric segments (e.g. Erlang `27.3.4.10`);
+    // grouping only needs major/minor(/patch), so we safely ignore the rest.
+    for seg in it {
+        if seg.parse::<u64>().is_err() {
+            return None;
+        }
     }
     Some((a, b, c))
 }
@@ -3135,6 +3202,39 @@ mod tests {
             st.derived_keys.iter().any(|k| k == "1.19"),
             "expected major.minor key from remote elixir rows"
         );
+    }
+
+    #[test]
+    fn recompute_keeps_current_key_visible_when_installed_list_is_empty() {
+        let mut st = EnvCenterState {
+            kind: RuntimeKind::Erlang,
+            current: Some(RuntimeVersion("27.3.4.10".to_string())),
+            ..Default::default()
+        };
+        st.recompute_derived_lists(JavaDistro::default());
+        assert!(
+            st.derived_keys.iter().any(|k| k == "27.3"),
+            "expected current erlang version key to be visible even if installed scan is empty"
+        );
+        assert!(
+            st.derived_installed_by_key
+                .get("27.3")
+                .is_some_and(|rows| rows.iter().any(|v| v.0 == "27.3.4.10")),
+            "expected current erlang version to be grouped under derived installed rows"
+        );
+    }
+
+    #[test]
+    fn recompute_erlang_four_part_installed_and_remote_show_major_keys() {
+        let mut st = EnvCenterState {
+            kind: RuntimeKind::Erlang,
+            installed: vec![RuntimeVersion("27.3.4.10".to_string())],
+            ..Default::default()
+        };
+        st.remote_slot_mut(RuntimeKind::Erlang).rows = vec![RuntimeVersion("28.4.2".to_string())];
+        st.recompute_derived_lists(JavaDistro::default());
+        assert!(st.derived_keys.iter().any(|k| k == "28"));
+        assert!(st.derived_keys.iter().any(|k| k == "27"));
     }
 
     #[cfg(windows)]

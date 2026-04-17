@@ -179,7 +179,7 @@ pub(crate) fn run_inner(
                 ));
                 continue;
             }
-            if single_runtime && kind == RuntimeKind::Elixir {
+            if single_runtime && matches!(kind, RuntimeKind::Elixir | RuntimeKind::Erlang) {
                 let timeout = Duration::from_millis(2500);
                 if let Some(vers) =
                     try_fetch_remote_with_timeout(kind, RemoteFilter { prefix: None }, timeout)

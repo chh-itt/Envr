@@ -993,6 +993,7 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
         envr_domain::runtime::RuntimeKind::Bun => !snap.bun.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Ruby => !snap.ruby.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Elixir => !snap.elixir.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Erlang => !snap.erlang.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
         // Rust is not expected to support path proxy, but keep this explicit.
         envr_domain::runtime::RuntimeKind::Rust => false,
@@ -1917,6 +1918,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 envr_domain::runtime::RuntimeKind::Elixir,
                 on,
                 |st, on| st.runtime.elixir.path_proxy_enabled = on,
+            )
+        }
+        EnvCenterMsg::SetErlangPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Erlang,
+                on,
+                |st, on| st.runtime.erlang.path_proxy_enabled = on,
             )
         }
         EnvCenterMsg::BunGlobalBinDirEdit(s) => {
