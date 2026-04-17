@@ -69,12 +69,14 @@ impl RuntimeService {
         self.provider(kind)?.list_installed()
     }
 
+    /// Remote versions that [`RuntimeProvider::install`] is expected to satisfy (see
+    /// [`RuntimeProvider::list_remote_installable`]).
     pub fn list_remote(
         &self,
         kind: RuntimeKind,
         filter: &RemoteFilter,
     ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.provider(kind)?.list_remote(filter)
+        self.provider(kind)?.list_remote_installable(filter)
     }
 
     pub fn list_remote_majors(&self, kind: RuntimeKind) -> EnvrResult<Vec<String>> {
@@ -85,7 +87,8 @@ impl RuntimeService {
         &self,
         kind: RuntimeKind,
     ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.provider(kind)?.list_remote_latest_per_major()
+        self.provider(kind)?
+            .list_remote_latest_installable_per_major()
     }
 
     pub fn try_load_remote_latest_per_major_from_disk(
@@ -94,7 +97,7 @@ impl RuntimeService {
     ) -> Vec<RuntimeVersion> {
         self.providers
             .get(&kind)
-            .map(|p| p.try_load_remote_latest_per_major_from_disk())
+            .map(|p| p.try_load_remote_latest_installable_per_major_from_disk())
             .unwrap_or_default()
     }
 

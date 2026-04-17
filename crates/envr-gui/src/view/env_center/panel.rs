@@ -7,13 +7,20 @@ use envr_config::settings::{
     PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
     RubyRuntimeSettings, RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
 };
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, runtime_descriptor};
+use envr_domain::runtime::{RuntimeKind, RuntimeVersion, RUNTIME_DESCRIPTORS, runtime_descriptor};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
 use iced::widget::{button, column, container, row, rule, space, text, text_input, toggler};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
+
+/// Latest remote rows + refresh flag for one [`RuntimeKind`] (Env Center).
+#[derive(Debug, Clone, Default)]
+pub struct RemoteLatestSlot {
+    pub rows: Vec<RuntimeVersion>,
+    pub refreshing: bool,
+}
 
 use crate::app::Message;
 use crate::icons::Lucide;
@@ -119,37 +126,10 @@ pub struct EnvCenterState {
     pub busy: bool,
     /// Non-fatal remote fetch/parse error shown inline (keeps global UI usable).
     pub remote_error: Option<String>,
-    /// Node: latest patch per major from cache/network (see `list_remote_latest_per_major`).
-    pub node_remote_latest: Vec<RuntimeVersion>,
-    /// Node: background refresh of `node_remote_latest` (TTL / index) is in flight.
-    pub node_remote_refreshing: bool,
-    /// Python: latest patch per major from cache/network (see `list_remote_latest_per_major`).
-    pub python_remote_latest: Vec<RuntimeVersion>,
-    /// Python: background refresh of `python_remote_latest` (TTL / index) is in flight.
-    pub python_remote_refreshing: bool,
-    /// Java: latest patch per LTS major from cache/network.
-    pub java_remote_latest: Vec<RuntimeVersion>,
-    /// Java: background refresh is in flight.
-    pub java_remote_refreshing: bool,
-    /// Go: latest stable patch per minor line (`1.xx`) from cache/network.
-    pub go_remote_latest: Vec<RuntimeVersion>,
-    /// Go: background refresh of `go_remote_latest` is in flight.
-    pub go_remote_refreshing: bool,
-    /// PHP: latest stable patch per minor line for **current NTS/TS** (see `list_remote_latest_per_major`).
-    pub php_remote_latest: Vec<RuntimeVersion>,
-    pub php_remote_refreshing: bool,
-    /// Deno: latest patch per major from tags cache/network.
-    pub deno_remote_latest: Vec<RuntimeVersion>,
-    pub deno_remote_refreshing: bool,
-    /// Bun: latest patch per major from tags cache/network.
-    pub bun_remote_latest: Vec<RuntimeVersion>,
-    pub bun_remote_refreshing: bool,
-    /// .NET: latest patch per major from releases metadata/cache.
-    pub dotnet_remote_latest: Vec<RuntimeVersion>,
-    pub dotnet_remote_refreshing: bool,
-    /// Ruby: latest patch per major from releases index/cache.
-    pub ruby_remote_latest: Vec<RuntimeVersion>,
-    pub ruby_remote_refreshing: bool,
+    /// Per-runtime remote “latest per line” rows and refresh flags (descriptor `supports_remote_latest`).
+    ///
+    /// **Note:** On tab switch, [.NET](RuntimeKind::Dotnet) rows are kept (cache); other kinds are cleared.
+    pub remote_latest_by_kind: HashMap<RuntimeKind, RemoteLatestSlot>,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -187,24 +167,7 @@ impl Default for EnvCenterState {
             php_global_current_want_ts: None,
             busy: false,
             remote_error: None,
-            node_remote_latest: Vec::new(),
-            node_remote_refreshing: false,
-            python_remote_latest: Vec::new(),
-            python_remote_refreshing: false,
-            java_remote_latest: Vec::new(),
-            java_remote_refreshing: false,
-            go_remote_latest: Vec::new(),
-            go_remote_refreshing: false,
-            php_remote_latest: Vec::new(),
-            php_remote_refreshing: false,
-            deno_remote_latest: Vec::new(),
-            deno_remote_refreshing: false,
-            bun_remote_latest: Vec::new(),
-            bun_remote_refreshing: false,
-            dotnet_remote_latest: Vec::new(),
-            dotnet_remote_refreshing: false,
-            ruby_remote_latest: Vec::new(),
-            ruby_remote_refreshing: false,
+            remote_latest_by_kind: HashMap::new(),
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -226,6 +189,10 @@ impl Default for EnvCenterState {
 }
 
 impl EnvCenterState {
+    pub fn remote_slot_mut(&mut self, k: RuntimeKind) -> &mut RemoteLatestSlot {
+        self.remote_latest_by_kind.entry(k).or_default()
+    }
+
     pub fn recompute_derived_lists(&mut self, java_distro: JavaDistro) {
         // Search/filter text (we reuse `install_input` field).
         let query = self.install_input.trim();
@@ -259,51 +226,59 @@ impl EnvCenterState {
 
         // Merge remote keys when available (so empty installs still show suggestions).
         let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
+        let remote_rows: &[RuntimeVersion] = if runtime_descriptor(self.kind).supports_remote_latest {
+            self.remote_latest_by_kind
+                .get(&self.kind)
+                .map(|s| s.rows.as_slice())
+                .unwrap_or(&[])
+        } else {
+            &[]
+        };
         match self.kind {
             RuntimeKind::Node => {
-                for v in &self.node_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_node_major_key(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Python => {
-                for v in &self.python_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_python_major_minor_key(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Java => {
-                for v in &self.java_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_java_major_key(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Go => {
-                for v in &self.go_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_go_minor_line_key(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Php => {
-                for v in &self.php_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_python_major_minor_key(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Deno => {
-                for v in &self.deno_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_major_from_ver(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Bun => {
-                for v in &self.bun_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_major_from_ver(&v.0)
                         && bun_major_supported_on_host(&k)
                     {
@@ -312,14 +287,14 @@ impl EnvCenterState {
                 }
             }
             RuntimeKind::Dotnet => {
-                for v in &self.dotnet_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_major_from_ver(&v.0) {
                         keys_set.insert(k);
                     }
                 }
             }
             RuntimeKind::Ruby => {
-                for v in &self.ruby_remote_latest {
+                for v in remote_rows {
                     if let Some(k) = parse_major_from_ver(&v.0) {
                         keys_set.insert(k);
                     }
@@ -1546,79 +1521,55 @@ fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Mes
     .into()
 }
 
-fn node_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .node_remote_latest
-        .iter()
-        .find(|v| parse_node_major_key(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn python_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .python_remote_latest
-        .iter()
-        .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn java_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .java_remote_latest
-        .iter()
-        .find(|v| parse_java_major_key(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn go_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .go_remote_latest
-        .iter()
-        .find(|v| parse_go_minor_line_key(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn php_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .php_remote_latest
-        .iter()
-        .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn deno_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .deno_remote_latest
-        .iter()
-        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn bun_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    if !bun_major_supported_on_host(key) {
-        return None;
+fn env_remote_latest_for_key(
+    state: &EnvCenterState,
+    kind: RuntimeKind,
+    key: &str,
+) -> Option<RuntimeVersion> {
+    let rows = state.remote_latest_by_kind.get(&kind)?.rows.as_slice();
+    match kind {
+        RuntimeKind::Node => rows
+            .iter()
+            .find(|v| parse_node_major_key(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Python => rows
+            .iter()
+            .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Java => rows
+            .iter()
+            .find(|v| parse_java_major_key(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Go => rows
+            .iter()
+            .find(|v| parse_go_minor_line_key(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Php => rows
+            .iter()
+            .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Deno => rows
+            .iter()
+            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Bun => {
+            if !bun_major_supported_on_host(key) {
+                return None;
+            }
+            rows.iter()
+                .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+                .cloned()
+        }
+        RuntimeKind::Dotnet => rows
+            .iter()
+            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Ruby => rows
+            .iter()
+            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .cloned(),
+        RuntimeKind::Rust => None,
     }
-    state
-        .bun_remote_latest
-        .iter()
-        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn dotnet_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .dotnet_remote_latest
-        .iter()
-        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
-        .cloned()
-}
-
-fn ruby_remote_latest_for_key(state: &EnvCenterState, key: &str) -> Option<RuntimeVersion> {
-    state
-        .ruby_remote_latest
-        .iter()
-        .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
-        .cloned()
 }
 
 fn ruby_runtime_settings_section(
@@ -1921,36 +1872,10 @@ pub fn env_center_view(
     let show_keys = show_keys.as_slice();
 
     let waiting_remote = runtime_descriptor(state.kind).supports_remote_latest
-        && match state.kind {
-            RuntimeKind::Node => {
-                state.node_remote_latest.is_empty() && state.node_remote_refreshing
-            }
-            RuntimeKind::Python => {
-                state.python_remote_latest.is_empty() && state.python_remote_refreshing
-            }
-            RuntimeKind::Java => {
-                state.java_remote_latest.is_empty() && state.java_remote_refreshing
-            }
-            RuntimeKind::Go => {
-                state.go_remote_latest.is_empty() && state.go_remote_refreshing
-            }
-            RuntimeKind::Php => {
-                state.php_remote_latest.is_empty() && state.php_remote_refreshing
-            }
-            RuntimeKind::Deno => {
-                state.deno_remote_latest.is_empty() && state.deno_remote_refreshing
-            }
-            RuntimeKind::Bun => {
-                state.bun_remote_latest.is_empty() && state.bun_remote_refreshing
-            }
-            RuntimeKind::Dotnet => {
-                state.dotnet_remote_latest.is_empty() && state.dotnet_remote_refreshing
-            }
-            RuntimeKind::Ruby => {
-                state.ruby_remote_latest.is_empty() && state.ruby_remote_refreshing
-            }
-            RuntimeKind::Rust => false,
-        };
+        && state
+            .remote_latest_by_kind
+            .get(&state.kind)
+            .is_some_and(|s| s.rows.is_empty() && s.refreshing);
 
     if let Some(err) = state.remote_error.as_deref()
         && runtime_descriptor(state.kind).supports_remote_latest
@@ -2024,45 +1949,9 @@ pub fn env_center_view(
             };
 
             let install_spec = || -> String {
-                if state.kind == RuntimeKind::Node {
-                    node_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Python {
-                    python_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Java {
-                    java_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Go {
-                    go_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Php {
-                    php_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Deno {
-                    deno_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Bun {
-                    bun_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Dotnet {
-                    dotnet_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else if state.kind == RuntimeKind::Ruby {
-                    ruby_remote_latest_for_key(state, key)
-                        .map(|v| v.0)
-                        .unwrap_or_else(|| key.clone())
-                } else {
-                    key.clone()
-                }
+                env_remote_latest_for_key(state, state.kind, key)
+                    .map(|v| v.0)
+                    .unwrap_or_else(|| key.clone())
             };
 
             let action_btn: Element<'static, Message> = if let Some(_highest) = highest_installed {
@@ -3040,3 +2929,26 @@ fn parse_go_key_sort(k: &str) -> (u64, u64) {
     parse_python_key_sort(k)
 }
 
+pub(crate) fn env_center_clear_remote_for_tab_switch(state: &mut EnvCenterState) {
+    for (k, slot) in state.remote_latest_by_kind.iter_mut() {
+        if *k == RuntimeKind::Dotnet {
+            slot.refreshing = false;
+            continue;
+        }
+        slot.rows.clear();
+        slot.refreshing = false;
+    }
+}
+
+pub(crate) fn env_center_set_exclusive_remote_refreshing(
+    state: &mut EnvCenterState,
+    active: Option<RuntimeKind>,
+) {
+    for d in RUNTIME_DESCRIPTORS {
+        if !d.supports_remote_latest {
+            continue;
+        }
+        let slot = state.remote_slot_mut(d.kind);
+        slot.refreshing = active == Some(d.kind);
+    }
+}

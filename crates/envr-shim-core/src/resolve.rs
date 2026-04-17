@@ -975,136 +975,31 @@ fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
     )))
 }
 
-fn resolve_node_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
+fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
+    match cmd {
         CoreCommand::Node => "node",
         CoreCommand::Npm => "npm",
         CoreCommand::Npx => "npx",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports node tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_python_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Python => "python",
         CoreCommand::Pip => "pip",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports python tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_java_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Java => "java",
         CoreCommand::Javac => "javac",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports java tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_go_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports go tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_php_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Php => "php",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports php tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_deno_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Deno => "deno",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports deno tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_bun_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
         CoreCommand::Bun => "bun",
         CoreCommand::Bunx => "bunx",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports bun tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
-    })
-}
-
-fn resolve_ruby_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
+        CoreCommand::Dotnet => "dotnet",
         CoreCommand::Ruby => "ruby",
         CoreCommand::Gem => "gem",
         CoreCommand::Bundle => "bundle",
         CoreCommand::Irb => "irb",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports ruby tools".into(),
-            ));
-        }
-    };
+    }
+}
+
+fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+    let stem = path_proxy_bypass_host_stem(cmd);
     let executable = find_on_path_outside_envr_shims(stem)?;
     Ok(ResolvedShim {
         executable,
@@ -1158,40 +1053,6 @@ pub fn resolve_core_shim_command_with_settings(
     Ok(ResolvedShim {
         executable,
         extra_env,
-    })
-}
-
-fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    match cmd {
-        CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => {
-            resolve_node_tool_bypass_envr(cmd)
-        }
-        CoreCommand::Python | CoreCommand::Pip => resolve_python_tool_bypass_envr(cmd),
-        CoreCommand::Java | CoreCommand::Javac => resolve_java_tool_bypass_envr(cmd),
-        CoreCommand::Go | CoreCommand::Gofmt => resolve_go_tool_bypass_envr(cmd),
-        CoreCommand::Php => resolve_php_tool_bypass_envr(cmd),
-        CoreCommand::Deno => resolve_deno_tool_bypass_envr(cmd),
-        CoreCommand::Bun | CoreCommand::Bunx => resolve_bun_tool_bypass_envr(cmd),
-        CoreCommand::Dotnet => resolve_dotnet_tool_bypass_envr(cmd),
-        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
-            resolve_ruby_tool_bypass_envr(cmd)
-        }
-    }
-}
-
-fn resolve_dotnet_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
-    let stem = match cmd {
-        CoreCommand::Dotnet => "dotnet",
-        _ => {
-            return Err(EnvrError::Runtime(
-                "internal: bypass only supports dotnet tools".into(),
-            ));
-        }
-    };
-    let executable = find_on_path_outside_envr_shims(stem)?;
-    Ok(ResolvedShim {
-        executable,
-        extra_env: vec![],
     })
 }
 

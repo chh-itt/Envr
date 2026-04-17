@@ -25,7 +25,10 @@ use crate::view::dashboard::{DashboardMsg, DashboardState};
 use crate::view::downloads::{
     DOWNLOAD_PANEL_SHELL_W, DownloadJob, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
 };
-use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
+use crate::view::env_center::{
+    EnvCenterMsg, EnvCenterState, env_center_clear_remote_for_tab_switch,
+    env_center_set_exclusive_remote_refreshing,
+};
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
 
@@ -230,15 +233,13 @@ pub fn run() -> iced::Result {
         let runtime_skeleton = matches!(state.route(), Route::Runtime)
             && state.env_center.installed.is_empty()
             && (state.env_center.busy
-                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Node
-                    && state.env_center.node_remote_refreshing
-                    && state.env_center.node_remote_latest.is_empty())
-                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Go
-                    && state.env_center.go_remote_refreshing
-                    && state.env_center.go_remote_latest.is_empty())
-                || (state.env_center.kind == envr_domain::runtime::RuntimeKind::Ruby
-                    && state.env_center.ruby_remote_refreshing
-                    && state.env_center.ruby_remote_latest.is_empty()));
+                || (envr_domain::runtime::runtime_descriptor(state.env_center.kind)
+                    .supports_remote_latest
+                    && state
+                        .env_center
+                        .remote_latest_by_kind
+                        .get(&state.env_center.kind)
+                        .is_some_and(|s| s.refreshing && s.rows.is_empty())));
         let need_motion = state.downloads.needs_motion_tick()
             || state.downloads.title_drag_armed_since.is_some()
             || runtime_skeleton;
@@ -625,134 +626,25 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                     }
                     sync_go_env_center_drafts_from_settings(state);
                     if matches!(state.route(), Route::Runtime) {
-                        match state.env_center.kind {
-                            envr_domain::runtime::RuntimeKind::Node => {
-                                state.env_center.node_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Node,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Node,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Node,
-                                    ),
-                                ]);
+                        let k = state.env_center.kind;
+                        if envr_domain::runtime::runtime_descriptor(k).supports_remote_latest {
+                            if k == envr_domain::runtime::RuntimeKind::Java {
+                                let distro =
+                                    state.settings.cache.snapshot().runtime.java.current_distro;
+                                state
+                                    .env_center
+                                    .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
+                                    .rows = java_static_latest_for_distro(distro);
                             }
-                            envr_domain::runtime::RuntimeKind::Python => {
-                                state.env_center.python_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Python,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Python,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Python,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Java => {
-                                state.env_center.java_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Java,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Java,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Java,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Go => {
-                                state.env_center.go_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Go,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Go,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Go,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Php => {
-                                state.env_center.php_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Php,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Php,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Php,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Deno => {
-                                state.env_center.deno_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Deno,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Deno,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Deno,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Bun => {
-                                state.env_center.bun_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Bun,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Bun,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Bun,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Dotnet => {
-                                state.env_center.dotnet_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Dotnet,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Dotnet,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Dotnet,
-                                    ),
-                                ]);
-                            }
-                            envr_domain::runtime::RuntimeKind::Ruby => {
-                                state.env_center.ruby_remote_refreshing = true;
-                                return Task::batch([
-                                    gui_ops::refresh_runtimes(
-                                        envr_domain::runtime::RuntimeKind::Ruby,
-                                    ),
-                                    gui_ops::load_remote_latest_disk_snapshot(
-                                        envr_domain::runtime::RuntimeKind::Ruby,
-                                    ),
-                                    gui_ops::refresh_remote_latest_per_major(
-                                        envr_domain::runtime::RuntimeKind::Ruby,
-                                    ),
-                                ]);
-                            }
-                            _ => {}
+                            env_center_set_exclusive_remote_refreshing(
+                                &mut state.env_center,
+                                Some(k),
+                            );
+                            return Task::batch([
+                                gui_ops::refresh_runtimes(k),
+                                gui_ops::load_remote_latest_disk_snapshot(k),
+                                gui_ops::refresh_remote_latest_per_major(k),
+                            ]);
                         }
                     }
                 }
@@ -1085,45 +977,11 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
     let waiting_remote = envr_domain::runtime::runtime_descriptor(state.env_center.kind)
         .supports_remote_latest
         && state.env_center.installed.is_empty()
-        && match state.env_center.kind {
-            envr_domain::runtime::RuntimeKind::Node => {
-                state.env_center.node_remote_refreshing
-                    && state.env_center.node_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Python => {
-                state.env_center.python_remote_refreshing
-                    && state.env_center.python_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Java => {
-                state.env_center.java_remote_refreshing
-                    && state.env_center.java_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Go => {
-                state.env_center.go_remote_refreshing
-                    && state.env_center.go_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Php => {
-                state.env_center.php_remote_refreshing
-                    && state.env_center.php_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Deno => {
-                state.env_center.deno_remote_refreshing
-                    && state.env_center.deno_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Bun => {
-                state.env_center.bun_remote_refreshing
-                    && state.env_center.bun_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Dotnet => {
-                state.env_center.dotnet_remote_refreshing
-                    && state.env_center.dotnet_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Ruby => {
-                state.env_center.ruby_remote_refreshing
-                    && state.env_center.ruby_remote_latest.is_empty()
-            }
-            envr_domain::runtime::RuntimeKind::Rust => false,
-        };
+        && state
+            .env_center
+            .remote_latest_by_kind
+            .get(&state.env_center.kind)
+            .is_some_and(|s| s.refreshing && s.rows.is_empty());
     if !state.reduce_motion
         && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
@@ -1457,91 +1315,32 @@ fn rust_runtime_task_label(action: &str, detail: &str) -> String {
 
 fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
     let kind = state.env_center.kind;
-    match kind {
-        envr_domain::runtime::RuntimeKind::Node => {
-            state.env_center.node_remote_refreshing = true;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = false;
-            Task::batch([
-                gui_ops::refresh_runtimes(kind),
-                gui_ops::load_remote_latest_disk_snapshot(kind),
-                gui_ops::refresh_remote_latest_per_major(kind),
-            ])
-        }
-        envr_domain::runtime::RuntimeKind::Python => {
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = true;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = false;
-            Task::batch([
-                gui_ops::refresh_runtimes(kind),
-                gui_ops::load_remote_latest_disk_snapshot(kind),
-                gui_ops::refresh_remote_latest_per_major(kind),
-            ])
-        }
-        envr_domain::runtime::RuntimeKind::Java => {
-            let distro = state.settings.cache.snapshot().runtime.java.current_distro;
-            state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = true;
-            state.env_center.go_remote_refreshing = false;
-            Task::batch([
-                gui_ops::refresh_runtimes(kind),
-                gui_ops::load_remote_latest_disk_snapshot(kind),
-                gui_ops::refresh_remote_latest_per_major(kind),
-            ])
-        }
-        envr_domain::runtime::RuntimeKind::Go => {
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = true;
-            Task::batch([
-                gui_ops::refresh_runtimes(kind),
-                gui_ops::load_remote_latest_disk_snapshot(kind),
-                gui_ops::refresh_remote_latest_per_major(kind),
-            ])
-        }
-        envr_domain::runtime::RuntimeKind::Rust => {
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = false;
-            state.env_center.php_remote_refreshing = false;
-            state.env_center.busy = true;
-            Task::batch([
-                gui_ops::rust_refresh(),
-                gui_ops::rust_load_components(),
-                gui_ops::rust_load_targets(),
-            ])
-        }
-        envr_domain::runtime::RuntimeKind::Ruby => {
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = false;
-            state.env_center.php_remote_refreshing = false;
-            state.env_center.deno_remote_refreshing = false;
-            state.env_center.bun_remote_refreshing = false;
-            state.env_center.dotnet_remote_refreshing = false;
-            state.env_center.ruby_remote_refreshing = true;
-            Task::batch([
-                gui_ops::refresh_runtimes(kind),
-                gui_ops::load_remote_latest_disk_snapshot(kind),
-                gui_ops::refresh_remote_latest_per_major(kind),
-            ])
-        }
-        _ => {
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_refreshing = false;
-            state.env_center.php_remote_refreshing = false;
-            gui_ops::refresh_runtimes(kind)
-        }
+    if kind == envr_domain::runtime::RuntimeKind::Rust {
+        env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
+        state.env_center.busy = true;
+        return Task::batch([
+            gui_ops::rust_refresh(),
+            gui_ops::rust_load_components(),
+            gui_ops::rust_load_targets(),
+        ]);
     }
+    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
+        if kind == envr_domain::runtime::RuntimeKind::Java {
+            let distro = state.settings.cache.snapshot().runtime.java.current_distro;
+            state
+                .env_center
+                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
+                .rows = java_static_latest_for_distro(distro);
+        }
+        env_center_set_exclusive_remote_refreshing(&mut state.env_center, Some(kind));
+        return Task::batch([
+            gui_ops::refresh_runtimes(kind),
+            gui_ops::load_remote_latest_disk_snapshot(kind),
+            gui_ops::refresh_remote_latest_per_major(kind),
+        ]);
+    }
+    env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
+    gui_ops::refresh_runtimes(kind)
 }
 
 fn java_static_latest_for_distro(
@@ -1582,23 +1381,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.kind = k;
             state.env_center.remote_error = None;
-            state.env_center.node_remote_latest.clear();
-            state.env_center.node_remote_refreshing = false;
-            state.env_center.python_remote_latest.clear();
-            state.env_center.python_remote_refreshing = false;
-            state.env_center.java_remote_latest.clear();
-            state.env_center.java_remote_refreshing = false;
-            state.env_center.go_remote_latest.clear();
-            state.env_center.go_remote_refreshing = false;
-            state.env_center.php_remote_latest.clear();
-            state.env_center.php_remote_refreshing = false;
-            state.env_center.deno_remote_latest.clear();
-            state.env_center.deno_remote_refreshing = false;
-            state.env_center.bun_remote_latest.clear();
-            state.env_center.bun_remote_refreshing = false;
-            state.env_center.ruby_remote_latest.clear();
-            state.env_center.ruby_remote_refreshing = false;
             // Keep dotnet remote rows cached across tab switches to avoid "blank then reload".
+            env_center_clear_remote_for_tab_switch(&mut state.env_center);
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
             state.env_center.rust_targets.clear();
@@ -1611,130 +1395,34 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             if k == envr_domain::runtime::RuntimeKind::Bun {
                 sync_bun_env_center_drafts_from_settings(state);
             }
-            if k == envr_domain::runtime::RuntimeKind::Node {
-                state.env_center.node_remote_refreshing = true;
+            if k == envr_domain::runtime::RuntimeKind::Rust {
+                state.env_center.busy = true;
                 recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Python {
-                state.env_center.python_remote_refreshing = true;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Java {
-                let distro = state.settings.cache.snapshot().runtime.java.current_distro;
-                state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
-                state.env_center.java_remote_refreshing = true;
-                state.env_center.go_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Go {
-                state.env_center.go_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.php_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Php {
-                state.env_center.php_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.go_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Deno {
-                state.env_center.deno_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.go_remote_refreshing = false;
-                state.env_center.php_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Bun {
-                state.env_center.bun_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.go_remote_refreshing = false;
-                state.env_center.php_remote_refreshing = false;
-                state.env_center.deno_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Dotnet {
-                state.env_center.dotnet_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.go_remote_refreshing = false;
-                state.env_center.php_remote_refreshing = false;
-                state.env_center.deno_remote_refreshing = false;
-                state.env_center.bun_remote_refreshing = false;
-                state.env_center.ruby_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else if k == envr_domain::runtime::RuntimeKind::Ruby {
-                state.env_center.ruby_remote_refreshing = true;
-                state.env_center.node_remote_refreshing = false;
-                state.env_center.python_remote_refreshing = false;
-                state.env_center.java_remote_refreshing = false;
-                state.env_center.go_remote_refreshing = false;
-                state.env_center.php_remote_refreshing = false;
-                state.env_center.deno_remote_refreshing = false;
-                state.env_center.bun_remote_refreshing = false;
-                state.env_center.dotnet_remote_refreshing = false;
-                recompute_env_center_derived(state);
-                Task::batch([
-                    gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
-                ])
-            } else {
-                if k == envr_domain::runtime::RuntimeKind::Rust {
-                    state.env_center.busy = true;
-                    recompute_env_center_derived(state);
-                    Task::batch([
-                        gui_ops::rust_refresh(),
-                        gui_ops::rust_load_components(),
-                        gui_ops::rust_load_targets(),
-                    ])
-                } else {
-                    recompute_env_center_derived(state);
-                    Task::batch([gui_ops::refresh_runtimes(k)])
-                }
+                return Task::batch([
+                    gui_ops::rust_refresh(),
+                    gui_ops::rust_load_components(),
+                    gui_ops::rust_load_targets(),
+                ]);
             }
+            if envr_domain::runtime::runtime_descriptor(k).supports_remote_latest {
+                if k == envr_domain::runtime::RuntimeKind::Java {
+                    let distro = state.settings.cache.snapshot().runtime.java.current_distro;
+                    state
+                        .env_center
+                        .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
+                        .rows = java_static_latest_for_distro(distro);
+                }
+                env_center_set_exclusive_remote_refreshing(&mut state.env_center, Some(k));
+                recompute_env_center_derived(state);
+                return Task::batch([
+                    gui_ops::refresh_runtimes(k),
+                    gui_ops::load_remote_latest_disk_snapshot(k),
+                    gui_ops::refresh_remote_latest_per_major(k),
+                ]);
+            }
+            env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
+            recompute_env_center_derived(state);
+            Task::batch([gui_ops::refresh_runtimes(k)])
         }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input =
@@ -1760,71 +1448,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::RemoteLatestDiskSnapshot(kind, rows) => {
-            match kind {
-                envr_domain::runtime::RuntimeKind::Node => {
-                    if state.env_center.node_remote_latest.is_empty()
-                        || rows.len() > state.env_center.node_remote_latest.len()
-                    {
-                        state.env_center.node_remote_latest = rows;
-                    }
+            if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
+                let slot = state.env_center.remote_slot_mut(kind);
+                if slot.rows.is_empty() || rows.len() > slot.rows.len() {
+                    slot.rows = rows;
                 }
-                envr_domain::runtime::RuntimeKind::Python => {
-                    if state.env_center.python_remote_latest.is_empty()
-                        || rows.len() > state.env_center.python_remote_latest.len()
-                    {
-                        state.env_center.python_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Java => {
-                    if state.env_center.java_remote_latest.is_empty()
-                        || rows.len() > state.env_center.java_remote_latest.len()
-                    {
-                        state.env_center.java_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Go => {
-                    if state.env_center.go_remote_latest.is_empty()
-                        || rows.len() > state.env_center.go_remote_latest.len()
-                    {
-                        state.env_center.go_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Php => {
-                    if state.env_center.php_remote_latest.is_empty()
-                        || rows.len() > state.env_center.php_remote_latest.len()
-                    {
-                        state.env_center.php_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Deno => {
-                    if state.env_center.deno_remote_latest.is_empty()
-                        || rows.len() > state.env_center.deno_remote_latest.len()
-                    {
-                        state.env_center.deno_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Bun => {
-                    if state.env_center.bun_remote_latest.is_empty()
-                        || rows.len() > state.env_center.bun_remote_latest.len()
-                    {
-                        state.env_center.bun_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Dotnet => {
-                    if state.env_center.dotnet_remote_latest.is_empty()
-                        || rows.len() > state.env_center.dotnet_remote_latest.len()
-                    {
-                        state.env_center.dotnet_remote_latest = rows;
-                    }
-                }
-                envr_domain::runtime::RuntimeKind::Ruby => {
-                    if state.env_center.ruby_remote_latest.is_empty()
-                        || rows.len() > state.env_center.ruby_remote_latest.len()
-                    {
-                        state.env_center.ruby_remote_latest = rows;
-                    }
-                }
-                _ => {}
             }
             recompute_env_center_derived(state);
             Task::none()
@@ -1833,78 +1461,17 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             match res {
                 Ok(rows) => {
                     state.env_center.remote_error = None;
-                    match kind {
-                        envr_domain::runtime::RuntimeKind::Node => {
-                            state.env_center.node_remote_refreshing = false;
-                            state.env_center.node_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Python => {
-                            state.env_center.python_remote_refreshing = false;
-                            state.env_center.python_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Java => {
-                            state.env_center.java_remote_refreshing = false;
-                            state.env_center.java_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Go => {
-                            state.env_center.go_remote_refreshing = false;
-                            state.env_center.go_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Php => {
-                            state.env_center.php_remote_refreshing = false;
-                            state.env_center.php_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Deno => {
-                            state.env_center.deno_remote_refreshing = false;
-                            state.env_center.deno_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Bun => {
-                            state.env_center.bun_remote_refreshing = false;
-                            state.env_center.bun_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Dotnet => {
-                            state.env_center.dotnet_remote_refreshing = false;
-                            state.env_center.dotnet_remote_latest = rows;
-                        }
-                        envr_domain::runtime::RuntimeKind::Ruby => {
-                            state.env_center.ruby_remote_refreshing = false;
-                            state.env_center.ruby_remote_latest = rows;
-                        }
-                        _ => {}
+                    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
+                        let slot = state.env_center.remote_slot_mut(kind);
+                        slot.refreshing = false;
+                        slot.rows = rows;
                     }
                 }
                 Err(e) => {
                     state.env_center.remote_error = Some(e);
-                    match kind {
-                        envr_domain::runtime::RuntimeKind::Node => {
-                            state.env_center.node_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Python => {
-                            state.env_center.python_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Java => {
-                            state.env_center.java_remote_refreshing = false;
-                            // Keep already shown static rows to avoid visual blanking on transient refresh failure.
-                        }
-                        envr_domain::runtime::RuntimeKind::Go => {
-                            state.env_center.go_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Php => {
-                            state.env_center.php_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Deno => {
-                            state.env_center.deno_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Bun => {
-                            state.env_center.bun_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Dotnet => {
-                            state.env_center.dotnet_remote_refreshing = false;
-                        }
-                        envr_domain::runtime::RuntimeKind::Ruby => {
-                            state.env_center.ruby_remote_refreshing = false;
-                        }
-                        _ => {}
+                    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
+                        // Keep already shown rows to avoid visual blanking on transient refresh failure.
+                        state.env_center.remote_slot_mut(kind).refreshing = false;
                     }
                 }
             }
@@ -2175,8 +1742,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
         }
         EnvCenterMsg::SetJavaDistro(distro) => {
-            state.env_center.java_remote_latest = java_static_latest_for_distro(distro);
-            state.env_center.java_remote_refreshing = true;
+            state
+                .env_center
+                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
+                .rows = java_static_latest_for_distro(distro);
+            env_center_set_exclusive_remote_refreshing(
+                &mut state.env_center,
+                Some(envr_domain::runtime::RuntimeKind::Java),
+            );
             state.env_center.remote_error = None;
             let mut st = state.settings.cache.snapshot().clone();
             st.runtime.java.current_distro = distro;
@@ -2307,8 +1880,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.error = Some(e.to_string());
                 return Task::none();
             }
-            state.env_center.php_remote_latest.clear();
-            state.env_center.php_remote_refreshing = true;
+            let slot = state
+                .env_center
+                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Php);
+            slot.rows.clear();
+            slot.refreshing = true;
             persist_settings_clone_task(st)
         }
         EnvCenterMsg::SetPhpWindowsBuild(flavor) => {
@@ -2318,8 +1894,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.error = Some(e.to_string());
                 return Task::none();
             }
-            state.env_center.php_remote_latest.clear();
-            state.env_center.php_remote_refreshing = true;
+            let slot = state
+                .env_center
+                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Php);
+            slot.rows.clear();
+            slot.refreshing = true;
             persist_settings_clone_task(st)
         }
         EnvCenterMsg::SetPhpPathProxy(on) => {

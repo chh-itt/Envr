@@ -154,7 +154,22 @@ pub trait RuntimeProvider: Send + Sync {
     fn current(&self) -> EnvrResult<Option<RuntimeVersion>>;
     fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()>;
 
+    /// Remote versions for display and CLI listing.
+    ///
+    /// **Contract:** For runtimes where [`Self::install`] consumes the same index as this list,
+    /// implementations should only return versions that can actually be installed. When the
+    /// upstream “marketing” index is wider than installable artifacts, override
+    /// [`Self::list_remote_installable`] (and related installable helpers) instead of widening
+    /// what [`Self::install`] accepts without documentation.
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>>;
+
+    /// Subset (or equal) of [`Self::list_remote`] that [`Self::install`] is guaranteed to satisfy.
+    ///
+    /// Defaults to forwarding to [`Self::list_remote`]. Override when remote discovery and install
+    /// artifacts diverge (e.g. language release page vs platform installer feed).
+    fn list_remote_installable(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.list_remote(filter)
+    }
 
     /// Returns remote version `major` keys (e.g. `25` for `25.x.x`) without
     /// materializing the full remote leaf version list.
@@ -166,6 +181,20 @@ pub trait RuntimeProvider: Send + Sync {
     /// Latest patch per major line for GUI list rows (e.g. Node). Default: empty.
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         Ok(Vec::new())
+    }
+
+    /// Like [`Self::list_remote_latest_per_major`] but restricted to versions [`Self::install`] can use.
+    ///
+    /// Defaults to [`Self::list_remote_latest_per_major`].
+    fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.list_remote_latest_per_major()
+    }
+
+    /// Read cached [`Self::list_remote_latest_installable_per_major`] from disk without TTL (for instant UI paint).
+    ///
+    /// Defaults to [`Self::try_load_remote_latest_per_major_from_disk`].
+    fn try_load_remote_latest_installable_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        self.try_load_remote_latest_per_major_from_disk()
     }
 
     /// Read cached [`Self::list_remote_latest_per_major`] from disk without TTL (for instant UI paint).

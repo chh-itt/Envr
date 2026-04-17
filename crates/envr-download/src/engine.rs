@@ -89,123 +89,137 @@ impl DownloadEngine {
         on_progress: Option<DownloadProgressFn>,
     ) -> EnvrResult<DownloadOutcome> {
         let dest_path = dest_path.as_ref().to_path_buf();
-        if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent).await.map_err(EnvrError::from)?;
-        }
-
-        let resumed_from = existing_file_len(&dest_path).await.unwrap_or(0);
-        let mut request = self.client.get(url.clone()).timeout(options.timeout);
-        if resumed_from > 0 {
-            request = request.header(header::RANGE, format!("bytes={resumed_from}-"));
-        }
-
-        let response = request
-            .send()
-            .await
-            .map_err(|e| EnvrError::Download(format!("request failed: {e}")))?;
-
-        let status = response.status();
-        let (append, effective_resumed_from) = match status {
-            StatusCode::OK => (false, 0),
-            StatusCode::PARTIAL_CONTENT => (true, resumed_from),
-            _ => {
-                return Err(EnvrError::Download(format!(
-                    "unexpected http status {status} for {url}"
-                )));
+        let mut range_recovery = 0u8;
+        loop {
+            if let Some(parent) = dest_path.parent() {
+                fs::create_dir_all(parent).await.map_err(EnvrError::from)?;
             }
-        };
 
-        if let (Some(total_atomic), Some(remainder)) =
-            (progress_total.as_ref(), response.content_length())
-        {
-            total_atomic.store(
-                effective_resumed_from.saturating_add(remainder),
-                Ordering::Relaxed,
-            );
-        }
+            let resumed_from = existing_file_len(&dest_path).await.unwrap_or(0);
+            let mut request = self.client.get(url.clone()).timeout(options.timeout);
+            if resumed_from > 0 {
+                request = request.header(header::RANGE, format!("bytes={resumed_from}-"));
+            }
 
-        if let Some(dl) = progress_downloaded.as_ref() {
-            dl.store(effective_resumed_from, Ordering::Relaxed);
-        }
+            let response = request
+                .send()
+                .await
+                .map_err(|e| EnvrError::Download(format!("request failed: {e}")))?;
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(append)
-            .truncate(!append)
-            .open(&dest_path)
-            .await
-            .map_err(EnvrError::from)?;
-
-        let mut limiter = RateLimiter::new(options.max_bytes_per_sec);
-        let mut bytes_written = 0u64;
-
-        let emit_state: Option<Arc<Mutex<(Instant, u64)>>> = on_progress
-            .as_ref()
-            .map(|_| Arc::new(Mutex::new((Instant::now(), 0u64))));
-
-        let maybe_emit = |downloaded: u64, total: u64, force: bool| {
-            let Some(cb) = on_progress.as_ref() else {
-                return;
+            let status = response.status();
+            let (append, effective_resumed_from) = match status {
+                StatusCode::OK => (false, 0),
+                StatusCode::PARTIAL_CONTENT => (true, resumed_from),
+                StatusCode::RANGE_NOT_SATISFIABLE if resumed_from > 0 => {
+                    range_recovery = range_recovery.saturating_add(1);
+                    if range_recovery > 3 {
+                        return Err(EnvrError::Download(format!(
+                            "GET {url} -> {status} (range recovery limit)"
+                        )));
+                    }
+                    let _ = fs::remove_file(&dest_path).await;
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    continue;
+                }
+                _ => {
+                    return Err(EnvrError::Download(format!(
+                        "unexpected http status {status} for {url}"
+                    )));
+                }
             };
-            let Some(st) = emit_state.as_ref() else {
-                return;
-            };
-            let now = Instant::now();
-            let mut g = st.lock().expect("progress mutex");
-            let byte_delta = downloaded.saturating_sub(g.1);
-            if force
-                || now.duration_since(g.0) >= Duration::from_millis(200)
-                || byte_delta >= 256 * 1024
+
+            if let (Some(total_atomic), Some(remainder)) =
+                (progress_total.as_ref(), response.content_length())
             {
-                cb(downloaded, total);
-                g.0 = now;
-                g.1 = downloaded;
+                total_atomic.store(
+                    effective_resumed_from.saturating_add(remainder),
+                    Ordering::Relaxed,
+                );
             }
-        };
 
-        let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            if cancel.is_cancelled() {
-                return Err(EnvrError::Download("download cancelled".to_string()));
-            }
-            let chunk =
-                chunk.map_err(|e| EnvrError::Download(format!("read chunk failed: {e}")))?;
-
-            limiter.throttle(chunk.len() as u64).await?;
-
-            file.write_all(&chunk).await.map_err(EnvrError::from)?;
-            bytes_written = bytes_written.saturating_add(chunk.len() as u64);
             if let Some(dl) = progress_downloaded.as_ref() {
-                dl.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+                dl.store(effective_resumed_from, Ordering::Relaxed);
             }
-            let downloaded = progress_downloaded
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(append)
+                .truncate(!append)
+                .open(&dest_path)
+                .await
+                .map_err(EnvrError::from)?;
+
+            let mut limiter = RateLimiter::new(options.max_bytes_per_sec);
+            let mut bytes_written = 0u64;
+
+            let emit_state: Option<Arc<Mutex<(Instant, u64)>>> = on_progress
+                .as_ref()
+                .map(|_| Arc::new(Mutex::new((Instant::now(), 0u64))));
+
+            let maybe_emit = |downloaded: u64, total: u64, force: bool| {
+                let Some(cb) = on_progress.as_ref() else {
+                    return;
+                };
+                let Some(st) = emit_state.as_ref() else {
+                    return;
+                };
+                let now = Instant::now();
+                let mut g = st.lock().expect("progress mutex");
+                let byte_delta = downloaded.saturating_sub(g.1);
+                if force
+                    || now.duration_since(g.0) >= Duration::from_millis(200)
+                    || byte_delta >= 256 * 1024
+                {
+                    cb(downloaded, total);
+                    g.0 = now;
+                    g.1 = downloaded;
+                }
+            };
+
+            let mut stream = response.bytes_stream();
+            while let Some(chunk) = stream.next().await {
+                if cancel.is_cancelled() {
+                    return Err(EnvrError::Download("download cancelled".to_string()));
+                }
+                let chunk =
+                    chunk.map_err(|e| EnvrError::Download(format!("read chunk failed: {e}")))?;
+
+                limiter.throttle(chunk.len() as u64).await?;
+
+                file.write_all(&chunk).await.map_err(EnvrError::from)?;
+                bytes_written = bytes_written.saturating_add(chunk.len() as u64);
+                if let Some(dl) = progress_downloaded.as_ref() {
+                    dl.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+                }
+                let downloaded = progress_downloaded
+                    .as_ref()
+                    .map(|d| d.load(Ordering::Relaxed))
+                    .unwrap_or(effective_resumed_from.saturating_add(bytes_written));
+                let total = progress_total
+                    .as_ref()
+                    .map(|t| t.load(Ordering::Relaxed))
+                    .unwrap_or(0);
+                maybe_emit(downloaded, total, false);
+            }
+            file.flush().await.map_err(EnvrError::from)?;
+
+            let downloaded_final = progress_downloaded
                 .as_ref()
                 .map(|d| d.load(Ordering::Relaxed))
                 .unwrap_or(effective_resumed_from.saturating_add(bytes_written));
-            let total = progress_total
+            let total_final = progress_total
                 .as_ref()
                 .map(|t| t.load(Ordering::Relaxed))
                 .unwrap_or(0);
-            maybe_emit(downloaded, total, false);
+            maybe_emit(downloaded_final, total_final, true);
+
+            return Ok(DownloadOutcome {
+                path: dest_path,
+                bytes_written,
+                resumed_from: effective_resumed_from,
+            });
         }
-        file.flush().await.map_err(EnvrError::from)?;
-
-        let downloaded_final = progress_downloaded
-            .as_ref()
-            .map(|d| d.load(Ordering::Relaxed))
-            .unwrap_or(effective_resumed_from.saturating_add(bytes_written));
-        let total_final = progress_total
-            .as_ref()
-            .map(|t| t.load(Ordering::Relaxed))
-            .unwrap_or(0);
-        maybe_emit(downloaded_final, total_final, true);
-
-        Ok(DownloadOutcome {
-            path: dest_path,
-            bytes_written,
-            resumed_from: effective_resumed_from,
-        })
     }
 }
 

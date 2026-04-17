@@ -28,7 +28,19 @@ impl RuntimeProvider for StubProvider {
     }
 
     fn list_remote(&self, _filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(vec![])
+        Ok(vec![RuntimeVersion("raw-remote".to_string())])
+    }
+
+    fn list_remote_installable(&self, _filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(vec![RuntimeVersion("installable-remote".to_string())])
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(vec![RuntimeVersion("raw-latest".to_string())])
+    }
+
+    fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(vec![RuntimeVersion("installable-latest".to_string())])
     }
 
     fn resolve(&self, _spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
@@ -89,10 +101,15 @@ fn passthrough_methods_delegate_to_stub_provider() {
     assert_eq!(svc.current(RuntimeKind::Go).expect("current"), None);
     svc.set_current(RuntimeKind::Go, &RuntimeVersion("1.0.0".to_string()))
         .expect("set_current");
-    assert!(
+    assert_eq!(
         svc.list_remote(RuntimeKind::Go, &RemoteFilter { prefix: None })
-            .expect("remote")
-            .is_empty()
+            .expect("remote"),
+        vec![RuntimeVersion("installable-remote".to_string())]
+    );
+    assert_eq!(
+        svc.list_remote_latest_per_major(RuntimeKind::Go)
+            .expect("latest"),
+        vec![RuntimeVersion("installable-latest".to_string())]
     );
     assert_eq!(
         svc.resolve(RuntimeKind::Go, &VersionSpec("x".to_string()))
