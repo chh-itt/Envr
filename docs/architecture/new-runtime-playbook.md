@@ -349,3 +349,20 @@ Suggested guardrails for the next runtime:
 - [ ] Add provider tests in the same PR as parser/index code (not as follow-up).
 - [ ] Verify GUI `Set<Runtime>PathProxy` branch + shim sync is wired when descriptor enables `supports_path_proxy`.
 - [ ] When a runtime has an external prerequisite (e.g. OTP), add `doctor`/GUI preflight checks and a crisp error message before download/extract work.
+
+### 8.7 Post-Elixir hardening (settings + version list strategy)
+
+Recent follow-up optimizations produced two practical rules for future runtime bring-up and refactors:
+
+- **Unify settings persistence in GUI handlers**:
+  - Avoid per-branch hand-written `clone -> mutate -> validate -> persist` code in `handle_env_center`.
+  - Route common write paths through shared helpers (for example, one helper for generic runtime setting updates and one for path-proxy toggles that also performs shim sync when re-enabled).
+  - This reduces omission risk when adding a new runtime-specific `Set*` message.
+
+- **Keep derived version-list behavior strategy-based, not branch-heavy**:
+  - `recompute_derived_lists` should rely on small reusable strategy functions (key extraction, query parsing, sorting, host-compat filtering) instead of large `match` blocks duplicated across installed/remote/filter phases.
+  - Add focused unit tests for these helpers and for at least one remote-key merge case (e.g. runtime rows present remotely but not installed).
+  - Minimum GUI regression tests:
+    - key grouping for line-based runtimes (e.g. `major.minor`),
+    - query matching rules (major/minor input behavior),
+    - remote-only rows still producing visible keys.

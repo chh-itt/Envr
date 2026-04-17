@@ -936,6 +936,47 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
     )
 }
 
+fn persist_runtime_settings_update<F>(state: &mut AppState, update: F) -> Task<Message>
+where
+    F: FnOnce(&mut Settings),
+{
+    let mut st = state.settings.cache.snapshot().clone();
+    update(&mut st);
+    if let Err(e) = st.validate() {
+        state.error = Some(e.to_string());
+        return Task::none();
+    }
+    persist_settings_clone_task(st)
+}
+
+fn persist_path_proxy_toggle<F>(
+    state: &mut AppState,
+    kind: envr_domain::runtime::RuntimeKind,
+    on: bool,
+    update: F,
+) -> Task<Message>
+where
+    F: FnOnce(&mut Settings, bool),
+{
+    let mut st = state.settings.cache.snapshot().clone();
+    update(&mut st, on);
+    if let Err(e) = st.validate() {
+        state.error = Some(e.to_string());
+        return Task::none();
+    }
+    if on {
+        Task::batch([persist_settings_clone_task(st), gui_ops::sync_shims_for_kind(kind)])
+    } else {
+        persist_settings_clone_task(st)
+    }
+}
+
+fn mark_remote_latest_dirty_for_kind(state: &mut AppState, kind: envr_domain::runtime::RuntimeKind) {
+    let slot = state.env_center.remote_slot_mut(kind);
+    slot.rows.clear();
+    slot.refreshing = true;
+}
+
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
     let kind = state.env_center.kind;
     if !envr_domain::runtime::runtime_descriptor(kind).supports_path_proxy {
@@ -1685,72 +1726,40 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::SetNodeDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.node.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.node.download_source = src;
+            })
         }
         EnvCenterMsg::SetNpmRegistryMode(mode) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.node.npm_registry_mode = mode;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.node.npm_registry_mode = mode;
+            })
         }
         EnvCenterMsg::SetNodePathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.node.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Node),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Node,
+                on,
+                |st, on| st.runtime.node.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetPythonDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.python.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.python.download_source = src;
+            })
         }
         EnvCenterMsg::SetPipRegistryMode(mode) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.python.pip_registry_mode = mode;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.python.pip_registry_mode = mode;
+            })
         }
         EnvCenterMsg::SetPythonPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.python.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Python),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Python,
+                on,
+                |st, on| st.runtime.python.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetJavaDistro(distro) => {
             state
@@ -1762,90 +1771,57 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 Some(envr_domain::runtime::RuntimeKind::Java),
             );
             state.env_center.remote_error = None;
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.java.current_distro = distro;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.java.current_distro = distro;
+            })
         }
         EnvCenterMsg::SetJavaDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.java.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.java.download_source = src;
+            })
         }
         EnvCenterMsg::SetJavaPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.java.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Java),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Java,
+                on,
+                |st, on| st.runtime.java.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetGoDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.go.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.go.download_source = src;
+            })
         }
         EnvCenterMsg::SetGoProxyMode(mode) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.go.proxy_mode = mode;
-            if mode == envr_config::settings::GoProxyMode::Custom {
-                // Prevent validation failure when the user *just* clicked "Custom" but hasn't
-                // applied a value yet. Prefer current draft, then existing custom, then legacy
-                // `goproxy`, and finally an official default.
-                let draft = state.env_center.go_proxy_custom_draft.trim();
-                let existing = st.runtime.go.proxy_custom.as_deref().unwrap_or("").trim();
-                let legacy = st.runtime.go.goproxy.as_deref().unwrap_or("").trim();
-                let chosen = if !draft.is_empty() {
-                    draft.to_string()
-                } else if !existing.is_empty() {
-                    existing.to_string()
-                } else if !legacy.is_empty() {
-                    legacy.to_string()
-                } else {
-                    "https://proxy.golang.org,direct".to_string()
-                };
-                st.runtime.go.proxy_custom = Some(chosen);
-            }
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            let draft_proxy = state.env_center.go_proxy_custom_draft.trim().to_string();
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.go.proxy_mode = mode;
+                if mode == envr_config::settings::GoProxyMode::Custom {
+                    // Prevent validation failure when the user switches to Custom
+                    // before applying text input.
+                    let existing = st.runtime.go.proxy_custom.as_deref().unwrap_or("").trim();
+                    let legacy = st.runtime.go.goproxy.as_deref().unwrap_or("").trim();
+                    let chosen = if !draft_proxy.is_empty() {
+                        draft_proxy
+                    } else if !existing.is_empty() {
+                        existing.to_string()
+                    } else if !legacy.is_empty() {
+                        legacy.to_string()
+                    } else {
+                        "https://proxy.golang.org,direct".to_string()
+                    };
+                    st.runtime.go.proxy_custom = Some(chosen);
+                }
+            })
         }
         EnvCenterMsg::SetGoPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.go.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Go),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Go,
+                on,
+                |st, on| st.runtime.go.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetGoProxyCustomDraft(s) => {
             state.env_center.go_proxy_custom_draft = s;
@@ -1856,202 +1832,102 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::ApplyGoNetworkSettings => {
-            let mut st = state.settings.cache.snapshot().clone();
-            let p = state.env_center.go_proxy_custom_draft.trim();
-            st.runtime.go.proxy_custom = if p.is_empty() {
-                None
-            } else {
-                Some(p.to_string())
-            };
-            let pr = state.env_center.go_private_patterns_draft.trim();
-            st.runtime.go.private_patterns = if pr.is_empty() {
-                None
-            } else {
-                Some(pr.to_string())
-            };
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            let p = state.env_center.go_proxy_custom_draft.trim().to_string();
+            let pr = state.env_center.go_private_patterns_draft.trim().to_string();
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.go.proxy_custom = if p.is_empty() { None } else { Some(p) };
+                st.runtime.go.private_patterns = if pr.is_empty() { None } else { Some(pr) };
+            })
         }
         EnvCenterMsg::SetRustDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.rust.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.rust.download_source = src;
+            })
         }
         EnvCenterMsg::SetPhpDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.php.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            let slot = state
-                .env_center
-                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Php);
-            slot.rows.clear();
-            slot.refreshing = true;
-            persist_settings_clone_task(st)
+            mark_remote_latest_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.php.download_source = src;
+            })
         }
         EnvCenterMsg::SetPhpWindowsBuild(flavor) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.php.windows_build = flavor;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            let slot = state
-                .env_center
-                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Php);
-            slot.rows.clear();
-            slot.refreshing = true;
-            persist_settings_clone_task(st)
+            mark_remote_latest_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.php.windows_build = flavor;
+            })
         }
         EnvCenterMsg::SetPhpPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.php.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Php),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Php,
+                on,
+                |st, on| st.runtime.php.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetDenoDownloadSource(src) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.deno.download_source = src;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.deno.download_source = src;
+            })
         }
         EnvCenterMsg::SetDenoPackageSource(mode) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.deno.package_source = mode;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.deno.package_source = mode;
+            })
         }
         EnvCenterMsg::SetDenoPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.deno.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Deno),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Deno,
+                on,
+                |st, on| st.runtime.deno.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetBunPackageSource(mode) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.bun.package_source = mode;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.bun.package_source = mode;
+            })
         }
         EnvCenterMsg::SetBunPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.bun.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Bun),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Bun,
+                on,
+                |st, on| st.runtime.bun.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetDotnetPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.dotnet.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Dotnet),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Dotnet,
+                on,
+                |st, on| st.runtime.dotnet.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetRubyPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.ruby.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Ruby),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Ruby,
+                on,
+                |st, on| st.runtime.ruby.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::SetElixirPathProxy(on) => {
-            let mut st = state.settings.cache.snapshot().clone();
-            st.runtime.elixir.path_proxy_enabled = on;
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            if on {
-                Task::batch([
-                    persist_settings_clone_task(st),
-                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Elixir),
-                ])
-            } else {
-                persist_settings_clone_task(st)
-            }
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Elixir,
+                on,
+                |st, on| st.runtime.elixir.path_proxy_enabled = on,
+            )
         }
         EnvCenterMsg::BunGlobalBinDirEdit(s) => {
             state.env_center.bun_global_bin_dir_draft = s;
             Task::none()
         }
         EnvCenterMsg::ApplyBunGlobalBinDir => {
-            let mut st = state.settings.cache.snapshot().clone();
-            let t = state.env_center.bun_global_bin_dir_draft.trim();
-            st.runtime.bun.global_bin_dir = if t.is_empty() {
-                None
-            } else {
-                Some(t.to_string())
-            };
-            if let Err(e) = st.validate() {
-                state.error = Some(e.to_string());
-                return Task::none();
-            }
-            persist_settings_clone_task(st)
+            let t = state.env_center.bun_global_bin_dir_draft.trim().to_string();
+            persist_runtime_settings_update(state, move |st| {
+                st.runtime.bun.global_bin_dir = if t.is_empty() { None } else { Some(t) };
+            })
         }
         EnvCenterMsg::RustRefresh => {
             state.env_center.busy = true;

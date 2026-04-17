@@ -203,35 +203,6 @@ impl EnvCenterState {
         // Search/filter text (we reuse `install_input` field).
         let query = self.install_input.trim();
         let query_norm = query.strip_prefix('v').unwrap_or(query);
-        let query_key = match self.kind {
-            RuntimeKind::Python => parse_python_major_minor_only(query_norm),
-            RuntimeKind::Php => parse_python_major_minor_only(query_norm),
-            RuntimeKind::Java => parse_major_only(query_norm),
-            RuntimeKind::Go => parse_go_minor_line_only(query_norm),
-            _ => parse_major_only(query_norm),
-        };
-
-        // Group installed versions by key (Node: major, Python/PHP: major.minor, else: major).
-        let mut installed_by_key: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
-        for v in &self.installed {
-            let key = match self.kind {
-                RuntimeKind::Python => parse_python_major_minor_key(&v.0),
-                RuntimeKind::Php => parse_python_major_minor_key(&v.0),
-                RuntimeKind::Node => parse_node_major_key(&v.0),
-                RuntimeKind::Java => parse_java_major_key(&v.0),
-                RuntimeKind::Go => parse_go_minor_line_key(&v.0),
-                _ => parse_major_from_ver(&v.0),
-            };
-            if let Some(k) = key {
-                installed_by_key.entry(k).or_default().push(v.clone());
-            }
-        }
-        for (_k, versions) in installed_by_key.iter_mut() {
-            versions.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
-        }
-
-        // Merge remote keys when available (so empty installs still show suggestions).
-        let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
         let remote_rows: &[RuntimeVersion] = if runtime_descriptor(self.kind).supports_remote_latest
         {
             self.remote_latest_by_kind
@@ -241,198 +212,176 @@ impl EnvCenterState {
         } else {
             &[]
         };
-        match self.kind {
-            RuntimeKind::Node => {
-                for v in remote_rows {
-                    if let Some(k) = parse_node_major_key(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
+        let key_mode = key_mode_for_kind(self.kind, &self.installed, remote_rows);
+        let query_key = query_key_for_kind(self.kind, key_mode, query_norm);
+
+        // Group installed versions by display key (major / major.minor / go minor line).
+        let mut installed_by_key: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
+        for v in &self.installed {
+            if let Some(k) = grouped_version_key(self.kind, key_mode, &v.0)
+                && key_supported_on_host(self.kind, &k)
+            {
+                installed_by_key.entry(k).or_default().push(v.clone());
             }
-            RuntimeKind::Python => {
-                for v in remote_rows {
-                    if let Some(k) = parse_python_major_minor_key(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Java => {
-                for v in remote_rows {
-                    if let Some(k) = parse_java_major_key(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Go => {
-                for v in remote_rows {
-                    if let Some(k) = parse_go_minor_line_key(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Php => {
-                for v in remote_rows {
-                    if let Some(k) = parse_python_major_minor_key(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Deno => {
-                for v in remote_rows {
-                    if let Some(k) = parse_major_from_ver(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Bun => {
-                for v in remote_rows {
-                    if let Some(k) = parse_major_from_ver(&v.0)
-                        && bun_major_supported_on_host(&k)
-                    {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Dotnet => {
-                for v in remote_rows {
-                    if let Some(k) = parse_major_from_ver(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Ruby => {
-                for v in remote_rows {
-                    if let Some(k) = parse_major_from_ver(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            RuntimeKind::Elixir => {
-                for v in remote_rows {
-                    if let Some(k) = parse_major_from_ver(&v.0) {
-                        keys_set.insert(k);
-                    }
-                }
-            }
-            _ => {}
+        }
+        for (_k, versions) in installed_by_key.iter_mut() {
+            versions.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
         }
 
-        let mut keys: Vec<String> = keys_set.into_iter().collect();
-        if self.kind == RuntimeKind::Python {
-            keys.sort_by(|a, b| {
-                parse_python_key_sort(a)
-                    .cmp(&parse_python_key_sort(b))
-                    .reverse()
-            });
-        } else if self.kind == RuntimeKind::Java {
-            keys = java_distro
+        // Merge remote keys when available (so empty installs still show suggestions).
+        let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
+        for v in remote_rows {
+            if let Some(k) = grouped_version_key(self.kind, key_mode, &v.0)
+                && key_supported_on_host(self.kind, &k)
+            {
+                keys_set.insert(k);
+            }
+        }
+
+        let mut keys: Vec<String> = if self.kind == RuntimeKind::Java {
+            java_distro
                 .supported_lts_major_strs()
                 .iter()
                 .map(|s| (*s).to_string())
-                .collect();
-        } else if self.kind == RuntimeKind::Go {
-            keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
-        } else if self.kind == RuntimeKind::Php {
-            keys.sort_by(|a, b| {
-                parse_python_key_sort(a)
-                    .cmp(&parse_python_key_sort(b))
-                    .reverse()
-            });
+                .collect()
         } else {
-            keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
-        }
-        if self.kind == RuntimeKind::Bun {
-            keys.retain(|k| bun_major_supported_on_host(k));
-        }
+            keys_set.into_iter().collect()
+        };
+        keys.retain(|k| key_supported_on_host(self.kind, k));
+        keys.sort_by(|a, b| key_sort_desc_for_kind(self.kind, key_mode, a, b));
 
         let mut show_keys: Vec<String> = if query_norm.is_empty() {
             keys.clone()
         } else {
             let needle = query_key.as_deref().unwrap_or(query_norm);
-            match self.kind {
-                RuntimeKind::Node => keys
-                    .iter()
-                    .filter(|k| k.contains(needle))
-                    .cloned()
-                    .collect(),
-                RuntimeKind::Python => {
-                    if needle.contains('.') {
-                        keys.iter()
-                            .filter(|k| k.starts_with(needle))
-                            .cloned()
-                            .collect()
-                    } else {
-                        keys.iter()
-                            .filter(|k| {
-                                let mut it = k.split('.');
-                                let major = it.next().unwrap_or("");
-                                let minor = it.next().unwrap_or("");
-                                major == needle || minor == needle
-                            })
-                            .cloned()
-                            .collect()
-                    }
-                }
-                RuntimeKind::Go => {
-                    if needle.contains('.') {
-                        keys.iter()
-                            .filter(|k| k.starts_with(needle))
-                            .cloned()
-                            .collect()
-                    } else {
-                        keys.iter()
-                            .filter(|k| {
-                                let mut it = k.split('.');
-                                let major = it.next().unwrap_or("");
-                                let minor = it.next().unwrap_or("");
-                                major == needle || minor == needle
-                            })
-                            .cloned()
-                            .collect()
-                    }
-                }
-                RuntimeKind::Php => {
-                    if needle.contains('.') {
-                        keys.iter()
-                            .filter(|k| k.starts_with(needle))
-                            .cloned()
-                            .collect()
-                    } else {
-                        keys.iter()
-                            .filter(|k| {
-                                let mut it = k.split('.');
-                                let major = it.next().unwrap_or("");
-                                let minor = it.next().unwrap_or("");
-                                major == needle || minor == needle
-                            })
-                            .cloned()
-                            .collect()
-                    }
-                }
-                _ => keys
-                    .iter()
-                    .filter(|k| k.starts_with(needle))
-                    .cloned()
-                    .collect(),
-            }
+            keys.iter()
+                .filter(|k| key_matches_query(self.kind, key_mode, k, needle))
+                .cloned()
+                .collect()
         };
-
-        if self.kind == RuntimeKind::Python || self.kind == RuntimeKind::Php {
-            show_keys.sort_by(|a, b| {
-                parse_python_key_sort(a)
-                    .cmp(&parse_python_key_sort(b))
-                    .reverse()
-            });
-        } else if self.kind == RuntimeKind::Go {
-            show_keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
-        } else {
-            show_keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
-        }
+        show_keys.sort_by(|a, b| key_sort_desc_for_kind(self.kind, key_mode, a, b));
 
         self.derived_installed_by_key = installed_by_key;
         self.derived_keys = keys.clone();
         self.derived_show_keys = show_keys;
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VersionKeyMode {
+    Major,
+    MajorMinor,
+}
+
+fn key_mode_for_kind(
+    kind: RuntimeKind,
+    installed: &[RuntimeVersion],
+    remote_rows: &[RuntimeVersion],
+) -> VersionKeyMode {
+    match kind {
+        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => VersionKeyMode::MajorMinor,
+        RuntimeKind::Ruby
+        | RuntimeKind::Elixir
+        | RuntimeKind::Deno
+        | RuntimeKind::Bun
+        | RuntimeKind::Dotnet => {
+            let mut majors = HashSet::<String>::new();
+            for v in installed.iter().chain(remote_rows.iter()) {
+                if let Some(m) = parse_major_from_ver(&v.0) {
+                    if !key_supported_on_host(kind, &m) {
+                        continue;
+                    }
+                    majors.insert(m);
+                    if majors.len() > 1 {
+                        return VersionKeyMode::Major;
+                    }
+                }
+            }
+            VersionKeyMode::MajorMinor
+        }
+        _ => VersionKeyMode::Major,
+    }
+}
+
+fn grouped_version_key(kind: RuntimeKind, mode: VersionKeyMode, version: &str) -> Option<String> {
+    match kind {
+        RuntimeKind::Python | RuntimeKind::Php => parse_python_major_minor_key(version),
+        RuntimeKind::Node => parse_node_major_key(version),
+        RuntimeKind::Java => parse_java_major_key(version),
+        RuntimeKind::Go => parse_go_minor_line_key(version),
+        _ => match mode {
+            VersionKeyMode::Major => parse_major_from_ver(version),
+            VersionKeyMode::MajorMinor => parse_major_minor_key(version),
+        },
+    }
+}
+
+fn query_key_for_kind(kind: RuntimeKind, mode: VersionKeyMode, query_norm: &str) -> Option<String> {
+    match kind {
+        RuntimeKind::Python | RuntimeKind::Php => parse_python_major_minor_only(query_norm),
+        RuntimeKind::Go => parse_go_minor_line_only(query_norm),
+        _ => match mode {
+            VersionKeyMode::Major => parse_major_only(query_norm),
+            VersionKeyMode::MajorMinor => parse_python_major_minor_only(query_norm),
+        },
+    }
+}
+
+fn key_sort_desc_for_kind(
+    kind: RuntimeKind,
+    mode: VersionKeyMode,
+    a: &str,
+    b: &str,
+) -> std::cmp::Ordering {
+    match kind {
+        RuntimeKind::Python | RuntimeKind::Php => {
+            parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse()
+        }
+        RuntimeKind::Go => parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse(),
+        _ => match mode {
+            VersionKeyMode::Major => parse_major_num(a).cmp(&parse_major_num(b)).reverse(),
+            VersionKeyMode::MajorMinor => {
+                parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse()
+            }
+        },
+    }
+}
+
+fn key_matches_query(kind: RuntimeKind, mode: VersionKeyMode, key: &str, needle: &str) -> bool {
+    match kind {
+        RuntimeKind::Node => key.contains(needle),
+        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => {
+            if needle.contains('.') {
+                key.starts_with(needle)
+            } else {
+                let mut it = key.split('.');
+                let major = it.next().unwrap_or("");
+                let minor = it.next().unwrap_or("");
+                major == needle || minor == needle
+            }
+        }
+        _ => match mode {
+            VersionKeyMode::Major => key.starts_with(needle),
+            VersionKeyMode::MajorMinor => {
+                if needle.contains('.') {
+                    key.starts_with(needle)
+                } else {
+                    let mut it = key.split('.');
+                    let major = it.next().unwrap_or("");
+                    let minor = it.next().unwrap_or("");
+                    major == needle || minor == needle
+                }
+            }
+        },
+    }
+}
+
+fn key_supported_on_host(kind: RuntimeKind, key: &str) -> bool {
+    if kind == RuntimeKind::Bun {
+        let major = key.split('.').next().unwrap_or(key);
+        return bun_major_supported_on_host(major);
+    }
+    true
 }
 
 // (scroll_y is clamped locally during rendering; no persistent clamping helper needed)
@@ -1150,60 +1099,6 @@ fn php_runtime_settings_section(
         ds_buttons.into(),
     );
 
-    let build_row: Element<'static, Message> = if cfg!(windows) {
-        let builds = [PhpWindowsBuildFlavor::Nts, PhpWindowsBuildFlavor::Ts];
-        let mut build_buttons = row![].spacing(-1.0);
-        for (idx, flavor) in builds.iter().copied().enumerate() {
-            let label = match flavor {
-                PhpWindowsBuildFlavor::Nts => "NTS",
-                PhpWindowsBuildFlavor::Ts => "TS",
-            };
-            let active = flavor == php.windows_build;
-            let variant = if active {
-                ButtonVariant::Primary
-            } else {
-                ButtonVariant::Secondary
-            };
-            let pos = if builds.len() == 1 {
-                SegmentPosition::Single
-            } else if idx == 0 {
-                SegmentPosition::Start
-            } else if idx + 1 == builds.len() {
-                SegmentPosition::End
-            } else {
-                SegmentPosition::Middle
-            };
-            build_buttons = build_buttons.push(
-                button(button_content_centered(text(label).into()))
-                    .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
-                    .width(Length::Shrink)
-                    .height(Length::Fixed(if active {
-                        tokens.control_height_primary
-                    } else {
-                        tokens.control_height_secondary
-                    }))
-                    .padding([sp.sm as f32, (sp.sm + 2) as f32])
-                    .style(segmented_button_style(tokens, variant, pos)),
-            );
-        }
-        setting_row(
-            tokens,
-            envr_core::i18n::tr_key(
-                "gui.runtime.php.windows_build",
-                "Windows 构建",
-                "Windows build",
-            ),
-            Some(envr_core::i18n::tr_key(
-                "gui.runtime.php.windows_build_hint",
-                "切换后列表会刷新（NTS/TS 独立）。",
-                "Switching refreshes the list (NTS/TS are independent).",
-            )),
-            build_buttons.into(),
-        )
-    } else {
-        column![].into()
-    };
-
     let proxy_toggle = setting_row(
         tokens,
         envr_core::i18n::tr_key("gui.runtime.php.path_proxy", "PATH 代理", "PATH proxy"),
@@ -1230,7 +1125,6 @@ fn php_runtime_settings_section(
     let main_col = if cfg!(windows) {
         column![
             ds_row,
-            build_row,
             proxy_toggle,
             text("关闭时无法使用「切换」「安装并切换」。")
                 .size(ty.micro)
@@ -1250,6 +1144,62 @@ fn php_runtime_settings_section(
         .padding(Padding::from([sp.md as f32, sp.md as f32]))
         .style(card_container_style(tokens, 1))
         .into()
+}
+
+fn php_windows_build_row(
+    php: &PhpRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Option<Element<'static, Message>> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let sp = tokens.space();
+    let builds = [PhpWindowsBuildFlavor::Nts, PhpWindowsBuildFlavor::Ts];
+    let mut build_buttons = row![].spacing(-1.0);
+    for (idx, flavor) in builds.iter().copied().enumerate() {
+        let label = match flavor {
+            PhpWindowsBuildFlavor::Nts => "NTS",
+            PhpWindowsBuildFlavor::Ts => "TS",
+        };
+        let active = flavor == php.windows_build;
+        let variant = if active {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
+        let pos = if idx == 0 {
+            SegmentPosition::Start
+        } else if idx + 1 == builds.len() {
+            SegmentPosition::End
+        } else {
+            SegmentPosition::Middle
+        };
+        build_buttons = build_buttons.push(
+            button(button_content_centered(text(label).into()))
+                .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
+                .width(Length::Shrink)
+                .height(Length::Fixed(if active {
+                    tokens.control_height_primary
+                } else {
+                    tokens.control_height_secondary
+                }))
+                .padding([sp.sm as f32, (sp.sm + 2) as f32])
+                .style(segmented_button_style(tokens, variant, pos)),
+        );
+    }
+    Some(
+        setting_row(
+            tokens,
+            envr_core::i18n::tr_key("gui.runtime.php.windows_build", "Windows 构建", "Windows build"),
+            Some(envr_core::i18n::tr_key(
+                "gui.runtime.php.windows_build_hint",
+                "切换后列表会刷新（NTS/TS 独立）。",
+                "Switching refreshes the list (NTS/TS are independent).",
+            )),
+            build_buttons.into(),
+        )
+        .into(),
+    )
 }
 
 fn deno_runtime_settings_section(
@@ -1609,6 +1559,7 @@ fn env_remote_latest_for_key(
     key: &str,
 ) -> Option<RuntimeVersion> {
     let rows = state.remote_latest_by_kind.get(&kind)?.rows.as_slice();
+    let mode = key_mode_for_kind(kind, &state.installed, rows);
     match kind {
         RuntimeKind::Node => rows
             .iter()
@@ -1632,27 +1583,27 @@ fn env_remote_latest_for_key(
             .cloned(),
         RuntimeKind::Deno => rows
             .iter()
-            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
             .cloned(),
         RuntimeKind::Bun => {
             if !bun_major_supported_on_host(key) {
                 return None;
             }
             rows.iter()
-                .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+                .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
                 .cloned()
         }
         RuntimeKind::Dotnet => rows
             .iter()
-            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
             .cloned(),
         RuntimeKind::Ruby => rows
             .iter()
-            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
             .cloned(),
         RuntimeKind::Elixir => rows
             .iter()
-            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
             .cloned(),
         RuntimeKind::Rust => None,
     }
@@ -2059,14 +2010,16 @@ pub fn env_center_view(
     } else {
         for key in show_keys.iter() {
             let installed_versions = installed_by_key.get(key).cloned().unwrap_or_default();
-            let current_key = state.current.as_ref().and_then(|v| match state.kind {
-                RuntimeKind::Python => parse_python_major_minor_key(&v.0),
-                RuntimeKind::Php => parse_python_major_minor_key(&v.0),
-                RuntimeKind::Node => parse_node_major_key(&v.0),
-                RuntimeKind::Java => parse_java_major_key(&v.0),
-                RuntimeKind::Go => parse_go_minor_line_key(&v.0),
-                _ => parse_major_from_ver(&v.0),
-            });
+            let remote_for_mode = state
+                .remote_latest_by_kind
+                .get(&state.kind)
+                .map(|s| s.rows.as_slice())
+                .unwrap_or(&[]);
+            let key_mode = key_mode_for_kind(state.kind, &state.installed, remote_for_mode);
+            let current_key = state
+                .current
+                .as_ref()
+                .and_then(|v| grouped_version_key(state.kind, key_mode, &v.0));
             let is_active = current_key.as_deref() == Some(key.as_str());
             let flavor_matches_global = if state.kind != RuntimeKind::Php {
                 true
@@ -2122,8 +2075,13 @@ pub fn env_center_view(
             let action_btn: Element<'static, Message> = if let Some(_highest) = highest_installed {
                 let mut rows = column![].spacing(sp.xs as f32).width(Length::Fill);
                 for installed in &installed_versions {
-                    let is_current_exact =
-                        state.current.as_ref().is_some_and(|c| c.0 == installed.0) && path_proxy_on;
+                    let is_current_exact = state.current.as_ref().is_some_and(|c| c.0 == installed.0)
+                        && path_proxy_on
+                        && if state.kind == RuntimeKind::Php {
+                            flavor_matches_global
+                        } else {
+                            true
+                        };
 
                     let ver_text = if is_current_exact {
                         format!(
@@ -2456,11 +2414,22 @@ pub fn env_center_view(
     };
 
     let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let php_build_row = if state.kind == RuntimeKind::Php {
+        php_runtime.and_then(|p| php_windows_build_row(p, tokens))
+    } else {
+        None
+    };
     let mut col = if state.kind == RuntimeKind::Java {
         if let Some(distro_row) = java_distro_row {
             column![header, runtime_settings_block, distro_row]
         } else {
             column![header, runtime_settings_block]
+        }
+    } else if state.kind == RuntimeKind::Php {
+        if let Some(build_row) = php_build_row {
+            column![header, runtime_settings_block, build_row, filter_row]
+        } else {
+            column![header, runtime_settings_block, filter_row]
         }
     } else if let Some(hint) = bun_direct_spec_hint {
         column![header, runtime_settings_block, filter_row, hint]
@@ -3020,6 +2989,10 @@ fn parse_major_from_ver(ver: &str) -> Option<String> {
     semver_parts(ver).map(|(ma, _mi, _patch)| ma.to_string())
 }
 
+fn parse_major_minor_key(ver: &str) -> Option<String> {
+    semver_parts(ver).map(|(ma, mi, _)| format!("{ma}.{mi}"))
+}
+
 fn parse_node_major_key(ver: &str) -> Option<String> {
     parse_major_from_ver(ver)
 }
@@ -3119,5 +3092,74 @@ pub(crate) fn env_center_set_exclusive_remote_refreshing(
         }
         let slot = state.remote_slot_mut(d.kind);
         slot.refreshing = active == Some(d.kind);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn go_grouped_key_uses_major_minor() {
+        assert_eq!(
+            grouped_version_key(RuntimeKind::Go, VersionKeyMode::MajorMinor, "1.23.5"),
+            Some("1.23".to_string())
+        );
+    }
+
+    #[test]
+    fn python_query_matches_minor_component() {
+        assert!(key_matches_query(
+            RuntimeKind::Python,
+            VersionKeyMode::MajorMinor,
+            "3.12",
+            "12"
+        ));
+        assert!(!key_matches_query(
+            RuntimeKind::Python,
+            VersionKeyMode::MajorMinor,
+            "3.12",
+            "11"
+        ));
+    }
+
+    #[test]
+    fn recompute_includes_remote_keys_for_elixir() {
+        let mut st = EnvCenterState {
+            kind: RuntimeKind::Elixir,
+            ..Default::default()
+        };
+        st.remote_slot_mut(RuntimeKind::Elixir).rows = vec![RuntimeVersion("1.19.2".to_string())];
+        st.recompute_derived_lists(JavaDistro::default());
+        assert!(
+            st.derived_keys.iter().any(|k| k == "1.19"),
+            "expected major.minor key from remote elixir rows"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bun_key_mode_ignores_unsupported_zero_major_on_windows() {
+        let remote = vec![
+            RuntimeVersion("0.8.0".to_string()),
+            RuntimeVersion("1.3.12".to_string()),
+        ];
+        let mode = key_mode_for_kind(RuntimeKind::Bun, &[], &remote);
+        assert_eq!(mode, VersionKeyMode::MajorMinor);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn recompute_keeps_installed_bun_minor_key_visible() {
+        let mut st = EnvCenterState {
+            kind: RuntimeKind::Bun,
+            installed: vec![RuntimeVersion("1.3.12".to_string())],
+            ..Default::default()
+        };
+        st.recompute_derived_lists(JavaDistro::default());
+        assert!(
+            st.derived_keys.iter().any(|k| k == "1.3"),
+            "expected installed bun major.minor key to remain visible"
+        );
     }
 }

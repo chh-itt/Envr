@@ -949,39 +949,27 @@ pub fn validate_settings_file(path: impl AsRef<Path>) -> EnvrResult<()> {
 
 /// Returns `RUSTUP_DIST_SERVER` when a non-official mirror is selected, otherwise `None`.
 pub fn rustup_dist_server_from_settings(s: &Settings) -> Option<String> {
-    let src = match s.runtime.rust.download_source {
-        RustDownloadSource::Auto => {
-            if prefer_china_mirror_locale(s) {
-                RustDownloadSource::Domestic
-            } else {
-                RustDownloadSource::Official
-            }
-        }
-        other => other,
-    };
-    match src {
-        RustDownloadSource::Domestic => Some("https://mirrors.ustc.edu.cn/rust-static".to_string()),
-        RustDownloadSource::Official | RustDownloadSource::Auto => None,
+    if prefer_domestic_source(
+        s,
+        matches!(s.runtime.rust.download_source, RustDownloadSource::Domestic),
+        matches!(s.runtime.rust.download_source, RustDownloadSource::Auto),
+    ) {
+        Some("https://mirrors.ustc.edu.cn/rust-static".to_string())
+    } else {
+        None
     }
 }
 
 /// Returns `RUSTUP_UPDATE_ROOT` when a non-official mirror is selected, otherwise `None`.
 pub fn rustup_update_root_from_settings(s: &Settings) -> Option<String> {
-    let src = match s.runtime.rust.download_source {
-        RustDownloadSource::Auto => {
-            if prefer_china_mirror_locale(s) {
-                RustDownloadSource::Domestic
-            } else {
-                RustDownloadSource::Official
-            }
-        }
-        other => other,
-    };
-    match src {
-        RustDownloadSource::Domestic => {
-            Some("https://mirrors.ustc.edu.cn/rust-static/rustup".to_string())
-        }
-        RustDownloadSource::Official | RustDownloadSource::Auto => None,
+    if prefer_domestic_source(
+        s,
+        matches!(s.runtime.rust.download_source, RustDownloadSource::Domestic),
+        matches!(s.runtime.rust.download_source, RustDownloadSource::Auto),
+    ) {
+        Some("https://mirrors.ustc.edu.cn/rust-static/rustup".to_string())
+    } else {
+        None
     }
 }
 
@@ -1149,16 +1137,14 @@ pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
 }
 
 pub fn node_index_json_url(settings: &Settings) -> String {
-    match settings.runtime.node.download_source {
-        NodeDownloadSource::Official => NODE_INDEX_JSON_OFFICIAL.to_string(),
-        NodeDownloadSource::Domestic => NODE_INDEX_JSON_DOMESTIC.to_string(),
-        NodeDownloadSource::Auto => {
-            if prefer_china_mirror_locale(settings) {
-                NODE_INDEX_JSON_DOMESTIC.to_string()
-            } else {
-                NODE_INDEX_JSON_OFFICIAL.to_string()
-            }
-        }
+    if prefer_domestic_source(
+        settings,
+        matches!(settings.runtime.node.download_source, NodeDownloadSource::Domestic),
+        matches!(settings.runtime.node.download_source, NodeDownloadSource::Auto),
+    ) {
+        NODE_INDEX_JSON_DOMESTIC.to_string()
+    } else {
+        NODE_INDEX_JSON_OFFICIAL.to_string()
     }
 }
 
@@ -1195,11 +1181,11 @@ fn deno_host_tuple() -> EnvrResult<&'static str> {
 /// Resolved Deno release zip URL (official `dl.deno.land` vs npmmirror binary mirror).
 pub fn deno_release_zip_url(settings: &Settings, version: &str) -> EnvrResult<String> {
     let tuple = deno_host_tuple()?;
-    let prefer_domestic = match settings.runtime.deno.download_source {
-        DenoDownloadSource::Official => false,
-        DenoDownloadSource::Domestic => true,
-        DenoDownloadSource::Auto => prefer_china_mirror_locale(settings),
-    };
+    let prefer_domestic = prefer_domestic_source(
+        settings,
+        matches!(settings.runtime.deno.download_source, DenoDownloadSource::Domestic),
+        matches!(settings.runtime.deno.download_source, DenoDownloadSource::Auto),
+    );
     if prefer_domestic {
         Ok(format!(
             "{DENO_NPMIRROR_BINARY_BASE}/v{version}/deno-{tuple}.zip"
@@ -1279,16 +1265,17 @@ pub fn bun_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
 }
 
 pub fn python_get_pip_url(settings: &Settings) -> &'static str {
-    match settings.runtime.python.download_source {
-        PythonDownloadSource::Official => GET_PIP_URL_OFFICIAL,
-        PythonDownloadSource::Domestic => GET_PIP_URL_DOMESTIC,
-        PythonDownloadSource::Auto => {
-            if prefer_china_mirror_locale(settings) {
-                GET_PIP_URL_DOMESTIC
-            } else {
-                GET_PIP_URL_OFFICIAL
-            }
-        }
+    if prefer_domestic_source(
+        settings,
+        matches!(
+            settings.runtime.python.download_source,
+            PythonDownloadSource::Domestic
+        ),
+        matches!(settings.runtime.python.download_source, PythonDownloadSource::Auto),
+    ) {
+        GET_PIP_URL_DOMESTIC
+    } else {
+        GET_PIP_URL_OFFICIAL
     }
 }
 
@@ -1297,11 +1284,14 @@ pub fn python_get_pip_url(settings: &Settings) -> &'static str {
 /// `original_url` usually comes from python.org release APIs. In `auto` / `domestic`, when the URL
 /// is under official Python FTP, a TUNA mirror URL is prepended and official is kept as fallback.
 pub fn python_download_url_candidates(settings: &Settings, original_url: &str) -> Vec<String> {
-    let prefer_domestic = match settings.runtime.python.download_source {
-        PythonDownloadSource::Official => false,
-        PythonDownloadSource::Domestic => true,
-        PythonDownloadSource::Auto => prefer_china_mirror_locale(settings),
-    };
+    let prefer_domestic = prefer_domestic_source(
+        settings,
+        matches!(
+            settings.runtime.python.download_source,
+            PythonDownloadSource::Domestic
+        ),
+        matches!(settings.runtime.python.download_source, PythonDownloadSource::Auto),
+    );
     if !prefer_domestic {
         return vec![original_url.to_string()];
     }
@@ -1344,17 +1334,19 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
 }
 
 pub fn php_windows_releases_json_url(settings: &Settings) -> &'static str {
-    match settings.runtime.php.download_source {
-        PhpDownloadSource::Official => PHP_WINDOWS_RELEASES_JSON_OFFICIAL,
-        PhpDownloadSource::Domestic => PHP_WINDOWS_RELEASES_JSON_DOMESTIC,
-        PhpDownloadSource::Auto => {
-            if prefer_china_mirror_locale(settings) {
-                PHP_WINDOWS_RELEASES_JSON_DOMESTIC
-            } else {
-                PHP_WINDOWS_RELEASES_JSON_OFFICIAL
-            }
-        }
+    if prefer_domestic_source(
+        settings,
+        matches!(settings.runtime.php.download_source, PhpDownloadSource::Domestic),
+        matches!(settings.runtime.php.download_source, PhpDownloadSource::Auto),
+    ) {
+        PHP_WINDOWS_RELEASES_JSON_DOMESTIC
+    } else {
+        PHP_WINDOWS_RELEASES_JSON_OFFICIAL
     }
+}
+
+fn prefer_domestic_source(settings: &Settings, explicit_domestic: bool, is_auto: bool) -> bool {
+    explicit_domestic || (is_auto && prefer_china_mirror_locale(settings))
 }
 
 /// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
