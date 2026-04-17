@@ -58,9 +58,7 @@ fn bench_node_engines_hint(c: &mut Criterion) {
 
     fs::write(
         &pkg_without_engines,
-        format!(
-            "{{\"name\":\"bench\",\"version\":\"1.0.0\",\"dependencies\":{{{large_deps}}}}}"
-        ),
+        format!("{{\"name\":\"bench\",\"version\":\"1.0.0\",\"dependencies\":{{{large_deps}}}}}"),
     )
     .expect("write package without engines");
     fs::write(

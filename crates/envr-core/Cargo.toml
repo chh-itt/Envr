@@ -19,6 +19,7 @@ envr-runtime-java = { path = "../envr-runtime-java" }
 envr-runtime-go = { path = "../envr-runtime-go" }
 envr-runtime-rust = { path = "../envr-runtime-rust" }
 envr-runtime-ruby = { path = "../envr-runtime-ruby" }
+envr-runtime-elixir = { path = "../envr-runtime-elixir" }
 envr-runtime-php = { path = "../envr-runtime-php" }
 envr-runtime-deno = { path = "../envr-runtime-deno" }
 envr-runtime-bun = { path = "../envr-runtime-bun" }

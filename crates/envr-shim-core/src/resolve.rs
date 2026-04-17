@@ -19,6 +19,7 @@ pub struct ShimSettingsSnapshot {
     bun_path_proxy_enabled: bool,
     dotnet_path_proxy_enabled: bool,
     ruby_path_proxy_enabled: bool,
+    elixir_path_proxy_enabled: bool,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
@@ -36,6 +37,7 @@ impl Default for ShimSettingsSnapshot {
             bun_path_proxy_enabled: true,
             dotnet_path_proxy_enabled: true,
             ruby_path_proxy_enabled: true,
+            elixir_path_proxy_enabled: true,
             php_windows_build_want_ts: false,
             deno_registry_env: Vec::new(),
             bun_registry_env: Vec::new(),
@@ -55,6 +57,7 @@ impl ShimSettingsSnapshot {
             bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
             ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
+            elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
             php_windows_build_want_ts: matches!(
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
@@ -112,6 +115,13 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         cmd,
         CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb
     ) && !settings.ruby_path_proxy_enabled
+    {
+        return true;
+    }
+    if matches!(
+        cmd,
+        CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex
+    ) && !settings.elixir_path_proxy_enabled
     {
         return true;
     }
@@ -187,6 +197,9 @@ pub enum CoreCommand {
     Gem,
     Bundle,
     Irb,
+    Elixir,
+    Mix,
+    Iex,
 }
 
 impl CoreCommand {
@@ -200,9 +213,8 @@ impl CoreCommand {
             CoreCommand::Deno => "deno",
             CoreCommand::Bun | CoreCommand::Bunx => "bun",
             CoreCommand::Dotnet => "dotnet",
-            CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
-                "ruby"
-            }
+            CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => "ruby",
+            CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => "elixir",
         }
     }
 }
@@ -216,6 +228,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
+        "elixir" => vec![home.join("bin"), home.to_path_buf()],
         "php" => vec![home.to_path_buf(), home.join("bin")],
         "deno" => vec![home.to_path_buf(), home.join("bin")],
         "bun" => vec![home.to_path_buf(), home.join("bin")],
@@ -226,12 +239,60 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
 
 /// Environment variables that should point at the selected runtime home.
 pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)> {
+    fn env_path_string(home: &Path) -> String {
+        let raw = home.display().to_string();
+        #[cfg(windows)]
+        {
+            if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+                return stripped.to_string();
+            }
+        }
+        raw
+    }
+
+    let home_env = env_path_string(home);
     match key {
-        "java" => vec![("JAVA_HOME".into(), home.display().to_string())],
+        "java" => vec![("JAVA_HOME".into(), home_env.clone())],
         // Override stale parent env values so the selected runtime stays authoritative.
-        "go" => vec![("GOROOT".into(), home.display().to_string())],
+        "go" => vec![("GOROOT".into(), home_env.clone())],
+        "elixir" => {
+            #[cfg(windows)]
+            fn erts_bin_from_host_path() -> Option<String> {
+                use std::path::PathBuf;
+                let path_os = std::env::var_os("PATH")?;
+                for dir in std::env::split_paths(&path_os) {
+                    // Skip envr shims directory (avoid accidental self-resolution).
+                    if is_likely_envr_shims_dir(&dir) {
+                        continue;
+                    }
+                    let candidate: PathBuf = dir.join("erl.exe");
+                    if candidate.is_file() {
+                        let s = dir.display().to_string();
+                        let s = s.strip_prefix(r"\\?\").unwrap_or(&s).to_string();
+                        // `elixir.bat` concatenates `%ERTS_BIN%erl.exe`, so keep a trailing backslash.
+                        return Some(if s.ends_with('\\') {
+                            s
+                        } else {
+                            format!("{s}\\")
+                        });
+                    }
+                }
+                None
+            }
+
+            #[cfg(not(windows))]
+            fn erts_bin_from_host_path() -> Option<String> {
+                None
+            }
+
+            let mut out = Vec::new();
+            if let Some(erts) = erts_bin_from_host_path() {
+                out.push(("ERTS_BIN".into(), erts));
+            }
+            out
+        }
         "dotnet" => vec![
-            ("DOTNET_ROOT".into(), home.display().to_string()),
+            ("DOTNET_ROOT".into(), home_env),
             ("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()),
         ],
         _ => Vec::new(),
@@ -373,6 +434,9 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "gem" => Some(CoreCommand::Gem),
         "bundle" => Some(CoreCommand::Bundle),
         "irb" => Some(CoreCommand::Irb),
+        "elixir" => Some(CoreCommand::Elixir),
+        "mix" => Some(CoreCommand::Mix),
+        "iex" => Some(CoreCommand::Iex),
         _ => None,
     }
 }
@@ -879,6 +943,34 @@ fn ruby_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn elixir_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Elixir => Ok(first_existing(&[
+            bin.join("elixir.bat"),
+            bin.join("elixir.cmd"),
+            bin.join("elixir.exe"),
+            bin.join("elixir"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("elixir missing under {}", home.display())))?),
+        CoreCommand::Mix => Ok(first_existing(&[
+            bin.join("mix.bat"),
+            bin.join("mix.cmd"),
+            bin.join("mix.exe"),
+            bin.join("mix"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("mix missing under {}", home.display())))?),
+        CoreCommand::Iex => Ok(first_existing(&[
+            bin.join("iex.bat"),
+            bin.join("iex.cmd"),
+            bin.join("iex.exe"),
+            bin.join("iex"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("iex missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not an elixir tool".into())),
+    }
+}
+
 fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Dotnet => Ok(first_existing(&[
@@ -905,6 +997,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
             ruby_tool_path(home, cmd)
         }
+        CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(home, cmd),
     }
 }
 
@@ -995,6 +1088,9 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Gem => "gem",
         CoreCommand::Bundle => "bundle",
         CoreCommand::Irb => "irb",
+        CoreCommand::Elixir => "elixir",
+        CoreCommand::Mix => "mix",
+        CoreCommand::Iex => "iex",
     }
 }
 
@@ -1048,6 +1144,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => {
             ruby_tool_path(&home, cmd)?
         }
+        CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1132,6 +1229,9 @@ mod tests {
         assert_eq!(parse_core_command("gem"), Some(CoreCommand::Gem));
         assert_eq!(parse_core_command("bundle"), Some(CoreCommand::Bundle));
         assert_eq!(parse_core_command("irb"), Some(CoreCommand::Irb));
+        assert_eq!(parse_core_command("elixir"), Some(CoreCommand::Elixir));
+        assert_eq!(parse_core_command("mix"), Some(CoreCommand::Mix));
+        assert_eq!(parse_core_command("iex"), Some(CoreCommand::Iex));
         assert_eq!(parse_core_command("unknown"), None);
     }
 
@@ -1438,7 +1538,7 @@ version = "20"
     }
 
     #[test]
-    fn ruby_path_proxy_bypass_follows_settings_disk() {
+    fn ruby_and_elixir_path_proxy_bypass_follow_settings_disk() {
         let _guard = ENV_LOCK.lock().expect("lock");
 
         let tmp = tempfile::TempDir::new().expect("tmp");
@@ -1467,16 +1567,30 @@ version = "20"
             prev: old,
         };
 
-        fs::write(&cfg, "[runtime.ruby]\npath_proxy_enabled = false\n").expect("write");
+        fs::write(
+            &cfg,
+            "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n",
+        )
+        .expect("write");
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Irb));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Mix));
+        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Iex));
 
-        fs::write(&cfg, "[runtime.ruby]\npath_proxy_enabled = true\n").expect("write");
+        fs::write(
+            &cfg,
+            "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n",
+        )
+        .expect("write");
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Irb));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Mix));
+        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Iex));
     }
 }

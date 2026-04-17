@@ -22,4 +22,3 @@ fn cache_recovery_removes_low_quality_cache() {
     assert!(got.is_none());
     assert!(!p.exists(), "invalid cache must be removed");
 }
-

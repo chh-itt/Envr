@@ -65,11 +65,7 @@ pub fn floating_download_panel(
             )
         )
     } else if state.jobs.is_empty() {
-        envr_core::i18n::tr_key(
-            "gui.downloads.idle_summary",
-            "暂无任务",
-            "No active tasks",
-        )
+        envr_core::i18n::tr_key("gui.downloads.idle_summary", "暂无任务", "No active tasks")
     } else {
         envr_core::i18n::tr_key(
             "gui.downloads.done_summary",

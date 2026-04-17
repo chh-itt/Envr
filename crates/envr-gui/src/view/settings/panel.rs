@@ -10,8 +10,8 @@ use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::settings::state::SettingsViewState;
 use crate::widget_styles::{
-    ButtonVariant, SegmentPosition, button_content_centered, button_label_for_variant, button_style,
-    section_card, segmented_button_style, setting_row, text_input_style,
+    ButtonVariant, SegmentPosition, button_content_centered, button_label_for_variant,
+    button_style, section_card, segmented_button_style, setting_row, text_input_style,
 };
 
 #[derive(Debug, Clone)]
@@ -532,8 +532,8 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             manual,
             cleanup,
         ]
-            .spacing(sp.md as f32)
-            .into(),
+        .spacing(sp.md as f32)
+        .into(),
     );
 
     let look_card = section_card(
@@ -546,33 +546,21 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         column![
             setting_row(
                 tokens,
-                envr_core::i18n::tr_key(
-                    "gui.settings.font_section",
-                    "字体",
-                    "Font",
-                ),
+                envr_core::i18n::tr_key("gui.settings.font_section", "字体", "Font",),
                 None,
                 font_mode_row.into(),
             ),
             font_custom,
             setting_row(
                 tokens,
-                envr_core::i18n::tr_key(
-                    "gui.settings.theme_section",
-                    "主题",
-                    "Theme",
-                ),
+                envr_core::i18n::tr_key("gui.settings.theme_section", "主题", "Theme",),
                 None,
                 theme_mode_row.into(),
             ),
             accent_row,
             setting_row(
                 tokens,
-                envr_core::i18n::tr_key(
-                    "gui.settings.language",
-                    "语言",
-                    "Language",
-                ),
+                envr_core::i18n::tr_key("gui.settings.language", "语言", "Language",),
                 None,
                 locale_row.into(),
             ),

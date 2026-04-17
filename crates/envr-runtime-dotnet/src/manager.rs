@@ -1,5 +1,6 @@
 use crate::index::{
-    DotnetSdkRelease, blocking_http_client, load_sdk_releases, pick_install_file, resolve_dotnet_version,
+    DotnetSdkRelease, blocking_http_client, load_sdk_releases, pick_install_file,
+    resolve_dotnet_version,
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::extract;

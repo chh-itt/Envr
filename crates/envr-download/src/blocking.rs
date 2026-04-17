@@ -48,10 +48,7 @@ pub fn download_url_to_path_resumable(
 
         let mut request = client.get(url);
         if resumed_from > 0 {
-            request = request.header(
-                reqwest::header::RANGE,
-                format!("bytes={}-", resumed_from),
-            );
+            request = request.header(reqwest::header::RANGE, format!("bytes={}-", resumed_from));
         }
 
         let response = match request.send() {
@@ -163,7 +160,6 @@ pub fn download_url_to_path_resumable(
         return Ok(());
     }
 
-    Err(last_err.unwrap_or_else(|| {
-        EnvrError::Download("download failed (unknown error)".to_string())
-    }))
+    Err(last_err
+        .unwrap_or_else(|| EnvrError::Download("download failed (unknown error)".to_string())))
 }

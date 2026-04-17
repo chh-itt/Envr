@@ -951,6 +951,7 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
         envr_domain::runtime::RuntimeKind::Deno => !snap.deno.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Bun => !snap.bun.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Ruby => !snap.ruby.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Elixir => !snap.elixir.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
         // Rust is not expected to support path proxy, but keep this explicit.
         envr_domain::runtime::RuntimeKind::Rust => false,
@@ -1389,6 +1390,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
             state.env_center.runtime_settings_expanded = false;
+            if k == envr_domain::runtime::RuntimeKind::Elixir {
+                state.env_center.elixir_prereq_error = None;
+            }
             if k == envr_domain::runtime::RuntimeKind::Go {
                 sync_go_env_center_drafts_from_settings(state);
             }
@@ -1418,11 +1422,18 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     gui_ops::refresh_runtimes(k),
                     gui_ops::load_remote_latest_disk_snapshot(k),
                     gui_ops::refresh_remote_latest_per_major(k),
+                    (k == envr_domain::runtime::RuntimeKind::Elixir)
+                        .then_some(gui_ops::check_elixir_prereqs())
+                        .unwrap_or_else(Task::none),
                 ]);
             }
             env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
             recompute_env_center_derived(state);
             Task::batch([gui_ops::refresh_runtimes(k)])
+        }
+        EnvCenterMsg::ElixirPrereqChecked(res) => {
+            state.env_center.elixir_prereq_error = res.err();
+            Task::none()
         }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input =
@@ -2003,6 +2014,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 Task::batch([
                     persist_settings_clone_task(st),
                     gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Ruby),
+                ])
+            } else {
+                persist_settings_clone_task(st)
+            }
+        }
+        EnvCenterMsg::SetElixirPathProxy(on) => {
+            let mut st = state.settings.cache.snapshot().clone();
+            st.runtime.elixir.path_proxy_enabled = on;
+            if let Err(e) = st.validate() {
+                state.error = Some(e.to_string());
+                return Task::none();
+            }
+            if on {
+                Task::batch([
+                    persist_settings_clone_task(st),
+                    gui_ops::sync_shims_for_kind(envr_domain::runtime::RuntimeKind::Elixir),
                 ])
             } else {
                 persist_settings_clone_task(st)

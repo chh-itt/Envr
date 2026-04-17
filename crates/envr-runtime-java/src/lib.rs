@@ -224,11 +224,11 @@ impl RuntimeProvider for JavaRuntimeProvider {
         let Ok(cache_file) = self.remote_latest_per_major_cache_file(os, arch) else {
             return Vec::new();
         };
-        let Some(list) = envr_platform::cache_recovery::read_json_string_list(
-            &cache_file,
-            None,
-            |xs| !xs.is_empty(),
-        ) else {
+        let Some(list) =
+            envr_platform::cache_recovery::read_json_string_list(&cache_file, None, |xs| {
+                !xs.is_empty()
+            })
+        else {
             return Vec::new();
         };
         list.into_iter().map(RuntimeVersion).collect()

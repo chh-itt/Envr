@@ -20,8 +20,48 @@ use iced::Task;
 use crate::view::env_center::RustStatus;
 use envr_config::settings::resolve_runtime_root;
 use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_managed};
+use std::process::Command;
 
 type RefreshRuntimesOk = (Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>);
+
+fn semver_triplet(version: &str) -> (u64, u64, u64) {
+    let mut parts = version.trim().trim_start_matches('v').split('.');
+    let major = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
+    let minor = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
+    let patch = parts
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0);
+    (major, minor, patch)
+}
+
+fn latest_per_major_from_versions(versions: &[RuntimeVersion]) -> Vec<RuntimeVersion> {
+    use std::collections::BTreeMap;
+    let mut best: BTreeMap<u64, (u64, u64, u64, String)> = BTreeMap::new();
+    for v in versions {
+        let (maj, min, pat) = semver_triplet(&v.0);
+        let candidate = (maj, min, pat, v.0.clone());
+        best.entry(maj)
+            .and_modify(|cur| {
+                if (candidate.1, candidate.2) > (cur.1, cur.2) {
+                    *cur = candidate.clone();
+                }
+            })
+            .or_insert(candidate);
+    }
+    let mut out: Vec<RuntimeVersion> = best
+        .into_values()
+        .map(|(_, _, _, v)| RuntimeVersion(v))
+        .collect();
+    out.sort_by(|a, b| semver_triplet(&b.0).cmp(&semver_triplet(&a.0)));
+    out
+}
 
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
@@ -48,6 +88,45 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
             Err(e) => EnvCenterMsg::DataLoaded(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
+    })
+}
+
+pub fn check_elixir_prereqs() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                #[cfg(windows)]
+                let mut cmd = {
+                    let mut c = Command::new("erl.exe");
+                    c.arg("-version");
+                    c
+                };
+                #[cfg(not(windows))]
+                let mut cmd = {
+                    let mut c = Command::new("erl");
+                    c.arg("-version");
+                    c
+                };
+                match cmd.output() {
+                    Ok(out) if out.status.success() => Ok(()),
+                    Ok(_) => Err(
+                        "Erlang/OTP 已安装但不可用：`erl` 无法正常执行。请修复 Erlang/OTP 后重试。"
+                            .into(),
+                    ),
+                    Err(_) => Err(
+                        "Elixir 需要 Erlang/OTP（`erl.exe`）。当前系统未检测到 `erl`，请先安装 Erlang/OTP。"
+                            .into(),
+                    ),
+                }
+            })
+            .await;
+
+        Message::EnvCenter(EnvCenterMsg::ElixirPrereqChecked(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
     })
 }
 
@@ -335,8 +414,18 @@ pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
         let res = handle
             .spawn_blocking(move || -> Result<Vec<RuntimeVersion>, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                svc.list_remote_latest_per_major(kind)
-                    .map_err(|e: EnvrError| e.to_string())
+                let latest = svc
+                    .list_remote_latest_per_major(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                if !latest.is_empty() || kind != RuntimeKind::Elixir {
+                    return Ok(latest);
+                }
+                // Elixir index occasionally yields no "latest-per-major" rows in first fetch;
+                // fall back to full remote list and derive one latest row per major for GUI.
+                let all = svc
+                    .list_remote(kind, &envr_domain::runtime::RemoteFilter { prefix: None })
+                    .map_err(|e: EnvrError| e.to_string())?;
+                Ok(latest_per_major_from_versions(&all))
             })
             .await;
 

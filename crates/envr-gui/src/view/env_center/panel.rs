@@ -1,13 +1,14 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, GoDownloadSource, GoProxyMode,
-    GoRuntimeSettings, JavaDistro, JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource,
-    NodeRuntimeSettings, NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings,
-    PhpWindowsBuildFlavor, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
-    RubyRuntimeSettings, RustDownloadSource, RustRuntimeSettings, DotnetRuntimeSettings,
+    BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
+    ElixirRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
+    JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
+    PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RustDownloadSource,
+    RustRuntimeSettings,
 };
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, RUNTIME_DESCRIPTORS, runtime_descriptor};
+use envr_domain::runtime::{RUNTIME_DESCRIPTORS, RuntimeKind, RuntimeVersion, runtime_descriptor};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
 use iced::widget::{button, column, container, row, rule, space, text, text_input, toggler};
@@ -28,8 +29,8 @@ use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
 use crate::view::loading::loading_skeleton;
 use crate::widget_styles::{
-    ButtonVariant, button_content_centered, button_style, card_container_style, contrast_text_on,
-    segmented_button_style, setting_row, SegmentPosition, text_input_style,
+    ButtonVariant, SegmentPosition, button_content_centered, button_style, card_container_style,
+    contrast_text_on, segmented_button_style, setting_row, text_input_style,
 };
 
 type EnvCenterDataLoad =
@@ -43,6 +44,7 @@ pub enum EnvCenterMsg {
     DataLoaded(EnvCenterDataLoad),
     RemoteLatestDiskSnapshot(RuntimeKind, Vec<RuntimeVersion>),
     RemoteLatestRefreshed(RuntimeKind, Result<Vec<RuntimeVersion>, String>),
+    ElixirPrereqChecked(Result<(), String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
@@ -80,6 +82,7 @@ pub enum EnvCenterMsg {
     SetBunPathProxy(bool),
     SetDotnetPathProxy(bool),
     SetRubyPathProxy(bool),
+    SetElixirPathProxy(bool),
     BunGlobalBinDirEdit(String),
     ApplyBunGlobalBinDir,
 
@@ -126,6 +129,8 @@ pub struct EnvCenterState {
     pub busy: bool,
     /// Non-fatal remote fetch/parse error shown inline (keeps global UI usable).
     pub remote_error: Option<String>,
+    /// Elixir prerequisites check result (Erlang/OTP runtime).
+    pub elixir_prereq_error: Option<String>,
     /// Per-runtime remote “latest per line” rows and refresh flags (descriptor `supports_remote_latest`).
     ///
     /// **Note:** On tab switch, [.NET](RuntimeKind::Dotnet) rows are kept (cache); other kinds are cleared.
@@ -167,6 +172,7 @@ impl Default for EnvCenterState {
             php_global_current_want_ts: None,
             busy: false,
             remote_error: None,
+            elixir_prereq_error: None,
             remote_latest_by_kind: HashMap::new(),
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
@@ -226,7 +232,8 @@ impl EnvCenterState {
 
         // Merge remote keys when available (so empty installs still show suggestions).
         let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
-        let remote_rows: &[RuntimeVersion] = if runtime_descriptor(self.kind).supports_remote_latest {
+        let remote_rows: &[RuntimeVersion] = if runtime_descriptor(self.kind).supports_remote_latest
+        {
             self.remote_latest_by_kind
                 .get(&self.kind)
                 .map(|s| s.rows.as_slice())
@@ -300,12 +307,23 @@ impl EnvCenterState {
                     }
                 }
             }
+            RuntimeKind::Elixir => {
+                for v in remote_rows {
+                    if let Some(k) = parse_major_from_ver(&v.0) {
+                        keys_set.insert(k);
+                    }
+                }
+            }
             _ => {}
         }
 
         let mut keys: Vec<String> = keys_set.into_iter().collect();
         if self.kind == RuntimeKind::Python {
-            keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+            keys.sort_by(|a, b| {
+                parse_python_key_sort(a)
+                    .cmp(&parse_python_key_sort(b))
+                    .reverse()
+            });
         } else if self.kind == RuntimeKind::Java {
             keys = java_distro
                 .supported_lts_major_strs()
@@ -315,7 +333,11 @@ impl EnvCenterState {
         } else if self.kind == RuntimeKind::Go {
             keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
         } else if self.kind == RuntimeKind::Php {
-            keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+            keys.sort_by(|a, b| {
+                parse_python_key_sort(a)
+                    .cmp(&parse_python_key_sort(b))
+                    .reverse()
+            });
         } else {
             keys.sort_by(|a, b| parse_major_num(a).cmp(&parse_major_num(b)).reverse());
         }
@@ -396,7 +418,11 @@ impl EnvCenterState {
         };
 
         if self.kind == RuntimeKind::Python || self.kind == RuntimeKind::Php {
-            show_keys.sort_by(|a, b| parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse());
+            show_keys.sort_by(|a, b| {
+                parse_python_key_sort(a)
+                    .cmp(&parse_python_key_sort(b))
+                    .reverse()
+            });
         } else if self.kind == RuntimeKind::Go {
             show_keys.sort_by(|a, b| parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse());
         } else {
@@ -528,7 +554,11 @@ fn node_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.node.path_proxy.label", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.node.path_proxy.label",
+            "PATH 代理",
+            "PATH proxy",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.node.path_proxy.hint_short",
             "开启时由 envr 接管 node/npm/npx；关闭时 shim 透传到系统 PATH。",
@@ -672,7 +702,11 @@ fn python_runtime_settings_section(
     }
     let pip_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.python.pip_registry", "pip 引导源", "pip bootstrap"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.python.pip_registry",
+            "pip 引导源",
+            "pip bootstrap",
+        ),
         None,
         pip_buttons.into(),
     );
@@ -732,16 +766,12 @@ fn java_runtime_settings_section(
     let mut dl_buttons = row![].spacing(-1.0);
     for (idx, src) in sources.iter().copied().enumerate() {
         let label = match src {
-            JavaDownloadSource::Auto => envr_core::i18n::tr_key(
-                "gui.runtime.java.ds.auto",
-                "自动",
-                "Auto",
-            ),
-            JavaDownloadSource::Domestic => envr_core::i18n::tr_key(
-                "gui.runtime.java.ds.domestic",
-                "国内优先",
-                "China-first",
-            ),
+            JavaDownloadSource::Auto => {
+                envr_core::i18n::tr_key("gui.runtime.java.ds.auto", "自动", "Auto")
+            }
+            JavaDownloadSource::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.java.ds.domestic", "国内优先", "China-first")
+            }
             JavaDownloadSource::Official => {
                 envr_core::i18n::tr_key("gui.runtime.java.ds.official", "官方", "Official")
             }
@@ -771,7 +801,11 @@ fn java_runtime_settings_section(
     }
     let dl_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.java.download_source", "Java 下载源", "Java source"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.java.download_source",
+            "Java 下载源",
+            "Java source",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.java.download_source_hint",
             "仅支持 LTS（8/11/17/21/25）；部分发行版可能固定官方源。",
@@ -795,12 +829,10 @@ fn java_runtime_settings_section(
             .into(),
     );
 
-    container(
-        column![dl_row, proxy_row].spacing(sp.md as f32),
-    )
-    .padding(Padding::from([sp.sm as f32, sp.sm as f32]))
-    .style(card_container_style(tokens, 1))
-    .into()
+    container(column![dl_row, proxy_row].spacing(sp.md as f32))
+        .padding(Padding::from([sp.sm as f32, sp.sm as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
 }
 
 fn go_runtime_settings_section(
@@ -813,7 +845,11 @@ fn go_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let (proxy_draft, private_draft) = drafts;
 
-    let dl_sources = [GoDownloadSource::Auto, GoDownloadSource::Domestic, GoDownloadSource::Official];
+    let dl_sources = [
+        GoDownloadSource::Auto,
+        GoDownloadSource::Domestic,
+        GoDownloadSource::Official,
+    ];
     let mut dl_buttons = row![].spacing(-1.0);
     for (idx, src) in dl_sources.iter().copied().enumerate() {
         let lab = match src {
@@ -863,7 +899,11 @@ fn go_runtime_settings_section(
     }
     let dl_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.go.download_source", "Go 下载源", "Go download source"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.go.download_source",
+            "Go 下载源",
+            "Go download source",
+        ),
         None,
         dl_buttons.into(),
     );
@@ -1053,16 +1093,30 @@ fn php_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let ds_sources = [PhpDownloadSource::Auto, PhpDownloadSource::Domestic, PhpDownloadSource::Official];
+    let ds_sources = [
+        PhpDownloadSource::Auto,
+        PhpDownloadSource::Domestic,
+        PhpDownloadSource::Official,
+    ];
     let mut ds_buttons = row![].spacing(-1.0);
     for (idx, src) in ds_sources.iter().copied().enumerate() {
         let label = match src {
-            PhpDownloadSource::Auto => envr_core::i18n::tr_key("gui.runtime.php.ds.auto", "自动", "Auto"),
-            PhpDownloadSource::Domestic => envr_core::i18n::tr_key("gui.runtime.php.ds.domestic", "国内镜像", "China mirror"),
-            PhpDownloadSource::Official => envr_core::i18n::tr_key("gui.runtime.php.ds.official", "官方", "Official"),
+            PhpDownloadSource::Auto => {
+                envr_core::i18n::tr_key("gui.runtime.php.ds.auto", "自动", "Auto")
+            }
+            PhpDownloadSource::Domestic => {
+                envr_core::i18n::tr_key("gui.runtime.php.ds.domestic", "国内镜像", "China mirror")
+            }
+            PhpDownloadSource::Official => {
+                envr_core::i18n::tr_key("gui.runtime.php.ds.official", "官方", "Official")
+            }
         };
         let active = src == php.download_source;
-        let variant = if active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+        let variant = if active {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Secondary
+        };
         let pos = if ds_sources.len() == 1 {
             SegmentPosition::Single
         } else if idx == 0 {
@@ -1076,14 +1130,22 @@ fn php_runtime_settings_section(
             button(button_content_centered(text(label).into()))
                 .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpDownloadSource(src)))
                 .width(Length::Shrink)
-                .height(Length::Fixed(if active { tokens.control_height_primary } else { tokens.control_height_secondary }))
+                .height(Length::Fixed(if active {
+                    tokens.control_height_primary
+                } else {
+                    tokens.control_height_secondary
+                }))
                 .padding([sp.sm as f32, (sp.sm + 2) as f32])
                 .style(segmented_button_style(tokens, variant, pos)),
         );
     }
     let ds_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.php.download_source", "PHP 下载源", "PHP download source"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.php.download_source",
+            "PHP 下载源",
+            "PHP download source",
+        ),
         None,
         ds_buttons.into(),
     );
@@ -1097,7 +1159,11 @@ fn php_runtime_settings_section(
                 PhpWindowsBuildFlavor::Ts => "TS",
             };
             let active = flavor == php.windows_build;
-            let variant = if active { ButtonVariant::Primary } else { ButtonVariant::Secondary };
+            let variant = if active {
+                ButtonVariant::Primary
+            } else {
+                ButtonVariant::Secondary
+            };
             let pos = if builds.len() == 1 {
                 SegmentPosition::Single
             } else if idx == 0 {
@@ -1111,14 +1177,22 @@ fn php_runtime_settings_section(
                 button(button_content_centered(text(label).into()))
                     .on_press(Message::EnvCenter(EnvCenterMsg::SetPhpWindowsBuild(flavor)))
                     .width(Length::Shrink)
-                    .height(Length::Fixed(if active { tokens.control_height_primary } else { tokens.control_height_secondary }))
+                    .height(Length::Fixed(if active {
+                        tokens.control_height_primary
+                    } else {
+                        tokens.control_height_secondary
+                    }))
                     .padding([sp.sm as f32, (sp.sm + 2) as f32])
                     .style(segmented_button_style(tokens, variant, pos)),
             );
         }
         setting_row(
             tokens,
-            envr_core::i18n::tr_key("gui.runtime.php.windows_build", "Windows 构建", "Windows build"),
+            envr_core::i18n::tr_key(
+                "gui.runtime.php.windows_build",
+                "Windows 构建",
+                "Windows build",
+            ),
             Some(envr_core::i18n::tr_key(
                 "gui.runtime.php.windows_build_hint",
                 "切换后列表会刷新（NTS/TS 独立）。",
@@ -1186,7 +1260,11 @@ fn deno_runtime_settings_section(
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
 
-    let dl_sources = [DenoDownloadSource::Auto, DenoDownloadSource::Domestic, DenoDownloadSource::Official];
+    let dl_sources = [
+        DenoDownloadSource::Auto,
+        DenoDownloadSource::Domestic,
+        DenoDownloadSource::Official,
+    ];
     let mut dl_buttons = row![].spacing(-1.0);
     for (idx, src) in dl_sources.iter().copied().enumerate() {
         let lab = match src {
@@ -1232,7 +1310,11 @@ fn deno_runtime_settings_section(
     }
     let dl_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.deno.download_source", "Deno 下载源", "Deno source"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.deno.download_source",
+            "Deno 下载源",
+            "Deno source",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.deno.download_source_hint",
             "控制二进制 zip 来源（dl.deno.land / npmmirror）。",
@@ -1568,6 +1650,10 @@ fn env_remote_latest_for_key(
             .iter()
             .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
             .cloned(),
+        RuntimeKind::Elixir => rows
+            .iter()
+            .find(|v| parse_major_from_ver(&v.0).as_deref() == Some(key))
+            .cloned(),
         RuntimeKind::Rust => None,
     }
 }
@@ -1604,10 +1690,14 @@ fn ruby_runtime_settings_section(
     .size(ty.micro)
     .color(muted);
 
-    container(column![proxy_toggle, proxy_note].spacing(sp.sm as f32).width(Length::Fill))
-        .padding(Padding::from([sp.md as f32, sp.md as f32]))
-        .style(card_container_style(tokens, 1))
-        .into()
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
 }
 
 fn dotnet_runtime_settings_section(
@@ -1641,10 +1731,55 @@ fn dotnet_runtime_settings_section(
     .size(ty.micro)
     .color(muted);
 
-    container(column![proxy_toggle, proxy_note].spacing(sp.sm as f32).width(Length::Fill))
-        .padding(Padding::from([sp.md as f32, sp.md as f32]))
-        .style(card_container_style(tokens, 1))
-        .into()
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
+fn elixir_runtime_settings_section(
+    elixir: &ElixirRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.elixir.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.elixir.path_proxy.hint",
+            "开启时由 envr 接管 elixir/mix/iex；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages elixir/mix/iex; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(elixir.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetElixirPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.elixir.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1656,6 +1791,7 @@ pub fn env_center_view(
     go_runtime: Option<&GoRuntimeSettings>,
     rust_runtime: Option<&RustRuntimeSettings>,
     ruby_runtime: Option<&RubyRuntimeSettings>,
+    elixir_runtime: Option<&ElixirRuntimeSettings>,
     php_runtime: Option<&PhpRuntimeSettings>,
     deno_runtime: Option<&DenoRuntimeSettings>,
     bun_runtime: Option<&BunRuntimeSettings>,
@@ -1677,6 +1813,7 @@ pub fn env_center_view(
         RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Ruby => ruby_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Elixir => elixir_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
@@ -1713,6 +1850,7 @@ pub fn env_center_view(
             | RuntimeKind::Java
             | RuntimeKind::Go
             | RuntimeKind::Ruby
+            | RuntimeKind::Elixir
             | RuntimeKind::Php
             | RuntimeKind::Deno
             | RuntimeKind::Bun
@@ -1761,6 +1899,29 @@ pub fn env_center_view(
 
     let txt = gui_theme::to_color(tokens.colors.text);
 
+    let prereq_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Elixir {
+        state.elixir_prereq_error.as_ref().map(|msg| {
+            let msg = msg.clone();
+            let ty = tokens.typography();
+            let muted = gui_theme::to_color(tokens.colors.text_muted);
+            let warn = gui_theme::to_color(tokens.colors.warning);
+            let title = text(envr_core::i18n::tr_key(
+                "gui.runtime.elixir.prereq.title",
+                "前置依赖：Erlang/OTP",
+                "Prerequisite: Erlang/OTP",
+            ))
+            .size(ty.caption)
+            .color(warn);
+            let body = text(msg).size(ty.caption).color(muted);
+            container(column![title, body].spacing(sp.xs as f32))
+                .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+                .style(card_container_style(tokens, 1))
+                .into()
+        })
+    } else {
+        None
+    };
+
     let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
         column![].into()
     } else if state.kind == RuntimeKind::Node {
@@ -1791,6 +1952,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Ruby {
         ruby_runtime
             .map(|r| ruby_runtime_settings_section(r, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Elixir {
+        elixir_runtime
+            .map(|r| elixir_runtime_settings_section(r, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Php {
         php_runtime
@@ -2304,6 +2469,10 @@ pub fn env_center_view(
     }
     .spacing(sp.sm as f32)
     .width(Length::Fill);
+
+    if let Some(hint) = prereq_hint {
+        col = col.push(hint);
+    }
     if busy {
         col = col.push(
             text(envr_core::i18n::tr_key(

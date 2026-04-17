@@ -427,7 +427,15 @@ fn exec_dry_run_dotnet_includes_runtime_home_env() {
         )
     } else {
         run_envr(
-            &["exec", "--lang", "dotnet", "--dry-run", "sh", "-c", "echo noop"],
+            &[
+                "exec",
+                "--lang",
+                "dotnet",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
             &runtime_root,
             &project,
         )
@@ -565,7 +573,11 @@ fn run_dry_run_go_pin_includes_goroot() {
             &project,
         )
     } else {
-        run_envr(&["run", "--dry-run", "sh", "-c", "echo noop"], &runtime_root, &project)
+        run_envr(
+            &["run", "--dry-run", "sh", "-c", "echo noop"],
+            &runtime_root,
+            &project,
+        )
     };
     assert!(
         out.status.success(),
@@ -784,14 +796,8 @@ fn ruby_exec_dry_run_path_prefers_which_project_pin_home() {
         .expect("which executable string");
 
     let ps = if cfg!(windows) { '\\' } else { '/' };
-    let home_sub = format!(
-        "runtimes{}ruby{}versions{}3.3.11",
-        ps, ps, ps
-    );
-    let home_bin_sub = format!(
-        "runtimes{}ruby{}versions{}3.3.11{}bin",
-        ps, ps, ps, ps
-    );
+    let home_sub = format!("runtimes{}ruby{}versions{}3.3.11", ps, ps, ps);
+    let home_bin_sub = format!("runtimes{}ruby{}versions{}3.3.11{}bin", ps, ps, ps, ps);
     assert!(
         which_exe.contains(&home_bin_sub) || which_exe.contains(&home_sub),
         "expected which executable under runtimes/ruby/versions/3.3.11; got {which_exe}"
@@ -865,14 +871,8 @@ fn ruby_exec_dry_run_path_prefers_which_ruby_version_home_when_no_envr_pin() {
     assert_eq!(which_v["data"]["version"], serde_json::json!("3.3.11"));
 
     let ps = if cfg!(windows) { '\\' } else { '/' };
-    let home_sub = format!(
-        "runtimes{}ruby{}versions{}3.3.11",
-        ps, ps, ps
-    );
-    let home_bin_sub = format!(
-        "runtimes{}ruby{}versions{}3.3.11{}bin",
-        ps, ps, ps, ps
-    );
+    let home_sub = format!("runtimes{}ruby{}versions{}3.3.11", ps, ps, ps);
+    let home_bin_sub = format!("runtimes{}ruby{}versions{}3.3.11{}bin", ps, ps, ps, ps);
 
     let exec_out = run_envr_with_envr_root(
         &[
@@ -1008,10 +1008,7 @@ fn which_ruby_prefers_envr_runtime_home_when_path_proxy_enabled() {
         .as_str()
         .expect("executable string");
     let ps = if cfg!(windows) { '\\' } else { '/' };
-    let expected_sub = format!(
-        "runtimes{}ruby{}versions{}3.3.11{}bin",
-        ps, ps, ps, ps
-    );
+    let expected_sub = format!("runtimes{}ruby{}versions{}3.3.11{}bin", ps, ps, ps, ps);
     assert!(
         exe.contains(&expected_sub),
         "expected runtime ruby home in executable; exe={exe}"

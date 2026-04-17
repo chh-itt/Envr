@@ -34,7 +34,8 @@ impl AliasesFile {
         let path = path.as_ref();
         let content = toml::to_string_pretty(self)
             .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
-        envr_platform::fs_atomic::write_atomic(path, content.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(path, content.as_bytes())
+            .map_err(EnvrError::from)?;
         Ok(())
     }
 }

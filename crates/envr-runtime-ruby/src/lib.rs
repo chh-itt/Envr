@@ -5,7 +5,9 @@ pub use index::{
     DEFAULT_RUBY_RELEASES_URL, RubyRelease, list_latest_patch_per_major, parse_ruby_releases,
     resolve_ruby_version,
 };
-pub use manager::{RubyManager, RubyPaths, list_installed_versions, read_current, ruby_installation_valid};
+pub use manager::{
+    RubyManager, RubyPaths, list_installed_versions, read_current, ruby_installation_valid,
+};
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
@@ -61,7 +63,11 @@ impl RubyRuntimeProvider {
     fn remote_latest_per_major_cache_file(&self) -> Option<PathBuf> {
         let root = self.runtime_root().ok()?;
         let paths = RubyPaths::new(root);
-        Some(paths.cache_dir().join("remote_latest_per_major_installer.json"))
+        Some(
+            paths
+                .cache_dir()
+                .join("remote_latest_per_major_installer.json"),
+        )
     }
 }
 
@@ -122,11 +128,10 @@ impl RuntimeProvider for RubyRuntimeProvider {
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let ttl_secs = Self::remote_cache_ttl_secs();
         if let Some(path) = self.remote_latest_per_major_cache_file()
-            && let Some(list) = envr_platform::cache_recovery::read_json_string_list(
-                &path,
-                Some(ttl_secs),
-                |xs| !xs.is_empty(),
-            )
+            && let Some(list) =
+                envr_platform::cache_recovery::read_json_string_list(&path, Some(ttl_secs), |xs| {
+                    !xs.is_empty()
+                })
         {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
@@ -141,7 +146,9 @@ impl RuntimeProvider for RubyRuntimeProvider {
                 let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
                 let s = serde_json::to_string(&strings)
                     .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-                let cache_file = paths.cache_dir().join("remote_latest_per_major_installer.json");
+                let cache_file = paths
+                    .cache_dir()
+                    .join("remote_latest_per_major_installer.json");
                 envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
                 Ok(())
             })();
@@ -158,7 +165,9 @@ impl RuntimeProvider for RubyRuntimeProvider {
                 let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
                 let s = serde_json::to_string(&strings)
                     .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
-                let cache_file = paths.cache_dir().join("remote_latest_per_major_installer.json");
+                let cache_file = paths
+                    .cache_dir()
+                    .join("remote_latest_per_major_installer.json");
                 envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
                 Ok(())
             })();

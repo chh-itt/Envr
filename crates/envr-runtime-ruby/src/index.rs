@@ -73,7 +73,10 @@ fn semver_key(version: &str) -> EnvrResult<SemVerKey> {
 fn is_full_semver(version: &str) -> bool {
     let trimmed = version.trim().trim_start_matches('v');
     let parts: Vec<&str> = trimmed.split('.').collect();
-    parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 pub(crate) fn cmp_semver(a: &str, b: &str) -> Ordering {
@@ -107,8 +110,8 @@ pub fn list_latest_per_major_from_installer_releases(
 }
 
 pub fn parse_ruby_releases(html: &str) -> EnvrResult<Vec<RubyRelease>> {
-    let re = Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)")
-        .map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let re =
+        Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)").map_err(|e| EnvrError::Validation(e.to_string()))?;
     let mut versions: Vec<RubyRelease> = re
         .captures_iter(html)
         .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))

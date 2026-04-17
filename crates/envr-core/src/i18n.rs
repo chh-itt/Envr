@@ -1,8 +1,8 @@
 use envr_config::settings::{LocaleMode, Settings};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::cell::Cell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Locale {

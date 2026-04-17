@@ -487,6 +487,8 @@ pub struct RuntimeSettings {
     #[serde(default)]
     pub ruby: RubyRuntimeSettings,
     #[serde(default)]
+    pub elixir: ElixirRuntimeSettings,
+    #[serde(default)]
     pub php: PhpRuntimeSettings,
     #[serde(default)]
     pub deno: DenoRuntimeSettings,
@@ -515,6 +517,22 @@ impl Default for RubyRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::ruby_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ElixirRuntimeSettings {
+    /// When false, elixir/mix/iex shims resolve to the next matching binary on PATH
+    /// outside envr shims.
+    #[serde(default = "defaults::elixir_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for ElixirRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::elixir_path_proxy_enabled(),
         }
     }
 }
@@ -880,7 +898,9 @@ pub fn set_process_runtime_root_override(path: PathBuf) -> bool {
     if trimmed.is_empty() {
         return false;
     }
-    PROCESS_RUNTIME_ROOT_OVERRIDE.set(PathBuf::from(trimmed)).is_ok()
+    PROCESS_RUNTIME_ROOT_OVERRIDE
+        .set(PathBuf::from(trimmed))
+        .is_ok()
 }
 
 pub fn process_runtime_root_override() -> Option<&'static PathBuf> {
@@ -1436,6 +1456,17 @@ pub fn ruby_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`ElixirRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn elixir_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.elixir.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
 pub fn php_windows_build_want_ts_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1541,6 +1572,10 @@ mod defaults {
     pub fn ruby_path_proxy_enabled() -> bool {
         true
     }
+
+    pub fn elixir_path_proxy_enabled() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1603,6 +1638,7 @@ mod tests {
             runtime: RuntimeSettings {
                 node: NodeRuntimeSettings::default(),
                 ruby: RubyRuntimeSettings::default(),
+                elixir: ElixirRuntimeSettings::default(),
                 python: PythonRuntimeSettings::default(),
                 java: JavaRuntimeSettings::default(),
                 go: GoRuntimeSettings {

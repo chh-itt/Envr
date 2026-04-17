@@ -150,6 +150,7 @@ pub(crate) fn run_inner(
     prefix: Option<String>,
 ) -> EnvrResult<CliExit> {
     let filter = RemoteFilter { prefix };
+    let single_runtime = runtime.is_some();
     let kinds: Vec<RuntimeKind> = match runtime {
         None => runtime_kinds_all()
             .filter(|k| runtime_descriptor(*k).supports_remote_latest)
@@ -177,6 +178,15 @@ pub(crate) fn run_inner(
                     RemoteRow::Plain(cached.into_iter().map(|v| v.0).collect()),
                 ));
                 continue;
+            }
+            if single_runtime && kind == RuntimeKind::Elixir {
+                let timeout = Duration::from_millis(2500);
+                if let Some(vers) =
+                    try_fetch_remote_with_timeout(kind, RemoteFilter { prefix: None }, timeout)
+                {
+                    rows.push((kind, RemoteRow::Plain(vers)));
+                    continue;
+                }
             }
             missing_cached_snapshot = true;
             rows.push((kind, RemoteRow::Plain(Vec::new())));

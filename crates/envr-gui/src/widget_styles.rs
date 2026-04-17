@@ -278,7 +278,9 @@ pub fn setting_row<Message: 'static>(
     };
     row![
         left.width(Length::Fill),
-        container(control).width(Length::Shrink).align_y(iced::alignment::Vertical::Center),
+        container(control)
+            .width(Length::Shrink)
+            .align_y(iced::alignment::Vertical::Center),
     ]
     .spacing(sp.md as f32)
     .align_y(iced::Alignment::Center)

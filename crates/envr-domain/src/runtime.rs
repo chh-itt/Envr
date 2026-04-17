@@ -11,6 +11,7 @@ pub enum RuntimeKind {
     Go,
     Rust,
     Ruby,
+    Elixir,
     Php,
     Deno,
     Bun,
@@ -27,7 +28,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 10] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 11] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -73,6 +74,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 10] = [
         key: "ruby",
         label_en: "Ruby",
         label_zh: "Ruby",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Elixir,
+        key: "elixir",
+        label_en: "Elixir",
+        label_zh: "Elixir",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -249,8 +258,9 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 10);
+        assert_eq!(kinds.len(), 11);
         assert!(kinds.contains(&RuntimeKind::Ruby));
+        assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
     }
 }

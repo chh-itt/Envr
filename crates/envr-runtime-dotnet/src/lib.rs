@@ -2,7 +2,9 @@ mod index;
 mod manager;
 
 pub use index::{DEFAULT_RELEASES_INDEX_URL, DotnetFile, DotnetSdkRelease, resolve_dotnet_version};
-pub use manager::{DotnetManager, DotnetPaths, dotnet_installation_valid, list_installed_versions, read_current};
+pub use manager::{
+    DotnetManager, DotnetPaths, dotnet_installation_valid, list_installed_versions, read_current,
+};
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,

@@ -12,8 +12,9 @@ use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
 use std::path::PathBuf;
 
 /// Languages merged for `envr run` / `run --verbose` (fixed order; includes rust).
-pub(crate) const RUN_STACK_LANG_ORDER: &[&str] =
-    &["node", "python", "java", "go", "rust", "ruby", "php", "deno", "bun"];
+pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
+    "node", "python", "java", "go", "rust", "ruby", "php", "deno", "bun",
+];
 
 fn project_has_runtime_pin(cfg: Option<&ProjectConfig>, lang: &str) -> bool {
     cfg.and_then(|c| c.runtimes.get(lang))

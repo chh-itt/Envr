@@ -78,4 +78,3 @@ pub fn write_atomic_with_backup(path: &Path, bytes: &[u8], backup_ext: &str) -> 
     let _ = sync_parent_dir(path);
     Ok(())
 }
-

@@ -952,6 +952,7 @@ dependencies = [
  "envr-runtime-bun",
  "envr-runtime-deno",
  "envr-runtime-dotnet",
+ "envr-runtime-elixir",
  "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-node",
@@ -1106,6 +1107,19 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-elixir"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
+ "reqwest",
+ "serde_json",
 ]
 
 [[package]]

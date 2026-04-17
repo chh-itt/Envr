@@ -155,7 +155,8 @@ fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
                     s.push('\n');
                 }
                 s.push_str("import site\n");
-                envr_platform::fs_atomic::write_atomic(&p, s.as_bytes()).map_err(EnvrError::from)?;
+                envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())
+                    .map_err(EnvrError::from)?;
             }
         }
     }

@@ -203,7 +203,10 @@ fn validate_ruby_installation(home: &Path) -> EnvrResult<()> {
             "ruby install did not produce a valid runtime layout".into(),
         ));
     }
-    if !bundle_executable_candidates(home).iter().any(|p| p.is_file()) {
+    if !bundle_executable_candidates(home)
+        .iter()
+        .any(|p| p.is_file())
+    {
         return Err(EnvrError::Validation(
             "ruby install missing bundle executable in runtime bin directory".into(),
         ));
@@ -311,7 +314,8 @@ impl RubyManager {
         {
             let _ = _request;
             return Err(EnvrError::Platform(
-                "ruby install is currently implemented only for Windows RubyInstaller archives".into(),
+                "ruby install is currently implemented only for Windows RubyInstaller archives"
+                    .into(),
             ));
         }
         #[cfg(windows)]
@@ -337,11 +341,10 @@ impl RubyManager {
         let downloads_html = fetch_release_page(&self.client, &self.rubyinstaller_downloads_url)?;
         let artifacts = parse_rubyinstaller_7z_artifacts(&downloads_html)?;
         let artifact = pick_rubyinstaller_artifact(&artifacts, &version.0)?;
-        let file_name = artifact
-            .url
-            .rsplit('/')
-            .next()
-            .ok_or_else(|| EnvrError::Validation("rubyinstaller url missing filename".into()))?;
+        let file_name =
+            artifact.url.rsplit('/').next().ok_or_else(|| {
+                EnvrError::Validation("rubyinstaller url missing filename".into())
+            })?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(file_name);
         download_url_to_path_resumable(
             &self.client,

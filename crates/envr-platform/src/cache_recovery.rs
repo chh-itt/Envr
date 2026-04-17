@@ -69,4 +69,3 @@ mod tests {
         assert!(!p.exists(), "empty cache should be removed when invalid");
     }
 }
-

@@ -329,3 +329,23 @@ These are not blockers, but they increased integration cost:
 
 - **GUI Env Center** still requires a **per-runtime** branch for remote-latest state and tasks; easy to forget for a new `RuntimeKind` even when `supports_remote_latest` is true in the descriptor. A descriptor-driven or table-driven “remote latest wiring” would reduce omission.
 - **Two indices** (language releases vs installer artifacts) without a shared abstraction forced a second pass (RubyInstaller-only lists + download resume fix). A small internal contract (“install candidate versions”) per provider would make the rule explicit in code.
+
+### 8.6 Elixir bring-up notes (Hex builds)
+
+Elixir integration validated that the earlier refactors did reduce misses, but two friction points remain visible:
+
+- `RuntimeKind` expansion is still multi-point for GUI settings (`EnvCenterMsg`, settings fold sections, path-proxy guards). Compilation catches omissions, but this remains repetitive.
+- New provider crates can silently ship with **zero parser tests** unless explicitly added. Require at least: index parse smoke test, version resolution test, and latest-per-major test.
+
+Additional concrete frictions found during Elixir bring-up:
+
+- **GUI derived list omissions**: Even when `RemoteLatestRefreshed` is wired, a runtime can still show an empty left list if `recompute_derived_lists` does not merge that runtime’s remote rows into key sets (e.g. missing `RuntimeKind::Elixir` branch). This is a common “data loaded but UI blank” failure mode.
+- **Upstream index variance**: `builds.txt` includes multiple tag shapes (e.g. `main-otp-27`, `v1.19.5-otp-27`, `v1.0.0` without `-otp-`). Parsers must handle all relevant shapes, and OTP filtering should degrade gracefully (prefer configured OTP, but fall back to available OTP lines when absent).
+- **External prerequisite runtime**: Elixir requires Erlang/OTP (`erl.exe`). Add a **preflight check** (GUI + CLI) so installs fail fast with actionable guidance, instead of failing at post-install validation.
+- **Windows batch quoting trap**: `elixir.bat` uses `"%ERTS_BIN%erl.exe"`. When `ERTS_BIN` is empty, it becomes `"erl.exe"` and `cmd` will not resolve it via `PATH`. Ensure env injection sets `ERTS_BIN` (found from host PATH) so the bat resolves to an absolute `...\\erl.exe`.
+
+Suggested guardrails for the next runtime:
+
+- [ ] Add provider tests in the same PR as parser/index code (not as follow-up).
+- [ ] Verify GUI `Set<Runtime>PathProxy` branch + shim sync is wired when descriptor enables `supports_path_proxy`.
+- [ ] When a runtime has an external prerequisite (e.g. OTP), add `doctor`/GUI preflight checks and a crisp error message before download/extract work.

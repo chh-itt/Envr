@@ -50,6 +50,11 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Bundle, "bundle"),
             (CoreCommand::Irb, "irb"),
         ],
+        RuntimeKind::Elixir => &[
+            (CoreCommand::Elixir, "elixir"),
+            (CoreCommand::Mix, "mix"),
+            (CoreCommand::Iex, "iex"),
+        ],
         RuntimeKind::Php => &[(CoreCommand::Php, "php")],
         RuntimeKind::Deno => &[(CoreCommand::Deno, "deno")],
         RuntimeKind::Bun => &[(CoreCommand::Bun, "bun"), (CoreCommand::Bunx, "bunx")],
