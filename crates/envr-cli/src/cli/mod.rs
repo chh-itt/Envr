@@ -11,8 +11,9 @@ pub(crate) mod help_registry;
 mod metadata;
 
 pub use command::{
-    AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, Command, ConfigCmd, ConfigValueType, DebugCmd,
-    DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd, ProjectCmd, RustCmd, ShimCmd,
+    AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, CacheRuntimeCmd, Command, ConfigCmd,
+    ConfigValueType, DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd,
+    ProjectCmd, RustCmd, ShimCmd,
 };
 pub use global::{ExecRunSharedArgs, GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cache_runtime_status",
+  "type": "object",
+  "required": ["runtime_root", "cache_root", "entries"],
+  "properties": {
+    "runtime_root": { "type": "string" },
+    "cache_root": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "unified_files",
+          "unified_newest_mtime_unix_secs",
+          "unified_major_rows_mtime_unix_secs",
+          "unified_full_installable_mtime_unix_secs",
+          "unified_children_files",
+          "provider_files",
+          "provider_newest_mtime_unix_secs",
+          "provider_index_json_mtime_unix_secs",
+          "provider_remote_latest_files",
+          "provider_remote_latest_newest_mtime_unix_secs",
+          "unified_ready",
+          "provider_ready",
+          "remote_may_paint_empty"
+        ],
+        "properties": {
+          "runtime": { "type": "string" },
+          "unified_files": { "type": "integer" },
+          "unified_newest_mtime_unix_secs": { "type": ["integer", "null"] },
+          "unified_major_rows_mtime_unix_secs": { "type": ["integer", "null"] },
+          "unified_full_installable_mtime_unix_secs": { "type": ["integer", "null"] },
+          "unified_children_files": { "type": "integer" },
+          "provider_files": { "type": "integer" },
+          "provider_newest_mtime_unix_secs": { "type": ["integer", "null"] },
+          "provider_index_json_mtime_unix_secs": { "type": ["integer", "null"] },
+          "provider_remote_latest_files": { "type": "integer" },
+          "provider_remote_latest_newest_mtime_unix_secs": { "type": ["integer", "null"] },
+          "unified_ready": { "type": "boolean" },
+          "provider_ready": { "type": "boolean" },
+          "remote_may_paint_empty": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
+

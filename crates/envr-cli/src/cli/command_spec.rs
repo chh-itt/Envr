@@ -123,6 +123,7 @@ pub(crate) enum CommandKey {
     CacheClean,
     CacheIndexSync,
     CacheIndexStatus,
+    CacheRuntimeStatus,
     BundleCreate,
     BundleApply,
     Doctor,
@@ -718,6 +719,19 @@ const COMMAND_SPEC_REGISTRY: &[(CommandKey, CommandSpec)] = &[
             CommandCapabilities::new(false, true, ContractSurface::Json),
             &["cache", "index", "status"],
             &["cache_index_status"],
+        ),
+    ),
+    (
+        CommandKey::CacheRuntimeStatus,
+        CommandSpec::new(
+            "cache_runtime_status",
+            None,
+            false,
+            false,
+            None,
+            CommandCapabilities::new(false, true, ContractSurface::Json),
+            &["cache", "runtime", "status"],
+            &["cache_runtime_status"],
         ),
     ),
     (

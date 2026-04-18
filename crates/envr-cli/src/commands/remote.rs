@@ -226,12 +226,27 @@ pub(crate) fn run_inner(
             rows.push((kind, RemoteRow::Plain(Vec::new())));
             continue;
         }
+        // Prefix query: prefer local unified snapshot first (stale OK), then refresh in background.
+        let cached = filtered_cached_snapshot(service, kind, &filter);
+        if !cached.is_empty() {
+            used_cached_snapshot = true;
+            let payload = if kind == RuntimeKind::Node {
+                if let Some(enriched) = try_node_remote_rows(&filter) {
+                    RemoteRow::Node(enriched)
+                } else {
+                    RemoteRow::Plain(cached)
+                }
+            } else {
+                RemoteRow::Plain(cached)
+            };
+            rows.push((kind, payload));
+            continue;
+        }
         let timeout = Duration::from_millis(900);
-        let vers =
-            try_fetch_remote_with_timeout(kind, filter.clone(), timeout).unwrap_or_else(|| {
-                prefix_fallback = true;
-                filtered_cached_snapshot(service, kind, &filter)
-            });
+        let vers = try_fetch_remote_with_timeout(kind, filter.clone(), timeout).unwrap_or_else(|| {
+            prefix_fallback = true;
+            filtered_cached_snapshot(service, kind, &filter)
+        });
         let payload = if kind == RuntimeKind::Node {
             if let Some(enriched) = try_node_remote_rows(&filter) {
                 RemoteRow::Node(enriched)
@@ -243,9 +258,9 @@ pub(crate) fn run_inner(
         };
         rows.push((kind, payload));
     }
-    let remote_refreshing = (filter.prefix.is_none()
-        && (used_cached_snapshot || missing_cached_snapshot))
-        || (filter.prefix.is_some() && prefix_fallback && !update);
+    let remote_refreshing = !update
+        && ((filter.prefix.is_none() && (used_cached_snapshot || missing_cached_snapshot))
+            || (filter.prefix.is_some() && (used_cached_snapshot || prefix_fallback)));
     if remote_refreshing {
         emit_verbose_step(
             g,

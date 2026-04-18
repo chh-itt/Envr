@@ -160,6 +160,9 @@ fn route_cache(sub: crate::cli::CacheCmd, global: &GlobalArgs) -> CommandOutcome
         crate::cli::CacheCmd::Index(sub) => {
             ok!(cache_cmd::index_inner(global, sub))
         }
+        crate::cli::CacheCmd::Runtime(sub) => {
+            ok!(cache_cmd::runtime_inner(global, sub))
+        }
     }
 }
 

@@ -1423,6 +1423,35 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         }],
     },
     CmdHelpSpec {
+        path: &["cache", "runtime", "status"],
+        about: I18n(
+            "cli.help.cmd.cache.runtime.status",
+            "显示运行时远程/统一版本缓存状态",
+            "Show runtime remote/unified cache status",
+        ),
+        after_long_help: None,
+        args: &[
+            ArgHelpSpec {
+                id: "runtime",
+                help: I18n(
+                    "cli.help.arg.cache.runtime.runtime",
+                    "限制为某个运行时（默认全部）",
+                    "Limit to one runtime (default: all)",
+                ),
+                long_help: None,
+            },
+            ArgHelpSpec {
+                id: "all",
+                help: I18n(
+                    "cli.help.arg.cache.runtime.all",
+                    "检查所有运行时（与省略 RUNTIME 相同）",
+                    "Check all runtimes (same as omitting RUNTIME)",
+                ),
+                long_help: None,
+            },
+        ],
+    },
+    CmdHelpSpec {
         path: &["bundle"],
         about: I18n(
             "cli.help.cmd.bundle_topic",

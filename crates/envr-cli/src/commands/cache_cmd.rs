@@ -523,6 +523,232 @@ pub(crate) fn index_inner(g: &GlobalArgs, sub: crate::cli::CacheIndexCmd) -> Env
     }
 }
 
+pub(crate) fn runtime_inner(
+    g: &GlobalArgs,
+    sub: crate::cli::CacheRuntimeCmd,
+) -> EnvrResult<CliExit> {
+    match sub {
+        crate::cli::CacheRuntimeCmd::Status { runtime, all } => runtime_status_inner(g, runtime, all),
+    }
+}
+
+#[derive(Clone)]
+struct RuntimeCacheStatusRow {
+    runtime: String,
+    unified_files: usize,
+    unified_newest_mtime_unix_secs: Option<u64>,
+    unified_major_rows_mtime_unix_secs: Option<u64>,
+    unified_full_installable_mtime_unix_secs: Option<u64>,
+    unified_children_files: usize,
+    provider_files: usize,
+    provider_newest_mtime_unix_secs: Option<u64>,
+    provider_index_json_mtime_unix_secs: Option<u64>,
+    provider_remote_latest_files: usize,
+    provider_remote_latest_newest_mtime_unix_secs: Option<u64>,
+    unified_ready: bool,
+    provider_ready: bool,
+    remote_may_paint_empty: bool,
+}
+
+fn runtime_status_inner(
+    g: &GlobalArgs,
+    runtime: Option<String>,
+    all: bool,
+) -> EnvrResult<CliExit> {
+    use envr_domain::runtime::{parse_runtime_kind, runtime_descriptor, runtime_kinds_all};
+    use std::time::SystemTime;
+
+    let root = common::effective_runtime_root()?;
+    let cache_root = root.join("cache");
+
+    let target = runtime
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    if target.is_some() && all {
+        return Err(EnvrError::Validation(
+            "cannot combine RUNTIME with --all".to_string(),
+        ));
+    }
+
+    let kinds: Vec<envr_domain::runtime::RuntimeKind> = match target {
+        None => runtime_kinds_all().collect(),
+        Some(r) => vec![parse_runtime_kind(&r)?],
+    };
+
+    let svc = common::runtime_service()?;
+
+    fn newest_file_mtime_secs(dir: &Path) -> (usize, Option<u64>) {
+        let mut files = 0usize;
+        let mut newest: Option<SystemTime> = None;
+        if let Ok(rd) = fs::read_dir(dir) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_file() {
+                    files += 1;
+                    if let Ok(m) = ent.metadata().and_then(|m| m.modified()) {
+                        newest = Some(newest.map(|cur| cur.max(m)).unwrap_or(m));
+                    }
+                } else if p.is_dir() {
+                    let (c_files, c_newest) = newest_file_mtime_secs(&p);
+                    files += c_files;
+                    if let Some(secs) = c_newest {
+                        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(secs);
+                        newest = Some(newest.map(|cur| cur.max(t)).unwrap_or(t));
+                    }
+                }
+            }
+        }
+        let newest_secs = newest
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+        (files, newest_secs)
+    }
+
+    fn file_mtime_secs(path: &Path) -> Option<u64> {
+        let meta = fs::metadata(path).ok()?;
+        if !meta.is_file() {
+            return None;
+        }
+        let m = meta.modified().ok()?;
+        m.duration_since(SystemTime::UNIX_EPOCH).ok().map(|d| d.as_secs())
+    }
+
+    let mut rows: Vec<RuntimeCacheStatusRow> = Vec::new();
+    for kind in kinds {
+        let key = runtime_descriptor(kind).key.to_string();
+        let unified_dir = cache_root.join(&key).join("unified_version_list");
+        let provider_dir = cache_root.join(&key);
+        let (unified_files, unified_newest) = newest_file_mtime_secs(&unified_dir);
+        let (provider_files, provider_newest) = newest_file_mtime_secs(&provider_dir);
+
+        let unified_major_rows_mtime_unix_secs =
+            file_mtime_secs(&unified_dir.join("major_rows.json"));
+        let unified_full_installable_mtime_unix_secs =
+            file_mtime_secs(&unified_dir.join("full_installable_versions.json"));
+        let (unified_children_files, _) = newest_file_mtime_secs(&unified_dir.join("children"));
+
+        let provider_index_json_mtime_unix_secs = file_mtime_secs(&provider_dir.join("index.json"));
+        let mut provider_remote_latest_files = 0usize;
+        let mut provider_remote_latest_newest_mtime_unix_secs: Option<u64> = None;
+        if let Ok(rd) = fs::read_dir(&provider_dir) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if !p.is_file() {
+                    continue;
+                }
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if !name.starts_with("remote_latest_per_major") || !name.ends_with(".json") {
+                    continue;
+                }
+                provider_remote_latest_files += 1;
+                if let Some(m) = file_mtime_secs(&p) {
+                    provider_remote_latest_newest_mtime_unix_secs = Some(
+                        provider_remote_latest_newest_mtime_unix_secs
+                            .map(|cur| cur.max(m))
+                            .unwrap_or(m),
+                    );
+                }
+            }
+        }
+
+        // Best-effort warm: if unified has no snapshot but provider has disk cache, keep as-is.
+        // If both are empty, a background refresh would be needed; do not network in status.
+        let _ = svc.try_load_full_remote_installable_from_disk(kind);
+
+        rows.push(RuntimeCacheStatusRow {
+            runtime: key,
+            unified_files,
+            unified_newest_mtime_unix_secs: unified_newest,
+            unified_major_rows_mtime_unix_secs,
+            unified_full_installable_mtime_unix_secs,
+            unified_children_files,
+            provider_files,
+            provider_newest_mtime_unix_secs: provider_newest,
+            provider_index_json_mtime_unix_secs,
+            provider_remote_latest_files,
+            provider_remote_latest_newest_mtime_unix_secs,
+            unified_ready: unified_full_installable_mtime_unix_secs.is_some()
+                || unified_major_rows_mtime_unix_secs.is_some(),
+            provider_ready: provider_index_json_mtime_unix_secs.is_some()
+                || provider_remote_latest_files > 0,
+            remote_may_paint_empty: unified_files == 0 && provider_remote_latest_files == 0,
+        });
+    }
+    rows.sort_by(|a, b| a.runtime.cmp(&b.runtime));
+
+    let entries_json: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "runtime": r.runtime,
+                "unified_files": r.unified_files,
+                "unified_newest_mtime_unix_secs": r.unified_newest_mtime_unix_secs,
+                "unified_major_rows_mtime_unix_secs": r.unified_major_rows_mtime_unix_secs,
+                "unified_full_installable_mtime_unix_secs": r.unified_full_installable_mtime_unix_secs,
+                "unified_children_files": r.unified_children_files,
+                "provider_files": r.provider_files,
+                "provider_newest_mtime_unix_secs": r.provider_newest_mtime_unix_secs,
+                "provider_index_json_mtime_unix_secs": r.provider_index_json_mtime_unix_secs,
+                "provider_remote_latest_files": r.provider_remote_latest_files,
+                "provider_remote_latest_newest_mtime_unix_secs": r.provider_remote_latest_newest_mtime_unix_secs,
+                "unified_ready": r.unified_ready,
+                "provider_ready": r.provider_ready,
+                "remote_may_paint_empty": r.remote_may_paint_empty,
+            })
+        })
+        .collect();
+
+    let data = serde_json::json!({
+        "runtime_root": root.to_string_lossy(),
+        "cache_root": cache_root.to_string_lossy(),
+        "entries": entries_json,
+    });
+
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::CACHE_RUNTIME_STATUS,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!("{}", cache_root.display());
+                for r in &rows {
+                    println!(
+                        "{}\tunified_files={}\tunified_mtime={}\tmajor_rows_mtime={}\tfull_installable_mtime={}\tchildren_files={}\tprovider_files={}\tprovider_mtime={}\tprovider_index_mtime={}\tremote_latest_files={}\tremote_latest_mtime={}\tunified_ready={}\tprovider_ready={}\tremote_may_paint_empty={}",
+                        r.runtime,
+                        r.unified_files,
+                        r.unified_newest_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.unified_major_rows_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.unified_full_installable_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.unified_children_files,
+                        r.provider_files,
+                        r.provider_newest_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.provider_index_json_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.provider_remote_latest_files,
+                        r.provider_remote_latest_newest_mtime_unix_secs
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        r.unified_ready,
+                        r.provider_ready,
+                        r.remote_may_paint_empty,
+                    );
+                }
+            }
+        },
+    ))
+}
+
 fn index_cache_dir(dir_override: Option<PathBuf>) -> Result<PathBuf, EnvrError> {
     if let Some(d) = dir_override {
         return Ok(d);

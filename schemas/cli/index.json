@@ -9,6 +9,7 @@
     "cache_cleaned",
     "cache_index_status",
     "cache_index_synced",
+    "cache_runtime_status",
     "child_completed",
     "config_edit_ok",
     "config_exported",

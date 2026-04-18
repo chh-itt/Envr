@@ -306,6 +306,21 @@ fn common_error_hints(err: &EnvrError) -> Vec<String> {
             "File/directory not found: run `envr doctor` and `envr cache index sync` to repair and warm caches.",
         ));
     }
+    if line.contains("no global current for")
+        || line.contains("no versions directory at")
+        || line.contains("install and select a version")
+    {
+        hints.push(envr_core::i18n::tr_key(
+            "cli.hint.runtime_not_installed_or_current_missing",
+            "未安装或未设置 current：可先执行 `envr remote <runtime>` 查看可用版本，然后 `envr install <runtime> <version>` 并 `envr use <runtime> <version>`。",
+            "Not installed or no current set: run `envr remote <runtime>` to see versions, then `envr install <runtime> <version>` and `envr use <runtime> <version>`.",
+        ));
+        hints.push(envr_core::i18n::tr_key(
+            "cli.hint.remote_prefix_usage",
+            "前缀查询请使用 `envr remote <runtime> --prefix <prefix>`（例如 `--prefix 0.14`），如需强制刷新可加 `-u/--update`。",
+            "For prefix queries use `envr remote <runtime> --prefix <prefix>` (e.g. `--prefix 0.14`); add `-u/--update` to force refresh.",
+        ));
+    }
     hints
 }
 

@@ -49,6 +49,7 @@ pub mod ok {
     pub const CACHE_CLEANED: &str = "cache_cleaned";
     pub const CACHE_INDEX_SYNCED: &str = "cache_index_synced";
     pub const CACHE_INDEX_STATUS: &str = "cache_index_status";
+    pub const CACHE_RUNTIME_STATUS: &str = "cache_runtime_status";
     pub const BUNDLE_CREATED: &str = "bundle_created";
     pub const BUNDLE_APPLIED: &str = "bundle_applied";
     pub const DOCTOR_OK: &str = "doctor_ok";

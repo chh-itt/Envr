@@ -38,6 +38,22 @@ pub enum CacheCmd {
     /// Manage offline remote index cache
     #[command(subcommand)]
     Index(CacheIndexCmd),
+    /// Inspect runtime remote/unified cache files under `{runtime_root}/cache`
+    #[command(subcommand)]
+    Runtime(CacheRuntimeCmd),
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheRuntimeCmd {
+    /// Show per-runtime remote/unified cache status (unified list + provider snapshots)
+    Status {
+        /// Limit to one runtime (e.g. `zig`, `node`). Default: all.
+        #[arg(value_name = "RUNTIME")]
+        runtime: Option<String>,
+        /// Use all runtimes (same as omitting RUNTIME).
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
