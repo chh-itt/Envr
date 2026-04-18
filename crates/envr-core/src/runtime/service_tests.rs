@@ -225,11 +225,14 @@ fn defaults_providers_registered() {
         RuntimeKind::Java,
         RuntimeKind::Go,
         RuntimeKind::Rust,
+        RuntimeKind::Ruby,
         RuntimeKind::Elixir,
         RuntimeKind::Erlang,
         RuntimeKind::Php,
         RuntimeKind::Deno,
         RuntimeKind::Bun,
+        RuntimeKind::Dotnet,
+        RuntimeKind::Zig,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }
@@ -245,11 +248,14 @@ fn with_runtime_root_registers_providers() {
         RuntimeKind::Java,
         RuntimeKind::Go,
         RuntimeKind::Rust,
+        RuntimeKind::Ruby,
         RuntimeKind::Elixir,
         RuntimeKind::Erlang,
         RuntimeKind::Php,
         RuntimeKind::Deno,
         RuntimeKind::Bun,
+        RuntimeKind::Dotnet,
+        RuntimeKind::Zig,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }

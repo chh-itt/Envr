@@ -6,7 +6,7 @@ use envr_config::settings::{
     JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RustDownloadSource,
-    RustRuntimeSettings,
+    RustRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -80,6 +80,7 @@ pub enum EnvCenterMsg {
     SetBunPackageSource(NpmRegistryMode),
     SetBunPathProxy(bool),
     SetDotnetPathProxy(bool),
+    SetZigPathProxy(bool),
     SetRubyPathProxy(bool),
     SetElixirPathProxy(bool),
     SetErlangPathProxy(bool),
@@ -203,6 +204,7 @@ fn unified_list_rollout_enabled(kind: RuntimeKind) -> bool {
             | RuntimeKind::Deno
             | RuntimeKind::Bun
             | RuntimeKind::Dotnet
+            | RuntimeKind::Zig
     )
 }
 
@@ -1458,6 +1460,47 @@ fn dotnet_runtime_settings_section(
     .into()
 }
 
+fn zig_runtime_settings_section(
+    zig: &ZigRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.zig.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.zig.path_proxy.hint",
+            "开启时由 envr 接管 zig；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages zig; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(zig.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetZigPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.zig.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn elixir_runtime_settings_section(
     elixir: &ElixirRuntimeSettings,
     tokens: ThemeTokens,
@@ -1555,6 +1598,7 @@ pub fn env_center_view(
     deno_runtime: Option<&DenoRuntimeSettings>,
     bun_runtime: Option<&BunRuntimeSettings>,
     dotnet_runtime: Option<&DotnetRuntimeSettings>,
+    zig_runtime: Option<&ZigRuntimeSettings>,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -1578,6 +1622,7 @@ pub fn env_center_view(
         RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
         RuntimeKind::Dotnet => dotnet_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
+        RuntimeKind::Zig => zig_runtime.map(|z| z.path_proxy_enabled).unwrap_or(true),
         _ => true,
     };
 
@@ -1616,6 +1661,7 @@ pub fn env_center_view(
             | RuntimeKind::Deno
             | RuntimeKind::Bun
             | RuntimeKind::Dotnet
+            | RuntimeKind::Zig
     );
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
@@ -1737,6 +1783,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Dotnet {
         dotnet_runtime
             .map(|d| dotnet_runtime_settings_section(d, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Zig {
+        zig_runtime
+            .map(|z| zig_runtime_settings_section(z, tokens))
             .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
@@ -3105,6 +3155,7 @@ mod tests {
         assert!(unified_list_rollout_enabled(RuntimeKind::Deno));
         assert!(unified_list_rollout_enabled(RuntimeKind::Bun));
         assert!(unified_list_rollout_enabled(RuntimeKind::Dotnet));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Zig));
         assert!(!unified_list_rollout_enabled(RuntimeKind::Rust));
     }
 }

@@ -203,10 +203,13 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "java" => Some("ENVR_JAVA_VERSION"),
         "go" => Some("ENVR_GO_VERSION"),
         "ruby" => Some("ENVR_RUBY_VERSION"),
+        "elixir" => Some("ENVR_ELIXIR_VERSION"),
         "erlang" => Some("ENVR_ERLANG_VERSION"),
         "php" => Some("ENVR_PHP_VERSION"),
         "deno" => Some("ENVR_DENO_VERSION"),
         "bun" => Some("ENVR_BUN_VERSION"),
+        "dotnet" => Some("ENVR_DOTNET_VERSION"),
+        "zig" => Some("ENVR_ZIG_VERSION"),
         _ => None,
     }
 }

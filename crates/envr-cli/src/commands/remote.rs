@@ -111,10 +111,25 @@ fn filtered_cached_snapshot(
     filter: &RemoteFilter,
 ) -> Vec<String> {
     let mut versions: Vec<String> = service
-        .try_load_remote_latest_per_major_from_disk(kind)
+        .try_load_full_remote_installable_from_disk(kind)
         .into_iter()
         .map(|v| v.0)
         .collect();
+    if versions.is_empty() {
+        versions = service
+            .list_major_rows_cached(kind)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|r| r.latest_installable.map(|v| v.0))
+            .collect();
+    }
+    if versions.is_empty() {
+        versions = service
+            .try_load_remote_latest_per_major_from_disk(kind)
+            .into_iter()
+            .map(|v| v.0)
+            .collect();
+    }
     if let Some(prefix) = filter.prefix.as_ref() {
         let p = prefix.trim().trim_start_matches('v').to_ascii_lowercase();
         if !p.is_empty() {
@@ -148,6 +163,7 @@ pub(crate) fn run_inner(
     service: &RuntimeService,
     runtime: Option<String>,
     prefix: Option<String>,
+    update: bool,
 ) -> EnvrResult<CliExit> {
     let filter = RemoteFilter { prefix };
     let single_runtime = runtime.is_some();
@@ -169,14 +185,32 @@ pub(crate) fn run_inner(
     let mut missing_cached_snapshot = false;
     let mut prefix_fallback = false;
     for kind in kinds {
+        if update {
+            let vers = service
+                .list_remote(kind, &filter)?
+                .into_iter()
+                .map(|v| v.0)
+                .collect::<Vec<_>>();
+            if filter.prefix.is_none() {
+                let _ = service.list_remote_latest_per_major(kind);
+            }
+            let payload = if kind == RuntimeKind::Node {
+                if let Some(enriched) = try_node_remote_rows(&filter) {
+                    RemoteRow::Node(enriched)
+                } else {
+                    RemoteRow::Plain(vers)
+                }
+            } else {
+                RemoteRow::Plain(vers)
+            };
+            rows.push((kind, payload));
+            continue;
+        }
         if filter.prefix.is_none() {
-            let cached = service.try_load_remote_latest_per_major_from_disk(kind);
+            let cached = filtered_cached_snapshot(service, kind, &RemoteFilter { prefix: None });
             if !cached.is_empty() {
                 used_cached_snapshot = true;
-                rows.push((
-                    kind,
-                    RemoteRow::Plain(cached.into_iter().map(|v| v.0).collect()),
-                ));
+                rows.push((kind, RemoteRow::Plain(cached)));
                 continue;
             }
             if single_runtime && matches!(kind, RuntimeKind::Elixir | RuntimeKind::Erlang) {
@@ -211,7 +245,7 @@ pub(crate) fn run_inner(
     }
     let remote_refreshing = (filter.prefix.is_none()
         && (used_cached_snapshot || missing_cached_snapshot))
-        || (filter.prefix.is_some() && prefix_fallback);
+        || (filter.prefix.is_some() && prefix_fallback && !update);
     if remote_refreshing {
         emit_verbose_step(
             g,

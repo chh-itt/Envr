@@ -168,7 +168,7 @@ Target (consistent with other languages):
 1. **Domain + descriptor**: `RuntimeKind::Zig`, `RUNTIME_DESCRIPTORS`, `parse_runtime_kind`,
    `version_line_key_for_kind` / `major_line_remote_install_blocked` updates if needed.
 2. **Provider crate** `envr-runtime-zig`: fetch `index.json`, map triple, download+verify+extract,
-   `list_remote`, `resolve`, `install`, `uninstall`, `current`.
+   `list_remote`, `resolve`, `install`, `uninstall`, `current`. — **done** (2026-04-18).
 3. **Service registration** in `envr-core` runtime service.
 4. **Resolver / shim / exec** wiring for `zig`.
 5. **CLI smoke** in temp runtime root.
@@ -177,12 +177,12 @@ Target (consistent with other languages):
 
 ## 6) Acceptance criteria (MVP)
 
-- [ ] `envr remote zig` returns stable versions for this host’s triple.
-- [ ] `envr install zig 0.14.1` + `envr use zig 0.14.1` + `envr exec --lang zig -- zig version`.
+- [x] `envr remote zig` returns stable versions for this host’s triple.
+- [x] `envr install zig 0.14.1` + `envr use zig 0.14.1` + `envr exec --lang zig -- zig version`.
 - [ ] GUI: selecting Zig loads installed/remote without blanking on refresh; dashboard card shows
   correct counts after doctor/dashboard refresh.
-- [ ] Uninstall removes the version directory and clears `current` when it pointed there.
-- [ ] At least one integration-style test for resolve/exec dry-run or install layout validation.
+- [x] Uninstall removes the version directory and clears `current` when it pointed there.
+- [x] At least one integration-style test for resolve/exec dry-run or install layout validation.
 
 ## 7) Open questions (resolve during implementation)
 
@@ -194,4 +194,36 @@ Target (consistent with other languages):
 
 | Date | Note |
 |------|------|
-| (fill as work proceeds) | |
+| 2026-04-18 | Phase 2: `envr-runtime-zig` — `index.json` fetch + disk cache (TTL), host→JSON platform key mapping, stable-only remote list (excludes `master` unless spec), semver resolve (`0.14`→latest patch), SHA256 verify + zip/tar.xz extract + single-root promote under `runtimes/zig/versions/<label>/`, `current` symlink/pointer, uninstall; contract tests on `tests/fixtures/zig_index_snippet.json`; `envr run` registers `zig` in `resolve_run_lang_home`. |
+| 2026-04-18 | Follow-up: `RUNTIME_PLAN_ORDER` / `RUN_STACK_LANG_ORDER` / `ENVR_ZIG_VERSION` template key; bundle `global_current` includes Ruby/Elixir/Erlang/Dotnet/Zig; `shim sync` + `doctor --fix` core shim list aligned with all `ShimService` kinds; `docs/runtime/zig.md`; CLI integration test `exec_dry_run_zig_resolves_project_pin`. |
+| 2026-04-18 | `RUNTIME_PLAN_ORDER` adds `elixir` + `erlang` (with `zig`); CLI dev-test `remote_zig_offline` seeds `cache/zig/remote_latest_per_major_<plat>.json` and asserts `envr remote --format json zig` is offline and sets `cached_snapshot: true`. |
+| 2026-04-18 | Hardened tests: `RUN_STACK_LANG_ORDER` adds `dotnet`; `remote_zig_offline` validates envelope/data schemas and asserts `cached_snapshot=true` with non-prefix background refresh (`remote_refreshing=true`) and no prefix fallback; `envr-runtime-zig` unit test confirms uninstall removes version dir and clears `current`. |
+| 2026-04-18 | CLI remote strategy aligned with GUI unified cache path: non-prefix `remote` prefers unified full-installable snapshot for instant paint, keeps stale-first + async refresh behavior, and adds `remote -u/--update` to force live fetch + cache update before rendering. |
+
+## 9) Architecture and abstraction friction notes
+
+### A. Runtime cache layers diverged between CLI and GUI
+
+- GUI already consumed unified-list cache (`cache/<runtime>/unified_version_list/full_installable_versions.json`), while CLI `remote` initially read provider-local `remote_latest_per_major*` snapshots.
+- Result: GUI could display rich version lists while CLI still returned empty rows with `remote_refreshing=true`.
+- Fix direction used in this rollout: make CLI `remote` prefer unified full-installable snapshot, then fall back to major-row/provider snapshots.
+
+### B. `resolve` vs remote-intent mismatch in user expectations
+
+- Users often try `resolve zig --spec 0.14` expecting remote resolution.
+- Actual behavior is local runtime-home resolution (project pin / global current); without installed versions it should fail.
+- Action taken: keep semantics unchanged, but document command intent and provide `remote --prefix` + `remote -u` as the remote discovery path.
+
+### C. Cache status command semantics were narrower than expected
+
+- `cache index status` reports only the classic index-cache domain (`node`/`deno`/`bun`), not unified runtime caches.
+- This is a naming/UX friction point, not a data corruption bug.
+- Follow-up recommendation: add a dedicated runtime/unified cache status command rather than overloading existing index status semantics.
+
+## 10) CLI command changes from Zig rollout
+
+- `remote` now supports `-u, --update` to force live fetch and refresh cache before rendering.
+- Prefix filtering remains `--prefix <value>` (for example: `envr remote zig --prefix 0.14`), not positional `envr remote zig 0.14`.
+- Default `remote` path stays "stale-first then refresh" for fast paint:
+  - with cache: returns cached rows immediately and refreshes in background;
+  - without cache: may return temporary empty rows while refresh warms cache.

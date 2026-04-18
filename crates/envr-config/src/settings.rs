@@ -512,6 +512,9 @@ pub struct RuntimeSettings {
     pub bun: BunRuntimeSettings,
     #[serde(default)]
     pub dotnet: DotnetRuntimeSettings,
+
+    #[serde(default)]
+    pub zig: ZigRuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -689,6 +692,21 @@ impl Default for DotnetRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::dotnet_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ZigRuntimeSettings {
+    /// When false, the zig shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::zig_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for ZigRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::zig_path_proxy_enabled(),
         }
     }
 }
@@ -1469,6 +1487,17 @@ pub fn dotnet_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`ZigRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn zig_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.zig.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`RubyRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn ruby_path_proxy_enabled_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1604,6 +1633,10 @@ mod defaults {
         true
     }
 
+    pub fn zig_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn ruby_path_proxy_enabled() -> bool {
         true
     }
@@ -1693,6 +1726,7 @@ mod tests {
                     global_bin_dir: Some("/tmp/.bun/bin".to_string()),
                 },
                 dotnet: DotnetRuntimeSettings::default(),
+                zig: ZigRuntimeSettings::default(),
                 php: PhpRuntimeSettings::default(),
                 deno: DenoRuntimeSettings::default(),
             },

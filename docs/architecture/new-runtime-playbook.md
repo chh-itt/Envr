@@ -161,6 +161,14 @@ Typical targets:
 
 Do not assume descriptor refactor means all CLI work is automatic. Verify each command.
 
+Remote/cache parity addendum (CLI vs GUI):
+
+- [ ] Confirm CLI and GUI read from the same **primary** remote cache tier for non-prefix list paint.
+- [ ] If GUI uses unified major/children caches, ensure CLI `remote` can reuse unified full-installable snapshot before provider-local fallbacks.
+- [ ] Decide whether CLI exposes a force-refresh switch (for example `remote -u/--update`) and verify it bypasses stale-first behavior.
+- [ ] Keep prefix query contract explicit in docs/help/examples (`--prefix`, not positional argument).
+- [ ] Verify stale-first and force-refresh paths both preserve JSON schema compatibility.
+
 ### H. GUI parity checklist
 
 This is the section most likely to be missed.
@@ -230,6 +238,13 @@ Examples of runtime-native files:
 - [ ] Integration tests for current pointer/switch/uninstall behavior
 - [ ] GUI manual checklist
 - [ ] Smoke commands on a temporary runtime root
+
+Remote/cache regression tests:
+
+- [ ] Offline test: pre-seeded remote cache returns non-empty `remote` rows without network.
+- [ ] Prefix test: `remote --prefix` falls back to local snapshot only when live fetch fails/times out.
+- [ ] Force-refresh test: `remote -u/--update` disables stale/fallback hints and returns live path semantics.
+- [ ] Cache-source parity test: CLI `remote` and GUI unified list overlap on top installable versions for the same runtime.
 
 Minimum smoke matrix:
 
@@ -340,6 +355,19 @@ These are not blockers, but they increased integration cost:
 
 - **GUI Env Center** still requires a **per-runtime** branch for remote-latest state and tasks; easy to forget for a new `RuntimeKind` even when `supports_remote_latest` is true in the descriptor. A descriptor-driven or table-driven “remote latest wiring” would reduce omission.
 - **Two indices** (language releases vs installer artifacts) without a shared abstraction forced a second pass (RubyInstaller-only lists + download resume fix). A small internal contract (“install candidate versions”) per provider would make the rule explicit in code.
+
+### 8.7 Zig bring-up notes (CLI/GUI cache strategy)
+
+Zig integration surfaced one more cross-cutting friction that applies to future runtimes:
+
+- GUI already used unified cache (`cache/<runtime>/unified_version_list/full_installable_versions.json`) for stale-first rendering, while CLI `remote` initially read provider-local `remote_latest_per_major*`.
+- Outcome: GUI showed populated version rows but CLI could return temporary empty lists with `remote_refreshing=true`.
+- Guardrail for new runtimes: pick **one primary remote cache abstraction** (prefer unified full-installable snapshot when unified-list UX exists), and make both GUI + CLI consume it first.
+
+CLI contract lessons from Zig:
+
+- Keep prefix search as explicit option syntax (`remote <runtime> --prefix <value>`).
+- Provide a documented force-refresh path (`remote -u/--update`) for operators who prefer deterministic "fetch now then display" behavior.
 
 ### 8.6 Elixir bring-up notes (Hex builds)
 

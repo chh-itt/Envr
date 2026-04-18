@@ -18,6 +18,7 @@ pub struct ShimSettingsSnapshot {
     deno_path_proxy_enabled: bool,
     bun_path_proxy_enabled: bool,
     dotnet_path_proxy_enabled: bool,
+    zig_path_proxy_enabled: bool,
     ruby_path_proxy_enabled: bool,
     elixir_path_proxy_enabled: bool,
     erlang_path_proxy_enabled: bool,
@@ -37,6 +38,7 @@ impl Default for ShimSettingsSnapshot {
             deno_path_proxy_enabled: true,
             bun_path_proxy_enabled: true,
             dotnet_path_proxy_enabled: true,
+            zig_path_proxy_enabled: true,
             ruby_path_proxy_enabled: true,
             elixir_path_proxy_enabled: true,
             erlang_path_proxy_enabled: true,
@@ -58,6 +60,7 @@ impl ShimSettingsSnapshot {
             deno_path_proxy_enabled: settings.runtime.deno.path_proxy_enabled,
             bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
+            zig_path_proxy_enabled: settings.runtime.zig.path_proxy_enabled,
             ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
             elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
             erlang_path_proxy_enabled: settings.runtime.erlang.path_proxy_enabled,
@@ -112,6 +115,9 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         return true;
     }
     if matches!(cmd, CoreCommand::Dotnet) && !settings.dotnet_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Zig) && !settings.zig_path_proxy_enabled {
         return true;
     }
     if matches!(
@@ -213,6 +219,7 @@ pub enum CoreCommand {
     Erl,
     Erlc,
     Escript,
+    Zig,
 }
 
 impl CoreCommand {
@@ -229,6 +236,7 @@ impl CoreCommand {
             CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb => "ruby",
             CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => "elixir",
             CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
+            CoreCommand::Zig => "zig",
         }
     }
 }
@@ -248,6 +256,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "deno" => vec![home.to_path_buf(), home.join("bin")],
         "bun" => vec![home.to_path_buf(), home.join("bin")],
         "dotnet" => vec![home.to_path_buf(), home.join("bin")],
+        "zig" => vec![home.to_path_buf(), home.join("bin")],
         _ => vec![],
     }
 }
@@ -456,6 +465,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "erl" => Some(CoreCommand::Erl),
         "erlc" => Some(CoreCommand::Erlc),
         "escript" => Some(CoreCommand::Escript),
+        "zig" => Some(CoreCommand::Zig),
         _ => None,
     }
 }
@@ -1030,6 +1040,19 @@ fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn zig_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Zig => Ok(first_existing(&[
+            home.join("zig.exe"),
+            home.join("bin").join("zig.exe"),
+            home.join("bin").join("zig"),
+            home.join("zig"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("zig missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a zig tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -1046,6 +1069,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         }
         CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(home, cmd),
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
+        CoreCommand::Zig => zig_tool_path(home, cmd),
     }
 }
 
@@ -1142,6 +1166,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Erl => "erl",
         CoreCommand::Erlc => "erlc",
         CoreCommand::Escript => "escript",
+        CoreCommand::Zig => "zig",
     }
 }
 
@@ -1199,6 +1224,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => {
             erlang_tool_path(&home, cmd)?
         }
+        CoreCommand::Zig => zig_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1289,6 +1315,7 @@ mod tests {
         assert_eq!(parse_core_command("erl"), Some(CoreCommand::Erl));
         assert_eq!(parse_core_command("erlc"), Some(CoreCommand::Erlc));
         assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
+        assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("unknown"), None);
     }
 

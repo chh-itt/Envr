@@ -75,6 +75,9 @@ pub enum Command {
         /// Limit remote versions to those whose labels start with this prefix
         #[arg(long, value_name = "PREFIX")]
         prefix: Option<String>,
+        /// Force live refresh before rendering (ignore cached snapshot for this run)
+        #[arg(long, short = 'u')]
+        update: bool,
     },
     /// Rust / rustup helpers (e.g. managed rustup when no system rustup)
     #[command(subcommand)]

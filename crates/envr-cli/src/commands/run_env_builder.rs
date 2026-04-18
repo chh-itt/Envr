@@ -13,7 +13,19 @@ use std::path::PathBuf;
 
 /// Languages merged for `envr run` / `run --verbose` (fixed order; includes rust).
 pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
-    "node", "python", "java", "go", "rust", "ruby", "php", "deno", "bun",
+    "node",
+    "python",
+    "java",
+    "go",
+    "rust",
+    "ruby",
+    "elixir",
+    "erlang",
+    "php",
+    "deno",
+    "bun",
+    "dotnet",
+    "zig",
 ];
 
 fn project_has_runtime_pin(cfg: Option<&ProjectConfig>, lang: &str) -> bool {

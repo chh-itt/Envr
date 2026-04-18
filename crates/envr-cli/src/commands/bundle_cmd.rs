@@ -128,9 +128,14 @@ fn create_inner(
             RuntimeKind::Java,
             RuntimeKind::Go,
             RuntimeKind::Rust,
+            RuntimeKind::Ruby,
+            RuntimeKind::Elixir,
+            RuntimeKind::Erlang,
             RuntimeKind::Php,
             RuntimeKind::Deno,
             RuntimeKind::Bun,
+            RuntimeKind::Dotnet,
+            RuntimeKind::Zig,
         ] {
             if let Ok(Some(v)) = service.current(kind) {
                 global_current.push((crate::commands::common::kind_label(kind).to_string(), v.0));

@@ -14,8 +14,12 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         } => dispatch_runtime_result(ctx, |g, service| {
             doctor::run_inner(g, service, fix, fix_path, fix_path_apply)
         }),
-        Command::Remote { runtime, prefix } => dispatch_runtime_result(ctx, |g, service| {
-            remote::run_inner(g, service, runtime, prefix)
+        Command::Remote {
+            runtime,
+            prefix,
+            update,
+        } => dispatch_runtime_result(ctx, |g, service| {
+            remote::run_inner(g, service, runtime, prefix, update)
         }),
         Command::Diagnostics(sub) => dispatch_runtime_result(ctx, |g, service| match sub {
             crate::cli::DiagnosticsCmd::Export { output } => {

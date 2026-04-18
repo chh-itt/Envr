@@ -109,6 +109,28 @@ fn write_dotnet_layout(runtime_root: &Path, version: &str) {
     fs::write(ver.join("dotnet"), []).expect("touch dotnet");
 }
 
+fn write_zig_layout(runtime_root: &Path, version: &str) {
+    let zig_home = runtime_root.join("runtimes/zig");
+    let ver = zig_home.join("versions").join(version);
+    fs::create_dir_all(&ver).expect("create zig version dir");
+    #[cfg(windows)]
+    fs::write(ver.join("zig.exe"), []).expect("touch zig.exe");
+    #[cfg(not(windows))]
+    fs::write(ver.join("zig"), []).expect("touch zig");
+    let current = zig_home.join("current");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let rel = format!("versions/{version}");
+        symlink(rel, &current).expect("zig current symlink");
+    }
+    #[cfg(windows)]
+    {
+        let abs = fs::canonicalize(&ver).unwrap_or_else(|_| ver.clone());
+        fs::write(&current, format!("{}\n", abs.display())).expect("zig current pointer");
+    }
+}
+
 fn write_ruby_layout(runtime_root: &Path, version: &str) {
     let ver = runtime_root.join("runtimes/ruby/versions").join(version);
     let bin = ver.join("bin");
@@ -453,6 +475,60 @@ fn exec_dry_run_dotnet_includes_runtime_home_env() {
     assert!(
         stdout.contains("DOTNET_MULTILEVEL_LOOKUP=0"),
         "dry-run should disable multilevel lookup; stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn exec_dry_run_zig_resolves_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_zig_layout(&runtime_root, "0.14.1");
+    project_with_runtime_pin(&project, "zig", "0.14.1");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "zig",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "zig",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let path_line = stdout
+        .lines()
+        .find(|l| l.starts_with("PATH=") || l.starts_with("Path="))
+        .unwrap_or_else(|| panic!("expected PATH in dry-run stdout:\n{stdout}"));
+    assert!(
+        path_line.contains("0.14.1") && path_line.to_lowercase().contains("zig"),
+        "PATH should include zig version home; line={path_line:?} full stdout:\n{stdout}"
     );
 }
 

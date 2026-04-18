@@ -56,6 +56,7 @@ impl RuntimeService {
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new()),
             Box::new(envr_runtime_bun::BunRuntimeProvider::new()),
             Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new()),
+            Box::new(envr_runtime_zig::ZigRuntimeProvider::new()),
         ])
     }
 
@@ -81,6 +82,7 @@ impl RuntimeService {
             Box::new(envr_runtime_deno::DenoRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_bun::BunRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_zig::ZigRuntimeProvider::new().with_runtime_root(root.clone())),
         ])?;
         svc.runtime_root_override = Some(root_override);
         Ok(svc)
@@ -301,6 +303,12 @@ impl RuntimeService {
         let path = self.unified_full_remote_installable_cache_file(kind).ok()?;
         cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
             .map(|xs| xs.into_iter().map(RuntimeVersion).collect())
+    }
+
+    /// Read unified full installable remote snapshot from disk (stale allowed, no network).
+    pub fn try_load_full_remote_installable_from_disk(&self, kind: RuntimeKind) -> Vec<RuntimeVersion> {
+        self.try_read_full_remote_installable_stale_ok(kind)
+            .unwrap_or_default()
     }
 
     fn write_full_remote_installable(

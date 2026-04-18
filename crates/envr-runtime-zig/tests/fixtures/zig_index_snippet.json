@@ -1,0 +1,27 @@
+{
+  "master": {
+    "version": "0.17.0-dev.9+046002d1a",
+    "date": "2026-04-16",
+    "x86_64-windows": {
+      "tarball": "https://ziglang.org/builds/zig-x86_64-windows-0.17.0-dev.9+046002d1a.zip",
+      "shasum": "a009c6e18fbdc94914379f4be4f8039bc4ff56fea447b7f7ce16c0b9d674a2a0",
+      "size": "97810897"
+    }
+  },
+  "0.14.1": {
+    "date": "2025-05-21",
+    "x86_64-windows": {
+      "tarball": "https://ziglang.org/download/0.14.1/zig-x86_64-windows-0.14.1.zip",
+      "shasum": "554f5378228923ffd558eac35e21af020c73789d87afeabf4bfd16f2e6feed2c",
+      "size": "82229343"
+    }
+  },
+  "0.14.0": {
+    "date": "2025-03-05",
+    "x86_64-windows": {
+      "tarball": "https://ziglang.org/download/0.14.0/zig-x86_64-windows-0.14.0.zip",
+      "shasum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": "80000000"
+    }
+  }
+}

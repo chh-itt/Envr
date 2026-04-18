@@ -131,3 +131,7 @@ path_proxy_enabled = true
 [runtime.dotnet]
 # 当为 false 时，dotnet shim 将透传到系统 PATH 中的 dotnet 可执行文件
 path_proxy_enabled = true
+
+[runtime.zig]
+# 当为 false 时，zig shim 将透传到系统 PATH 中的 zig 可执行文件
+path_proxy_enabled = true

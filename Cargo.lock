@@ -913,6 +913,7 @@ dependencies = [
  "envr-resolver",
  "envr-runtime-node",
  "envr-runtime-rust",
+ "envr-runtime-zig",
  "envr-shim-core",
  "jsonschema",
  "proptest",
@@ -961,6 +962,7 @@ dependencies = [
  "envr-runtime-python",
  "envr-runtime-ruby",
  "envr-runtime-rust",
+ "envr-runtime-zig",
  "envr-shim-core",
  "serde_json",
  "tempfile",
@@ -1237,6 +1239,20 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "reqwest",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-zig"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

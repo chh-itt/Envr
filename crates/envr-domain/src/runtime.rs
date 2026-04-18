@@ -17,6 +17,7 @@ pub enum RuntimeKind {
     Deno,
     Bun,
     Dotnet,
+    Zig,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +30,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 12] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 13] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -123,6 +124,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 12] = [
         key: "dotnet",
         label_en: ".NET",
         label_zh: ".NET",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Zig,
+        key: "zig",
+        label_en: "Zig",
+        label_zh: "Zig",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -283,7 +292,7 @@ pub fn major_key_from_version(version: &str) -> Option<String> {
 pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<String> {
     let parts = numeric_version_segments(version)?;
     match kind {
-        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => {
+        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go | RuntimeKind::Zig => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
             Some(format!("{major}.{minor}"))
@@ -321,11 +330,12 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 12);
+        assert_eq!(kinds.len(), 13);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
+        assert!(kinds.contains(&RuntimeKind::Zig));
     }
 
     #[test]
@@ -368,6 +378,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Php, "8.4.11").as_deref(),
             Some("8.4")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Zig, "0.14.1").as_deref(),
+            Some("0.14")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),
