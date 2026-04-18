@@ -1,13 +1,15 @@
-use iced::widget::{button, column, container, row, space, text};
-use iced::{Alignment, Element, Length, Padding, Theme};
+use iced::widget::{button, column, container, mouse_area, row, space, text};
+use iced::{Alignment, Background, Element, Length, Padding, Theme};
 
-use envr_domain::runtime::{RuntimeKind, runtime_descriptor};
+use envr_config::settings::RuntimeLayoutSettings;
 use envr_ui::theme::ThemeTokens;
 
 use crate::app::{Message, Route};
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
+use crate::view::env_center::kind_label;
+use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::downloads::{DownloadPanelState, JobState};
 use crate::view::empty_state::{EmptyTone, illustrative_block, illustrative_block_compact};
 use crate::view::loading::loading_skeleton;
@@ -18,6 +20,7 @@ use crate::widget_styles::{
 pub fn dashboard_view(
     state: &DashboardState,
     downloads: &DownloadPanelState,
+    runtime_layout: &RuntimeLayoutSettings,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -82,7 +85,12 @@ pub fn dashboard_view(
             ));
         }
         col = col
-            .push(runtime_overview_card(&data.rows, tokens))
+            .push(runtime_overview_section(
+                state,
+                &data.rows,
+                runtime_layout,
+                tokens,
+            ))
             .push(doctor_card(
                 &data.runtime_root,
                 &data.shims_dir,
@@ -187,26 +195,312 @@ fn card(
     .into()
 }
 
-fn runtime_overview_card(rows: &[RuntimeRow], tokens: ThemeTokens) -> Element<'static, Message> {
+fn runtime_overview_section(
+    dash: &DashboardState,
+    rows: &[RuntimeRow],
+    layout: &RuntimeLayoutSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
-    let mut list = column![].spacing((sp.xs + 2) as f32);
-    for r in rows {
-        let label = kind_label(r.kind);
-        let cur = r.current.clone().unwrap_or_else(|| {
-            envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
-        });
-        list = list.push(text(format!("{label}: {} · {}", r.installed, cur)).size(ty.caption));
-    }
-    card(
+    let text_c = gui_theme::to_color(tokens.colors.text);
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let prim = gui_theme::to_color(tokens.colors.primary);
+    let (visible_rows, hidden_rows) = crate::view::runtime_layout::partition_dashboard_rows(layout, rows);
+    let editing = dash.runtime_overview_layout_editing;
+    let hidden_collapsed = dash.runtime_overview_hidden_collapsed;
+
+    let edit_btn_lbl = if editing {
         envr_core::i18n::tr_key(
+            "gui.dashboard.runtime_overview_done_editing",
+            "完成",
+            "Done",
+        )
+    } else {
+        envr_core::i18n::tr_key(
+            "gui.dashboard.runtime_overview_edit_layout",
+            "编辑布局",
+            "Edit layout",
+        )
+    };
+    let edit_btn = button(button_content_centered(text(edit_btn_lbl).into()))
+        .on_press(Message::RuntimeLayout(
+            RuntimeLayoutMsg::ToggleDashboardLayoutEditing,
+        ))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
+        .padding([sp.sm as f32, sp.md as f32])
+        .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let reset_btn = button(button_content_centered(
+        text(envr_core::i18n::tr_key(
+            "gui.runtime_layout.reset_defaults",
+            "恢复默认排序与显示",
+            "Reset order & visibility",
+        ))
+        .into(),
+    ))
+    .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::ResetToDefaults))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
+    .padding([sp.sm as f32, sp.md as f32])
+    .style(button_style(tokens, ButtonVariant::Ghost));
+
+    let reset_or_space: Element<'static, Message> = if editing {
+        reset_btn.into()
+    } else {
+        space::horizontal().into()
+    };
+    let header = row![
+        text(envr_core::i18n::tr_key(
             "gui.dashboard.runtimes_overview",
             "运行时概览",
             "Runtimes overview",
-        ),
-        list.into(),
-        tokens,
+        ))
+        .size(ty.section),
+        space::horizontal(),
+        reset_or_space,
+        edit_btn,
+    ]
+    .spacing(sp.sm as f32)
+    .align_y(Alignment::Center);
+
+    let legend = text(envr_core::i18n::tr_key(
+        "gui.dashboard.runtime_overview_legend",
+        "以下为各运行时的「已安装版本数」与「当前全局版本」；点击卡片进入对应页面。",
+        "Installed count and current global version per runtime; click a card to open.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    let mut body = column![header, legend]
+        .spacing(sp.sm as f32)
+        .width(Length::Fill);
+    for r in &visible_rows {
+        body = body.push(runtime_overview_runtime_card(
+            r,
+            layout,
+            editing,
+            tokens,
+            text_c,
+            muted,
+            prim,
+        ));
+    }
+
+    if !hidden_rows.is_empty() {
+        let n = hidden_rows.len();
+        let hidden_title = envr_core::i18n::tr_key(
+            "gui.dashboard.runtime_overview_hidden_section",
+            "已隐藏（仍可在下方恢复）",
+            "Hidden (restore below)",
+        );
+        let count_lbl = format!(
+            "{} ({n})",
+            envr_core::i18n::tr_key(
+                "gui.dashboard.runtime_overview_hidden_count",
+                "已隐藏",
+                "Hidden",
+            )
+        );
+        let toggle_hidden = button(button_content_centered(
+            text(if hidden_collapsed {
+                envr_core::i18n::tr_key(
+                    "gui.dashboard.runtime_overview_expand_hidden",
+                    "展开",
+                    "Show",
+                )
+            } else {
+                envr_core::i18n::tr_key(
+                    "gui.dashboard.runtime_overview_collapse_hidden",
+                    "收起",
+                    "Hide",
+                )
+            })
+            .into(),
+        ))
+        .on_press(Message::RuntimeLayout(
+            RuntimeLayoutMsg::ToggleDashboardHiddenCollapsed,
+        ))
+        .height(Length::Fixed(
+            tokens
+                .control_height_secondary
+                .max(tokens.min_click_target_px()),
+        ))
+        .padding([sp.sm as f32, sp.md as f32])
+        .style(button_style(tokens, ButtonVariant::Ghost));
+
+        let hidden_hdr = row![
+            text(hidden_title).size(ty.body_small).color(muted),
+            space::horizontal(),
+            text(count_lbl).size(ty.caption).color(muted),
+            space::horizontal(),
+            toggle_hidden,
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center);
+
+        body = body.push(hidden_hdr);
+        if !hidden_collapsed {
+            for r in &hidden_rows {
+                body = body.push(runtime_overview_runtime_card(
+                    r,
+                    layout,
+                    editing,
+                    tokens,
+                    text_c,
+                    muted,
+                    prim,
+                ));
+            }
+        }
+    }
+
+    let card_s = card_container_style(tokens, 2);
+    let pad = tokens.card_padding_px();
+    let inset = Padding::from([pad + 6.0, pad + 4.0]);
+    container(
+        column![body]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
     )
+    .padding(inset)
+    .width(Length::Fill)
+    .style(move |theme: &Theme| card_s(theme))
+    .into()
+}
+
+fn runtime_overview_runtime_card(
+    r: &RuntimeRow,
+    layout: &RuntimeLayoutSettings,
+    editing: bool,
+    tokens: ThemeTokens,
+    text_c: iced::Color,
+    muted: iced::Color,
+    prim: iced::Color,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let label = kind_label(r.kind);
+    let cur = r.current.clone().unwrap_or_else(|| {
+        envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
+    });
+    let summary_tpl = envr_core::i18n::tr_key(
+        "gui.dashboard.runtime_card_summary",
+        "已安装 {installed} 个 · 当前 {current}",
+        "{installed} installed · current {current}",
+    );
+    let detail = summary_tpl
+        .replace("{installed}", &r.installed.to_string())
+        .replace("{current}", &cur);
+    let kind = r.kind;
+    let is_hidden = crate::view::runtime_layout::is_kind_hidden(layout, kind);
+
+    let accent = container(space().width(Length::Fixed(4.0)))
+        .height(Length::Fixed(52.0))
+        .style(move |_theme: &Theme| {
+            container::Style::default()
+                .background(Background::Color(prim.scale_alpha(if is_hidden { 0.35 } else { 0.85 })))
+        });
+
+    let title_col = column![
+        text(label).size(ty.body),
+        text(detail).size(ty.caption).color(muted),
+    ]
+    .spacing(3.0)
+    .width(Length::Fill);
+
+    let chevron = text("→")
+        .size(ty.section)
+        .color(muted.scale_alpha(0.75));
+
+    let hide_lbl = if is_hidden {
+        envr_core::i18n::tr_key("gui.dashboard.runtime_card_show", "显示", "Show")
+    } else {
+        envr_core::i18n::tr_key("gui.dashboard.runtime_card_hide", "隐藏", "Hide")
+    };
+    let hide_btn = button(button_content_centered(
+        row![
+            Lucide::EyeOff.view(14.0, text_c),
+            text(hide_lbl),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
+    .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::ToggleHidden(kind)))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
+    .padding([sp.sm as f32, sp.sm as f32])
+    .style(button_style(tokens, ButtonVariant::Ghost));
+
+    let btn_h = tokens
+        .control_height_secondary
+        .max(tokens.min_click_target_px());
+    let up_btn = button(button_content_centered(text("↑").into()))
+        .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::MoveRuntime {
+            kind,
+            delta: -1,
+        }))
+        .height(Length::Fixed(btn_h))
+        .width(Length::Fixed(btn_h.max(40.0)))
+        .style(button_style(tokens, ButtonVariant::Secondary));
+    let down_btn = button(button_content_centered(text("↓").into()))
+        .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::MoveRuntime {
+            kind,
+            delta: 1,
+        }))
+        .height(Length::Fixed(btn_h))
+        .width(Length::Fixed(btn_h.max(40.0)))
+        .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let inner: Element<'static, Message> = if editing {
+        row![
+            up_btn,
+            down_btn,
+            accent,
+            title_col,
+            hide_btn,
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center)
+        .into()
+    } else {
+        let main_row = row![
+            accent,
+            title_col,
+            chevron,
+        ]
+        .spacing(sp.md as f32)
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
+        let tappable = mouse_area(main_row)
+            .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::OpenRuntime(kind)))
+            .interaction(iced::mouse::Interaction::Pointer);
+        row![
+            container(tappable).width(Length::Fill),
+            hide_btn,
+        ]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center)
+        .into()
+    };
+
+    let inner_card = card_container_style(tokens, if is_hidden { 0 } else { 1 });
+    container(inner)
+        .width(Length::Fill)
+        .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+        .style(move |theme: &Theme| inner_card(theme))
+        .into()
 }
 
 fn doctor_card(
@@ -398,6 +692,3 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
     )
 }
 
-fn kind_label(kind: RuntimeKind) -> &'static str {
-    runtime_descriptor(kind).label_en
-}

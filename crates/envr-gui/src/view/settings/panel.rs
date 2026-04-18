@@ -7,6 +7,7 @@ use iced::{Alignment, Element, Length};
 
 use crate::app::Message;
 use crate::icons::Lucide;
+use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::theme as gui_theme;
 use crate::view::settings::state::SettingsViewState;
 use crate::widget_styles::{
@@ -575,7 +576,43 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
         column![dl_row].spacing(sp.sm as f32).into(),
     );
 
-    column![paths_card, look_card, dl_card, actions, status,]
+    let runtime_layout_help = text(envr_core::i18n::tr_key(
+        "gui.settings.runtime_layout_help",
+        "在仪表盘「运行时概览」中可调整顺序、隐藏或恢复；此处可一键恢复默认。",
+        "Reorder or hide runtimes from the dashboard overview; reset defaults here.",
+    ))
+    .size(ty.micro)
+    .color(gui_theme::to_color(tokens.colors.text_muted));
+    let reset_layout_btn = button(button_content_centered(
+        text(envr_core::i18n::tr_key(
+            "gui.runtime_layout.reset_defaults",
+            "恢复默认排序与显示",
+            "Reset order & visibility",
+        ))
+        .into(),
+    ))
+    .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::ResetToDefaults))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
+    .padding([sp.sm as f32, sp.md as f32])
+    .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let runtime_ui_card = section_card(
+        tokens,
+        envr_core::i18n::tr_key(
+            "gui.settings.runtime_layout_section",
+            "运行时显示",
+            "Runtime display",
+        ),
+        column![runtime_layout_help, reset_layout_btn]
+            .spacing(sp.md as f32)
+            .into(),
+    );
+
+    column![paths_card, runtime_ui_card, look_card, dl_card, actions, status,]
         .spacing(sp.lg as f32)
         .into()
 }

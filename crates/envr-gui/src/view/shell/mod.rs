@@ -23,7 +23,12 @@ pub fn app_view(state: &AppState) -> Element<'_, Message> {
 
     // `spacing`: embed vertical scrollbar in layout so it does not overlay card edges (`GUI` polish).
     let page_scroll = scrollable(if state.route() == Route::Dashboard {
-        dashboard_view(&state.dashboard, &state.downloads, t)
+        dashboard_view(
+            &state.dashboard,
+            &state.downloads,
+            &state.settings.cache.snapshot().gui.runtime_layout,
+            t,
+        )
     } else {
         page_body(state, t)
     })
@@ -137,6 +142,7 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
             col = col.push(runtime_nav_bar(
                 state.env_center.kind,
                 state.env_center.busy,
+                &state.settings.cache.snapshot().gui.runtime_layout,
                 tokens,
             ));
             col = col.push(env_center_view(

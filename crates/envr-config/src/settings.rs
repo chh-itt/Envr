@@ -137,11 +137,25 @@ pub struct AppearanceSettings {
     pub accent_color: Option<String>,
 }
 
+/// Order and visibility for runtime hub + dashboard overview (string keys = `RuntimeDescriptor::key`).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct RuntimeLayoutSettings {
+    /// Permutation of runtime keys; empty means built-in default order at resolve time.
+    #[serde(default)]
+    pub order: Vec<String>,
+    /// Keys hidden from the runtime hub and shown only in the dashboard “hidden” region.
+    #[serde(default)]
+    pub hidden: Vec<String>,
+}
+
 /// GUI-only state persisted in `settings.toml` so window layout/UX preferences survive restarts.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct GuiSettings {
     #[serde(default)]
     pub downloads_panel: DownloadsPanelSettings,
+
+    #[serde(default)]
+    pub runtime_layout: RuntimeLayoutSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1648,6 +1662,7 @@ mod tests {
                     x_frac: None,
                     y_frac: None,
                 },
+                runtime_layout: RuntimeLayoutSettings::default(),
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,

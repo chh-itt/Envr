@@ -23,9 +23,25 @@ pub enum DashboardMsg {
     DataLoaded(Result<DashboardData, String>),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DashboardState {
     pub busy: bool,
     pub last_error: Option<String>,
     pub data: Option<DashboardData>,
+    /// When true, runtime overview cards show reorder controls instead of navigating on press.
+    pub runtime_overview_layout_editing: bool,
+    /// When true, the dashboard “hidden runtimes” block starts collapsed (only a summary row).
+    pub runtime_overview_hidden_collapsed: bool,
+}
+
+impl Default for DashboardState {
+    fn default() -> Self {
+        Self {
+            busy: false,
+            last_error: None,
+            data: None,
+            runtime_overview_layout_editing: false,
+            runtime_overview_hidden_collapsed: true,
+        }
+    }
 }

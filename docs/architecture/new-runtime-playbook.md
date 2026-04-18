@@ -189,6 +189,17 @@ Typical targets:
 - `crates/envr-gui/src/app.rs`
 - `crates/envr-gui/src/gui_ops.rs`
 - `crates/envr-gui/src/view/shell/mod.rs`
+- `crates/envr-gui/src/view/runtime_layout.rs` (order / visibility resolution)
+
+Additional GUI checks (hub + dashboard layout, `settings.toml`):
+
+- [ ] Descriptor `key` matches the strings used in `[gui.runtime_layout]` (`order` / `hidden`); new runtimes are merged into default order on load.
+- [ ] Runtime appears in the **horizontal hub** when not hidden; hidden runtimes are omitted there but may still appear in the dashboard “hidden” tail.
+- [ ] **Dashboard overview** card line uses the localized “installed count · current” pattern; users should not see a bare `N · version` without context.
+- [ ] Entering the runtime from a **dashboard card** (`OpenRuntime`) triggers the same initial load as **sidebar → Runtime** (`Navigate(Runtime)` + `runtime_page_enter_tasks`), including when the target kind is already the selected tab (avoid empty list + endless skeleton).
+- [ ] If `supports_remote_latest`: follow §8.1 unified major-line / cache / `runtime_page_enter_tasks` wiring, not only `refresh_runtimes`.
+
+See also: `docs/architecture/runtime-ui-layout-plan.md`.
 
 ### I. Project pinning and local policy
 
