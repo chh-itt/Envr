@@ -145,6 +145,10 @@ pub fn list_latest_patch_per_major_from_tags(tags: &[Tag]) -> Vec<String> {
         let Some(k) = semver_key(&v) else {
             continue;
         };
+        // Keep in sync with [`list_remote_versions`]: 0.x is not installable via envr's release path.
+        if k.0 < 1 {
+            continue;
+        }
         let major = k.0;
         let entry = best.entry(major).or_insert((k, v.clone()));
         if k > entry.0 {
@@ -222,4 +226,23 @@ pub fn resolve_bun_version(tags: &[Tag], spec: &str) -> EnvrResult<String> {
     Err(EnvrError::Validation(format!(
         "no Bun release matches spec {spec:?}"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latest_per_major_skips_uninstallable_zero_major_line() {
+        let tags = vec![
+            Tag {
+                name: "bun-v0.8.1".into(),
+            },
+            Tag {
+                name: "bun-v1.0.0".into(),
+            },
+        ];
+        let latest = list_latest_patch_per_major_from_tags(&tags);
+        assert_eq!(latest, vec!["1.0.0"]);
+    }
 }

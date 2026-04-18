@@ -2,6 +2,19 @@
 
 This plan refines `unified-version-list-interface-draft.md` into executable work items.
 
+## Current Status
+
+- Phase 1 complete: shared runtime domain contracts and semver/key helpers landed.
+- Phase 2 complete: `RuntimeService` unified list facade methods landed.
+- Phase 3 complete: cache schema + SWR-style cached-first then refresh behavior landed.
+- Phase 4 complete: GUI unified major/children state and lazy child loading are active.
+- Phase 5 complete for non-Rust runtimes in rollout scope:
+  - Node, Python, Java, Go, Ruby, Elixir, Erlang, PHP, Deno, Bun, Dotnet.
+- Phase 6 partial:
+  - obsolete key-mode/derived rendering branches removed from GUI main path.
+  - remote-latest GUI state plumbing removed.
+  - telemetry hooks are still pending.
+
 ## Scope
 
 - Replace runtime-specific list rendering branches with one shared major/child list pipeline.
@@ -49,12 +62,18 @@ Acceptance:
 1. Add minimal render-oriented cache files:
    - `cache/<kind>/major_rows.json`
    - `cache/<kind>/children/<major_key>.json`
+   - `cache/<kind>/unified_version_list/full_installable_versions.json` (full installable remote list; reused for every expanded major line within TTL so child refresh does not re-fetch the upstream index per expand)
 2. Cache payload keeps only required fields.
 3. Implement SWR behavior:
    - render cache immediately
    - refresh in background
    - merge without list blanking
 4. Keep env override for upstream page coverage.
+5. TTL defaults (overridable by env; disk payloads remain version strings only):
+   - `ENVR_UNIFIED_LIST_MAJOR_DISK_TTL_SECS` (default 600): “fresh” window for `major_rows.json`; after expiry the file is still read for **stale-while-revalidate** paint.
+   - `ENVR_UNIFIED_LIST_CHILDREN_DISK_TTL_SECS` (default 300): same for `children/<major>.json`.
+   - `ENVR_UNIFIED_LIST_FULL_REMOTE_TTL_SECS` (default 300): how long to reuse `full_installable_versions.json` before re-running `list_remote` for child refresh.
+6. Leaving the Runtime route clears **in-memory** unified list VM (`unified_major_rows_by_kind`, children map, expanded keys); on-disk unified cache is retained.
 
 Acceptance:
 
@@ -134,3 +153,8 @@ Acceptance:
 - PR-2: GUI unified VM + Node rollout
 - PR-3: Ruby/Elixir/Erlang rollout
 - PR-4: remaining runtimes + cleanup
+
+Progress note:
+
+- PR-1/PR-2/PR-3/PR-4 implementation work has been merged into current working tree changes.
+- Remaining follow-up is mainly observability/telemetry guardrails and optional polishing.

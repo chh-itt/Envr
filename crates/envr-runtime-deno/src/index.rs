@@ -142,6 +142,10 @@ pub fn list_latest_patch_per_major_from_tags(tags: &[Tag]) -> Vec<String> {
         let Some(k) = semver_key(&v) else {
             continue;
         };
+        // Keep in sync with [`list_remote_versions`]: 0.x is not supported for managed install.
+        if k.0 < 1 {
+            continue;
+        }
         let major = k.0;
         let entry = best.entry(major).or_insert((k, v.clone()));
         if k > entry.0 {
@@ -213,4 +217,23 @@ pub fn resolve_deno_version(tags: &[Tag], spec: &str) -> EnvrResult<String> {
     Err(EnvrError::Validation(format!(
         "no Deno release matches spec {spec:?}"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latest_per_major_skips_uninstallable_zero_major_line() {
+        let tags = vec![
+            Tag {
+                name: "v0.8.1".into(),
+            },
+            Tag {
+                name: "v1.0.0".into(),
+            },
+        ];
+        let latest = list_latest_patch_per_major_from_tags(&tags);
+        assert_eq!(latest, vec!["1.0.0"]);
+    }
 }

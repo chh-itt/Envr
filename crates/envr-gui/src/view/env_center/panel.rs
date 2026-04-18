@@ -8,20 +8,16 @@ use envr_config::settings::{
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RustDownloadSource,
     RustRuntimeSettings,
 };
-use envr_domain::runtime::{RUNTIME_DESCRIPTORS, RuntimeKind, RuntimeVersion, runtime_descriptor};
+use envr_domain::runtime::{
+    MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
+    runtime_descriptor, version_line_key_for_kind,
+};
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
-use iced::widget::{button, column, container, row, rule, space, text, text_input, toggler};
+use iced::widget::{button, column, container, mouse_area, row, rule, space, text, text_input, toggler};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
-
-/// Latest remote rows + refresh flag for one [`RuntimeKind`] (Env Center).
-#[derive(Debug, Clone, Default)]
-pub struct RemoteLatestSlot {
-    pub rows: Vec<RuntimeVersion>,
-    pub refreshing: bool,
-}
 
 use crate::app::Message;
 use crate::icons::Lucide;
@@ -42,8 +38,11 @@ pub enum EnvCenterMsg {
     InstallInput(String),
     DirectInstallInput(String),
     DataLoaded(EnvCenterDataLoad),
-    RemoteLatestDiskSnapshot(RuntimeKind, Vec<RuntimeVersion>),
-    RemoteLatestRefreshed(RuntimeKind, Result<Vec<RuntimeVersion>, String>),
+    UnifiedMajorRowsCached(RuntimeKind, Result<Vec<MajorVersionRecord>, String>),
+    UnifiedMajorRowsRefreshed(RuntimeKind, Result<Vec<MajorVersionRecord>, String>),
+    UnifiedChildrenCached(RuntimeKind, String, Result<Vec<RuntimeVersion>, String>),
+    UnifiedChildrenRefreshed(RuntimeKind, String, Result<Vec<RuntimeVersion>, String>),
+    ToggleUnifiedMajorExpanded(String),
     ElixirPrereqChecked(Result<(), String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
@@ -132,10 +131,6 @@ pub struct EnvCenterState {
     pub remote_error: Option<String>,
     /// Elixir prerequisites check result (Erlang/OTP runtime).
     pub elixir_prereq_error: Option<String>,
-    /// Per-runtime remote “latest per line” rows and refresh flags (descriptor `supports_remote_latest`).
-    ///
-    /// **Note:** On tab switch, [.NET](RuntimeKind::Dotnet) rows are kept (cache); other kinds are cleared.
-    pub remote_latest_by_kind: HashMap<RuntimeKind, RemoteLatestSlot>,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -151,10 +146,10 @@ pub struct EnvCenterState {
     /// Draft for `runtime.bun.global_bin_dir` (applied via [`EnvCenterMsg::ApplyBunGlobalBinDir`]).
     pub bun_global_bin_dir_draft: String,
 
-    /// Derived/cached view data to keep `view()` cheap.
-    pub derived_installed_by_key: HashMap<String, Vec<RuntimeVersion>>,
-    pub derived_keys: Vec<String>,
-    pub derived_show_keys: Vec<String>,
+    /// Unified list VM (phase-2 rollout: Node first, other runtimes keep legacy list path).
+    pub unified_major_rows_by_kind: HashMap<RuntimeKind, Vec<MajorVersionRecord>>,
+    pub unified_children_rows_by_kind_major: HashMap<(RuntimeKind, String), Vec<RuntimeVersion>>,
+    pub unified_expanded_major_keys: HashSet<String>,
 
     // Rust page state.
     pub rust_status: Option<RustStatus>,
@@ -174,7 +169,6 @@ impl Default for EnvCenterState {
             busy: false,
             remote_error: None,
             elixir_prereq_error: None,
-            remote_latest_by_kind: HashMap::new(),
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -183,9 +177,9 @@ impl Default for EnvCenterState {
             go_private_patterns_draft: String::new(),
             bun_global_bin_dir_draft: String::new(),
 
-            derived_installed_by_key: HashMap::new(),
-            derived_keys: Vec::new(),
-            derived_show_keys: Vec::new(),
+            unified_major_rows_by_kind: HashMap::new(),
+            unified_children_rows_by_kind_major: HashMap::new(),
+            unified_expanded_major_keys: HashSet::new(),
 
             rust_status: None,
             rust_tab: RustTab::Components,
@@ -195,204 +189,21 @@ impl Default for EnvCenterState {
     }
 }
 
-impl EnvCenterState {
-    pub fn remote_slot_mut(&mut self, k: RuntimeKind) -> &mut RemoteLatestSlot {
-        self.remote_latest_by_kind.entry(k).or_default()
-    }
-
-    pub fn recompute_derived_lists(&mut self, java_distro: JavaDistro) {
-        // Search/filter text (we reuse `install_input` field).
-        let query = self.install_input.trim();
-        let query_norm = query.strip_prefix('v').unwrap_or(query);
-        let remote_rows: &[RuntimeVersion] = if runtime_descriptor(self.kind).supports_remote_latest
-        {
-            self.remote_latest_by_kind
-                .get(&self.kind)
-                .map(|s| s.rows.as_slice())
-                .unwrap_or(&[])
-        } else {
-            &[]
-        };
-        let key_mode = key_mode_for_kind(self.kind, &self.installed, remote_rows);
-        let query_key = query_key_for_kind(self.kind, key_mode, query_norm);
-
-        // Build effective installed list; include current as a safety net so UI never
-        // drops the active version row due to transient scan lag.
-        let mut installed_effective = self.installed.clone();
-        if let Some(cur) = self.current.as_ref()
-            && !installed_effective.iter().any(|v| v.0 == cur.0)
-        {
-            installed_effective.push(cur.clone());
-        }
-
-        // Group installed versions by display key (major / major.minor / go minor line).
-        let mut installed_by_key: HashMap<String, Vec<RuntimeVersion>> = HashMap::new();
-        for v in &installed_effective {
-            if let Some(k) = grouped_version_key(self.kind, key_mode, &v.0)
-                && key_supported_on_host(self.kind, &k)
-            {
-                installed_by_key.entry(k).or_default().push(v.clone());
-            }
-        }
-        for (_k, versions) in installed_by_key.iter_mut() {
-            versions.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
-        }
-
-        // Merge remote keys when available (so empty installs still show suggestions).
-        let mut keys_set: HashSet<String> = installed_by_key.keys().cloned().collect();
-        for v in remote_rows {
-            if let Some(k) = grouped_version_key(self.kind, key_mode, &v.0)
-                && key_supported_on_host(self.kind, &k)
-            {
-                keys_set.insert(k);
-            }
-        }
-
-        let mut keys: Vec<String> = if self.kind == RuntimeKind::Java {
-            java_distro
-                .supported_lts_major_strs()
-                .iter()
-                .map(|s| (*s).to_string())
-                .collect()
-        } else {
-            keys_set.into_iter().collect()
-        };
-        keys.retain(|k| key_supported_on_host(self.kind, k));
-        keys.sort_by(|a, b| key_sort_desc_for_kind(self.kind, key_mode, a, b));
-
-        let mut show_keys: Vec<String> = if query_norm.is_empty() {
-            keys.clone()
-        } else {
-            let needle = query_key.as_deref().unwrap_or(query_norm);
-            keys.iter()
-                .filter(|k| key_matches_query(self.kind, key_mode, k, needle))
-                .cloned()
-                .collect()
-        };
-        show_keys.sort_by(|a, b| key_sort_desc_for_kind(self.kind, key_mode, a, b));
-
-        self.derived_installed_by_key = installed_by_key;
-        self.derived_keys = keys.clone();
-        self.derived_show_keys = show_keys;
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VersionKeyMode {
-    Major,
-    MajorMinor,
-}
-
-fn key_mode_for_kind(
-    kind: RuntimeKind,
-    installed: &[RuntimeVersion],
-    remote_rows: &[RuntimeVersion],
-) -> VersionKeyMode {
-    match kind {
-        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => VersionKeyMode::MajorMinor,
-        RuntimeKind::Ruby
-        | RuntimeKind::Elixir
-        | RuntimeKind::Erlang
-        | RuntimeKind::Deno
-        | RuntimeKind::Bun
-        | RuntimeKind::Dotnet => {
-            let mut majors = HashSet::<String>::new();
-            for v in installed.iter().chain(remote_rows.iter()) {
-                if let Some(m) = parse_major_from_ver(&v.0) {
-                    if !key_supported_on_host(kind, &m) {
-                        continue;
-                    }
-                    majors.insert(m);
-                    if majors.len() > 1 {
-                        return VersionKeyMode::Major;
-                    }
-                }
-            }
-            VersionKeyMode::MajorMinor
-        }
-        _ => VersionKeyMode::Major,
-    }
-}
-
-fn grouped_version_key(kind: RuntimeKind, mode: VersionKeyMode, version: &str) -> Option<String> {
-    match kind {
-        RuntimeKind::Python | RuntimeKind::Php => parse_python_major_minor_key(version),
-        RuntimeKind::Node => parse_node_major_key(version),
-        RuntimeKind::Java => parse_java_major_key(version),
-        RuntimeKind::Go => parse_go_minor_line_key(version),
-        _ => match mode {
-            VersionKeyMode::Major => parse_major_from_ver(version),
-            VersionKeyMode::MajorMinor => parse_major_minor_key(version),
-        },
-    }
-}
-
-fn query_key_for_kind(kind: RuntimeKind, mode: VersionKeyMode, query_norm: &str) -> Option<String> {
-    match kind {
-        RuntimeKind::Python | RuntimeKind::Php => parse_python_major_minor_only(query_norm),
-        RuntimeKind::Go => parse_go_minor_line_only(query_norm),
-        _ => match mode {
-            VersionKeyMode::Major => parse_major_only(query_norm),
-            VersionKeyMode::MajorMinor => parse_python_major_minor_only(query_norm),
-        },
-    }
-}
-
-fn key_sort_desc_for_kind(
-    kind: RuntimeKind,
-    mode: VersionKeyMode,
-    a: &str,
-    b: &str,
-) -> std::cmp::Ordering {
-    match kind {
-        RuntimeKind::Python | RuntimeKind::Php => {
-            parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse()
-        }
-        RuntimeKind::Go => parse_go_key_sort(a).cmp(&parse_go_key_sort(b)).reverse(),
-        _ => match mode {
-            VersionKeyMode::Major => parse_major_num(a).cmp(&parse_major_num(b)).reverse(),
-            VersionKeyMode::MajorMinor => {
-                parse_python_key_sort(a).cmp(&parse_python_key_sort(b)).reverse()
-            }
-        },
-    }
-}
-
-fn key_matches_query(kind: RuntimeKind, mode: VersionKeyMode, key: &str, needle: &str) -> bool {
-    match kind {
-        RuntimeKind::Node => key.contains(needle),
-        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => {
-            if needle.contains('.') {
-                key.starts_with(needle)
-            } else {
-                let mut it = key.split('.');
-                let major = it.next().unwrap_or("");
-                let minor = it.next().unwrap_or("");
-                major == needle || minor == needle
-            }
-        }
-        _ => match mode {
-            VersionKeyMode::Major => key.starts_with(needle),
-            VersionKeyMode::MajorMinor => {
-                if needle.contains('.') {
-                    key.starts_with(needle)
-                } else {
-                    let mut it = key.split('.');
-                    let major = it.next().unwrap_or("");
-                    let minor = it.next().unwrap_or("");
-                    major == needle || minor == needle
-                }
-            }
-        },
-    }
-}
-
-fn key_supported_on_host(kind: RuntimeKind, key: &str) -> bool {
-    if kind == RuntimeKind::Bun {
-        let major = key.split('.').next().unwrap_or(key);
-        return bun_major_supported_on_host(major);
-    }
-    true
+fn unified_list_rollout_enabled(kind: RuntimeKind) -> bool {
+    matches!(
+        kind,
+        RuntimeKind::Node
+            | RuntimeKind::Python
+            | RuntimeKind::Java
+            | RuntimeKind::Go
+            | RuntimeKind::Ruby
+            | RuntimeKind::Elixir
+            | RuntimeKind::Erlang
+            | RuntimeKind::Php
+            | RuntimeKind::Deno
+            | RuntimeKind::Bun
+            | RuntimeKind::Dotnet
+    )
 }
 
 // (scroll_y is clamped locally during rendering; no persistent clamping helper needed)
@@ -1564,66 +1375,6 @@ fn remote_error_inline(tokens: ThemeTokens, error: &str) -> Element<'static, Mes
     .into()
 }
 
-fn env_remote_latest_for_key(
-    state: &EnvCenterState,
-    kind: RuntimeKind,
-    key: &str,
-) -> Option<RuntimeVersion> {
-    let rows = state.remote_latest_by_kind.get(&kind)?.rows.as_slice();
-    let mode = key_mode_for_kind(kind, &state.installed, rows);
-    match kind {
-        RuntimeKind::Node => rows
-            .iter()
-            .find(|v| parse_node_major_key(&v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Python => rows
-            .iter()
-            .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Java => rows
-            .iter()
-            .find(|v| parse_java_major_key(&v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Go => rows
-            .iter()
-            .find(|v| parse_go_minor_line_key(&v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Php => rows
-            .iter()
-            .find(|v| parse_python_major_minor_key(&v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Deno => rows
-            .iter()
-            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Bun => {
-            if !bun_major_supported_on_host(key) {
-                return None;
-            }
-            rows.iter()
-                .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-                .cloned()
-        }
-        RuntimeKind::Dotnet => rows
-            .iter()
-            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Ruby => rows
-            .iter()
-            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Elixir => rows
-            .iter()
-            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Erlang => rows
-            .iter()
-            .find(|v| grouped_version_key(kind, mode, &v.0).as_deref() == Some(key))
-            .cloned(),
-        RuntimeKind::Rust => None,
-    }
-}
-
 fn ruby_runtime_settings_section(
     ruby: &RubyRuntimeSettings,
     tokens: ThemeTokens,
@@ -1995,8 +1746,18 @@ pub fn env_center_view(
     // in `update()` and stored on the state to keep `view()` fast.
     let query = state.install_input.trim();
     let query_norm = query.strip_prefix('v').unwrap_or(query);
-    let installed_by_key = &state.derived_installed_by_key;
-    let show_keys = &state.derived_show_keys;
+    let unified_major_rows = state.unified_major_rows_by_kind.get(&state.kind);
+    let unified_major_latest_by_key: HashMap<String, RuntimeVersion> = unified_major_rows
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|r| {
+                    r.latest_installable
+                        .as_ref()
+                        .map(|v| (r.major_key.clone(), v.clone()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     let matches_empty_hint = || -> Element<'static, Message> {
         let (title, body) = if query_norm.is_empty() {
@@ -2048,13 +1809,60 @@ pub fn env_center_view(
     // Use spacing instead of dense horizontal rules for a calmer UI.
     let mut list_col = column![].spacing(sp.sm as f32).width(Length::Fill);
 
-    let show_keys = show_keys.as_slice();
+    let render_keys: Vec<String> = if unified_list_rollout_enabled(state.kind)
+        && unified_major_rows.is_some_and(|rows| !rows.is_empty())
+    {
+        let mut keys: HashSet<String> = unified_major_rows
+            .into_iter()
+            .flatten()
+            .map(|r| r.major_key.clone())
+            .collect();
+        for v in &state.installed {
+            if let Some(k) = version_line_key_for_kind(state.kind, &v.0) {
+                keys.insert(k);
+            }
+        }
+        if let Some(cur) = state.current.as_ref()
+            && let Some(k) = version_line_key_for_kind(state.kind, &cur.0)
+        {
+            keys.insert(k);
+        }
+        let mut keys: Vec<String> = keys.into_iter().collect();
+        keys.retain(|k| {
+            !major_line_remote_install_blocked(state.kind, k)
+                || state.installed.iter().any(|v| {
+                    version_line_key_for_kind(state.kind, &v.0).as_deref() == Some(k.as_str())
+                })
+                || state
+                    .current
+                    .as_ref()
+                    .and_then(|c| version_line_key_for_kind(state.kind, &c.0))
+                    .as_deref()
+                    == Some(k.as_str())
+        });
+        keys.sort_by(|a, b| parse_python_key_sort(b).cmp(&parse_python_key_sort(a)));
+        if query_norm.is_empty() {
+            keys
+        } else if query_norm.contains('.') {
+            keys.into_iter()
+                .filter(|k| k.starts_with(query_norm))
+                .collect()
+        } else {
+            keys.into_iter()
+                .filter(|k| {
+                    let mut it = k.split('.');
+                    let major = it.next().unwrap_or("");
+                    let minor = it.next().unwrap_or("");
+                    major == query_norm || minor == query_norm || k.contains(query_norm)
+                })
+                .collect()
+        }
+    } else {
+        Vec::new()
+    };
 
-    let waiting_remote = runtime_descriptor(state.kind).supports_remote_latest
-        && state
-            .remote_latest_by_kind
-            .get(&state.kind)
-            .is_some_and(|s| s.rows.is_empty() && s.refreshing);
+    let waiting_remote =
+        runtime_descriptor(state.kind).supports_remote_latest && unified_major_rows.is_none();
 
     if let Some(err) = state.remote_error.as_deref()
         && runtime_descriptor(state.kind).supports_remote_latest
@@ -2062,27 +1870,27 @@ pub fn env_center_view(
         list_col = list_col.push(remote_error_inline(tokens, err));
     }
 
-    if (busy && show_keys.is_empty()) || (waiting_remote && show_keys.is_empty()) {
+    if (busy && render_keys.is_empty()) || (waiting_remote && render_keys.is_empty()) {
         list_col = list_col.push(loading_skeleton(
             tokens,
             state.skeleton_phase,
             tokens.list_skeleton_rows(),
         ));
-    } else if show_keys.is_empty() {
+    } else if render_keys.is_empty() {
         list_col = list_col.push(matches_empty_hint());
     } else {
-        for key in show_keys.iter() {
-            let installed_versions = installed_by_key.get(key).cloned().unwrap_or_default();
-            let remote_for_mode = state
-                .remote_latest_by_kind
-                .get(&state.kind)
-                .map(|s| s.rows.as_slice())
-                .unwrap_or(&[]);
-            let key_mode = key_mode_for_kind(state.kind, &state.installed, remote_for_mode);
+        for key in render_keys.iter() {
+            let mut installed_versions: Vec<RuntimeVersion> = state
+                .installed
+                .iter()
+                .filter(|v| version_line_key_for_kind(state.kind, &v.0).as_deref() == Some(key))
+                .cloned()
+                .collect();
+            installed_versions.sort_by(|a, b| semver_cmp_desc(&a.0, &b.0));
             let current_key = state
                 .current
                 .as_ref()
-                .and_then(|v| grouped_version_key(state.kind, key_mode, &v.0));
+                .and_then(|v| version_line_key_for_kind(state.kind, &v.0));
             let is_active = current_key.as_deref() == Some(key.as_str());
             let flavor_matches_global = if state.kind != RuntimeKind::Php {
                 true
@@ -2099,6 +1907,51 @@ pub fn env_center_view(
             let show_as_active = is_active && path_proxy_on && flavor_matches_global;
 
             let highest_installed = installed_versions.first().cloned();
+            let primary_installed: Option<RuntimeVersion> = installed_versions
+                .iter()
+                .find(|v| {
+                    state.current.as_ref().is_some_and(|c| c.0 == v.0)
+                        && path_proxy_on
+                        && if state.kind == RuntimeKind::Php {
+                            flavor_matches_global
+                        } else {
+                            true
+                        }
+                })
+                .cloned()
+                .or_else(|| highest_installed.clone());
+            let extra_installed_count = installed_versions.len().saturating_sub(1);
+
+            let (maj_row_ver_text, maj_row_is_current_exact): (Option<String>, bool) =
+                if let Some(installed) = primary_installed.as_ref() {
+                    let is_current_exact = state.current.as_ref().is_some_and(|c| c.0 == installed.0)
+                        && path_proxy_on
+                        && if state.kind == RuntimeKind::Php {
+                            flavor_matches_global
+                        } else {
+                            true
+                        };
+                    let ver_core = if is_current_exact {
+                        format!(
+                            "{} {}",
+                            installed.0,
+                            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)")
+                        )
+                    } else {
+                        installed.0.clone()
+                    };
+                    let ver_text = if extra_installed_count > 0 {
+                        format!("{} (+{})", ver_core, extra_installed_count)
+                    } else {
+                        ver_core
+                    };
+                    (Some(ver_text), is_current_exact)
+                } else {
+                    (None, false)
+                };
+
+            let unified_major_mode = unified_list_rollout_enabled(state.kind)
+                && unified_major_rows.is_some_and(|rows| !rows.is_empty());
 
             // Node list shows stable major keys; install spec still resolves latest patch elsewhere.
             let label_base = if state.kind == RuntimeKind::Node {
@@ -2119,7 +1972,8 @@ pub fn env_center_view(
                 format!("{} {}", kind_label(state.kind), key)
             };
 
-            let left_text = if show_as_active {
+            // Avoid duplicating "(current)" on the title when the row shows an installed summary column.
+            let left_text = if show_as_active && installed_versions.is_empty() {
                 format!(
                     "{} {}",
                     label_base,
@@ -2130,83 +1984,78 @@ pub fn env_center_view(
             };
 
             let install_spec = || -> String {
-                env_remote_latest_for_key(state, state.kind, key)
-                    .map(|v| v.0)
-                    .unwrap_or_else(|| key.clone())
+                if unified_list_rollout_enabled(state.kind)
+                    && let Some(v) = unified_major_latest_by_key.get(key)
+                {
+                    return v.0.clone();
+                }
+                key.clone()
             };
 
-            let action_btn: Element<'static, Message> = if let Some(_highest) = highest_installed {
-                let mut rows = column![].spacing(sp.xs as f32).width(Length::Fill);
-                for installed in &installed_versions {
-                    let is_current_exact = state.current.as_ref().is_some_and(|c| c.0 == installed.0)
-                        && path_proxy_on
-                        && if state.kind == RuntimeKind::Php {
-                            flavor_matches_global
-                        } else {
-                            true
-                        };
+            let action_btn: Element<'static, Message> = if let Some(installed) = primary_installed {
+                let is_current_exact = maj_row_is_current_exact;
+                let ver_text = maj_row_ver_text.clone().unwrap_or_default();
 
-                    let ver_text = if is_current_exact {
-                        format!(
-                            "{} {}",
-                            installed.0,
-                            envr_core::i18n::tr_key(
-                                "gui.runtime.current_tag",
-                                "(当前)",
-                                "(current)"
-                            )
-                        )
+                let use_btn = button(button_content_centered(
+                    row![
+                        Lucide::Package.view(14.0, txt),
+                        text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
+                .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
+                    Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
+                ))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, ButtonVariant::Secondary));
+
+                let uninstall_btn = button(button_content_centered(
+                    row![
+                        Lucide::X.view(
+                            14.0,
+                            contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
+                        ),
+                        text(envr_core::i18n::tr_key(
+                            "gui.action.uninstall",
+                            "卸载",
+                            "Uninstall",
+                        )),
+                    ]
+                    .spacing(sp.xs as f32)
+                    .align_y(Alignment::Center)
+                    .into(),
+                ))
+                .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+                    installed.0.clone(),
+                ))))
+                .height(Length::Fixed(
+                    tokens
+                        .control_height_secondary
+                        .max(tokens.min_click_target_px()),
+                ))
+                .padding([sp.sm as f32, sp.sm as f32])
+                .style(button_style(tokens, ButtonVariant::Danger));
+
+                if unified_major_mode {
+                    if is_current_exact {
+                        space::horizontal().into()
                     } else {
-                        installed.0.clone()
-                    };
-
-                    let use_btn = button(button_content_centered(
-                        row![
-                            Lucide::Package.view(14.0, txt),
-                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ))
-                    .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
-                        Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
-                    ))
-                    .height(Length::Fixed(
-                        tokens
-                            .control_height_secondary
-                            .max(tokens.min_click_target_px()),
-                    ))
-                    .padding([sp.sm as f32, sp.sm as f32])
-                    .style(button_style(tokens, ButtonVariant::Secondary));
-
-                    let uninstall_btn = button(button_content_centered(
-                        row![
-                            Lucide::X.view(
-                                14.0,
-                                contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
-                            ),
-                            text(envr_core::i18n::tr_key(
-                                "gui.action.uninstall",
-                                "卸载",
-                                "Uninstall",
-                            )),
-                        ]
-                        .spacing(sp.xs as f32)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    ))
-                    .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
-                        installed.0.clone(),
-                    ))))
-                    .height(Length::Fixed(
-                        tokens
-                            .control_height_secondary
-                            .max(tokens.min_click_target_px()),
-                    ))
-                    .padding([sp.sm as f32, sp.sm as f32])
-                    .style(button_style(tokens, ButtonVariant::Danger));
-
+                        container(
+                            row![use_btn, uninstall_btn]
+                                .spacing(sp.sm as f32)
+                                .align_y(Alignment::Center),
+                        )
+                        .padding([sp.xs as f32, sp.md as f32])
+                        .into()
+                    }
+                } else {
                     let line_row = if is_current_exact {
                         row![text(ver_text).width(Length::Fill)]
                             .spacing(sp.sm as f32)
@@ -2219,9 +2068,10 @@ pub fn env_center_view(
                             .width(Length::Fill)
                     };
 
-                    rows = rows.push(container(line_row).padding([sp.xs as f32, sp.md as f32]));
+                    container(line_row.padding([sp.xs as f32, sp.md as f32]))
+                        .width(Length::Fill)
+                        .into()
                 }
-                container(rows).width(Length::Fill).into()
             } else {
                 let spec = install_spec();
                 let install_btn = button(button_content_centered(
@@ -2281,16 +2131,200 @@ pub fn env_center_view(
                 .into()
             };
 
+            let head_row: Element<'static, Message> = if unified_major_mode {
+                let expanded = state.unified_expanded_major_keys.contains(key);
+                let muted = gui_theme::to_color(tokens.colors.text_muted);
+                let chevron_lbl = if expanded { "▾" } else { "▸" };
+                let chevron_cell = container(
+                    text(chevron_lbl)
+                        .size(ty.caption)
+                        .color(muted),
+                )
+                .width(Length::Fixed(22.0))
+                .align_x(Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center);
+                let mut tap_inner = row![
+                    chevron_cell,
+                    text(left_text.clone()).width(Length::Fill),
+                ]
+                .spacing(sp.sm as f32)
+                .align_y(Alignment::Center);
+                if let Some(v) = maj_row_ver_text.clone() {
+                    tap_inner = tap_inner.push(text(v).width(Length::Fill));
+                }
+                let expand_strip = container(
+                    mouse_area(tap_inner.width(Length::Fill))
+                        .on_press(Message::EnvCenter(EnvCenterMsg::ToggleUnifiedMajorExpanded(
+                            key.clone(),
+                        )))
+                        .interaction(iced::mouse::Interaction::Pointer),
+                )
+                .width(Length::Fill);
+                row![expand_strip, action_btn]
+                    .spacing(sp.sm as f32)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .into()
+            } else {
+                row![text(left_text).width(Length::Fill), action_btn]
+                    .spacing(sp.sm as f32)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .into()
+            };
+
             list_col = list_col.push(
                 container(
-                    row![text(left_text).width(Length::Fill), action_btn,]
-                        .spacing(sp.sm as f32)
-                        .align_y(Alignment::Center)
-                        .width(Length::Fill),
+                    head_row,
                 )
                 .padding([sp.xs as f32, sp.md as f32])
                 .style(card_container_style(tokens, 1)),
             );
+
+            if unified_list_rollout_enabled(state.kind)
+                && state.unified_expanded_major_keys.contains(key)
+            {
+                let child_rows = state
+                    .unified_children_rows_by_kind_major
+                    .get(&(state.kind, key.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+                for child in child_rows {
+                    let spec = child.0.clone();
+                    let is_installed = state.installed.iter().any(|v| v.0 == spec);
+                    let is_current = state.current.as_ref().is_some_and(|c| c.0 == spec);
+                    let child_label = if is_current {
+                        format!(
+                            "{} {}",
+                            spec,
+                            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)")
+                        )
+                    } else {
+                        spec.clone()
+                    };
+
+                    let child_actions: Element<'static, Message> = if is_installed {
+                        let use_btn = button(button_content_centered(
+                            row![
+                                Lucide::Package.view(14.0, txt),
+                                text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                            ]
+                            .spacing(sp.xs as f32)
+                            .align_y(Alignment::Center)
+                            .into(),
+                        ))
+                        .on_press_maybe((!is_current && path_proxy_on).then_some(
+                            Message::EnvCenter(EnvCenterMsg::SubmitUse(spec.clone())),
+                        ))
+                        .height(Length::Fixed(
+                            tokens
+                                .control_height_secondary
+                                .max(tokens.min_click_target_px()),
+                        ))
+                        .padding([sp.sm as f32, sp.sm as f32])
+                        .style(button_style(tokens, ButtonVariant::Secondary));
+
+                        let uninstall_btn = button(button_content_centered(
+                            row![
+                                Lucide::X.view(
+                                    14.0,
+                                    contrast_text_on(gui_theme::to_color(tokens.colors.danger)),
+                                ),
+                                text(envr_core::i18n::tr_key(
+                                    "gui.action.uninstall",
+                                    "卸载",
+                                    "Uninstall",
+                                )),
+                            ]
+                            .spacing(sp.xs as f32)
+                            .align_y(Alignment::Center)
+                            .into(),
+                        ))
+                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitUninstall(
+                            spec.clone(),
+                        ))))
+                        .height(Length::Fixed(
+                            tokens
+                                .control_height_secondary
+                                .max(tokens.min_click_target_px()),
+                        ))
+                        .padding([sp.sm as f32, sp.sm as f32])
+                        .style(button_style(tokens, ButtonVariant::Danger));
+                        row![use_btn, uninstall_btn]
+                            .spacing(sp.sm as f32)
+                            .align_y(Alignment::Center)
+                            .into()
+                    } else {
+                        let install_btn = button(button_content_centered(
+                            row![
+                                Lucide::Download.view(14.0, txt),
+                                text(envr_core::i18n::tr_key(
+                                    "gui.action.install",
+                                    "安装",
+                                    "Install"
+                                )),
+                            ]
+                            .spacing(sp.xs as f32)
+                            .align_y(Alignment::Center)
+                            .into(),
+                        ))
+                        .on_press_maybe(Some(Message::EnvCenter(EnvCenterMsg::SubmitInstall(
+                            spec.clone(),
+                        ))))
+                        .height(Length::Fixed(
+                            tokens
+                                .control_height_secondary
+                                .max(tokens.min_click_target_px()),
+                        ))
+                        .padding([sp.sm as f32, sp.sm as f32])
+                        .style(button_style(tokens, ButtonVariant::Primary));
+
+                        let install_and_use_btn = button(button_content_centered(
+                            row![
+                                Lucide::RefreshCw.view(14.0, txt),
+                                text(envr_core::i18n::tr_key(
+                                    "gui.action.install_use",
+                                    "安装并切换",
+                                    "Install & Use"
+                                )),
+                            ]
+                            .spacing(sp.xs as f32)
+                            .align_y(Alignment::Center)
+                            .into(),
+                        ))
+                        .on_press_maybe(path_proxy_on.then_some(Message::EnvCenter(
+                            EnvCenterMsg::SubmitInstallAndUse(spec.clone()),
+                        )))
+                        .height(Length::Fixed(
+                            tokens
+                                .control_height_secondary
+                                .max(tokens.min_click_target_px()),
+                        ))
+                        .padding([sp.sm as f32, sp.sm as f32])
+                        .style(button_style(tokens, ButtonVariant::Secondary));
+                        row![install_btn, install_and_use_btn]
+                            .spacing(sp.sm as f32)
+                            .align_y(Alignment::Center)
+                            .into()
+                    };
+
+                    list_col = list_col.push(
+                        container(
+                            row![
+                                container(space().width(Length::Fixed((sp.xl + sp.sm) as f32)))
+                                    .width(Length::Fixed((sp.xl + sp.sm) as f32)),
+                                text(child_label).width(Length::Fill),
+                                child_actions
+                            ]
+                            .spacing(sp.sm as f32)
+                            .align_y(Alignment::Center)
+                            .width(Length::Fill),
+                        )
+                        .padding([sp.xs as f32, sp.md as f32])
+                        .style(card_container_style(tokens, 1)),
+                    );
+                }
+            }
         }
     }
 
@@ -3027,18 +3061,6 @@ fn semver_cmp_desc(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-fn parse_major_num(major: &str) -> u64 {
-    major.parse::<u64>().unwrap_or(0)
-}
-
-fn bun_major_supported_on_host(major: &str) -> bool {
-    if cfg!(windows) {
-        parse_major_num(major) >= 1
-    } else {
-        true
-    }
-}
-
 fn bun_direct_spec_blocked_on_windows(spec: &str) -> bool {
     if !cfg!(windows) {
         return false;
@@ -3052,60 +3074,6 @@ fn deno_direct_spec_blocked(spec: &str) -> bool {
     t.starts_with("0.")
 }
 
-fn parse_major_from_ver(ver: &str) -> Option<String> {
-    semver_parts(ver).map(|(ma, _mi, _patch)| ma.to_string())
-}
-
-fn parse_major_minor_key(ver: &str) -> Option<String> {
-    semver_parts(ver).map(|(ma, mi, _)| format!("{ma}.{mi}"))
-}
-
-fn parse_node_major_key(ver: &str) -> Option<String> {
-    parse_major_from_ver(ver)
-}
-
-fn parse_java_major_key(ver: &str) -> Option<String> {
-    let t = ver.trim().strip_prefix('v').unwrap_or(ver.trim());
-    let major = t.split(['.', '+', '-']).next().unwrap_or("").trim();
-    if major.is_empty() || !major.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    Some(major.to_string())
-}
-
-fn parse_python_major_minor_key(ver: &str) -> Option<String> {
-    semver_parts(ver).map(|(ma, mi, _patch)| format!("{ma}.{mi}"))
-}
-
-fn parse_major_only(s: &str) -> Option<String> {
-    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
-    if t.is_empty() {
-        return None;
-    }
-    if t.chars().all(|c| c.is_ascii_digit()) {
-        Some(t.to_string())
-    } else {
-        None
-    }
-}
-
-fn parse_python_major_minor_only(s: &str) -> Option<String> {
-    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
-    if t.is_empty() {
-        return None;
-    }
-    let parts: Vec<&str> = t.split('.').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-    if parts[0].chars().all(|c| c.is_ascii_digit()) && parts[1].chars().all(|c| c.is_ascii_digit())
-    {
-        Some(format!("{}.{}", parts[0], parts[1]))
-    } else {
-        None
-    }
-}
-
 fn parse_python_key_sort(k: &str) -> (u64, u64) {
     let mut it = k.split('.');
     let a = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -3113,53 +3081,11 @@ fn parse_python_key_sort(k: &str) -> (u64, u64) {
     (a, b)
 }
 
-fn parse_go_minor_line_key(ver: &str) -> Option<String> {
-    semver_parts(ver).map(|(ma, mi, _patch)| format!("{ma}.{mi}"))
-}
-
-fn parse_go_minor_line_only(s: &str) -> Option<String> {
-    let t = s.trim().strip_prefix('v').unwrap_or(s.trim());
-    if t.is_empty() {
-        return None;
-    }
-    let parts: Vec<&str> = t.split('.').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-    if parts[0].chars().all(|c| c.is_ascii_digit()) && parts[1].chars().all(|c| c.is_ascii_digit())
-    {
-        Some(format!("{}.{}", parts[0], parts[1]))
-    } else {
-        None
-    }
-}
-
-fn parse_go_key_sort(k: &str) -> (u64, u64) {
-    parse_python_key_sort(k)
-}
-
-pub(crate) fn env_center_clear_remote_for_tab_switch(state: &mut EnvCenterState) {
-    for (k, slot) in state.remote_latest_by_kind.iter_mut() {
-        if *k == RuntimeKind::Dotnet {
-            slot.refreshing = false;
-            continue;
-        }
-        slot.rows.clear();
-        slot.refreshing = false;
-    }
-}
-
-pub(crate) fn env_center_set_exclusive_remote_refreshing(
-    state: &mut EnvCenterState,
-    active: Option<RuntimeKind>,
-) {
-    for d in RUNTIME_DESCRIPTORS {
-        if !d.supports_remote_latest {
-            continue;
-        }
-        let slot = state.remote_slot_mut(d.kind);
-        slot.refreshing = active == Some(d.kind);
-    }
+/// Drop in-memory unified list VM when leaving the Runtime page; on-disk cache under runtime root is kept.
+pub(crate) fn env_center_clear_unified_list_render_state(state: &mut EnvCenterState) {
+    state.unified_major_rows_by_kind.clear();
+    state.unified_children_rows_by_kind_major.clear();
+    state.unified_expanded_major_keys.clear();
 }
 
 #[cfg(test)]
@@ -3167,99 +3093,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn go_grouped_key_uses_major_minor() {
-        assert_eq!(
-            grouped_version_key(RuntimeKind::Go, VersionKeyMode::MajorMinor, "1.23.5"),
-            Some("1.23".to_string())
-        );
-    }
-
-    #[test]
-    fn python_query_matches_minor_component() {
-        assert!(key_matches_query(
-            RuntimeKind::Python,
-            VersionKeyMode::MajorMinor,
-            "3.12",
-            "12"
-        ));
-        assert!(!key_matches_query(
-            RuntimeKind::Python,
-            VersionKeyMode::MajorMinor,
-            "3.12",
-            "11"
-        ));
-    }
-
-    #[test]
-    fn recompute_includes_remote_keys_for_elixir() {
-        let mut st = EnvCenterState {
-            kind: RuntimeKind::Elixir,
-            ..Default::default()
-        };
-        st.remote_slot_mut(RuntimeKind::Elixir).rows = vec![RuntimeVersion("1.19.2".to_string())];
-        st.recompute_derived_lists(JavaDistro::default());
-        assert!(
-            st.derived_keys.iter().any(|k| k == "1.19"),
-            "expected major.minor key from remote elixir rows"
-        );
-    }
-
-    #[test]
-    fn recompute_keeps_current_key_visible_when_installed_list_is_empty() {
-        let mut st = EnvCenterState {
-            kind: RuntimeKind::Erlang,
-            current: Some(RuntimeVersion("27.3.4.10".to_string())),
-            ..Default::default()
-        };
-        st.recompute_derived_lists(JavaDistro::default());
-        assert!(
-            st.derived_keys.iter().any(|k| k == "27.3"),
-            "expected current erlang version key to be visible even if installed scan is empty"
-        );
-        assert!(
-            st.derived_installed_by_key
-                .get("27.3")
-                .is_some_and(|rows| rows.iter().any(|v| v.0 == "27.3.4.10")),
-            "expected current erlang version to be grouped under derived installed rows"
-        );
-    }
-
-    #[test]
-    fn recompute_erlang_four_part_installed_and_remote_show_major_keys() {
-        let mut st = EnvCenterState {
-            kind: RuntimeKind::Erlang,
-            installed: vec![RuntimeVersion("27.3.4.10".to_string())],
-            ..Default::default()
-        };
-        st.remote_slot_mut(RuntimeKind::Erlang).rows = vec![RuntimeVersion("28.4.2".to_string())];
-        st.recompute_derived_lists(JavaDistro::default());
-        assert!(st.derived_keys.iter().any(|k| k == "28"));
-        assert!(st.derived_keys.iter().any(|k| k == "27"));
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn bun_key_mode_ignores_unsupported_zero_major_on_windows() {
-        let remote = vec![
-            RuntimeVersion("0.8.0".to_string()),
-            RuntimeVersion("1.3.12".to_string()),
-        ];
-        let mode = key_mode_for_kind(RuntimeKind::Bun, &[], &remote);
-        assert_eq!(mode, VersionKeyMode::MajorMinor);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn recompute_keeps_installed_bun_minor_key_visible() {
-        let mut st = EnvCenterState {
-            kind: RuntimeKind::Bun,
-            installed: vec![RuntimeVersion("1.3.12".to_string())],
-            ..Default::default()
-        };
-        st.recompute_derived_lists(JavaDistro::default());
-        assert!(
-            st.derived_keys.iter().any(|k| k == "1.3"),
-            "expected installed bun major.minor key to remain visible"
-        );
+    fn unified_list_rollout_covers_node_ruby_elixir_erlang_only() {
+        assert!(unified_list_rollout_enabled(RuntimeKind::Node));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Python));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Java));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Go));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Ruby));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Elixir));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Erlang));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Php));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Deno));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Bun));
+        assert!(unified_list_rollout_enabled(RuntimeKind::Dotnet));
+        assert!(!unified_list_rollout_enabled(RuntimeKind::Rust));
     }
 }

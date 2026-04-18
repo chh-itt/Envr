@@ -145,6 +145,17 @@ pub struct VersionSpec(pub String);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeVersion(pub String);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MajorVersionRecord {
+    pub major_key: String,
+    pub latest_installable: Option<RuntimeVersion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionRecord {
+    pub version: RuntimeVersion,
+}
+
 #[derive(Debug, Clone)]
 pub struct InstallRequest {
     pub spec: VersionSpec,
@@ -245,6 +256,49 @@ pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {
     }
 }
 
+pub fn numeric_version_segments(version: &str) -> Option<Vec<u64>> {
+    let t = version.trim().trim_start_matches('v');
+    if t.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    for seg in t.split('.') {
+        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        parts.push(seg.parse::<u64>().ok()?);
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(parts)
+}
+
+pub fn major_key_from_version(version: &str) -> Option<String> {
+    numeric_version_segments(version)
+        .and_then(|parts| parts.first().copied())
+        .map(|m| m.to_string())
+}
+
+pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<String> {
+    let parts = numeric_version_segments(version)?;
+    match kind {
+        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go => {
+            let major = parts.first().copied()?;
+            let minor = parts.get(1).copied()?;
+            Some(format!("{major}.{minor}"))
+        }
+        _ => parts.first().copied().map(|m| m.to_string()),
+    }
+}
+
+/// Bun/Deno **0.x** lines are not installable via envr’s managed installers (no supported release path).
+/// Use this to drop `"0"` major rows from remote summaries and caches; keep the line in UI only when
+/// [`version_line_key_for_kind`] shows the user still has a local install on that line (uninstall/switch).
+pub fn major_line_remote_install_blocked(kind: RuntimeKind, major_key: &str) -> bool {
+    matches!(kind, RuntimeKind::Bun | RuntimeKind::Deno) && major_key == "0"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +326,66 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
+    }
+
+    #[test]
+    fn numeric_version_segments_accepts_three_and_four_parts() {
+        assert_eq!(
+            numeric_version_segments("27.3.4").expect("three"),
+            vec![27, 3, 4]
+        );
+        assert_eq!(
+            numeric_version_segments("27.3.4.10").expect("four"),
+            vec![27, 3, 4, 10]
+        );
+        assert_eq!(
+            numeric_version_segments("v25.9.0").expect("v-prefixed"),
+            vec![25, 9, 0]
+        );
+    }
+
+    #[test]
+    fn major_key_from_version_extracts_numeric_major() {
+        assert_eq!(major_key_from_version("27.3.4.10").as_deref(), Some("27"));
+        assert_eq!(major_key_from_version("v25.9.0").as_deref(), Some("25"));
+        assert_eq!(major_key_from_version("27.3.4-rc1"), None);
+    }
+
+    #[test]
+    fn version_line_key_for_kind_matches_runtime_grouping_contract() {
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Node, "25.9.0").as_deref(),
+            Some("25")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Python, "3.13.2").as_deref(),
+            Some("3.13")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Go, "1.24.7").as_deref(),
+            Some("1.24")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Php, "8.4.11").as_deref(),
+            Some("8.4")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),
+            Some("27")
+        );
+    }
+
+    #[test]
+    fn major_line_remote_install_blocked_bun_deno_zero_only() {
+        assert!(major_line_remote_install_blocked(
+            RuntimeKind::Bun,
+            "0"
+        ));
+        assert!(major_line_remote_install_blocked(
+            RuntimeKind::Deno,
+            "0"
+        ));
+        assert!(!major_line_remote_install_blocked(RuntimeKind::Bun, "1"));
+        assert!(!major_line_remote_install_blocked(RuntimeKind::Node, "0"));
     }
 }

@@ -2,7 +2,8 @@
 
 use envr_core::shim_service::ShimService;
 use envr_domain::runtime::{
-    InstallRequest, RuntimeKind, RuntimeVersion, VersionSpec, runtime_kinds_all,
+    InstallRequest, MajorVersionRecord, RuntimeKind, RuntimeVersion, VersionRecord, VersionSpec,
+    runtime_kinds_all,
 };
 use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
@@ -23,45 +24,6 @@ use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_man
 use std::process::Command;
 
 type RefreshRuntimesOk = (Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>);
-
-fn semver_triplet(version: &str) -> (u64, u64, u64) {
-    let mut parts = version.trim().trim_start_matches('v').split('.');
-    let major = parts
-        .next()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or(0);
-    let minor = parts
-        .next()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or(0);
-    let patch = parts
-        .next()
-        .and_then(|x| x.parse::<u64>().ok())
-        .unwrap_or(0);
-    (major, minor, patch)
-}
-
-fn latest_per_major_from_versions(versions: &[RuntimeVersion]) -> Vec<RuntimeVersion> {
-    use std::collections::BTreeMap;
-    let mut best: BTreeMap<u64, (u64, u64, u64, String)> = BTreeMap::new();
-    for v in versions {
-        let (maj, min, pat) = semver_triplet(&v.0);
-        let candidate = (maj, min, pat, v.0.clone());
-        best.entry(maj)
-            .and_modify(|cur| {
-                if (candidate.1, candidate.2) > (cur.1, cur.2) {
-                    *cur = candidate.clone();
-                }
-            })
-            .or_insert(candidate);
-    }
-    let mut out: Vec<RuntimeVersion> = best
-        .into_values()
-        .map(|(_, _, _, v)| RuntimeVersion(v))
-        .collect();
-    out.sort_by(|a, b| semver_triplet(&b.0).cmp(&semver_triplet(&a.0)));
-    out
-}
 
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
@@ -389,52 +351,106 @@ pub fn rust_target_toggle(name: String, install: bool) -> Task<Message> {
     })
 }
 
-pub fn load_remote_latest_disk_snapshot(kind: RuntimeKind) -> Task<Message> {
+pub fn load_unified_major_rows_cached(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Vec<RuntimeVersion> {
-                let Ok(svc) = open_runtime_service() else {
-                    return Vec::new();
-                };
-                svc.try_load_remote_latest_per_major_from_disk(kind)
+            .spawn_blocking(move || -> Result<Vec<MajorVersionRecord>, String> {
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                svc.list_major_rows_cached(kind)
+                    .map_err(|e: EnvrError| e.to_string())
             })
             .await;
-
-        Message::EnvCenter(EnvCenterMsg::RemoteLatestDiskSnapshot(
-            kind,
-            res.unwrap_or_default(),
-        ))
+        let msg = match res {
+            Ok(Ok(rows)) => EnvCenterMsg::UnifiedMajorRowsCached(kind, Ok(rows)),
+            Ok(Err(e)) => EnvCenterMsg::UnifiedMajorRowsCached(kind, Err(e)),
+            Err(e) => EnvCenterMsg::UnifiedMajorRowsCached(kind, Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
     })
 }
 
-pub fn refresh_remote_latest_per_major(kind: RuntimeKind) -> Task<Message> {
+pub fn refresh_unified_major_rows(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Result<Vec<RuntimeVersion>, String> {
+            .spawn_blocking(move || -> Result<Vec<MajorVersionRecord>, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                let latest = svc
-                    .list_remote_latest_per_major(kind)
-                    .map_err(|e: EnvrError| e.to_string())?;
-                if !latest.is_empty() || kind != RuntimeKind::Elixir {
-                    return Ok(latest);
-                }
-                // Elixir index occasionally yields no "latest-per-major" rows in first fetch;
-                // fall back to full remote list and derive one latest row per major for GUI.
-                let all = svc
-                    .list_remote(kind, &envr_domain::runtime::RemoteFilter { prefix: None })
-                    .map_err(|e: EnvrError| e.to_string())?;
-                Ok(latest_per_major_from_versions(&all))
+                svc.refresh_major_rows_remote(kind)
+                    .map_err(|e: EnvrError| e.to_string())
             })
             .await;
-
         let msg = match res {
-            Ok(Ok(list)) => EnvCenterMsg::RemoteLatestRefreshed(kind, Ok(list)),
-            Ok(Err(e)) => EnvCenterMsg::RemoteLatestRefreshed(kind, Err(e)),
-            Err(e) => EnvCenterMsg::RemoteLatestRefreshed(kind, Err(e.to_string())),
+            Ok(Ok(rows)) => EnvCenterMsg::UnifiedMajorRowsRefreshed(kind, Ok(rows)),
+            Ok(Err(e)) => EnvCenterMsg::UnifiedMajorRowsRefreshed(kind, Err(e)),
+            Err(e) => EnvCenterMsg::UnifiedMajorRowsRefreshed(kind, Err(e.to_string())),
         };
         Message::EnvCenter(msg)
+    })
+}
+
+pub fn load_unified_children_cached(kind: RuntimeKind, major_key: String) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let major_for_msg = major_key.clone();
+        let major_for_call = major_key.clone();
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<VersionRecord>, String> {
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                svc.list_children_cached(kind, &major_for_call)
+                    .map_err(|e: EnvrError| e.to_string())
+            })
+            .await;
+        let msg = match res {
+            Ok(Ok(rows)) => EnvCenterMsg::UnifiedChildrenCached(
+                kind,
+                major_for_msg,
+                Ok(rows.into_iter().map(|r| r.version).collect()),
+            ),
+            Ok(Err(e)) => EnvCenterMsg::UnifiedChildrenCached(kind, major_key, Err(e)),
+            Err(e) => EnvCenterMsg::UnifiedChildrenCached(kind, major_key, Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+pub fn refresh_unified_children(kind: RuntimeKind, major_key: String) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let major_for_msg = major_key.clone();
+        let major_for_call = major_key.clone();
+        let res = handle
+            .spawn_blocking(move || -> Result<Vec<VersionRecord>, String> {
+                let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                svc.refresh_children_remote(kind, &major_for_call)
+                    .map_err(|e: EnvrError| e.to_string())
+            })
+            .await;
+        let msg = match res {
+            Ok(Ok(rows)) => EnvCenterMsg::UnifiedChildrenRefreshed(
+                kind,
+                major_for_msg,
+                Ok(rows.into_iter().map(|r| r.version).collect()),
+            ),
+            Ok(Err(e)) => EnvCenterMsg::UnifiedChildrenRefreshed(kind, major_key, Err(e)),
+            Err(e) => EnvCenterMsg::UnifiedChildrenRefreshed(kind, major_key, Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+/// Best-effort: delete unified list on-disk cache for `kind` (major rows, full remote snapshot, children).
+pub fn invalidate_unified_list_disk_cache(kind: RuntimeKind) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let _ = handle
+            .spawn_blocking(move || {
+                if let Ok(svc) = open_runtime_service() {
+                    let _ = svc.remove_unified_version_list_cache_dir(kind);
+                }
+            })
+            .await;
+        Message::Idle
     })
 }
 

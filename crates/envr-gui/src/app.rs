@@ -26,8 +26,7 @@ use crate::view::downloads::{
     DOWNLOAD_PANEL_SHELL_W, DownloadJob, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
 };
 use crate::view::env_center::{
-    EnvCenterMsg, EnvCenterState, env_center_clear_remote_for_tab_switch,
-    env_center_set_exclusive_remote_refreshing,
+    EnvCenterMsg, EnvCenterState, env_center_clear_unified_list_render_state,
 };
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
@@ -184,6 +183,8 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// Background work completed; no state change (e.g. disk cache invalidation).
+    Idle,
     /// Re-resolve `FollowSystem` scheme when OS appearance changes (cheap tick).
     ThemePollTick,
     /// ~32ms: panel reveal, skeleton shimmer, throttled download progress (`tasks_gui.md` GUI-040–042, 041).
@@ -237,9 +238,9 @@ pub fn run() -> iced::Result {
                     .supports_remote_latest
                     && state
                         .env_center
-                        .remote_latest_by_kind
+                        .unified_major_rows_by_kind
                         .get(&state.env_center.kind)
-                        .is_some_and(|s| s.refreshing && s.rows.is_empty())));
+                        .is_none_or(|rows| rows.is_empty())));
         let need_motion = state.downloads.needs_motion_tick()
             || state.downloads.title_drag_armed_since.is_some()
             || runtime_skeleton;
@@ -329,6 +330,7 @@ fn configured_default_font(st: &Settings) -> iced::Font {
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
     let locale = state.locale;
     envr_core::i18n::with_locale(locale, || match message {
+        Message::Idle => Task::none(),
         Message::ThemePollTick => Task::none(),
         Message::A11yPollTick => {
             state.reduce_motion = envr_platform::a11y::prefers_reduced_motion();
@@ -342,7 +344,11 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::MotionTick => handle_motion_tick(state),
         Message::Navigate(route) => {
             tracing::debug!(?route, "navigate");
+            let leaving_runtime = state.route() == Route::Runtime && route != Route::Runtime;
             state.route = route;
+            if leaving_runtime {
+                env_center_clear_unified_list_render_state(&mut state.env_center);
+            }
             if route == Route::Runtime {
                 return runtime_page_enter_tasks(state);
             }
@@ -628,22 +634,14 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                     if matches!(state.route(), Route::Runtime) {
                         let k = state.env_center.kind;
                         if envr_domain::runtime::runtime_descriptor(k).supports_remote_latest {
-                            if k == envr_domain::runtime::RuntimeKind::Java {
-                                let distro =
-                                    state.settings.cache.snapshot().runtime.java.current_distro;
-                                state
-                                    .env_center
-                                    .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
-                                    .rows = java_static_latest_for_distro(distro);
-                            }
-                            env_center_set_exclusive_remote_refreshing(
-                                &mut state.env_center,
-                                Some(k),
-                            );
                             return Task::batch([
                                 gui_ops::refresh_runtimes(k),
-                                gui_ops::load_remote_latest_disk_snapshot(k),
-                                gui_ops::refresh_remote_latest_per_major(k),
+                                unified_list_rollout_enabled(k)
+                                    .then_some(gui_ops::load_unified_major_rows_cached(k))
+                                    .unwrap_or_else(Task::none),
+                                unified_list_rollout_enabled(k)
+                                    .then_some(gui_ops::refresh_unified_major_rows(k))
+                                    .unwrap_or_else(Task::none),
                             ]);
                         }
                     }
@@ -971,10 +969,32 @@ where
     }
 }
 
-fn mark_remote_latest_dirty_for_kind(state: &mut AppState, kind: envr_domain::runtime::RuntimeKind) {
-    let slot = state.env_center.remote_slot_mut(kind);
-    slot.rows.clear();
-    slot.refreshing = true;
+fn unified_list_rollout_enabled(kind: envr_domain::runtime::RuntimeKind) -> bool {
+    matches!(
+        kind,
+        envr_domain::runtime::RuntimeKind::Node
+            | envr_domain::runtime::RuntimeKind::Python
+            | envr_domain::runtime::RuntimeKind::Java
+            | envr_domain::runtime::RuntimeKind::Go
+            | envr_domain::runtime::RuntimeKind::Ruby
+            | envr_domain::runtime::RuntimeKind::Elixir
+            | envr_domain::runtime::RuntimeKind::Erlang
+            | envr_domain::runtime::RuntimeKind::Php
+            | envr_domain::runtime::RuntimeKind::Deno
+            | envr_domain::runtime::RuntimeKind::Bun
+            | envr_domain::runtime::RuntimeKind::Dotnet
+    )
+}
+
+fn mark_unified_major_rows_dirty_for_kind(
+    state: &mut AppState,
+    kind: envr_domain::runtime::RuntimeKind,
+) {
+    state.env_center.unified_major_rows_by_kind.remove(&kind);
+    state
+        .env_center
+        .unified_children_rows_by_kind_major
+        .retain(|(k, _), _| *k != kind);
 }
 
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
@@ -1022,9 +1042,9 @@ fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
         && state.env_center.installed.is_empty()
         && state
             .env_center
-            .remote_latest_by_kind
+            .unified_major_rows_by_kind
             .get(&state.env_center.kind)
-            .is_some_and(|s| s.refreshing && s.rows.is_empty());
+            .is_none_or(|rows| rows.is_empty());
     if !state.reduce_motion
         && !state.disable_runtime_skeleton_shimmer
         && matches!(state.route(), Route::Runtime)
@@ -1359,7 +1379,6 @@ fn rust_runtime_task_label(action: &str, detail: &str) -> String {
 fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
     let kind = state.env_center.kind;
     if kind == envr_domain::runtime::RuntimeKind::Rust {
-        env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
         state.env_center.busy = true;
         return Task::batch([
             gui_ops::rust_refresh(),
@@ -1368,32 +1387,17 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
         ]);
     }
     if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
-        if kind == envr_domain::runtime::RuntimeKind::Java {
-            let distro = state.settings.cache.snapshot().runtime.java.current_distro;
-            state
-                .env_center
-                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
-                .rows = java_static_latest_for_distro(distro);
-        }
-        env_center_set_exclusive_remote_refreshing(&mut state.env_center, Some(kind));
         return Task::batch([
             gui_ops::refresh_runtimes(kind),
-            gui_ops::load_remote_latest_disk_snapshot(kind),
-            gui_ops::refresh_remote_latest_per_major(kind),
+            unified_list_rollout_enabled(kind)
+                .then_some(gui_ops::load_unified_major_rows_cached(kind))
+                .unwrap_or_else(Task::none),
+            unified_list_rollout_enabled(kind)
+                .then_some(gui_ops::refresh_unified_major_rows(kind))
+                .unwrap_or_else(Task::none),
         ]);
     }
-    env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
     gui_ops::refresh_runtimes(kind)
-}
-
-fn java_static_latest_for_distro(
-    distro: envr_config::settings::JavaDistro,
-) -> Vec<envr_domain::runtime::RuntimeVersion> {
-    distro
-        .supported_lts_major_strs()
-        .iter()
-        .map(|m| envr_domain::runtime::RuntimeVersion((*m).to_string()))
-        .collect()
 }
 
 fn sync_go_env_center_drafts_from_settings(state: &mut AppState) {
@@ -1412,8 +1416,7 @@ fn sync_bun_env_center_drafts_from_settings(state: &mut AppState) {
 }
 
 fn recompute_env_center_derived(state: &mut AppState) {
-    let distro = state.settings.cache.snapshot().runtime.java.current_distro;
-    state.env_center.recompute_derived_lists(distro);
+    let _ = state;
 }
 
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
@@ -1424,14 +1427,13 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             state.env_center.kind = k;
             state.env_center.remote_error = None;
-            // Keep dotnet remote rows cached across tab switches to avoid "blank then reload".
-            env_center_clear_remote_for_tab_switch(&mut state.env_center);
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
             state.env_center.rust_targets.clear();
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
             state.env_center.runtime_settings_expanded = false;
+            state.env_center.unified_expanded_major_keys.clear();
             if k == envr_domain::runtime::RuntimeKind::Elixir {
                 state.env_center.elixir_prereq_error = None;
             }
@@ -1451,25 +1453,20 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 ]);
             }
             if envr_domain::runtime::runtime_descriptor(k).supports_remote_latest {
-                if k == envr_domain::runtime::RuntimeKind::Java {
-                    let distro = state.settings.cache.snapshot().runtime.java.current_distro;
-                    state
-                        .env_center
-                        .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
-                        .rows = java_static_latest_for_distro(distro);
-                }
-                env_center_set_exclusive_remote_refreshing(&mut state.env_center, Some(k));
                 recompute_env_center_derived(state);
                 return Task::batch([
                     gui_ops::refresh_runtimes(k),
-                    gui_ops::load_remote_latest_disk_snapshot(k),
-                    gui_ops::refresh_remote_latest_per_major(k),
+                    unified_list_rollout_enabled(k)
+                        .then_some(gui_ops::load_unified_major_rows_cached(k))
+                        .unwrap_or_else(Task::none),
+                    unified_list_rollout_enabled(k)
+                        .then_some(gui_ops::refresh_unified_major_rows(k))
+                        .unwrap_or_else(Task::none),
                     (k == envr_domain::runtime::RuntimeKind::Elixir)
                         .then_some(gui_ops::check_elixir_prereqs())
                         .unwrap_or_else(Task::none),
                 ]);
             }
-            env_center_set_exclusive_remote_refreshing(&mut state.env_center, None);
             recompute_env_center_derived(state);
             Task::batch([gui_ops::refresh_runtimes(k)])
         }
@@ -1500,35 +1497,84 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             recompute_env_center_derived(state);
             Task::none()
         }
-        EnvCenterMsg::RemoteLatestDiskSnapshot(kind, rows) => {
-            if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
-                let slot = state.env_center.remote_slot_mut(kind);
-                if slot.rows.is_empty() || rows.len() > slot.rows.len() {
-                    slot.rows = rows;
-                }
+        EnvCenterMsg::UnifiedMajorRowsCached(kind, res) => {
+            if !unified_list_rollout_enabled(kind) {
+                return Task::none();
             }
-            recompute_env_center_derived(state);
-            Task::none()
-        }
-        EnvCenterMsg::RemoteLatestRefreshed(kind, res) => {
             match res {
                 Ok(rows) => {
                     state.env_center.remote_error = None;
-                    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
-                        let slot = state.env_center.remote_slot_mut(kind);
-                        slot.refreshing = false;
-                        slot.rows = rows;
-                    }
+                    state.env_center.unified_major_rows_by_kind.insert(kind, rows);
                 }
                 Err(e) => {
                     state.env_center.remote_error = Some(e);
-                    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
-                        // Keep already shown rows to avoid visual blanking on transient refresh failure.
-                        state.env_center.remote_slot_mut(kind).refreshing = false;
-                    }
                 }
             }
-            recompute_env_center_derived(state);
+            Task::none()
+        }
+        EnvCenterMsg::UnifiedMajorRowsRefreshed(kind, res) => {
+            if !unified_list_rollout_enabled(kind) {
+                return Task::none();
+            }
+            match res {
+                Ok(rows) => {
+                    state.env_center.remote_error = None;
+                    state.env_center.unified_major_rows_by_kind.insert(kind, rows);
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e);
+                }
+            }
+            Task::none()
+        }
+        EnvCenterMsg::UnifiedChildrenCached(kind, major_key, res) => {
+            if !unified_list_rollout_enabled(kind) {
+                return Task::none();
+            }
+            match res {
+                Ok(rows) => {
+                    state.env_center.remote_error = None;
+                    state
+                        .env_center
+                        .unified_children_rows_by_kind_major
+                        .insert((kind, major_key), rows);
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e);
+                }
+            }
+            Task::none()
+        }
+        EnvCenterMsg::UnifiedChildrenRefreshed(kind, major_key, res) => {
+            if !unified_list_rollout_enabled(kind) {
+                return Task::none();
+            }
+            match res {
+                Ok(rows) => {
+                    state.env_center.remote_error = None;
+                    state
+                        .env_center
+                        .unified_children_rows_by_kind_major
+                        .insert((kind, major_key), rows);
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e);
+                }
+            }
+            Task::none()
+        }
+        EnvCenterMsg::ToggleUnifiedMajorExpanded(major_key) => {
+            if !state.env_center.unified_expanded_major_keys.remove(&major_key) {
+                state
+                    .env_center
+                    .unified_expanded_major_keys
+                    .insert(major_key.clone());
+                let kind = state.env_center.kind;
+                return Task::batch([
+                    gui_ops::load_unified_children_cached(kind, major_key.clone()),
+                    gui_ops::refresh_unified_children(kind, major_key),
+                ]);
+            }
             Task::none()
         }
         EnvCenterMsg::SubmitDirectInstall => {
@@ -1763,14 +1809,6 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             )
         }
         EnvCenterMsg::SetJavaDistro(distro) => {
-            state
-                .env_center
-                .remote_slot_mut(envr_domain::runtime::RuntimeKind::Java)
-                .rows = java_static_latest_for_distro(distro);
-            env_center_set_exclusive_remote_refreshing(
-                &mut state.env_center,
-                Some(envr_domain::runtime::RuntimeKind::Java),
-            );
             state.env_center.remote_error = None;
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.java.current_distro = distro;
@@ -1846,16 +1884,22 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             })
         }
         EnvCenterMsg::SetPhpDownloadSource(src) => {
-            mark_remote_latest_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
-            persist_runtime_settings_update(state, move |st| {
-                st.runtime.php.download_source = src;
-            })
+            mark_unified_major_rows_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
+            Task::batch([
+                gui_ops::invalidate_unified_list_disk_cache(envr_domain::runtime::RuntimeKind::Php),
+                persist_runtime_settings_update(state, move |st| {
+                    st.runtime.php.download_source = src;
+                }),
+            ])
         }
         EnvCenterMsg::SetPhpWindowsBuild(flavor) => {
-            mark_remote_latest_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
-            persist_runtime_settings_update(state, move |st| {
-                st.runtime.php.windows_build = flavor;
-            })
+            mark_unified_major_rows_dirty_for_kind(state, envr_domain::runtime::RuntimeKind::Php);
+            Task::batch([
+                gui_ops::invalidate_unified_list_disk_cache(envr_domain::runtime::RuntimeKind::Php),
+                persist_runtime_settings_update(state, move |st| {
+                    st.runtime.php.windows_build = flavor;
+                }),
+            ])
         }
         EnvCenterMsg::SetPhpPathProxy(on) => {
             persist_path_proxy_toggle(
