@@ -85,6 +85,11 @@ path_proxy_enabled = true
 
 [runtime.python]
 download_source = "auto"
+# windows_distribution：auto | nuget | embeddable
+# - auto：优先使用 NuGet 完整发行版（包含 venv 等标准库），失败则回退 embeddable zip
+# - nuget：强制使用 NuGet（python/pythonx86/pythonarm64）
+# - embeddable：使用 python.org embeddable zip（可能缺少 venv）
+windows_distribution = "auto"
 # pip_registry_mode：auto | domestic | official | restore
 pip_registry_mode = "auto"
 path_proxy_enabled = true

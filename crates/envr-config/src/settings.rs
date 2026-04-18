@@ -420,6 +420,9 @@ impl Default for NodeRuntimeSettings {
 pub struct PythonRuntimeSettings {
     #[serde(default)]
     pub download_source: PythonDownloadSource,
+    /// Windows distribution choice: `auto` (prefer full NuGet), `nuget`, or `embeddable`.
+    #[serde(default)]
+    pub windows_distribution: PythonWindowsDistribution,
     #[serde(default)]
     pub pip_registry_mode: PipRegistryMode,
     /// When false, python/pip shims resolve to the next matching binary on PATH outside envr shims.
@@ -431,10 +434,24 @@ impl Default for PythonRuntimeSettings {
     fn default() -> Self {
         Self {
             download_source: PythonDownloadSource::default(),
+            windows_distribution: PythonWindowsDistribution::default(),
             pip_registry_mode: PipRegistryMode::default(),
             path_proxy_enabled: defaults::python_path_proxy_enabled(),
         }
     }
+}
+
+/// Windows distribution for CPython installs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PythonWindowsDistribution {
+    /// Prefer full NuGet packages on Windows, fall back to embeddable zip when needed.
+    #[default]
+    Auto,
+    /// Full Python from NuGet (`python`, `pythonx86`, `pythonarm64`).
+    Nuget,
+    /// python.org embeddable zip (may lack some stdlib modules such as `venv`).
+    Embeddable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

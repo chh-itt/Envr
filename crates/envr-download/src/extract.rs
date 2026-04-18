@@ -23,7 +23,8 @@ pub fn detect_archive_kind(path: impl AsRef<Path>) -> EnvrResult<ArchiveKind> {
         .and_then(|s| s.to_str())
         .ok_or_else(|| EnvrError::Validation("archive path missing filename".to_string()))?;
 
-    if name.ends_with(".zip") {
+    // NuGet `.nupkg` is a zip container.
+    if name.ends_with(".zip") || name.ends_with(".nupkg") {
         Ok(ArchiveKind::Zip)
     } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
         Ok(ArchiveKind::TarGz)
@@ -212,6 +213,10 @@ mod tests {
     #[test]
     fn detect_archive_kind_covers_common_suffixes() {
         assert_eq!(detect_archive_kind("x.zip").expect("zip"), ArchiveKind::Zip);
+        assert_eq!(
+            detect_archive_kind("x.nupkg").expect("nupkg"),
+            ArchiveKind::Zip
+        );
         assert_eq!(detect_archive_kind("x.tar").expect("tar"), ArchiveKind::Tar);
         assert_eq!(
             detect_archive_kind("x.tgz").expect("tgz"),

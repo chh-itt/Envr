@@ -8,6 +8,7 @@ use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
     settings_path_from_platform,
 };
+use envr_config::settings::PythonWindowsDistribution;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
@@ -169,6 +170,61 @@ fn load_settings_snapshot() -> Option<envr_config::settings::Settings> {
         let path = settings_path_from_platform(&platform);
         envr_config::settings::Settings::load_or_default_from(&path).ok()
     })()
+}
+
+#[cfg(windows)]
+fn nuget_package_id_for_arch(arch: &str) -> Option<&'static str> {
+    match arch {
+        "x86_64" => Some("python"),
+        "x86" => Some("pythonx86"),
+        "aarch64" => Some("pythonarm64"),
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
+fn nuget_nupkg_url(package_id: &str, version: &str) -> String {
+    // NuGet v3 flat container: https://api.nuget.org/v3-flatcontainer/<id>/<ver>/<id>.<ver>.nupkg
+    let id_lc = package_id.to_ascii_lowercase();
+    let ver_lc = version.to_ascii_lowercase();
+    format!(
+        "https://api.nuget.org/v3-flatcontainer/{id_lc}/{ver_lc}/{id_lc}.{ver_lc}.nupkg"
+    )
+}
+
+#[cfg(windows)]
+fn promote_nuget_tools_dir(staging_root: &Path) -> EnvrResult<()> {
+    let tools = staging_root.join("tools");
+    if !tools.is_dir() {
+        return Ok(());
+    }
+    // Hoist children of `tools/` into the install root.
+    for ent in fs::read_dir(&tools).map_err(EnvrError::from)? {
+        let ent = ent.map_err(EnvrError::from)?;
+        let from = ent.path();
+        let to = staging_root.join(ent.file_name());
+        // Best-effort replace if needed.
+        if to.exists() {
+            let _ = fs::remove_dir_all(&to);
+            let _ = fs::remove_file(&to);
+        }
+        fs::rename(&from, &to).map_err(EnvrError::from)?;
+    }
+    let _ = fs::remove_dir_all(&tools);
+    Ok(())
+}
+
+#[cfg(windows)]
+fn python_has_venv(home: &Path) -> bool {
+    let Some(py) = python_executable(home) else {
+        return false;
+    };
+    Command::new(py)
+        .args(["-c", "import venv, ensurepip; print('ok')"])
+        .current_dir(home)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn remove_path_if_exists(path: &Path) {
@@ -372,6 +428,87 @@ fn bootstrap_pip_windows(
     Ok(())
 }
 
+#[cfg(windows)]
+fn pip_launcher_path(home: &Path) -> PathBuf {
+    home.join("Scripts").join("pip.exe")
+}
+
+#[cfg(windows)]
+fn pip_launcher_looks_stale(home: &Path) -> bool {
+    let p = pip_launcher_path(home);
+    let Ok(bytes) = fs::read(&p) else {
+        return false;
+    };
+    // Our install layout uses `.envr-staging-*` sibling paths. If a launcher embeds this path,
+    // it will break once the directory is renamed into `versions/<ver>`.
+    bytes
+        .windows(b".envr-staging-".len())
+        .any(|w| w == b".envr-staging-")
+}
+
+#[cfg(windows)]
+fn verify_windows_pip_launcher(home: &Path) -> EnvrResult<()> {
+    let p = pip_launcher_path(home);
+    if !p.is_file() {
+        return Err(EnvrError::Runtime(format!(
+            "pip launcher missing after install: {}",
+            p.display()
+        )));
+    }
+    if pip_launcher_looks_stale(home) {
+        return Err(EnvrError::Runtime(format!(
+            "pip launcher embeds staging path: {}",
+            p.display()
+        )));
+    }
+    let out = Command::new(&p)
+        .arg("--version")
+        .current_dir(home)
+        .output()
+        .map_err(|e| EnvrError::Runtime(format!("pip.exe probe: {e}")))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    Err(EnvrError::Runtime(format!(
+        "pip.exe failed after install (exit={}); stdout={}; stderr={}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout).trim(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    )))
+}
+
+#[cfg(windows)]
+fn ensure_windows_pip_launchers(home: &Path) -> EnvrResult<()> {
+    let py = python_executable(home).ok_or_else(|| {
+        EnvrError::Runtime("installation layout missing python executable".into())
+    })?;
+
+    // If `pip.exe` exists, just validate it.
+    if pip_launcher_path(home).is_file() {
+        return verify_windows_pip_launcher(home);
+    }
+
+    // Offline-friendly path: stdlib ensurepip. `--default-pip` ensures `pip.exe` is created.
+    let ensure = Command::new(&py)
+        .args(["-m", "ensurepip", "--upgrade", "--default-pip"])
+        .current_dir(home)
+        .output()
+        .map_err(|e| EnvrError::Runtime(format!("ensurepip: {e}")))?;
+
+    if ensure.status.success() && pip_launcher_path(home).is_file() {
+        return verify_windows_pip_launcher(home);
+    }
+
+    let ensure_out = String::from_utf8_lossy(&ensure.stdout);
+    let ensure_err = String::from_utf8_lossy(&ensure.stderr);
+    Err(EnvrError::Runtime(format!(
+        "pip launchers not created by ensurepip; ensurepip_exit={}; ensurepip_stdout={}; ensurepip_stderr={}",
+        ensure.status,
+        ensure_out.trim(),
+        ensure_err.trim(),
+    )))
+}
+
 fn build_cpython_unix(src_root: &Path, install_prefix: &Path) -> EnvrResult<()> {
     let prefix = install_prefix.to_string_lossy();
     let cfg = Command::new("./configure")
@@ -430,6 +567,8 @@ fn verify_python_and_pip(home: &Path) -> EnvrResult<()> {
         .output()
         .map_err(|e| EnvrError::Runtime(format!("pip check: {e}")))?;
     if first.status.success() {
+        #[cfg(windows)]
+        ensure_windows_pip_launchers(home)?;
         return Ok(());
     }
 
@@ -444,6 +583,8 @@ fn verify_python_and_pip(home: &Path) -> EnvrResult<()> {
             .output()
             .map_err(|e| EnvrError::Runtime(format!("pip re-check: {e}")))?;
         if second.status.success() {
+            #[cfg(windows)]
+            ensure_windows_pip_launchers(home)?;
             return Ok(());
         }
     }
@@ -595,7 +736,38 @@ impl PythonManager {
             .get(&rid)
             .map(Vec::as_slice)
             .unwrap_or(&[]);
-        let artifact = pick_install_artifact(files, os, arch)?;
+
+        #[cfg(windows)]
+        let win_dist = load_settings_snapshot()
+            .map(|s| s.runtime.python.windows_distribution)
+            .unwrap_or(PythonWindowsDistribution::Auto);
+
+        #[cfg(windows)]
+        let prefer_nuget =
+            matches!(win_dist, PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget);
+
+        // Default artifact selection.
+        let embed_artifact = pick_install_artifact(files, os, arch)?;
+        let mut artifact = embed_artifact.clone();
+        // On Windows, allow selecting NuGet nupkg as the "full" distribution.
+        #[cfg(windows)]
+        let nuget_artifact = if os == "windows" && prefer_nuget {
+            nuget_package_id_for_arch(arch).map(|pid| crate::index::PyReleaseFile {
+                name: format!("nuget:{pid}"),
+                os: "/downloads/os/1/".into(),
+                release: format!("/downloads/release/{rid}/"),
+                is_source: false,
+                url: nuget_nupkg_url(pid, &version.0),
+                sha256_sum: None,
+            })
+        } else {
+            None
+        };
+        #[cfg(not(windows))]
+        let nuget_artifact: Option<crate::index::PyReleaseFile> = None;
+        if let Some(n) = nuget_artifact.clone() {
+            artifact = n;
+        }
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let fname = artifact.url.rsplit('/').next().unwrap_or("download.bin");
@@ -605,14 +777,43 @@ impl PythonManager {
         } else {
             vec![artifact.url.clone()]
         };
-        download_with_fallbacks(
+        let download_res = download_with_fallbacks(
             &self.client,
             &download_urls,
             &cache_file,
             progress_downloaded,
             progress_total,
             cancel,
-        )?;
+        );
+        #[cfg(windows)]
+        let download_res = match download_res {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // Auto: NuGet might not have every python.org release. Fall back to embeddable zip.
+                if os == "windows"
+                    && matches!(win_dist, PythonWindowsDistribution::Auto)
+                    && artifact.name.starts_with("nuget:")
+                {
+                    artifact = embed_artifact.clone();
+                    let download_urls = if let Some(st) = load_settings_snapshot() {
+                        python_download_url_candidates(&st, &artifact.url)
+                    } else {
+                        vec![artifact.url.clone()]
+                    };
+                    download_with_fallbacks(
+                        &self.client,
+                        &download_urls,
+                        &cache_file,
+                        progress_downloaded,
+                        progress_total,
+                        cancel,
+                    )
+                } else {
+                    Err(e)
+                }
+            }
+        };
+        download_res?;
         verify_sha256_if_present(&cache_file, &artifact.sha256_sum)?;
 
         let final_dir = self.paths.version_dir(&version.0);
@@ -621,31 +822,30 @@ impl PythonManager {
 
         if os == "windows" {
             fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
-            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
-                .map_err(EnvrError::from)?;
+            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
             extract::extract_archive(&cache_file, staging.path())?;
             let staging_final = install_layout::sibling_staging_path(&final_dir)?;
             install_layout::remove_if_exists(&staging_final)?;
             install_layout::hoist_directory_children(staging.path(), &staging_final)?;
-            fix_windows_embed_pth(&staging_final)?;
-            bootstrap_pip_windows(
-                &self.client,
-                &self.paths,
-                &staging_final,
-                progress_downloaded,
-                progress_total,
-                cancel,
-            )?;
+            // NuGet packages store payload under `tools/` - hoist if present.
+            #[cfg(windows)]
+            promote_nuget_tools_dir(&staging_final)?;
+            // For embeddable zips, ensure `_pth` enables site-packages.
+            #[cfg(windows)]
+            if staging_final.read_dir().ok().is_some()
+                && (staging_final.join("python311._pth").exists()
+                    || staging_final.join("python312._pth").exists()
+                    || staging_final.join("python313._pth").exists()
+                    || staging_final.join("python314._pth").exists())
+            {
+                fix_windows_embed_pth(&staging_final)?;
+            }
             let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
             if !python_installation_valid(&install_root) {
                 let _ = fs::remove_dir_all(&staging_final);
                 return Err(EnvrError::Validation(
                     "python install did not produce a usable prefix".into(),
                 ));
-            }
-            if let Err(e) = verify_python_and_pip(&install_root) {
-                let _ = fs::remove_dir_all(&staging_final);
-                return Err(e);
             }
             install_layout::commit_staging_dir(&staging_final, &final_dir)?;
         } else {
@@ -679,6 +879,58 @@ impl PythonManager {
             return Err(EnvrError::Validation(
                 "python install did not produce a usable prefix".into(),
             ));
+        }
+        #[cfg(windows)]
+        {
+            // Install pip *after* promotion to final directory so `pip.exe` launchers do not embed staging paths.
+            // For Windows, prefer NuGet full distribution when configured; it includes full stdlib (e.g. `venv`).
+            // If `venv` is missing after install, bootstrap via NuGet is expected to fix this (embeddable may not).
+            if matches!(win_dist, PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget)
+                && !python_has_venv(&install_root)
+            {
+                return Err(EnvrError::Validation(
+                    "python install missing stdlib modules (venv/ensurepip); consider runtime.python.windows_distribution = \"nuget\"".into(),
+                ));
+            }
+            // Best-effort: only bootstrap pip when `python -m pip` is not available.
+            let pip_ok = Command::new(python_executable(&install_root).expect("py"))
+                .args(["-m", "pip", "--version"])
+                .current_dir(&install_root)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if !pip_ok {
+                // First try ensurepip (no network), then fall back to get-pip if needed.
+                if ensure_windows_pip_launchers(&install_root).is_err() {
+                    if let Err(e) = bootstrap_pip_windows(
+                        &self.client,
+                        &self.paths,
+                        &install_root,
+                        progress_downloaded,
+                        progress_total,
+                        cancel,
+                    ) {
+                        let _ = fs::remove_dir_all(&final_dir);
+                        return Err(e);
+                    }
+                }
+            } else {
+                // `python -m pip` is available but `pip.exe` may still be missing (NuGet layouts).
+                if ensure_windows_pip_launchers(&install_root).is_err() {
+                    // As a last resort, use get-pip to generate entrypoint launchers.
+                    if let Err(e) = bootstrap_pip_windows(
+                        &self.client,
+                        &self.paths,
+                        &install_root,
+                        progress_downloaded,
+                        progress_total,
+                        cancel,
+                    ) {
+                        let _ = fs::remove_dir_all(&final_dir);
+                        return Err(e);
+                    }
+                }
+            }
         }
         verify_python_and_pip(&install_root)?;
         self.set_current(version)?;
@@ -732,5 +984,28 @@ mod tests {
         fix_windows_embed_pth(tmp.path()).expect("fix");
         let s = fs::read_to_string(&pth).expect("r");
         assert!(s.contains("import site"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn nuget_arch_mapping_and_url() {
+        assert_eq!(nuget_package_id_for_arch("x86_64"), Some("python"));
+        assert_eq!(nuget_package_id_for_arch("x86"), Some("pythonx86"));
+        assert_eq!(nuget_package_id_for_arch("aarch64"), Some("pythonarm64"));
+        let u = nuget_nupkg_url("python", "3.12.10");
+        assert!(u.contains("/python/3.12.10/python.3.12.10.nupkg"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn promote_nuget_tools_hoists_children() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let root = tmp.path();
+        fs::create_dir_all(root.join("tools/Lib")).expect("mk");
+        fs::write(root.join("tools/python.exe"), []).expect("touch");
+        promote_nuget_tools_dir(root).expect("promote");
+        assert!(root.join("python.exe").exists());
+        assert!(root.join("Lib").is_dir());
+        assert!(!root.join("tools").exists());
     }
 }
