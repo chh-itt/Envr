@@ -8,6 +8,7 @@ use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
 };
+use envr_domain::kotlin_java;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
 // Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …
@@ -191,6 +192,20 @@ pub fn collect_exec_env(
                         spec_override,
                         cfg,
                     )?;
+                    let kotlin_label = home
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    let java_label = java_home
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if !kotlin_label.is_empty()
+                        && let Some(msg) =
+                            kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+                    {
+                        return Err(EnvrError::Validation(msg));
+                    }
                     let java_home = std::fs::canonicalize(&java_home).map_err(EnvrError::from)?;
                     for (k, v) in runtime_home_env_for_key(&java_home, "java") {
                         env.insert(k, v);
@@ -300,11 +315,20 @@ fn collect_run_env_impl(
                     runtime_home_env.insert(k, v);
                 }
                 if lang == "kotlin" {
-                    if let Ok(java_home) = resolve_run_lang_home(ctx, cfg, "java") {
-                        let java_home = std::fs::canonicalize(&java_home).unwrap_or(java_home);
-                        for (k, v) in runtime_home_env_for_key(&java_home, "java") {
-                            runtime_home_env.insert(k, v);
-                        }
+                    let java_home = resolve_run_lang_home(ctx, cfg, "java")?;
+                    let java_home = std::fs::canonicalize(&java_home).unwrap_or(java_home);
+                    let kotlin_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    let java_label = java_home
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if let Some(msg) =
+                        kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+                    {
+                        return Err(EnvrError::Validation(msg));
+                    }
+                    for (k, v) in runtime_home_env_for_key(&java_home, "java") {
+                        runtime_home_env.insert(k, v);
                     }
                 }
                 if lang == "deno" {

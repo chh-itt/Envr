@@ -1502,6 +1502,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.env_center.kind = k;
+            state.env_center.kotlin_jdk_hint = None;
             state.env_center.remote_error = None;
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
@@ -1541,6 +1542,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     (k == envr_domain::runtime::RuntimeKind::Elixir)
                         .then_some(gui_ops::check_elixir_prereqs())
                         .unwrap_or_else(Task::none),
+                    (k == envr_domain::runtime::RuntimeKind::Kotlin)
+                        .then_some(gui_ops::check_kotlin_jdk_compat())
+                        .unwrap_or_else(Task::none),
                 ]);
             }
             recompute_env_center_derived(state);
@@ -1548,6 +1552,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         }
         EnvCenterMsg::ElixirPrereqChecked(res) => {
             state.env_center.elixir_prereq_error = res.err();
+            Task::none()
+        }
+        EnvCenterMsg::KotlinJdkChecked(res) => {
+            state.env_center.kotlin_jdk_hint = res.err();
             Task::none()
         }
         EnvCenterMsg::InstallInput(s) => {
@@ -1806,10 +1814,16 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
             }
             match res {
-                Ok(_) => Task::batch([
-                    gui_ops::sync_shims_for_kind(kind),
-                    gui_ops::refresh_runtimes(kind),
-                ]),
+                Ok(_) => {
+                    let mut tasks = vec![
+                        gui_ops::sync_shims_for_kind(kind),
+                        gui_ops::refresh_runtimes(kind),
+                    ];
+                    if kind == envr_domain::runtime::RuntimeKind::Kotlin {
+                        tasks.push(gui_ops::check_kotlin_jdk_compat());
+                    }
+                    Task::batch(tasks)
+                }
                 Err(_) => gui_ops::refresh_runtimes(kind),
             }
         }
@@ -1826,7 +1840,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             if let Err(e) = res {
                 state.error = Some(e);
             }
-            gui_ops::refresh_runtimes(state.env_center.kind)
+            let kind = state.env_center.kind;
+            if kind == envr_domain::runtime::RuntimeKind::Kotlin {
+                Task::batch([
+                    gui_ops::refresh_runtimes(kind),
+                    gui_ops::check_kotlin_jdk_compat(),
+                ])
+            } else {
+                gui_ops::refresh_runtimes(kind)
+            }
         }
         EnvCenterMsg::SubmitUninstall(v) => {
             if state.env_center.busy {

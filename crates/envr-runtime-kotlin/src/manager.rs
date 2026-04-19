@@ -234,20 +234,11 @@ fn download_to_path(
     Ok(())
 }
 
-fn java_major_from_version_dir_label(label: &str) -> Option<u32> {
-    use envr_domain::runtime::numeric_version_segments;
-    let parts = numeric_version_segments(label)?;
-    if parts.first() == Some(&1) {
-        return parts.get(1).copied().map(|m| m as u32);
-    }
-    parts.first().copied().map(|m| m as u32)
-}
-
 fn min_java_major_for_kotlin(_kotlin_label: &str) -> u32 {
     8
 }
 
-fn ensure_java_preflight(runtime_root: &Path) -> EnvrResult<()> {
+fn ensure_java_preflight(runtime_root: &Path, kotlin_version_label: &str) -> EnvrResult<()> {
     let working_dir =
         std::env::current_dir().unwrap_or_else(|_| runtime_root.to_path_buf());
     let ctx = ShimContext::with_runtime_root(
@@ -260,7 +251,7 @@ fn ensure_java_preflight(runtime_root: &Path) -> EnvrResult<()> {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
-    let Some(maj) = java_major_from_version_dir_label(label) else {
+    let Some(maj) = envr_domain::kotlin_java::jdk_dir_label_effective_major(label) else {
         return Err(EnvrError::Validation(format!(
             "could not parse Java major from `{label}` under {}",
             java_home.display()
@@ -269,8 +260,13 @@ fn ensure_java_preflight(runtime_root: &Path) -> EnvrResult<()> {
     let need = min_java_major_for_kotlin("");
     if maj < need {
         return Err(EnvrError::Validation(format!(
-            "Kotlin requires Java {need}+ (current JDK appears to be major {maj} from `{label}`)"
+            "Kotlin 需要 Java {need}+。当前 JDK 目录名 `{label}` 推断主版本为 {maj}。请先安装并执行 `envr use java <版本>`。详见 docs/runtime/kotlin.md。"
         )));
+    }
+    if let Some(msg) =
+        envr_domain::kotlin_java::kotlin_jdk_mismatch_message(kotlin_version_label, label)
+    {
+        return Err(EnvrError::Validation(msg));
     }
     Ok(())
 }
@@ -418,7 +414,7 @@ impl KotlinManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
-        ensure_java_preflight(&self.paths.runtime_root)?;
+        ensure_java_preflight(&self.paths.runtime_root, version_label)?;
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
@@ -465,7 +461,7 @@ impl KotlinManager {
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
-        ensure_java_preflight(&self.paths.runtime_root)?;
+        ensure_java_preflight(&self.paths.runtime_root, &version.0)?;
         let dir = self.paths.version_dir(&version.0);
         if !kotlin_installation_valid(&dir) {
             return Err(EnvrError::Validation(format!(

@@ -1295,6 +1295,17 @@ pub fn resolve_core_shim_command_with_settings(
     let mut extra_env = runtime_home_env_for_key(&home, key);
     if key == "kotlin" {
         let java_home = runtime_home_for_key(ctx, "java", cfg.as_ref(), None, settings)?;
+        let kotlin_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let java_label = java_home
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if !kotlin_label.is_empty()
+            && let Some(msg) =
+                envr_domain::kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+        {
+            return Err(EnvrError::Runtime(msg));
+        }
         extra_env.extend(runtime_home_env_for_key(&java_home, "java"));
     }
 

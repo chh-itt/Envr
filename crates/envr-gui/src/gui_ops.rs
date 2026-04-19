@@ -1,6 +1,7 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
 use envr_core::shim_service::ShimService;
+use envr_domain::kotlin_java;
 use envr_domain::runtime::{
     InstallRequest, MajorVersionRecord, RuntimeKind, RuntimeVersion, VersionRecord, VersionSpec,
     runtime_kinds_all,
@@ -50,6 +51,44 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
             Err(e) => EnvCenterMsg::DataLoaded(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
+    })
+}
+
+pub fn check_kotlin_jdk_compat() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || -> Result<(), String> {
+                let svc = open_runtime_service().map_err(|e| e.to_string())?;
+                let Some(kv) = svc
+                    .current(RuntimeKind::Kotlin)
+                    .map_err(|e| e.to_string())?
+                else {
+                    return Ok(());
+                };
+                let Some(java_cur) = svc
+                    .current(RuntimeKind::Java)
+                    .map_err(|e| e.to_string())?
+                else {
+                    return Err(
+                        "Kotlin 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。"
+                            .into(),
+                    );
+                };
+                if let Some(msg) =
+                    kotlin_java::kotlin_jdk_mismatch_message(kv.0.as_str(), java_cur.0.as_str())
+                {
+                    return Err(msg);
+                }
+                Ok(())
+            })
+            .await;
+
+        Message::EnvCenter(EnvCenterMsg::KotlinJdkChecked(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
     })
 }
 

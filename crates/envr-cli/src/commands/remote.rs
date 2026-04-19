@@ -102,6 +102,16 @@ fn next_steps_for_remote(refreshing: bool, prefix_fallback: bool) -> Vec<(&'stat
             ),
         ));
     }
+    if steps.is_empty() {
+        steps.push((
+            "install_from_remote_list",
+            envr_core::i18n::tr_key(
+                "cli.next_step.remote.install_from_list",
+                "从列表中选择版本后，使用 `envr install <运行时> <版本>` 安装。",
+                "Pick a version from the list, then run `envr install <runtime> <version>`.",
+            ),
+        ));
+    }
     steps
 }
 
@@ -213,27 +223,17 @@ pub(crate) fn run_inner(
                 rows.push((kind, RemoteRow::Plain(cached)));
                 continue;
             }
-            if single_runtime
-                && matches!(
-                    kind,
-                    RuntimeKind::Elixir
-                        | RuntimeKind::Erlang
-                        | RuntimeKind::Crystal
-                        | RuntimeKind::Zig
-                        | RuntimeKind::Julia
-                        | RuntimeKind::Lua
-                        | RuntimeKind::Kotlin
-                        | RuntimeKind::Nim
-                        | RuntimeKind::RLang
-                )
-            {
-                let timeout = Duration::from_millis(2500);
-                if let Some(vers) =
-                    try_fetch_remote_with_timeout(kind, RemoteFilter { prefix: None }, timeout)
-                {
-                    rows.push((kind, RemoteRow::Plain(vers)));
-                    continue;
-                }
+            // Single-runtime cold start: an empty on-disk snapshot should not print "(无)" —
+            // block once on the same `list_remote` path as `-u` / update so the first run is useful.
+            if single_runtime {
+                let vers = service
+                    .list_remote(kind, &RemoteFilter { prefix: None })?
+                    .into_iter()
+                    .map(|v| v.0)
+                    .collect::<Vec<_>>();
+                let _ = service.list_remote_latest_per_major(kind);
+                rows.push((kind, RemoteRow::Plain(vers)));
+                continue;
             }
             missing_cached_snapshot = true;
             rows.push((kind, RemoteRow::Plain(Vec::new())));

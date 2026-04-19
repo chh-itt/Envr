@@ -53,13 +53,13 @@ Add **Kotlin** as a first-class **`RuntimeKind::Kotlin`** (CLI / GUI / shims / `
 ### Phase 4 — CLI / GUI / registry / locales
 
 - [x] CLI: `remote` / `list` / `shim` / `bundle` parity lists; `help_registry/table.inc` + `root.rs` doc strings mention `kotlin`.
-- [x] GUI: Env Center Kotlin settings (PATH proxy), `runtime_layout` default count **19**.
+- [x] GUI: Env Center Kotlin settings (PATH proxy), `runtime_layout` default count **19**, JDK↔Kotlin **compat hint** (install/switch/kind pick).
 - [ ] `envr doctor`: Kotlin+Java sanity row (optional follow-up).
 
 ### Phase 5 — Docs & tests
 
-- [ ] User doc `docs/runtime/kotlin.md` (install limits, Java requirement, pins).
-- [x] Domain tests: descriptor / `version_line_key` / host acyclicity.
+- [x] User doc [`kotlin.md`](kotlin.md) (install limits, Java requirement, pins, `remote` UX, perf note).
+- [x] Domain tests: descriptor / `version_line_key` / host acyclicity + `kotlin_java` JDK/Kotlin combo tests.
 - [ ] Integration test: `exec --lang kotlin --dry-run` with temp roots (optional follow-up).
 - [ ] Manual smoke matrix (Windows + one Unix) recorded below.
 
@@ -90,8 +90,9 @@ Add **Kotlin** as a first-class **`RuntimeKind::Kotlin`** (CLI / GUI / shims / `
 - **2026-04-19 (implementation):**
   - **Friction — `runtime_home_env_for_key("kotlin")`:** left empty on purpose; **`JAVA_HOME` is merged in the shim resolver and in `child_env`** next to Kotlin home resolution so it always matches the Java resolver (ADR) without overloading `runtime_home_env_for_key` with `ShimContext`.
   - **Friction — `RUN_STACK_LANG_ORDER`:** **java** must appear **before** **kotlin** so `collect_run_env` can reuse Java’s `JAVA_HOME` when both layers resolve; extra merge for `exec --lang kotlin`-only and kotlin-only pins when Java layer is skipped is handled explicitly in `child_env`.
-  - **GUI gap:** no **host JDK subtitle** on the hub row yet (ADR §GUI); PATH-proxy settings strip only.
-  - **Preflight gap:** no per-Kotlin-version `java_min_major` matrix; global **≥ 8** only.
+  - **Follow-up — upper JDK vs bundled compiler:** `envr-domain::kotlin_java` adds a **Kotlin 2.0.x → JDK ≤24** heuristic (directory labels) after reports that **JDK 25+** can crash kotlinc startup; enforced in manager preflight, shim resolve, `exec`/`run` env build, and GUI **`check_kotlin_jdk_compat`** after pick/install/use.
+  - **CLI `remote <kind>` cold UX:** single-runtime **`envr remote kotlin`** with empty cache now **blocks on `list_remote` once** (same data path as `-u`) instead of printing empty rows.
+  - **GUI:** hub-row **「宿主: Java xx」** subtitle still optional; compat card covers JDK-too-new vs Kotlin instead.
 
 ## Manual verification (fill in during QA)
 
