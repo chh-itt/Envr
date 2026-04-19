@@ -147,6 +147,7 @@ pub enum CoreCommand {
     Zig,
     Julia,
     Nim,
+    Crystal,
     R,
     Rscript,
 }
@@ -168,6 +169,7 @@ impl CoreCommand {
             CoreCommand::Zig => "zig",
             CoreCommand::Julia => "julia",
             CoreCommand::Nim => "nim",
+            CoreCommand::Crystal => "crystal",
             CoreCommand::R | CoreCommand::Rscript => "r",
         }
     }
@@ -191,6 +193,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "zig" => vec![home.to_path_buf(), home.join("bin")],
         "julia" => vec![home.join("bin")],
         "nim" => vec![home.join("bin")],
+        "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
         "r" => vec![home.join("bin")],
         _ => vec![],
     }
@@ -405,6 +408,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "zig" => Some(CoreCommand::Zig),
         "julia" => Some(CoreCommand::Julia),
         "nim" => Some(CoreCommand::Nim),
+        "crystal" => Some(CoreCommand::Crystal),
         "r" => Some(CoreCommand::R),
         "rscript" => Some(CoreCommand::Rscript),
         _ => None,
@@ -1016,6 +1020,18 @@ fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn crystal_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Crystal => {
+            let c = envr_domain::crystal_paths::crystal_compiler_candidate_paths(home);
+            Ok(first_existing(&c).ok_or_else(|| {
+                EnvrError::Runtime(format!("crystal missing under {}", home.display()))
+            })?)
+        }
+        _ => Err(EnvrError::Runtime("internal: not a crystal tool".into())),
+    }
+}
+
 fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::R => Ok(first_existing(&[
@@ -1051,6 +1067,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Zig => zig_tool_path(home, cmd),
         CoreCommand::Julia => julia_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
+        CoreCommand::Crystal => crystal_tool_path(home, cmd),
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
     }
 }
@@ -1198,6 +1215,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Zig => "zig",
         CoreCommand::Julia => "julia",
         CoreCommand::Nim => "nim",
+        CoreCommand::Crystal => "crystal",
         CoreCommand::R => "r",
         CoreCommand::Rscript => "rscript",
     }
@@ -1260,6 +1278,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
         CoreCommand::Julia => julia_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
+        CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
     };
 
@@ -1354,6 +1373,7 @@ mod tests {
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
+        assert_eq!(parse_core_command("crystal"), Some(CoreCommand::Crystal));
         assert_eq!(parse_core_command("r"), Some(CoreCommand::R));
         assert_eq!(parse_core_command("rscript"), Some(CoreCommand::Rscript));
         assert_eq!(parse_core_command("unknown"), None);

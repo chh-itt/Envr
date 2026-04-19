@@ -138,6 +138,7 @@ fn create_inner(
             RuntimeKind::Zig,
             RuntimeKind::Julia,
             RuntimeKind::Nim,
+            RuntimeKind::Crystal,
             RuntimeKind::RLang,
         ] {
             if let Ok(Some(v)) = service.current(kind) {

@@ -906,6 +906,7 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
                 "javac",
                 "bun",
                 "bunx",
+                "crystal",
                 "r",
                 "rscript",
             ];

@@ -67,6 +67,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Zig => &[(CoreCommand::Zig, "zig")],
         RuntimeKind::Julia => &[(CoreCommand::Julia, "julia")],
         RuntimeKind::Nim => &[(CoreCommand::Nim, "nim")],
+        RuntimeKind::Crystal => &[(CoreCommand::Crystal, "crystal")],
         RuntimeKind::RLang => &[
             (CoreCommand::R, "R"),
             (CoreCommand::Rscript, "Rscript"),

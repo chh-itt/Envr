@@ -2048,6 +2048,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 |st, on| st.runtime.nim.path_proxy_enabled = on,
             )
         }
+        EnvCenterMsg::SetCrystalPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Crystal,
+                on,
+                |st, on| st.runtime.crystal.path_proxy_enabled = on,
+            )
+        }
         EnvCenterMsg::SetRLangPathProxy(on) => {
             persist_path_proxy_toggle(
                 state,

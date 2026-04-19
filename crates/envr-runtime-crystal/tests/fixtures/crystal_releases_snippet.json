@@ -1,0 +1,29 @@
+[
+  {
+    "tag_name": "1.20.0",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "crystal-1.20.0-1-linux-x86_64-bundled.tar.gz",
+        "browser_download_url": "https://example.invalid/crystal-1.20.0-1-linux-x86_64-bundled.tar.gz"
+      },
+      {
+        "name": "crystal-1.20.0-1-linux-x86_64.tar.gz",
+        "browser_download_url": "https://example.invalid/crystal-1.20.0-1-linux-x86_64.tar.gz",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  {
+    "tag_name": "1.19.0",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "name": "crystal-1.19.0-1-linux-x86_64.tar.gz",
+        "browser_download_url": "https://example.invalid/crystal-1.19.0-1-linux-x86_64.tar.gz"
+      }
+    ]
+  }
+]

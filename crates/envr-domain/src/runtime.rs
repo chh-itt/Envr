@@ -20,6 +20,7 @@ pub enum RuntimeKind {
     Zig,
     Julia,
     Nim,
+    Crystal,
     RLang,
 }
 
@@ -33,7 +34,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 16] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 17] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -151,6 +152,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 16] = [
         key: "nim",
         label_en: "Nim",
         label_zh: "Nim",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Crystal,
+        key: "crystal",
+        label_en: "Crystal",
+        label_zh: "Crystal",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -333,6 +342,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Zig
         | RuntimeKind::Julia
         | RuntimeKind::Nim
+        | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
@@ -360,6 +370,10 @@ mod tests {
             parse_runtime_kind("Python").expect("py"),
             RuntimeKind::Python
         );
+        assert_eq!(
+            parse_runtime_kind("CRYSTAL").expect("crystal"),
+            RuntimeKind::Crystal
+        );
     }
 
     #[test]
@@ -371,7 +385,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 16);
+        assert_eq!(kinds.len(), 17);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -379,12 +393,14 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Zig));
         assert!(kinds.contains(&RuntimeKind::Julia));
         assert!(kinds.contains(&RuntimeKind::Nim));
+        assert!(kinds.contains(&RuntimeKind::Crystal));
         assert!(kinds.contains(&RuntimeKind::RLang));
     }
 
     #[test]
     fn unified_major_list_rollout_is_everything_except_rust_hub_page() {
         assert!(unified_major_list_rollout_enabled(RuntimeKind::Nim));
+        assert!(unified_major_list_rollout_enabled(RuntimeKind::Crystal));
         assert!(unified_major_list_rollout_enabled(RuntimeKind::Node));
         assert!(!unified_major_list_rollout_enabled(RuntimeKind::Rust));
         for k in runtime_kinds_all() {
@@ -447,6 +463,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Nim, "2.0.14").as_deref(),
             Some("2.0")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Crystal, "1.20.0").as_deref(),
+            Some("1.20")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::RLang, "4.4.2").as_deref(),

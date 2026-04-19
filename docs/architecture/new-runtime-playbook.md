@@ -35,6 +35,7 @@ Create a runtime-specific plan first. It should answer:
 - Whether project-local config outside `.envr.toml` can override runtime selection
   - for example `.ruby-version`, `Gemfile`, toolchain files, etc.
 - **Index / URL discovery shape**: many runtimes use one JSON or simple URL rules, but some ship installable artifacts only through a **scraped HTML matrix** or other non-formulaic index (example: Nim’s `install.html` on nim-lang.org → nightlies GitHub assets). Document parsing, caching, TTL, and optional checksum sidecars (`.sha256`) up front.
+- **GitHub Releases API** (`/repos/<org>/<repo>/releases`): responses are paginated (`?per_page=100&page=N`); rate limits apply. If you cache **normalized install rows** (version + download URL + digest) as JSON, do not round-trip them through the raw GitHub parser unless that parser accepts the same shape—use a dedicated `serde` type for the cache file (see Crystal’s `CrystalReleaseRow` cache).
 - **Installer-backed Windows runtimes** (no portable zip): some vendors only ship an `.exe` setup (examples: CRAN `R-*-win.exe` Inno; Rust **`rustup-init.exe`**). Plan for **spawn installer with documented silent flags**, **target directory layout**, **post-install validation**, and **Windows `current` pointer-file fallback** when symlinks are blocked—do not assume `extract_archive` alone can install.
 
 Do not start coding before these decisions are written down.

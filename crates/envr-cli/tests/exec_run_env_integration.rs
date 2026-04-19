@@ -177,6 +177,29 @@ fn write_nim_layout(runtime_root: &Path, version: &str) {
     }
 }
 
+fn write_crystal_layout(runtime_root: &Path, version: &str) {
+    let crystal_home = runtime_root.join("runtimes/crystal");
+    let ver = crystal_home.join("versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create crystal version bin");
+    #[cfg(windows)]
+    fs::write(bin.join("crystal.exe"), []).expect("touch crystal.exe");
+    #[cfg(not(windows))]
+    fs::write(bin.join("crystal"), []).expect("touch crystal");
+    let current = crystal_home.join("current");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let rel = format!("versions/{version}");
+        symlink(rel, &current).expect("crystal current symlink");
+    }
+    #[cfg(windows)]
+    {
+        let abs = fs::canonicalize(&ver).unwrap_or_else(|_| ver.clone());
+        fs::write(&current, format!("{}\n", abs.display())).expect("crystal current pointer");
+    }
+}
+
 fn write_r_layout(runtime_root: &Path, version: &str) {
     let r_home = runtime_root.join("runtimes/r");
     let ver = r_home.join("versions").join(version);
@@ -716,6 +739,60 @@ fn exec_dry_run_nim_resolves_project_pin() {
     assert!(
         path_line.contains("2.0.14") && path_line.to_lowercase().contains("nim"),
         "PATH should include nim version bin; line={path_line:?} full stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn exec_dry_run_crystal_resolves_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_crystal_layout(&runtime_root, "1.20.0");
+    project_with_runtime_pin(&project, "crystal", "1.20.0");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "crystal",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "crystal",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let path_line = stdout
+        .lines()
+        .find(|l| l.starts_with("PATH=") || l.starts_with("Path="))
+        .unwrap_or_else(|| panic!("expected PATH in dry-run stdout:\n{stdout}"));
+    assert!(
+        path_line.contains("1.20.0") && path_line.to_lowercase().contains("crystal"),
+        "PATH should include crystal version bin; line={path_line:?} full stdout:\n{stdout}"
     );
 }
 
