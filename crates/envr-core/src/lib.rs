@@ -1,6 +1,7 @@
 pub mod i18n;
 pub mod logging;
 pub mod runtime;
+pub mod runtime_path_proxy;
 pub mod shim_service;
 
 pub use shim_service::ShimService;

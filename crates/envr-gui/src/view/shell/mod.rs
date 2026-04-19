@@ -175,6 +175,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .then_some(&state.settings.cache.snapshot().runtime.zig),
                 matches!(state.env_center.kind, RuntimeKind::Julia)
                     .then_some(&state.settings.cache.snapshot().runtime.julia),
+                matches!(state.env_center.kind, RuntimeKind::Nim)
+                    .then_some(&state.settings.cache.snapshot().runtime.nim),
+                &state.settings.cache.snapshot().runtime,
                 tokens,
             ));
         }

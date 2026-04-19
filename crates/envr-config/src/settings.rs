@@ -535,6 +535,9 @@ pub struct RuntimeSettings {
 
     #[serde(default)]
     pub julia: JuliaRuntimeSettings,
+
+    #[serde(default)]
+    pub nim: NimRuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -742,6 +745,21 @@ impl Default for JuliaRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::julia_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NimRuntimeSettings {
+    /// When false, the nim shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::nim_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for NimRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::nim_path_proxy_enabled(),
         }
     }
 }
@@ -1533,6 +1551,17 @@ pub fn julia_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`NimRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn nim_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.nim.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`ZigRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn zig_path_proxy_enabled_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1687,6 +1716,10 @@ mod defaults {
         true
     }
 
+    pub fn nim_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn ruby_path_proxy_enabled() -> bool {
         true
     }
@@ -1778,6 +1811,7 @@ mod tests {
                 dotnet: DotnetRuntimeSettings::default(),
                 zig: ZigRuntimeSettings::default(),
                 julia: JuliaRuntimeSettings::default(),
+                nim: NimRuntimeSettings::default(),
                 php: PhpRuntimeSettings::default(),
                 deno: DenoRuntimeSettings::default(),
             },

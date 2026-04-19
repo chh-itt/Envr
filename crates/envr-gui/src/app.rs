@@ -740,10 +740,10 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                         if envr_domain::runtime::runtime_descriptor(k).supports_remote_latest {
                             return Task::batch([
                                 gui_ops::refresh_runtimes(k),
-                                unified_list_rollout_enabled(k)
+                                envr_domain::runtime::unified_major_list_rollout_enabled(k)
                                     .then_some(gui_ops::load_unified_major_rows_cached(k))
                                     .unwrap_or_else(Task::none),
-                                unified_list_rollout_enabled(k)
+                                envr_domain::runtime::unified_major_list_rollout_enabled(k)
                                     .then_some(gui_ops::refresh_unified_major_rows(k))
                                     .unwrap_or_else(Task::none),
                             ]);
@@ -1073,25 +1073,6 @@ where
     }
 }
 
-fn unified_list_rollout_enabled(kind: envr_domain::runtime::RuntimeKind) -> bool {
-    matches!(
-        kind,
-        envr_domain::runtime::RuntimeKind::Node
-            | envr_domain::runtime::RuntimeKind::Python
-            | envr_domain::runtime::RuntimeKind::Java
-            | envr_domain::runtime::RuntimeKind::Go
-            | envr_domain::runtime::RuntimeKind::Ruby
-            | envr_domain::runtime::RuntimeKind::Elixir
-            | envr_domain::runtime::RuntimeKind::Erlang
-            | envr_domain::runtime::RuntimeKind::Php
-            | envr_domain::runtime::RuntimeKind::Deno
-            | envr_domain::runtime::RuntimeKind::Bun
-            | envr_domain::runtime::RuntimeKind::Dotnet
-            | envr_domain::runtime::RuntimeKind::Zig
-            | envr_domain::runtime::RuntimeKind::Julia
-    )
-}
-
 fn mark_unified_major_rows_dirty_for_kind(
     state: &mut AppState,
     kind: envr_domain::runtime::RuntimeKind,
@@ -1104,28 +1085,10 @@ fn mark_unified_major_rows_dirty_for_kind(
 }
 
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
-    let kind = state.env_center.kind;
-    if !envr_domain::runtime::runtime_descriptor(kind).supports_path_proxy {
-        return false;
-    }
-    let snap = &state.settings.cache.snapshot().runtime;
-    match kind {
-        envr_domain::runtime::RuntimeKind::Node => !snap.node.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Python => !snap.python.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Java => !snap.java.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Go => !snap.go.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Php => !snap.php.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Deno => !snap.deno.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Bun => !snap.bun.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Ruby => !snap.ruby.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Elixir => !snap.elixir.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Erlang => !snap.erlang.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Zig => !snap.zig.path_proxy_enabled,
-        envr_domain::runtime::RuntimeKind::Julia => !snap.julia.path_proxy_enabled,
-        // Rust is not expected to support path proxy, but keep this explicit.
-        envr_domain::runtime::RuntimeKind::Rust => false,
-    }
+    envr_core::runtime_path_proxy::path_proxy_blocks_managed_use(
+        state.env_center.kind,
+        &state.settings.cache.snapshot().runtime,
+    )
 }
 
 fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
@@ -1502,10 +1465,10 @@ fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
     if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
         return Task::batch([
             gui_ops::refresh_runtimes(kind),
-            unified_list_rollout_enabled(kind)
+            envr_domain::runtime::unified_major_list_rollout_enabled(kind)
                 .then_some(gui_ops::load_unified_major_rows_cached(kind))
                 .unwrap_or_else(Task::none),
-            unified_list_rollout_enabled(kind)
+            envr_domain::runtime::unified_major_list_rollout_enabled(kind)
                 .then_some(gui_ops::refresh_unified_major_rows(kind))
                 .unwrap_or_else(Task::none),
         ]);
@@ -1569,10 +1532,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 recompute_env_center_derived(state);
                 return Task::batch([
                     gui_ops::refresh_runtimes(k),
-                    unified_list_rollout_enabled(k)
+                    envr_domain::runtime::unified_major_list_rollout_enabled(k)
                         .then_some(gui_ops::load_unified_major_rows_cached(k))
                         .unwrap_or_else(Task::none),
-                    unified_list_rollout_enabled(k)
+                    envr_domain::runtime::unified_major_list_rollout_enabled(k)
                         .then_some(gui_ops::refresh_unified_major_rows(k))
                         .unwrap_or_else(Task::none),
                     (k == envr_domain::runtime::RuntimeKind::Elixir)
@@ -1611,7 +1574,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::UnifiedMajorRowsCached(kind, res) => {
-            if !unified_list_rollout_enabled(kind) {
+            if !envr_domain::runtime::unified_major_list_rollout_enabled(kind) {
                 return Task::none();
             }
             match res {
@@ -1626,7 +1589,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::UnifiedMajorRowsRefreshed(kind, res) => {
-            if !unified_list_rollout_enabled(kind) {
+            if !envr_domain::runtime::unified_major_list_rollout_enabled(kind) {
                 return Task::none();
             }
             match res {
@@ -1641,7 +1604,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::UnifiedChildrenCached(kind, major_key, res) => {
-            if !unified_list_rollout_enabled(kind) {
+            if !envr_domain::runtime::unified_major_list_rollout_enabled(kind) {
                 return Task::none();
             }
             match res {
@@ -1659,7 +1622,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::UnifiedChildrenRefreshed(kind, major_key, res) => {
-            if !unified_list_rollout_enabled(kind) {
+            if !envr_domain::runtime::unified_major_list_rollout_enabled(kind) {
                 return Task::none();
             }
             match res {
@@ -2075,6 +2038,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 envr_domain::runtime::RuntimeKind::Julia,
                 on,
                 |st, on| st.runtime.julia.path_proxy_enabled = on,
+            )
+        }
+        EnvCenterMsg::SetNimPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Nim,
+                on,
+                |st, on| st.runtime.nim.path_proxy_enabled = on,
             )
         }
         EnvCenterMsg::SetRubyPathProxy(on) => {

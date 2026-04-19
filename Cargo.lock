@@ -958,6 +958,7 @@ dependencies = [
  "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-julia",
+ "envr-runtime-nim",
  "envr-runtime-node",
  "envr-runtime-php",
  "envr-runtime-python",
@@ -1178,6 +1179,21 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-nim"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

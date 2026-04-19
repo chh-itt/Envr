@@ -55,7 +55,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
                 t.to_string()
             }
         }
-        RuntimeKind::Zig | RuntimeKind::Julia => version_line_key_for_kind(kind, t)
+        RuntimeKind::Zig | RuntimeKind::Julia | RuntimeKind::Nim => version_line_key_for_kind(kind, t)
             .unwrap_or_else(|| t.split(['.', '-', '+']).next().unwrap_or(t).to_string()),
         _ => t.split(['.', '-', '+']).next().unwrap_or(t).to_string(),
     }

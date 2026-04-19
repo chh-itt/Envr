@@ -5,8 +5,8 @@ use envr_config::settings::{
     ElixirRuntimeSettings, ErlangRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RustDownloadSource,
-    JuliaRuntimeSettings, RustRuntimeSettings, ZigRuntimeSettings,
+    PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
+    JuliaRuntimeSettings, NimRuntimeSettings, RustRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -82,6 +82,7 @@ pub enum EnvCenterMsg {
     SetDotnetPathProxy(bool),
     SetZigPathProxy(bool),
     SetJuliaPathProxy(bool),
+    SetNimPathProxy(bool),
     SetRubyPathProxy(bool),
     SetElixirPathProxy(bool),
     SetErlangPathProxy(bool),
@@ -189,25 +190,6 @@ impl Default for EnvCenterState {
             rust_targets: Vec::new(),
         }
     }
-}
-
-fn unified_list_rollout_enabled(kind: RuntimeKind) -> bool {
-    matches!(
-        kind,
-        RuntimeKind::Node
-            | RuntimeKind::Python
-            | RuntimeKind::Java
-            | RuntimeKind::Go
-            | RuntimeKind::Ruby
-            | RuntimeKind::Elixir
-            | RuntimeKind::Erlang
-            | RuntimeKind::Php
-            | RuntimeKind::Deno
-            | RuntimeKind::Bun
-            | RuntimeKind::Dotnet
-            | RuntimeKind::Zig
-            | RuntimeKind::Julia
-    )
 }
 
 // (scroll_y is clamped locally during rendering; no persistent clamping helper needed)
@@ -1503,6 +1485,47 @@ fn julia_runtime_settings_section(
     .into()
 }
 
+fn nim_runtime_settings_section(
+    nim: &NimRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.nim.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.nim.path_proxy.hint",
+            "开启时由 envr 接管 nim；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages nim; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(nim.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetNimPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.nim.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn zig_runtime_settings_section(
     zig: &ZigRuntimeSettings,
     tokens: ThemeTokens,
@@ -1643,6 +1666,8 @@ pub fn env_center_view(
     dotnet_runtime: Option<&DotnetRuntimeSettings>,
     zig_runtime: Option<&ZigRuntimeSettings>,
     julia_runtime: Option<&JuliaRuntimeSettings>,
+    nim_runtime: Option<&NimRuntimeSettings>,
+    runtime_settings: &RuntimeSettings,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
     let ty = tokens.typography();
@@ -1654,22 +1679,11 @@ pub fn env_center_view(
         return rust_env_center_view(state, rust_runtime, tokens);
     }
 
-    let path_proxy_on = match state.kind {
-        RuntimeKind::Node => node_runtime.map(|n| n.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Python => python_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Java => java_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Go => go_runtime.map(|g| g.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Ruby => ruby_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Elixir => elixir_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Erlang => erlang_runtime.map(|r| r.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Php => php_runtime.map(|p| p.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Deno => deno_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Bun => bun_runtime.map(|b| b.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Dotnet => dotnet_runtime.map(|d| d.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Zig => zig_runtime.map(|z| z.path_proxy_enabled).unwrap_or(true),
-        RuntimeKind::Julia => julia_runtime.map(|j| j.path_proxy_enabled).unwrap_or(true),
-        _ => true,
-    };
+    let path_proxy_on = envr_core::runtime_path_proxy::path_proxy_enabled_for_kind(
+        state.kind,
+        runtime_settings,
+    )
+    .unwrap_or(true);
 
     let cur_line = match &state.current {
         Some(v) => {
@@ -1693,22 +1707,8 @@ pub fn env_center_view(
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let show_runtime_fold = matches!(
-        state.kind,
-        RuntimeKind::Node
-            | RuntimeKind::Python
-            | RuntimeKind::Java
-            | RuntimeKind::Go
-            | RuntimeKind::Ruby
-            | RuntimeKind::Elixir
-            | RuntimeKind::Erlang
-            | RuntimeKind::Php
-            | RuntimeKind::Deno
-            | RuntimeKind::Bun
-            | RuntimeKind::Dotnet
-            | RuntimeKind::Zig
-            | RuntimeKind::Julia
-    );
+    let show_runtime_fold =
+        envr_domain::runtime::unified_major_list_rollout_enabled(state.kind);
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
     } else {
@@ -1838,6 +1838,10 @@ pub fn env_center_view(
         julia_runtime
             .map(|j| julia_runtime_settings_section(j, tokens))
             .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Nim {
+        nim_runtime
+            .map(|n| nim_runtime_settings_section(n, tokens))
+            .unwrap_or_else(|| column![].into())
     } else {
         column![].into()
     };
@@ -1909,7 +1913,7 @@ pub fn env_center_view(
     // Use spacing instead of dense horizontal rules for a calmer UI.
     let mut list_col = column![].spacing(sp.sm as f32).width(Length::Fill);
 
-    let render_keys: Vec<String> = if unified_list_rollout_enabled(state.kind)
+    let render_keys: Vec<String> = if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
         && unified_major_rows.is_some_and(|rows| !rows.is_empty())
     {
         let mut keys: HashSet<String> = unified_major_rows
@@ -2050,7 +2054,7 @@ pub fn env_center_view(
                     (None, false)
                 };
 
-            let unified_major_mode = unified_list_rollout_enabled(state.kind)
+            let unified_major_mode = envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
                 && unified_major_rows.is_some_and(|rows| !rows.is_empty());
 
             // Node list shows stable major keys; install spec still resolves latest patch elsewhere.
@@ -2084,7 +2088,7 @@ pub fn env_center_view(
             };
 
             let install_spec = || -> String {
-                if unified_list_rollout_enabled(state.kind)
+                if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
                     && let Some(v) = unified_major_latest_by_key.get(key)
                 {
                     return v.0.clone();
@@ -2281,7 +2285,7 @@ pub fn env_center_view(
                 .style(card_container_style(tokens, 1)),
             );
 
-            if unified_list_rollout_enabled(state.kind)
+            if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
                 && state.unified_expanded_major_keys.contains(key)
             {
                 let child_rows = state
@@ -3188,25 +3192,3 @@ pub(crate) fn env_center_clear_unified_list_render_state(state: &mut EnvCenterSt
     state.unified_expanded_major_keys.clear();
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn unified_list_rollout_covers_node_ruby_elixir_erlang_only() {
-        assert!(unified_list_rollout_enabled(RuntimeKind::Node));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Python));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Java));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Go));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Ruby));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Elixir));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Erlang));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Php));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Deno));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Bun));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Dotnet));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Zig));
-        assert!(unified_list_rollout_enabled(RuntimeKind::Julia));
-        assert!(!unified_list_rollout_enabled(RuntimeKind::Rust));
-    }
-}

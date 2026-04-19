@@ -27,6 +27,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "dotnet",
     "zig",
     "julia",
+    "nim",
 ];
 
 fn project_has_runtime_pin(cfg: Option<&ProjectConfig>, lang: &str) -> bool {

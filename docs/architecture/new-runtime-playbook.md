@@ -34,6 +34,7 @@ Create a runtime-specific plan first. It should answer:
 - Whether remote latest / major-line cache is supported
 - Whether project-local config outside `.envr.toml` can override runtime selection
   - for example `.ruby-version`, `Gemfile`, toolchain files, etc.
+- **Index / URL discovery shape**: many runtimes use one JSON or simple URL rules, but some ship installable artifacts only through a **scraped HTML matrix** or other non-formulaic index (example: Nim’s `install.html` on nim-lang.org → nightlies GitHub assets). Document parsing, caching, TTL, and optional checksum sidecars (`.sha256`) up front.
 
 Do not start coding before these decisions are written down.
 

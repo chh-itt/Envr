@@ -30,6 +30,7 @@ pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<Str
         RuntimeKind::Dotnet,
         RuntimeKind::Zig,
         RuntimeKind::Julia,
+        RuntimeKind::Nim,
     ] {
         svc.ensure_shims(kind)?;
         ensured.push(common::kind_label(kind).to_string());
@@ -61,6 +62,7 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<Cl
         RuntimeKind::Dotnet,
         RuntimeKind::Zig,
         RuntimeKind::Julia,
+        RuntimeKind::Nim,
     ] {
         match svc.ensure_shims(kind) {
             Ok(()) => ensured.push(common::kind_label(kind)),

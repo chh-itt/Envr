@@ -154,6 +154,29 @@ fn write_julia_layout(runtime_root: &Path, version: &str) {
     }
 }
 
+fn write_nim_layout(runtime_root: &Path, version: &str) {
+    let nim_home = runtime_root.join("runtimes/nim");
+    let ver = nim_home.join("versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create nim version bin");
+    #[cfg(windows)]
+    fs::write(bin.join("nim.exe"), []).expect("touch nim.exe");
+    #[cfg(not(windows))]
+    fs::write(bin.join("nim"), []).expect("touch nim");
+    let current = nim_home.join("current");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let rel = format!("versions/{version}");
+        symlink(rel, &current).expect("nim current symlink");
+    }
+    #[cfg(windows)]
+    {
+        let abs = fs::canonicalize(&ver).unwrap_or_else(|_| ver.clone());
+        fs::write(&current, format!("{}\n", abs.display())).expect("nim current pointer");
+    }
+}
+
 fn write_ruby_layout(runtime_root: &Path, version: &str) {
     let ver = runtime_root.join("runtimes/ruby/versions").join(version);
     let bin = ver.join("bin");
@@ -610,6 +633,60 @@ fn exec_dry_run_julia_resolves_project_pin() {
     assert!(
         path_line.contains("1.10.5") && path_line.to_lowercase().contains("julia"),
         "PATH should include julia version bin; line={path_line:?} full stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn exec_dry_run_nim_resolves_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_nim_layout(&runtime_root, "2.0.14");
+    project_with_runtime_pin(&project, "nim", "2.0.14");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "nim",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "nim",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let path_line = stdout
+        .lines()
+        .find(|l| l.starts_with("PATH=") || l.starts_with("Path="))
+        .unwrap_or_else(|| panic!("expected PATH in dry-run stdout:\n{stdout}"));
+    assert!(
+        path_line.contains("2.0.14") && path_line.to_lowercase().contains("nim"),
+        "PATH should include nim version bin; line={path_line:?} full stdout:\n{stdout}"
     );
 }
 

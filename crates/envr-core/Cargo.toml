@@ -27,6 +27,7 @@ envr-runtime-bun = { path = "../envr-runtime-bun" }
 envr-runtime-dotnet = { path = "../envr-runtime-dotnet" }
 envr-runtime-zig = { path = "../envr-runtime-zig" }
 envr-runtime-julia = { path = "../envr-runtime-julia" }
+envr-runtime-nim = { path = "../envr-runtime-nim" }
 envr-shim-core = { path = "../envr-shim-core" }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }

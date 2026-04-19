@@ -19,6 +19,7 @@ pub enum RuntimeKind {
     Dotnet,
     Zig,
     Julia,
+    Nim,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,7 +32,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 14] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 15] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -144,6 +145,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 14] = [
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Nim,
+        key: "nim",
+        label_en: "Nim",
+        label_zh: "Nim",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
 ];
 
 pub fn runtime_descriptor(kind: RuntimeKind) -> &'static RuntimeDescriptor {
@@ -155,6 +164,14 @@ pub fn runtime_descriptor(kind: RuntimeKind) -> &'static RuntimeDescriptor {
 
 pub fn runtime_kinds_all() -> impl Iterator<Item = RuntimeKind> {
     RUNTIME_DESCRIPTORS.iter().map(|d| d.kind)
+}
+
+/// Env-center hub uses the unified major-line remote list UX for this runtime.
+///
+/// Rust alone uses a dedicated page; every other [`RuntimeKind`] shares the unified shell.
+#[inline]
+pub fn unified_major_list_rollout_enabled(kind: RuntimeKind) -> bool {
+    kind != RuntimeKind::Rust
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -305,7 +322,8 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Php
         | RuntimeKind::Go
         | RuntimeKind::Zig
-        | RuntimeKind::Julia => {
+        | RuntimeKind::Julia
+        | RuntimeKind::Nim => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
             Some(format!("{major}.{minor}"))
@@ -343,13 +361,27 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 14);
+        assert_eq!(kinds.len(), 15);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
         assert!(kinds.contains(&RuntimeKind::Zig));
         assert!(kinds.contains(&RuntimeKind::Julia));
+        assert!(kinds.contains(&RuntimeKind::Nim));
+    }
+
+    #[test]
+    fn unified_major_list_rollout_is_everything_except_rust_hub_page() {
+        assert!(unified_major_list_rollout_enabled(RuntimeKind::Nim));
+        assert!(unified_major_list_rollout_enabled(RuntimeKind::Node));
+        assert!(!unified_major_list_rollout_enabled(RuntimeKind::Rust));
+        for k in runtime_kinds_all() {
+            assert_eq!(
+                unified_major_list_rollout_enabled(k),
+                k != RuntimeKind::Rust
+            );
+        }
     }
 
     #[test]
@@ -400,6 +432,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Julia, "1.10.5").as_deref(),
             Some("1.10")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Nim, "2.0.14").as_deref(),
+            Some("2.0")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

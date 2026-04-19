@@ -234,6 +234,7 @@ fn defaults_providers_registered() {
         RuntimeKind::Dotnet,
         RuntimeKind::Zig,
         RuntimeKind::Julia,
+        RuntimeKind::Nim,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }
@@ -258,6 +259,7 @@ fn with_runtime_root_registers_providers() {
         RuntimeKind::Dotnet,
         RuntimeKind::Zig,
         RuntimeKind::Julia,
+        RuntimeKind::Nim,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
     }

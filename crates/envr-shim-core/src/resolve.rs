@@ -20,6 +20,7 @@ pub struct ShimSettingsSnapshot {
     dotnet_path_proxy_enabled: bool,
     zig_path_proxy_enabled: bool,
     julia_path_proxy_enabled: bool,
+    nim_path_proxy_enabled: bool,
     ruby_path_proxy_enabled: bool,
     elixir_path_proxy_enabled: bool,
     erlang_path_proxy_enabled: bool,
@@ -41,6 +42,7 @@ impl Default for ShimSettingsSnapshot {
             dotnet_path_proxy_enabled: true,
             zig_path_proxy_enabled: true,
             julia_path_proxy_enabled: true,
+            nim_path_proxy_enabled: true,
             ruby_path_proxy_enabled: true,
             elixir_path_proxy_enabled: true,
             erlang_path_proxy_enabled: true,
@@ -64,6 +66,7 @@ impl ShimSettingsSnapshot {
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
             zig_path_proxy_enabled: settings.runtime.zig.path_proxy_enabled,
             julia_path_proxy_enabled: settings.runtime.julia.path_proxy_enabled,
+            nim_path_proxy_enabled: settings.runtime.nim.path_proxy_enabled,
             ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
             elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
             erlang_path_proxy_enabled: settings.runtime.erlang.path_proxy_enabled,
@@ -124,6 +127,9 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         return true;
     }
     if matches!(cmd, CoreCommand::Julia) && !settings.julia_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Nim) && !settings.nim_path_proxy_enabled {
         return true;
     }
     if matches!(
@@ -227,6 +233,7 @@ pub enum CoreCommand {
     Escript,
     Zig,
     Julia,
+    Nim,
 }
 
 impl CoreCommand {
@@ -245,6 +252,7 @@ impl CoreCommand {
             CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
             CoreCommand::Zig => "zig",
             CoreCommand::Julia => "julia",
+            CoreCommand::Nim => "nim",
         }
     }
 }
@@ -266,6 +274,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "dotnet" => vec![home.to_path_buf(), home.join("bin")],
         "zig" => vec![home.to_path_buf(), home.join("bin")],
         "julia" => vec![home.join("bin")],
+        "nim" => vec![home.join("bin")],
         _ => vec![],
     }
 }
@@ -477,6 +486,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "escript" => Some(CoreCommand::Escript),
         "zig" => Some(CoreCommand::Zig),
         "julia" => Some(CoreCommand::Julia),
+        "nim" => Some(CoreCommand::Nim),
         _ => None,
     }
 }
@@ -1075,6 +1085,17 @@ fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Nim => Ok(first_existing(&[
+            home.join("bin").join("nim.exe"),
+            home.join("bin").join("nim"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("nim missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a nim tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -1093,6 +1114,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
         CoreCommand::Zig => zig_tool_path(home, cmd),
         CoreCommand::Julia => julia_tool_path(home, cmd),
+        CoreCommand::Nim => nim_tool_path(home, cmd),
     }
 }
 
@@ -1238,6 +1260,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Escript => "escript",
         CoreCommand::Zig => "zig",
         CoreCommand::Julia => "julia",
+        CoreCommand::Nim => "nim",
     }
 }
 
@@ -1297,6 +1320,7 @@ pub fn resolve_core_shim_command_with_settings(
         }
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
         CoreCommand::Julia => julia_tool_path(&home, cmd)?,
+        CoreCommand::Nim => nim_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1389,6 +1413,7 @@ mod tests {
         assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
+        assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
         assert_eq!(parse_core_command("unknown"), None);
     }
 
@@ -1834,6 +1859,85 @@ version = "20"
                 .to_ascii_lowercase()
                 .ends_with("julia.exe"),
             "expected system julia.exe, got {:?}",
+            resolved.executable
+        );
+    }
+
+    /// Same as [`path_proxy_bypass_skips_managed_shims_dir_without_envr_parent_heuristic`] but for `nim`.
+    #[cfg(windows)]
+    #[test]
+    fn path_proxy_bypass_skips_managed_shims_dir_for_nim_without_envr_parent_heuristic() {
+        let _guard = ENV_LOCK.lock().expect("lock");
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let cfg_dir = root.join("config");
+        fs::create_dir_all(&cfg_dir).expect("config dir");
+        fs::write(
+            cfg_dir.join("settings.toml"),
+            "[runtime.nim]\npath_proxy_enabled = false\n",
+        )
+        .expect("settings");
+
+        let old_root = std::env::var_os("ENVR_ROOT");
+        unsafe { std::env::set_var("ENVR_ROOT", root) };
+        struct RestoreRoot {
+            key: &'static str,
+            prev: Option<std::ffi::OsString>,
+        }
+        impl Drop for RestoreRoot {
+            fn drop(&mut self) {
+                match self.prev.take() {
+                    Some(v) => unsafe { std::env::set_var(self.key, v) },
+                    None => unsafe { std::env::remove_var(self.key) },
+                }
+            }
+        }
+        let _restore_root = RestoreRoot {
+            key: "ENVR_ROOT",
+            prev: old_root,
+        };
+
+        let runtime_root = root.join("plaindata").join("runtimes");
+        let shims = runtime_root.join("shims");
+        let system_bin = root.join("system_bin");
+        fs::create_dir_all(&shims).expect("shims");
+        fs::write(shims.join("nim.cmd"), b"@echo off\r\n").expect("nim.cmd");
+        fs::create_dir_all(&system_bin).expect("system_bin");
+        fs::write(system_bin.join("nim.exe"), []).expect("nim.exe");
+
+        let old_path = std::env::var_os("PATH");
+        let path_joined = format!("{};{}", shims.display(), system_bin.display());
+        unsafe { std::env::set_var("PATH", &path_joined) };
+        struct RestorePath(Option<std::ffi::OsString>);
+        impl Drop for RestorePath {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(v) => unsafe { std::env::set_var("PATH", v) },
+                    None => unsafe { std::env::remove_var("PATH") },
+                }
+            }
+        }
+        let _restore_path = RestorePath(old_path);
+
+        let paths = envr_platform::paths::current_platform_paths().expect("paths");
+        let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+        let snap = ShimSettingsSnapshot::from_settings(&settings);
+
+        let ctx = ShimContext {
+            runtime_root,
+            working_dir: root.join("prj"),
+            profile: None,
+        };
+
+        let resolved = resolve_core_shim_command_with_settings(CoreCommand::Nim, &ctx, &snap)
+            .expect("resolve");
+        assert!(
+            resolved
+                .executable
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with("nim.exe"),
+            "expected system nim.exe, got {:?}",
             resolved.executable
         );
     }
