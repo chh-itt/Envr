@@ -38,6 +38,14 @@ Create a runtime-specific plan first. It should answer:
 - **GitHub Releases API** (`/repos/<org>/<repo>/releases`): responses are paginated (`?per_page=100&page=N`); rate limits apply. If you cache **normalized install rows** (version + download URL + digest) as JSON, do not round-trip them through the raw GitHub parser unless that parser accepts the same shape—use a dedicated `serde` type for the cache file (see Crystal’s `CrystalReleaseRow` cache).
 - **Installer-backed Windows runtimes** (no portable zip): some vendors only ship an `.exe` setup (examples: CRAN `R-*-win.exe` Inno; Rust **`rustup-init.exe`**). Plan for **spawn installer with documented silent flags**, **target directory layout**, **post-install validation**, and **Windows `current` pointer-file fallback** when symlinks are blocked—do not assume `extract_archive` alone can install.
 
+### 2.1 Runtime host dependencies (Kotlin / JVM)
+
+Some runtimes **depend on another envr-managed runtime** (example: Kotlin needs a JDK). Declaring that relationship, resolving the host before the guest, shim `JAVA_HOME` (or other host env), GUI “host” metadata, and JDK compatibility preflight are **not** covered by the generic bullets above alone.
+
+**Normative design:** **[ADR-0001: Runtime host dependencies & Kotlin on the JVM](./adr-0001-runtime-host-dependencies-kotlin.md)** (Accepted).
+
+When adding a **hosted** runtime, follow §3 of this playbook **and** the ADR (descriptor `host_runtime` / future `host_runtimes`, acyclic checks, shared Java home resolution, install/`use` preflight policy, shim `extra_env` merge, Env Center subtitle). Reuse the same pattern for later JVM-family languages (Scala, Clojure, Groovy) unless a new ADR supersedes it.
+
 Do not start coding before these decisions are written down.
 
 ## 3) Standard implementation checklist
@@ -292,7 +300,7 @@ If any answer is `no`, the runtime is not done.
 
 For each non-trivial runtime, create and keep:
 
-- `docs/runtime/<key>-integration-plan.md`
+- `docs/runtime/<key>-integration-plan.md` (example: [`kotlin-integration-plan.md`](../runtime/kotlin-integration-plan.md) for a **hosted** runtime tied to [ADR-0001](./adr-0001-runtime-host-dependencies-kotlin.md))
 - `docs/runtime/<key>.md`
 
 Recommended sections:
