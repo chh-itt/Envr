@@ -1903,6 +1903,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 |st, on| st.runtime.java.path_proxy_enabled = on,
             )
         }
+        EnvCenterMsg::SetKotlinPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Kotlin,
+                on,
+                |st, on| st.runtime.kotlin.path_proxy_enabled = on,
+            )
+        }
         EnvCenterMsg::SetGoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.download_source = src;

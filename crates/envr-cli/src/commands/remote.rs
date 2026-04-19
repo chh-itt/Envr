@@ -222,6 +222,7 @@ pub(crate) fn run_inner(
                         | RuntimeKind::Zig
                         | RuntimeKind::Julia
                         | RuntimeKind::Lua
+                        | RuntimeKind::Kotlin
                         | RuntimeKind::Nim
                         | RuntimeKind::RLang
                 )

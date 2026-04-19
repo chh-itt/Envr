@@ -129,6 +129,8 @@ pub enum CoreCommand {
     Pip,
     Java,
     Javac,
+    Kotlin,
+    Kotlinc,
     Go,
     Gofmt,
     Php,
@@ -162,6 +164,7 @@ impl CoreCommand {
             CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => "node",
             CoreCommand::Python | CoreCommand::Pip => "python",
             CoreCommand::Java | CoreCommand::Javac => "java",
+            CoreCommand::Kotlin | CoreCommand::Kotlinc => "kotlin",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -186,6 +189,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "node" => vec![home.join("bin"), home.to_path_buf()],
         "python" => vec![home.join("Scripts"), home.join("bin")],
         "java" => vec![home.join("bin")],
+        "kotlin" => vec![home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -394,6 +398,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "pip" | "pip3" => Some(CoreCommand::Pip),
         "java" => Some(CoreCommand::Java),
         "javac" => Some(CoreCommand::Javac),
+        "kotlin" => Some(CoreCommand::Kotlin),
+        "kotlinc" => Some(CoreCommand::Kotlinc),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -829,6 +835,27 @@ fn python_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn kotlin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Kotlin => Ok(first_existing(&[
+            bin.join("kotlin.cmd"),
+            bin.join("kotlin.bat"),
+            bin.join("kotlin.exe"),
+            bin.join("kotlin"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("kotlin missing under {}", home.display())))?),
+        CoreCommand::Kotlinc => Ok(first_existing(&[
+            bin.join("kotlinc.cmd"),
+            bin.join("kotlinc.bat"),
+            bin.join("kotlinc.exe"),
+            bin.join("kotlinc"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("kotlinc missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a kotlin tool".into())),
+    }
+}
+
 fn java_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -1062,6 +1089,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(home, cmd),
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
+        CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1204,6 +1232,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Pip => "pip",
         CoreCommand::Java => "java",
         CoreCommand::Javac => "javac",
+        CoreCommand::Kotlin => "kotlin",
+        CoreCommand::Kotlinc => "kotlinc",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1263,11 +1293,16 @@ pub fn resolve_core_shim_command_with_settings(
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, settings)?;
 
     let mut extra_env = runtime_home_env_for_key(&home, key);
+    if key == "kotlin" {
+        let java_home = runtime_home_for_key(ctx, "java", cfg.as_ref(), None, settings)?;
+        extra_env.extend(runtime_home_env_for_key(&java_home, "java"));
+    }
 
     let executable = match cmd {
         CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx => node_tool_path(&home, cmd)?,
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(&home, cmd)?,
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(&home, cmd)?,
+        CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

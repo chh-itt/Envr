@@ -20,7 +20,9 @@ use envr_resolver::{
     extend_env_with_tooling_settings, plan_missing_installable_pins, resolve_exec_lang_home,
     resolve_run_lang_home,
 };
-use envr_shim_core::{ShimContext, runtime_home_env_for_key};
+use envr_shim_core::{
+    ShimContext, resolve_runtime_home_for_lang_with_project, runtime_home_env_for_key,
+};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
@@ -182,6 +184,18 @@ pub fn collect_exec_env(
                 for (k, v) in runtime_home_env_for_key(&home, lang) {
                     env.insert(k, v);
                 }
+                if lang == "kotlin" {
+                    let java_home = resolve_runtime_home_for_lang_with_project(
+                        ctx,
+                        "java",
+                        spec_override,
+                        cfg,
+                    )?;
+                    let java_home = std::fs::canonicalize(&java_home).map_err(EnvrError::from)?;
+                    for (k, v) in runtime_home_env_for_key(&java_home, "java") {
+                        env.insert(k, v);
+                    }
+                }
                 let st = load_settings()?;
                 extend_env_with_tooling_settings(
                     &mut env,
@@ -215,6 +229,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "nim" => Some("ENVR_NIM_VERSION"),
         "crystal" => Some("ENVR_CRYSTAL_VERSION"),
         "r" => Some("ENVR_R_VERSION"),
+        "kotlin" => Some("ENVR_KOTLIN_VERSION"),
         _ => None,
     }
 }
@@ -283,6 +298,14 @@ fn collect_run_env_impl(
                 }
                 for (k, v) in runtime_home_env_for_key(&home, &lang) {
                     runtime_home_env.insert(k, v);
+                }
+                if lang == "kotlin" {
+                    if let Ok(java_home) = resolve_run_lang_home(ctx, cfg, "java") {
+                        let java_home = std::fs::canonicalize(&java_home).unwrap_or(java_home);
+                        for (k, v) in runtime_home_env_for_key(&java_home, "java") {
+                            runtime_home_env.insert(k, v);
+                        }
+                    }
                 }
                 if lang == "deno" {
                     deno_on_path = true;

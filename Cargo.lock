@@ -961,6 +961,7 @@ dependencies = [
  "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-julia",
+ "envr-runtime-kotlin",
  "envr-runtime-lua",
  "envr-runtime-nim",
  "envr-runtime-node",
@@ -1199,6 +1200,21 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-kotlin"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "envr-shim-core",
  "reqwest",
  "serde",
  "serde_json",

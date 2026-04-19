@@ -14,82 +14,84 @@ Add **Kotlin** as a first-class **`RuntimeKind::Kotlin`** (CLI / GUI / shims / `
 2. **Independence:** Kotlin is its own `RuntimeKind`; users run `envr install kotlin` / `envr use kotlin`.
 3. **Host:** `RuntimeDescriptor` gains **`host_runtime: Option<RuntimeKind>`** (Kotlin → `Some(Java)`); future JVM languages reuse the same field or migrate to `host_runtimes: &'static [RuntimeKind]` per ADR Phase B.
 4. **Core commands (MVP):** `kotlin`, `kotlinc` shims + `exec --lang kotlin` (defer `kapt`, REPL variants, until needed).
-5. **Index / artifacts:** TBD in implementation PR — likely **JetBrains GitHub releases** (`https://github.com/JetBrains/kotlin/releases`) or official **kotlin-compiler** bundles; document exact URL matrix, supported hosts (align with envr host policy: Windows x64, Linux x64 glibc, macOS tier as for Java/Lua policy).
+5. **Index / artifacts:** **JetBrains GitHub releases API** → `kotlin-compiler-<ver>.zip` per tag; cached under `cache/kotlin/github_releases.json` (TTL via `ENVR_KOTLIN_INDEX_CACHE_TTL_SECS`, default 6h).
 6. **Layout:** `runtimes/kotlin/versions/<label>/` with standard **`current`** (symlink or Windows pointer file).
-7. **JDK compatibility:** Static or index-derived **`java_min_major`** per Kotlin release; preflight on `install` / `use` / shim resolve compares **effective** Java from `RuntimeKind::Java` `current` (or pin); policy **`warn` vs `error`** via settings (key TBD — see ADR open questions).
-8. **Shims:** Resolve Kotlin binary under Kotlin home; **`extra_env` includes `JAVA_HOME`** set to the **same resolved Java home** as the `java` shim (`envr-shim-core`: extend `runtime_home_env_for_key` / shared helper per ADR).
-9. **GUI:** Kotlin row shows secondary text for host JDK, e.g. `宿主: Java 21` / i18n equivalent; blocking hint if Java missing.
-10. **PATH proxy:** Descriptor `supports_path_proxy` — default **true** if Kotlin binaries must be managed like Java (confirm during wiring).
+7. **JDK compatibility:** Preflight uses **Java `current` resolution** (same as shims) and parses **major** from the JDK version directory label (`21…` → 21, `1.8…` → 8). MVP minimum: **Java 8+** for all Kotlin lines (no per-Kotlin-line table yet).
+8. **Shims:** `resolve_core_shim_command_with_settings` merges **`JAVA_HOME`** from resolved Java home whenever the guest key is `kotlin` (ADR: same source as `java` shims). `exec` / `run` merge the same way in `child_env`.
+9. **GUI:** Env Center **PATH proxy** strip for Kotlin (like Lua). **Host subtitle** (`宿主: Java …`) and blocking row CTA are **not** in this MVP (see Development log).
+10. **PATH proxy:** `supports_path_proxy: true`; `[runtime.kotlin] path_proxy_enabled` + schema zh template.
 
 ## Implementation checklist (playbook + ADR cross-walk)
 
 ### Phase 0 — Domain & policy
 
-- [ ] `RuntimeKind::Kotlin` + `RUNTIME_DESCRIPTORS` entry (`label_en` / `label_zh`, flags).
-- [ ] `RuntimeDescriptor::host_runtime` (or slice) + **acyclic** validation helper.
-- [ ] `parse_runtime_kind("kotlin")`, `version_line_key_for_kind` if unified major UX applies.
-- [ ] Settings: Kotlin runtime section + **JDK mismatch policy** (`warn` | `error`) + schema template + zh schema.
-- [ ] `PathProxyRuntimeSnapshot` + `path_proxy_enabled_for_kind(Kotlin)` if supported.
+- [x] `RuntimeKind::Kotlin` + `RUNTIME_DESCRIPTORS` entry (`label_en` / `label_zh`, flags).
+- [x] `RuntimeDescriptor::host_runtime` + **acyclic** validation in domain tests (MVP: single hop only).
+- [x] `parse_runtime_kind("kotlin")`, `version_line_key_for_kind` → **major.minor** (e.g. `2.0.21` → `2.0`).
+- [x] Settings: `[runtime.kotlin] path_proxy_enabled` + schema template (zh).
+- [ ] JDK mismatch policy (`warn` | `error`) as a dedicated settings enum (still **hard error** below Java 8 only).
+- [x] `PathProxyRuntimeSnapshot` + `path_proxy_enabled_for_kind(Kotlin)`.
 
 ### Phase 1 — Provider crate `envr-runtime-kotlin`
 
-- [ ] Crate layout: `index` (fetch/parse releases), `manager` (install, promote, `kotlin_installation_valid`), `mirror` if needed.
-- [ ] `RuntimeProvider` impl: list/install/uninstall/current/set_current/resolve + remote list semantics consistent with artifact set.
-- [ ] **Preflight:** before install/commit `current`, resolve Java home + major; compare `java_min_major`; emit warn or error.
-- [ ] Register in **`default_provider_boxes`** (`envr-core` `service.rs`).
+- [x] Crate: `index` (GitHub releases JSON), `manager` (install zip, promote, `kotlin_installation_valid`).
+- [x] `RuntimeProvider` impl + **`default_provider_boxes`** (`envr-core` `service.rs`).
+- [x] **Preflight:** `install` / `set_current` require resolvable Java home + major ≥ 8.
 
 ### Phase 2 — Resolver / exec / run / child env
 
-- [ ] `RUN_STACK_LANG_ORDER`, `RUNTIME_PLAN_ORDER`, merge env templates.
-- [ ] `runtime_bin_dirs_for_key("kotlin", …)`.
-- [ ] Ensure **`JAVA_HOME`** (and `PATH` bin dirs) appear in merged child env when Kotlin participates — same source as shims.
+- [x] `RUN_STACK_LANG_ORDER` (**kotlin** after **java**), `RUNTIME_PLAN_ORDER`, `resolve_run_lang_home` / `resolve_exec_lang_home` delegation.
+- [x] `runtime_bin_dirs_for_key("kotlin", …)` → `bin/`.
+- [x] **`JAVA_HOME`** for `exec --lang kotlin` and for **kotlin** layer in `run` when Java resolves.
 
 ### Phase 3 — Shims
 
-- [ ] `CoreCommand::Kotlin` / `Kotlinc` (names aligned with stems).
-- [ ] Parser + `core_tool_executable` + PATH-proxy bypass map.
-- [ ] **`runtime_home_env_for_key`:** for `kotlin`, append **`JAVA_HOME`** from shared **Java home resolver** (do not duplicate Java-only branch logic).
-- [ ] `shim_service` / core stems for new commands.
+- [x] `CoreCommand::Kotlin` / `Kotlinc`, parser, `core_tool_executable`, PATH-proxy bypass stems.
+- [x] **`JAVA_HOME`** merged in `resolve_core_shim_command_with_settings` for `kotlin` (not only via `runtime_home_env_for_key("kotlin")`).
+- [x] `shim_service` stems.
 
 ### Phase 4 — CLI / GUI / registry / locales
 
-- [ ] CLI: `remote` / `install` / `use` / … parity per playbook §G; **argv sample** + `COMMAND_SPEC_REGISTRY` + `help_registry/table.inc` + `cli.ok.*` locale keys.
-- [ ] GUI: nav, dashboard, Env Center, `runtime_layout` default order merge, **host subtitle** component, preflight errors.
-- [ ] `envr doctor`: optional Kotlin+Java sanity row.
+- [x] CLI: `remote` / `list` / `shim` / `bundle` parity lists; `help_registry/table.inc` + `root.rs` doc strings mention `kotlin`.
+- [x] GUI: Env Center Kotlin settings (PATH proxy), `runtime_layout` default count **19**.
+- [ ] `envr doctor`: Kotlin+Java sanity row (optional follow-up).
 
 ### Phase 5 — Docs & tests
 
 - [ ] User doc `docs/runtime/kotlin.md` (install limits, Java requirement, pins).
-- [ ] Unit tests: index parse, resolve, preflight matrix (Java 8 vs 21 vs missing).
-- [ ] Integration: `exec --lang kotlin --dry-run`, shim `extra_env` contains expected `JAVA_HOME`.
+- [x] Domain tests: descriptor / `version_line_key` / host acyclicity.
+- [ ] Integration test: `exec --lang kotlin --dry-run` with temp roots (optional follow-up).
 - [ ] Manual smoke matrix (Windows + one Unix) recorded below.
 
 ## Acceptance criteria
 
 - With **Java `current` set** to a compatible JDK, `envr install kotlin <ver>` + `envr use kotlin <ver>` + `envr exec --lang kotlin -- kotlinc -version` succeed.
-- With **Java missing** or **below `java_min_major`**, behavior matches configured policy (warn vs error) with actionable messages.
-- **GUI** shows Kotlin versions and **host JDK** metadata without duplicating the Java editor.
-- **`cargo test --workspace`** green after registry/help/locale updates.
+- With **Java missing** or **below Java 8**, install/use preflight fails with an actionable message.
+- **`cargo test --workspace`** green.
 
 ## Risks & watchlist
 
 | Risk | Mitigation |
 |------|------------|
-| Two indices (GitHub API vs installable assets) | Single installable row list; cap/pagination documented (playbook §2 GitHub note). |
+| Two indices (GitHub API vs installable assets) | Only rows with matching `kotlin-compiler-{label}.zip` asset. |
 | Kotlin native vs JVM-only | MVP scope: **JVM compiler bundle** only unless ADR extended. |
 | `JAVA_HOME` vs `JDK_JAVA_OPTIONS` | Start with ADR-mandated `JAVA_HOME`; add knobs only if real failures. |
-| GUI row without Java | Clear CTA to install/use Java; link to Java tab. |
+| GUI row without Java | Subtitle/CTA deferred; user still sees Java tab separately. |
 
 ## Open questions (carry from ADR until closed)
 
-1. Exact **release feed** and **OS/arch matrix** for MVP.
+1. Per-Kotlin-line **`java_min_major`** table vs static minimum.
 2. Shim surface beyond `kotlin` / `kotlinc`.
-3. `.envr.toml` **only Kotlin pin** — confirm preflight uses **effective** Java global current.
-4. Settings key names for host mismatch policy.
+3. `.envr.toml` **only Kotlin pin** — preflight uses **effective** Java via `resolve_runtime_home_for_lang` (global `current` + project pin for `java` when present).
 
 ## Development log
 
 - **2026-04-19:** Integration plan created; ADR-0001 Accepted; playbook §2.1 linked.
+- **2026-04-19 (implementation):**
+  - **Friction — `runtime_home_env_for_key("kotlin")`:** left empty on purpose; **`JAVA_HOME` is merged in the shim resolver and in `child_env`** next to Kotlin home resolution so it always matches the Java resolver (ADR) without overloading `runtime_home_env_for_key` with `ShimContext`.
+  - **Friction — `RUN_STACK_LANG_ORDER`:** **java** must appear **before** **kotlin** so `collect_run_env` can reuse Java’s `JAVA_HOME` when both layers resolve; extra merge for `exec --lang kotlin`-only and kotlin-only pins when Java layer is skipped is handled explicitly in `child_env`.
+  - **GUI gap:** no **host JDK subtitle** on the hub row yet (ADR §GUI); PATH-proxy settings strip only.
+  - **Preflight gap:** no per-Kotlin-version `java_min_major` matrix; global **≥ 8** only.
 
 ## Manual verification (fill in during QA)
 

@@ -126,6 +126,7 @@ fn create_inner(
             RuntimeKind::Node,
             RuntimeKind::Python,
             RuntimeKind::Java,
+            RuntimeKind::Kotlin,
             RuntimeKind::Go,
             RuntimeKind::Rust,
             RuntimeKind::Ruby,

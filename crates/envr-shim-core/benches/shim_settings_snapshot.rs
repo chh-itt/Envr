@@ -19,6 +19,7 @@ fn legacy_multi_load(path: &std::path::Path) -> usize {
     acc += usize::from(load_settings(path).runtime.node.path_proxy_enabled);
     acc += usize::from(load_settings(path).runtime.python.path_proxy_enabled);
     acc += usize::from(load_settings(path).runtime.java.path_proxy_enabled);
+    acc += usize::from(load_settings(path).runtime.kotlin.path_proxy_enabled);
     acc += usize::from(load_settings(path).runtime.go.path_proxy_enabled);
     acc += usize::from(load_settings(path).runtime.php.path_proxy_enabled);
     acc += usize::from(load_settings(path).runtime.deno.path_proxy_enabled);
@@ -39,6 +40,7 @@ fn single_snapshot(path: &std::path::Path) -> usize {
     acc += usize::from(s.runtime.node.path_proxy_enabled);
     acc += usize::from(s.runtime.python.path_proxy_enabled);
     acc += usize::from(s.runtime.java.path_proxy_enabled);
+    acc += usize::from(s.runtime.kotlin.path_proxy_enabled);
     acc += usize::from(s.runtime.go.path_proxy_enabled);
     acc += usize::from(s.runtime.php.path_proxy_enabled);
     acc += usize::from(s.runtime.deno.path_proxy_enabled);
@@ -67,6 +69,9 @@ path_proxy_enabled = true
 pip_registry_mode = "official"
 
 [runtime.java]
+path_proxy_enabled = true
+
+[runtime.kotlin]
 path_proxy_enabled = true
 
 [runtime.go]

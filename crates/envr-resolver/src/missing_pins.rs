@@ -11,6 +11,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "node",
     "python",
     "java",
+    "kotlin",
     "go",
     "ruby",
     "elixir",

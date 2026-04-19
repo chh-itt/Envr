@@ -475,6 +475,21 @@ impl Default for JavaRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KotlinRuntimeSettings {
+    /// When false, kotlin/kotlinc shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::kotlin_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for KotlinRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::kotlin_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -511,6 +526,8 @@ pub struct RuntimeSettings {
     pub python: PythonRuntimeSettings,
     #[serde(default)]
     pub java: JavaRuntimeSettings,
+    #[serde(default)]
+    pub kotlin: KotlinRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -1775,6 +1792,10 @@ mod defaults {
         true
     }
 
+    pub fn kotlin_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn go_path_proxy_enabled() -> bool {
         true
     }
@@ -1897,6 +1918,7 @@ mod tests {
                 erlang: ErlangRuntimeSettings::default(),
                 python: PythonRuntimeSettings::default(),
                 java: JavaRuntimeSettings::default(),
+                kotlin: KotlinRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                     ..Default::default()

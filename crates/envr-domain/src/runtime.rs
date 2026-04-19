@@ -8,6 +8,7 @@ pub enum RuntimeKind {
     Node,
     Python,
     Java,
+    Kotlin,
     Go,
     Rust,
     Ruby,
@@ -33,9 +34,11 @@ pub struct RuntimeDescriptor {
     pub label_zh: &'static str,
     pub supports_remote_latest: bool,
     pub supports_path_proxy: bool,
+    /// When set, this runtime expects an envr-managed host (e.g. Kotlin → Java).
+    pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 19] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -43,6 +46,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Node",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Python,
@@ -51,6 +55,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Python",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Java,
@@ -59,6 +64,16 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Java",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Kotlin,
+        key: "kotlin",
+        label_en: "Kotlin",
+        label_zh: "Kotlin",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: Some(RuntimeKind::Java),
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Go,
@@ -67,6 +82,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Go",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Rust,
@@ -75,6 +91,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Rust",
         supports_remote_latest: false,
         supports_path_proxy: false,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Ruby,
@@ -83,6 +100,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Ruby",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Elixir,
@@ -91,6 +109,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Elixir",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Erlang,
@@ -99,6 +118,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Erlang/OTP",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Php,
@@ -107,6 +127,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "PHP",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Deno,
@@ -115,6 +136,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Deno",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Bun,
@@ -123,6 +145,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Bun",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Dotnet,
@@ -131,6 +154,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: ".NET",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Zig,
@@ -139,6 +163,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Zig",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Julia,
@@ -147,6 +172,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Julia",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Lua,
@@ -155,6 +181,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Lua",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Nim,
@@ -163,6 +190,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Nim",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Crystal,
@@ -171,6 +199,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "Crystal",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::RLang,
@@ -179,6 +208,7 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 18] = [
         label_zh: "R",
         supports_remote_latest: true,
         supports_path_proxy: true,
+        host_runtime: None,
     },
 ];
 
@@ -187,6 +217,12 @@ pub fn runtime_descriptor(kind: RuntimeKind) -> &'static RuntimeDescriptor {
         .iter()
         .find(|d| d.kind == kind)
         .expect("runtime descriptor must exist for kind")
+}
+
+/// Declared host runtime for `kind`, if any (see ADR-0001).
+#[inline]
+pub fn runtime_host_runtime(kind: RuntimeKind) -> Option<RuntimeKind> {
+    runtime_descriptor(kind).host_runtime
 }
 
 pub fn runtime_kinds_all() -> impl Iterator<Item = RuntimeKind> {
@@ -351,6 +387,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Zig
         | RuntimeKind::Julia
         | RuntimeKind::Lua
+        | RuntimeKind::Kotlin
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
@@ -396,7 +433,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 18);
+        assert_eq!(kinds.len(), 19);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -407,6 +444,33 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Crystal));
         assert!(kinds.contains(&RuntimeKind::RLang));
         assert!(kinds.contains(&RuntimeKind::Lua));
+        assert!(kinds.contains(&RuntimeKind::Kotlin));
+    }
+
+    #[test]
+    fn kotlin_descriptor_hosts_java_acyclic() {
+        assert_eq!(
+            runtime_host_runtime(RuntimeKind::Kotlin),
+            Some(RuntimeKind::Java)
+        );
+        assert_eq!(runtime_host_runtime(RuntimeKind::Java), None);
+        for d in RUNTIME_DESCRIPTORS {
+            let Some(host) = d.host_runtime else {
+                continue;
+            };
+            assert_ne!(
+                host, d.kind,
+                "descriptor host_runtime must not self-reference {:?}",
+                d.kind
+            );
+            assert_eq!(
+                runtime_host_runtime(host),
+                None,
+                "MVP: only one-hop hosts; {:?} -> {:?} must not chain further",
+                d.kind,
+                host
+            );
+        }
     }
 
     #[test]
@@ -487,6 +551,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Lua, "5.4.8").as_deref(),
             Some("5.4")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Kotlin, "2.0.21").as_deref(),
+            Some("2.0")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

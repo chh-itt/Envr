@@ -42,6 +42,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Pip, "pip3"),
         ],
         RuntimeKind::Java => &[(CoreCommand::Java, "java"), (CoreCommand::Javac, "javac")],
+        RuntimeKind::Kotlin => &[
+            (CoreCommand::Kotlin, "kotlin"),
+            (CoreCommand::Kotlinc, "kotlinc"),
+        ],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
         RuntimeKind::Ruby => &[

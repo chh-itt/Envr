@@ -66,6 +66,7 @@ Legend:
   - `label_zh`
   - `supports_remote_latest`
   - `supports_path_proxy`
+  - `host_runtime` (usually `None`; set when the runtime depends on another envr-managed runtime — see §2.1 / ADR-0001)
 - [ ] Ensure `parse_runtime_kind()` accepts the runtime key
 - [ ] Confirm descriptor-driven lists automatically pick it up where expected
 
