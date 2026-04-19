@@ -1,0 +1,25 @@
+{
+  "1.10.5": {
+    "stable": true,
+    "files": [
+      {
+        "arch": "x86_64",
+        "extension": "tar.gz",
+        "kind": "archive",
+        "os": "linux",
+        "sha256": "33497b93cf9dd65e8431024fd1db19cbfbe30bd796775a59d53e2df9a8de6dc0",
+        "url": "https://julialang-s3.julialang.org/bin/linux/x64/1.10/julia-1.10.5-linux-x86_64.tar.gz",
+        "version": "1.10.5"
+      },
+      {
+        "arch": "x86_64",
+        "extension": "zip",
+        "kind": "archive",
+        "os": "winnt",
+        "sha256": "7b21b30c0a412df7bf2472ff5ee5d47aab5a9b4f184a7595da62eea3f10650b1",
+        "url": "https://julialang-s3.julialang.org/bin/winnt/x64/1.10/julia-1.10.5-win64.zip",
+        "version": "1.10.5"
+      }
+    ]
+  }
+}

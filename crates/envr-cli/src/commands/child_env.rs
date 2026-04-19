@@ -210,6 +210,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "bun" => Some("ENVR_BUN_VERSION"),
         "dotnet" => Some("ENVR_DOTNET_VERSION"),
         "zig" => Some("ENVR_ZIG_VERSION"),
+        "julia" => Some("ENVR_JULIA_VERSION"),
         _ => None,
     }
 }

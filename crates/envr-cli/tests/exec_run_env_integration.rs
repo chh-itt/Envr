@@ -131,6 +131,29 @@ fn write_zig_layout(runtime_root: &Path, version: &str) {
     }
 }
 
+fn write_julia_layout(runtime_root: &Path, version: &str) {
+    let julia_home = runtime_root.join("runtimes/julia");
+    let ver = julia_home.join("versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create julia version bin");
+    #[cfg(windows)]
+    fs::write(bin.join("julia.exe"), []).expect("touch julia.exe");
+    #[cfg(not(windows))]
+    fs::write(bin.join("julia"), []).expect("touch julia");
+    let current = julia_home.join("current");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let rel = format!("versions/{version}");
+        symlink(rel, &current).expect("julia current symlink");
+    }
+    #[cfg(windows)]
+    {
+        let abs = fs::canonicalize(&ver).unwrap_or_else(|_| ver.clone());
+        fs::write(&current, format!("{}\n", abs.display())).expect("julia current pointer");
+    }
+}
+
 fn write_ruby_layout(runtime_root: &Path, version: &str) {
     let ver = runtime_root.join("runtimes/ruby/versions").join(version);
     let bin = ver.join("bin");
@@ -529,6 +552,64 @@ fn exec_dry_run_zig_resolves_project_pin() {
     assert!(
         path_line.contains("0.14.1") && path_line.to_lowercase().contains("zig"),
         "PATH should include zig version home; line={path_line:?} full stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn exec_dry_run_julia_resolves_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_julia_layout(&runtime_root, "1.10.5");
+    project_with_runtime_pin(&project, "julia", "1.10.5");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "julia",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "julia",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("JULIA_HOME="),
+        "dry-run should include JULIA_HOME; stdout:\n{stdout}"
+    );
+    let path_line = stdout
+        .lines()
+        .find(|l| l.starts_with("PATH=") || l.starts_with("Path="))
+        .unwrap_or_else(|| panic!("expected PATH in dry-run stdout:\n{stdout}"));
+    assert!(
+        path_line.contains("1.10.5") && path_line.to_lowercase().contains("julia"),
+        "PATH should include julia version bin; line={path_line:?} full stdout:\n{stdout}"
     );
 }
 

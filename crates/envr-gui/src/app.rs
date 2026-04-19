@@ -1088,6 +1088,7 @@ fn unified_list_rollout_enabled(kind: envr_domain::runtime::RuntimeKind) -> bool
             | envr_domain::runtime::RuntimeKind::Bun
             | envr_domain::runtime::RuntimeKind::Dotnet
             | envr_domain::runtime::RuntimeKind::Zig
+            | envr_domain::runtime::RuntimeKind::Julia
     )
 }
 
@@ -1121,6 +1122,7 @@ fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
         envr_domain::runtime::RuntimeKind::Erlang => !snap.erlang.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Dotnet => !snap.dotnet.path_proxy_enabled,
         envr_domain::runtime::RuntimeKind::Zig => !snap.zig.path_proxy_enabled,
+        envr_domain::runtime::RuntimeKind::Julia => !snap.julia.path_proxy_enabled,
         // Rust is not expected to support path proxy, but keep this explicit.
         envr_domain::runtime::RuntimeKind::Rust => false,
     }
@@ -2065,6 +2067,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 envr_domain::runtime::RuntimeKind::Zig,
                 on,
                 |st, on| st.runtime.zig.path_proxy_enabled = on,
+            )
+        }
+        EnvCenterMsg::SetJuliaPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Julia,
+                on,
+                |st, on| st.runtime.julia.path_proxy_enabled = on,
             )
         }
         EnvCenterMsg::SetRubyPathProxy(on) => {

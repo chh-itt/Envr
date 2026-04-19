@@ -20,6 +20,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "bun",
     "dotnet",
     "zig",
+    "julia",
 ];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and

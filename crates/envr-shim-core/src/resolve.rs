@@ -19,6 +19,7 @@ pub struct ShimSettingsSnapshot {
     bun_path_proxy_enabled: bool,
     dotnet_path_proxy_enabled: bool,
     zig_path_proxy_enabled: bool,
+    julia_path_proxy_enabled: bool,
     ruby_path_proxy_enabled: bool,
     elixir_path_proxy_enabled: bool,
     erlang_path_proxy_enabled: bool,
@@ -39,6 +40,7 @@ impl Default for ShimSettingsSnapshot {
             bun_path_proxy_enabled: true,
             dotnet_path_proxy_enabled: true,
             zig_path_proxy_enabled: true,
+            julia_path_proxy_enabled: true,
             ruby_path_proxy_enabled: true,
             elixir_path_proxy_enabled: true,
             erlang_path_proxy_enabled: true,
@@ -61,6 +63,7 @@ impl ShimSettingsSnapshot {
             bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
             dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
             zig_path_proxy_enabled: settings.runtime.zig.path_proxy_enabled,
+            julia_path_proxy_enabled: settings.runtime.julia.path_proxy_enabled,
             ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
             elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
             erlang_path_proxy_enabled: settings.runtime.erlang.path_proxy_enabled,
@@ -118,6 +121,9 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
         return true;
     }
     if matches!(cmd, CoreCommand::Zig) && !settings.zig_path_proxy_enabled {
+        return true;
+    }
+    if matches!(cmd, CoreCommand::Julia) && !settings.julia_path_proxy_enabled {
         return true;
     }
     if matches!(
@@ -220,6 +226,7 @@ pub enum CoreCommand {
     Erlc,
     Escript,
     Zig,
+    Julia,
 }
 
 impl CoreCommand {
@@ -237,6 +244,7 @@ impl CoreCommand {
             CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => "elixir",
             CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
             CoreCommand::Zig => "zig",
+            CoreCommand::Julia => "julia",
         }
     }
 }
@@ -257,6 +265,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "bun" => vec![home.to_path_buf(), home.join("bin")],
         "dotnet" => vec![home.to_path_buf(), home.join("bin")],
         "zig" => vec![home.to_path_buf(), home.join("bin")],
+        "julia" => vec![home.join("bin")],
         _ => vec![],
     }
 }
@@ -286,7 +295,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
                 let path_os = std::env::var_os("PATH")?;
                 for dir in std::env::split_paths(&path_os) {
                     // Skip envr shims directory (avoid accidental self-resolution).
-                    if is_likely_envr_shims_dir(&dir) {
+                    if should_skip_envr_shims_path_entry(&dir) {
                         continue;
                     }
                     let candidate: PathBuf = dir.join("erl.exe");
@@ -320,6 +329,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
             ("DOTNET_MULTILEVEL_LOOKUP".into(), "0".into()),
         ],
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
+        "julia" => vec![("JULIA_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -466,6 +476,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "erlc" => Some(CoreCommand::Erlc),
         "escript" => Some(CoreCommand::Escript),
         "zig" => Some(CoreCommand::Zig),
+        "julia" => Some(CoreCommand::Julia),
         _ => None,
     }
 }
@@ -1053,6 +1064,17 @@ fn zig_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Julia => Ok(first_existing(&[
+            home.join("bin").join("julia.exe"),
+            home.join("bin").join("julia"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("julia missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a julia tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -1070,6 +1092,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex => elixir_tool_path(home, cmd),
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
         CoreCommand::Zig => zig_tool_path(home, cmd),
+        CoreCommand::Julia => julia_tool_path(home, cmd),
     }
 }
 
@@ -1109,7 +1132,54 @@ fn is_likely_envr_shims_dir(dir: &Path) -> bool {
         .is_some_and(|s| s.to_ascii_lowercase().contains("envr"))
 }
 
-fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
+fn paths_equal_trimmed_case_insensitive(a: &Path, b: &Path) -> bool {
+    fn norm(p: &Path) -> String {
+        p.as_os_str()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .trim_end_matches(|c| c == '/' || c == '\\')
+            .to_string()
+    }
+    norm(a) == norm(b)
+}
+
+/// `dir` is the envr shims folder for the effective [`resolve_runtime_root`] layout
+/// (logical match or same inode after `canonicalize`).
+fn path_matches_managed_shims(dir: &Path, managed: &Path) -> bool {
+    if paths_equal_trimmed_case_insensitive(dir, managed) {
+        return true;
+    }
+    if dir.is_dir() && managed.is_dir() {
+        if let (Ok(a), Ok(b)) = (std::fs::canonicalize(dir), std::fs::canonicalize(managed)) {
+            return a == b;
+        }
+    }
+    false
+}
+
+/// Skip a PATH segment that points at envr shims when we have no [`ShimContext`]
+/// (e.g. Elixir `ERTS_BIN` discovery). Uses the same root as shim resolution plus a
+/// narrow legacy heuristic.
+fn should_skip_envr_shims_path_entry(dir: &Path) -> bool {
+    if let Ok(root) = resolve_runtime_root() {
+        if path_matches_managed_shims(dir, &root.join("shims")) {
+            return true;
+        }
+    }
+    is_likely_envr_shims_dir(dir)
+}
+
+/// True when `dir` is the envr-managed shims directory for this installation.
+///
+/// Prefer this over [`is_likely_envr_shims_dir`] alone: the legacy heuristic misses
+/// `.../runtimes/shims` when the parent path has no `"envr"` substring (custom roots),
+/// and it fails for Windows short (8.3) PATH segments that do not spell `envr`.
+fn is_envr_managed_shims_dir(dir: &Path, ctx: &ShimContext) -> bool {
+    let managed = ctx.runtime_root.join("shims");
+    path_matches_managed_shims(dir, &managed) || is_likely_envr_shims_dir(dir)
+}
+
+fn find_on_path_outside_envr_shims(ctx: &ShimContext, tool_stem: &str) -> EnvrResult<PathBuf> {
     let path_os = std::env::var_os("PATH").ok_or_else(|| {
         EnvrError::Runtime(
             "PATH is not set; cannot search for host executables outside envr shims".into(),
@@ -1121,7 +1191,7 @@ fn find_on_path_outside_envr_shims(tool_stem: &str) -> EnvrResult<PathBuf> {
     let suffixes: &[&str] = &[""];
 
     for dir in std::env::split_paths(&path_os) {
-        if is_likely_envr_shims_dir(&dir) {
+        if is_envr_managed_shims_dir(&dir, ctx) {
             continue;
         }
         for suf in suffixes {
@@ -1167,12 +1237,13 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Erlc => "erlc",
         CoreCommand::Escript => "escript",
         CoreCommand::Zig => "zig",
+        CoreCommand::Julia => "julia",
     }
 }
 
-fn resolve_core_tool_bypass_envr(cmd: CoreCommand) -> EnvrResult<ResolvedShim> {
+fn resolve_core_tool_bypass_envr(cmd: CoreCommand, ctx: &ShimContext) -> EnvrResult<ResolvedShim> {
     let stem = path_proxy_bypass_host_stem(cmd);
-    let executable = find_on_path_outside_envr_shims(stem)?;
+    let executable = find_on_path_outside_envr_shims(ctx, stem)?;
     Ok(ResolvedShim {
         executable,
         extra_env: vec![],
@@ -1192,7 +1263,7 @@ pub fn resolve_core_shim_command_with_settings(
     settings: &ShimSettingsSnapshot,
 ) -> EnvrResult<ResolvedShim> {
     if uses_path_proxy_bypass(cmd, settings) {
-        return resolve_core_tool_bypass_envr(cmd);
+        return resolve_core_tool_bypass_envr(cmd, ctx);
     }
     let cfg =
         load_project_config_profile(&ctx.working_dir, ctx.profile.as_deref())?.map(|(c, _)| c);
@@ -1225,6 +1296,7 @@ pub fn resolve_core_shim_command_with_settings(
             erlang_tool_path(&home, cmd)?
         }
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
+        CoreCommand::Julia => julia_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1316,6 +1388,7 @@ mod tests {
         assert_eq!(parse_core_command("erlc"), Some(CoreCommand::Erlc));
         assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
+        assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
         assert_eq!(parse_core_command("unknown"), None);
     }
 
@@ -1682,5 +1755,86 @@ version = "20"
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erl));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Escript));
+    }
+
+    /// When PATH lists envr `shims` before a real `julia.exe`, bypass must not pick `julia.cmd`
+    /// in that shims dir: parent paths like `...\plaindata\runtimes` do not contain `"envr"`, so the
+    /// legacy heuristic alone would recurse through `cmd /c` batch shims on Windows.
+    #[cfg(windows)]
+    #[test]
+    fn path_proxy_bypass_skips_managed_shims_dir_without_envr_parent_heuristic() {
+        let _guard = ENV_LOCK.lock().expect("lock");
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let cfg_dir = root.join("config");
+        fs::create_dir_all(&cfg_dir).expect("config dir");
+        fs::write(
+            cfg_dir.join("settings.toml"),
+            "[runtime.julia]\npath_proxy_enabled = false\n",
+        )
+        .expect("settings");
+
+        let old_root = std::env::var_os("ENVR_ROOT");
+        unsafe { std::env::set_var("ENVR_ROOT", root) };
+        struct RestoreRoot {
+            key: &'static str,
+            prev: Option<std::ffi::OsString>,
+        }
+        impl Drop for RestoreRoot {
+            fn drop(&mut self) {
+                match self.prev.take() {
+                    Some(v) => unsafe { std::env::set_var(self.key, v) },
+                    None => unsafe { std::env::remove_var(self.key) },
+                }
+            }
+        }
+        let _restore_root = RestoreRoot {
+            key: "ENVR_ROOT",
+            prev: old_root,
+        };
+
+        let runtime_root = root.join("plaindata").join("runtimes");
+        let shims = runtime_root.join("shims");
+        let system_bin = root.join("system_bin");
+        fs::create_dir_all(&shims).expect("shims");
+        fs::write(shims.join("julia.cmd"), b"@echo off\r\n").expect("julia.cmd");
+        fs::create_dir_all(&system_bin).expect("system_bin");
+        fs::write(system_bin.join("julia.exe"), []).expect("julia.exe");
+
+        let old_path = std::env::var_os("PATH");
+        let path_joined = format!("{};{}", shims.display(), system_bin.display());
+        unsafe { std::env::set_var("PATH", &path_joined) };
+        struct RestorePath(Option<std::ffi::OsString>);
+        impl Drop for RestorePath {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(v) => unsafe { std::env::set_var("PATH", v) },
+                    None => unsafe { std::env::remove_var("PATH") },
+                }
+            }
+        }
+        let _restore_path = RestorePath(old_path);
+
+        let paths = envr_platform::paths::current_platform_paths().expect("paths");
+        let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+        let snap = ShimSettingsSnapshot::from_settings(&settings);
+
+        let ctx = ShimContext {
+            runtime_root,
+            working_dir: root.join("prj"),
+            profile: None,
+        };
+
+        let resolved = resolve_core_shim_command_with_settings(CoreCommand::Julia, &ctx, &snap)
+            .expect("resolve");
+        assert!(
+            resolved
+                .executable
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with("julia.exe"),
+            "expected system julia.exe, got {:?}",
+            resolved.executable
+        );
     }
 }

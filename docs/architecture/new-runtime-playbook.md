@@ -28,7 +28,7 @@ Create a runtime-specific plan first. It should answer:
 - Install layout assumptions under `runtimes/<key>/versions/<label>`
 - Whether `current` is a symlink, pointer file fallback, or custom marker
 - Whether the runtime needs extra child env:
-  - for example `JAVA_HOME`, `GOROOT`, `DOTNET_ROOT`
+  - for example `JAVA_HOME`, `GOROOT`, `DOTNET_ROOT`, `JULIA_HOME`
 - Whether the runtime needs package registry/proxy env derived from settings
 - Whether PATH proxy toggle is supported
 - Whether remote latest / major-line cache is supported
@@ -344,6 +344,8 @@ If the provider uses **HTTP Range** resume for archives:
 ### 8.3 Shim bypass error copy
 
 Shared helpers like `find_on_path_outside_envr_shims` are used by **all** runtimes. Avoid hardcoding one runtime name (e.g. “Node”) in user-visible strings.
+
+**Skipping envr shims on PATH-proxy bypass:** the managed shims directory must be detected from **`ShimContext.runtime_root.join("shims")`** (compare case-insensitively on Windows and, when both paths exist, via **`fs::canonicalize`** so short 8.3 PATH entries still match the long layout). Do **not** rely only on a parent-path substring such as `"envr"`: custom `ENVR_RUNTIME_ROOT` layouts (e.g. `...\plaindata\runtimes\shims`) omit that substring, and 8.3 segments like `ENVIRON~1` can omit it even for default roots—then bypass resolves to `julia.cmd` in shims, `cmd /c` re-enters the shim, and Ctrl+C can flood “Terminate batch job (Y/N)?”.
 
 ### 8.4 GUI: what “one row per major” looks like
 

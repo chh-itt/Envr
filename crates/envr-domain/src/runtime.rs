@@ -18,6 +18,7 @@ pub enum RuntimeKind {
     Bun,
     Dotnet,
     Zig,
+    Julia,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +31,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 13] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 14] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -132,6 +133,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 13] = [
         key: "zig",
         label_en: "Zig",
         label_zh: "Zig",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Julia,
+        key: "julia",
+        label_en: "Julia",
+        label_zh: "Julia",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -292,7 +301,11 @@ pub fn major_key_from_version(version: &str) -> Option<String> {
 pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<String> {
     let parts = numeric_version_segments(version)?;
     match kind {
-        RuntimeKind::Python | RuntimeKind::Php | RuntimeKind::Go | RuntimeKind::Zig => {
+        RuntimeKind::Python
+        | RuntimeKind::Php
+        | RuntimeKind::Go
+        | RuntimeKind::Zig
+        | RuntimeKind::Julia => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
             Some(format!("{major}.{minor}"))
@@ -330,12 +343,13 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 13);
+        assert_eq!(kinds.len(), 14);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
         assert!(kinds.contains(&RuntimeKind::Dotnet));
         assert!(kinds.contains(&RuntimeKind::Zig));
+        assert!(kinds.contains(&RuntimeKind::Julia));
     }
 
     #[test]
@@ -382,6 +396,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Zig, "0.14.1").as_deref(),
             Some("0.14")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Julia, "1.10.5").as_deref(),
+            Some("1.10")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),
