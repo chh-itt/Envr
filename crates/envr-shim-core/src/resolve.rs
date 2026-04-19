@@ -6,6 +6,7 @@ use envr_config::settings::{
 };
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::lua_binaries;
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -146,6 +147,8 @@ pub enum CoreCommand {
     Escript,
     Zig,
     Julia,
+    Lua,
+    Luac,
     Nim,
     Crystal,
     R,
@@ -168,6 +171,7 @@ impl CoreCommand {
             CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
             CoreCommand::Zig => "zig",
             CoreCommand::Julia => "julia",
+            CoreCommand::Lua | CoreCommand::Luac => "lua",
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
             CoreCommand::R | CoreCommand::Rscript => "r",
@@ -192,6 +196,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "dotnet" => vec![home.to_path_buf(), home.join("bin")],
         "zig" => vec![home.to_path_buf(), home.join("bin")],
         "julia" => vec![home.join("bin")],
+        "lua" => vec![home.to_path_buf()],
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
         "r" => vec![home.join("bin")],
@@ -407,6 +412,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "escript" => Some(CoreCommand::Escript),
         "zig" => Some(CoreCommand::Zig),
         "julia" => Some(CoreCommand::Julia),
+        "lua" => Some(CoreCommand::Lua),
+        "luac" => Some(CoreCommand::Luac),
         "nim" => Some(CoreCommand::Nim),
         "crystal" => Some(CoreCommand::Crystal),
         "r" => Some(CoreCommand::R),
@@ -1009,6 +1016,18 @@ fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("lua missing under {}", home.display()))
+        }),
+        CoreCommand::Luac => lua_binaries::resolve_luac_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("luac missing under {}", home.display()))
+        }),
+        _ => Err(EnvrError::Runtime("internal: not a lua tool".into())),
+    }
+}
+
 fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Nim => Ok(first_existing(&[
@@ -1066,6 +1085,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
         CoreCommand::Zig => zig_tool_path(home, cmd),
         CoreCommand::Julia => julia_tool_path(home, cmd),
+        CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
@@ -1214,6 +1234,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Escript => "escript",
         CoreCommand::Zig => "zig",
         CoreCommand::Julia => "julia",
+        CoreCommand::Lua => "lua",
+        CoreCommand::Luac => "luac",
         CoreCommand::Nim => "nim",
         CoreCommand::Crystal => "crystal",
         CoreCommand::R => "r",
@@ -1277,6 +1299,7 @@ pub fn resolve_core_shim_command_with_settings(
         }
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
         CoreCommand::Julia => julia_tool_path(&home, cmd)?,
+        CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
@@ -1372,6 +1395,8 @@ mod tests {
         assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
+        assert_eq!(parse_core_command("lua"), Some(CoreCommand::Lua));
+        assert_eq!(parse_core_command("luac"), Some(CoreCommand::Luac));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
         assert_eq!(parse_core_command("crystal"), Some(CoreCommand::Crystal));
         assert_eq!(parse_core_command("r"), Some(CoreCommand::R));

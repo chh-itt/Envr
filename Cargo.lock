@@ -911,6 +911,7 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "envr-resolver",
+ "envr-runtime-lua",
  "envr-runtime-node",
  "envr-runtime-rust",
  "envr-runtime-zig",
@@ -960,6 +961,7 @@ dependencies = [
  "envr-runtime-go",
  "envr-runtime-java",
  "envr-runtime-julia",
+ "envr-runtime-lua",
  "envr-runtime-nim",
  "envr-runtime-node",
  "envr-runtime-php",
@@ -1199,6 +1201,22 @@ dependencies = [
  "envr-platform",
  "reqwest",
  "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-lua"
+version = "0.1.0"
+dependencies = [
+ "envr-config",
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-mirror",
+ "envr-platform",
+ "regex",
+ "reqwest",
  "serde_json",
  "tempfile",
 ]
