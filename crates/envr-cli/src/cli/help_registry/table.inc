@@ -1423,6 +1423,16 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         }],
     },
     CmdHelpSpec {
+        path: &["cache", "runtime"],
+        about: I18n(
+            "cli.help.cmd.cache.runtime.topic",
+            "检查各运行时远程/统一列表缓存（`{runtime_root}/cache/<runtime>/…`）",
+            "Inspect per-runtime remote/unified cache files under `{runtime_root}/cache`",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
         path: &["cache", "runtime", "status"],
         about: I18n(
             "cli.help.cmd.cache.runtime.status",

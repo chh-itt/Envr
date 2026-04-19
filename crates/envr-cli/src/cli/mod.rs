@@ -776,6 +776,10 @@ mod command_trace_tests {
                 CommandKey::CacheIndexStatus,
                 &["envr", "cache", "index", "status"],
             ),
+            (
+                CommandKey::CacheRuntimeStatus,
+                &["envr", "cache", "runtime", "status"],
+            ),
             (CommandKey::BundleCreate, &["envr", "bundle", "create"]),
             (
                 CommandKey::BundleApply,
