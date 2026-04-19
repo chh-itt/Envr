@@ -1910,6 +1910,7 @@ mod tests {
                 dotnet: DotnetRuntimeSettings::default(),
                 zig: ZigRuntimeSettings::default(),
                 julia: JuliaRuntimeSettings::default(),
+                lua: LuaRuntimeSettings::default(),
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),
                 r: RlangRuntimeSettings::default(),
