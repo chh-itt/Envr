@@ -6,6 +6,7 @@ use envr_config::settings::{
 };
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::bin_tool_layout;
 use envr_platform::lua_binaries;
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
@@ -994,24 +995,18 @@ fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn zig_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Zig => Ok(first_existing(&[
-            home.join("zig.exe"),
-            home.join("bin").join("zig.exe"),
-            home.join("bin").join("zig"),
-            home.join("zig"),
-        ])
-        .ok_or_else(|| EnvrError::Runtime(format!("zig missing under {}", home.display())))?),
+        CoreCommand::Zig => bin_tool_layout::resolve_zig_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("zig missing under {}", home.display()))
+        }),
         _ => Err(EnvrError::Runtime("internal: not a zig tool".into())),
     }
 }
 
 fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Julia => Ok(first_existing(&[
-            home.join("bin").join("julia.exe"),
-            home.join("bin").join("julia"),
-        ])
-        .ok_or_else(|| EnvrError::Runtime(format!("julia missing under {}", home.display())))?),
+        CoreCommand::Julia => bin_tool_layout::resolve_julia_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("julia missing under {}", home.display()))
+        }),
         _ => Err(EnvrError::Runtime("internal: not a julia tool".into())),
     }
 }
@@ -1030,11 +1025,9 @@ fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Nim => Ok(first_existing(&[
-            home.join("bin").join("nim.exe"),
-            home.join("bin").join("nim"),
-        ])
-        .ok_or_else(|| EnvrError::Runtime(format!("nim missing under {}", home.display())))?),
+        CoreCommand::Nim => bin_tool_layout::resolve_nim_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("nim missing under {}", home.display()))
+        }),
         _ => Err(EnvrError::Runtime("internal: not a nim tool".into())),
     }
 }
@@ -1053,16 +1046,12 @@ fn crystal_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::R => Ok(first_existing(&[
-            home.join("bin").join("R.exe"),
-            home.join("bin").join("R"),
-        ])
-        .ok_or_else(|| EnvrError::Runtime(format!("R missing under {}", home.display())))?),
-        CoreCommand::Rscript => Ok(first_existing(&[
-            home.join("bin").join("Rscript.exe"),
-            home.join("bin").join("Rscript"),
-        ])
-        .ok_or_else(|| EnvrError::Runtime(format!("Rscript missing under {}", home.display())))?),
+        CoreCommand::R => bin_tool_layout::resolve_r_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("R missing under {}", home.display()))
+        }),
+        CoreCommand::Rscript => bin_tool_layout::resolve_rscript_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("Rscript missing under {}", home.display()))
+        }),
         _ => Err(EnvrError::Runtime("internal: not an R tool".into())),
     }
 }

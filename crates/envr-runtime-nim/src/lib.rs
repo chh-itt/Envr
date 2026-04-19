@@ -8,9 +8,9 @@ pub use index::{
     nim_host_platform_slot, list_remote_latest_per_major_lines, list_remote_versions, parse_install_html,
     pick_download_url, resolve_nim_version,
 };
+pub use envr_platform::bin_tool_layout::nim_installation_valid;
 pub use manager::{
-    NimManager, NimPaths, list_installed_versions, nim_installation_valid, promote_single_root_dir,
-    read_current,
+    NimManager, NimPaths, list_installed_versions, promote_single_root_dir, read_current,
 };
 
 use envr_domain::runtime::{

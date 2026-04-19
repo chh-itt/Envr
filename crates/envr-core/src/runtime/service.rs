@@ -9,6 +9,112 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn attach_runtime_root<T>(
+    runtime_root: &Option<PathBuf>,
+    new: impl FnOnce() -> T,
+    with_root: impl FnOnce(T, PathBuf) -> T,
+) -> T {
+    match runtime_root {
+        None => new(),
+        Some(r) => with_root(new(), r.clone()),
+    }
+}
+
+fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeProvider>> {
+    vec![
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_node::NodeRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_python::PythonRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_java::JavaRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_go::GoRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_rust::RustRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_ruby::RubyRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_elixir::ElixirRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_erlang::ErlangRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_php::PhpRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_deno::DenoRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_bun::BunRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_dotnet::DotnetRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_zig::ZigRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_julia::JuliaRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_lua::LuaRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_nim::NimRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_crystal::CrystalRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_rlang::RlangRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+    ]
+}
+
 pub struct RuntimeService {
     providers: HashMap<RuntimeKind, Box<dyn RuntimeProvider>>,
     runtime_root_override: Option<PathBuf>,
@@ -43,59 +149,13 @@ impl RuntimeService {
     }
 
     pub fn with_defaults() -> EnvrResult<Self> {
-        Self::new(vec![
-            Box::new(envr_runtime_node::NodeRuntimeProvider::new()),
-            Box::new(envr_runtime_python::PythonRuntimeProvider::new()),
-            Box::new(envr_runtime_java::JavaRuntimeProvider::new()),
-            Box::new(envr_runtime_go::GoRuntimeProvider::new()),
-            Box::new(envr_runtime_rust::RustRuntimeProvider::new()),
-            Box::new(envr_runtime_ruby::RubyRuntimeProvider::new()),
-            Box::new(envr_runtime_elixir::ElixirRuntimeProvider::new()),
-            Box::new(envr_runtime_erlang::ErlangRuntimeProvider::new()),
-            Box::new(envr_runtime_php::PhpRuntimeProvider::new()),
-            Box::new(envr_runtime_deno::DenoRuntimeProvider::new()),
-            Box::new(envr_runtime_bun::BunRuntimeProvider::new()),
-            Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new()),
-            Box::new(envr_runtime_zig::ZigRuntimeProvider::new()),
-            Box::new(envr_runtime_julia::JuliaRuntimeProvider::new()),
-            Box::new(envr_runtime_lua::LuaRuntimeProvider::new()),
-            Box::new(envr_runtime_nim::NimRuntimeProvider::new()),
-            Box::new(envr_runtime_crystal::CrystalRuntimeProvider::new()),
-            Box::new(envr_runtime_rlang::RlangRuntimeProvider::new()),
-        ])
+        Self::new(default_provider_boxes(None))
     }
 
     /// Same as [`Self::with_defaults`], but all providers use this runtime root (e.g. from `ENVR_RUNTIME_ROOT`).
     pub fn with_runtime_root(root: PathBuf) -> EnvrResult<Self> {
         let root_override = root.clone();
-        let mut svc = Self::new(vec![
-            Box::new(envr_runtime_node::NodeRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(
-                envr_runtime_python::PythonRuntimeProvider::new().with_runtime_root(root.clone()),
-            ),
-            Box::new(envr_runtime_java::JavaRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_go::GoRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_rust::RustRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_ruby::RubyRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(
-                envr_runtime_elixir::ElixirRuntimeProvider::new().with_runtime_root(root.clone()),
-            ),
-            Box::new(
-                envr_runtime_erlang::ErlangRuntimeProvider::new().with_runtime_root(root.clone()),
-            ),
-            Box::new(envr_runtime_php::PhpRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_deno::DenoRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_bun::BunRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_zig::ZigRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_julia::JuliaRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_lua::LuaRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(envr_runtime_nim::NimRuntimeProvider::new().with_runtime_root(root.clone())),
-            Box::new(
-                envr_runtime_crystal::CrystalRuntimeProvider::new().with_runtime_root(root.clone()),
-            ),
-            Box::new(envr_runtime_rlang::RlangRuntimeProvider::new().with_runtime_root(root.clone())),
-        ])?;
+        let mut svc = Self::new(default_provider_boxes(Some(root)))?;
         svc.runtime_root_override = Some(root_override);
         Ok(svc)
     }

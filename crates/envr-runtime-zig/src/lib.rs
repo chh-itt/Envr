@@ -9,9 +9,9 @@ pub use index::{
     list_remote_versions, list_stable_versions_with_platform, parse_index_root, resolve_zig_version,
     zig_json_platform_key,
 };
+pub use envr_platform::bin_tool_layout::zig_installation_valid;
 pub use manager::{
     ZigManager, ZigPaths, list_installed_versions, promote_single_root_dir, read_current,
-    zig_installation_valid,
 };
 
 use envr_domain::runtime::{

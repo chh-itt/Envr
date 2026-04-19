@@ -2,6 +2,7 @@
 //! on Windows, builds often ship **`lua54.exe` / `lua55.exe`** (and **`luacNN.exe`**) instead of plain `lua.exe`.
 //! This module centralizes discovery so install validation and shim resolution stay aligned.
 
+use crate::layout_common::first_existing_path;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -14,12 +15,12 @@ pub fn lua_installation_valid(home: &Path) -> bool {
 pub fn resolve_lua_interpreter_exe(home: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        first_existing(&lua_interpreter_candidate_paths_windows(home))
+        first_existing_path(&lua_interpreter_candidate_paths_windows(home))
             .or_else(|| scan_windows_digit_tag_exe(home, false))
     }
     #[cfg(not(windows))]
     {
-        first_existing(&lua_interpreter_candidate_paths_unix(home))
+        first_existing_path(&lua_interpreter_candidate_paths_unix(home))
     }
 }
 
@@ -27,12 +28,12 @@ pub fn resolve_lua_interpreter_exe(home: &Path) -> Option<PathBuf> {
 pub fn resolve_luac_exe(home: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        first_existing(&luac_candidate_paths_windows(home))
+        first_existing_path(&luac_candidate_paths_windows(home))
             .or_else(|| scan_windows_digit_tag_exe(home, true))
     }
     #[cfg(not(windows))]
     {
-        first_existing(&luac_candidate_paths_unix(home))
+        first_existing_path(&luac_candidate_paths_unix(home))
     }
 }
 
@@ -63,10 +64,6 @@ pub(crate) fn tools_executable_digit_tag_matches(name: &str, want_luac: bool) ->
         let after = &stem[3..];
         after.len() >= 2 && after.chars().all(|c| c.is_ascii_digit())
     }
-}
-
-fn first_existing(candidates: &[PathBuf]) -> Option<PathBuf> {
-    candidates.iter().find(|p| p.is_file()).cloned()
 }
 
 #[cfg(windows)]

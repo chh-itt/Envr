@@ -8,9 +8,8 @@ pub use index::{
     fetch_text, list_remote_latest_per_major_lines, list_remote_versions, parse_latest_win_release_version,
     parse_r_versions_list, resolve_r_version,
 };
-pub use manager::{
-    RlangManager, RlangPaths, list_installed_versions, read_current, rlang_installation_valid,
-};
+pub use envr_platform::bin_tool_layout::rlang_installation_valid;
+pub use manager::{RlangManager, RlangPaths, list_installed_versions, read_current};
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,

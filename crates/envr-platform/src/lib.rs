@@ -1,7 +1,9 @@
 pub mod a11y;
+pub mod bin_tool_layout;
 pub mod cache_recovery;
 pub mod fs_atomic;
 pub mod install_layout;
+pub mod layout_common;
 pub mod lua_binaries;
 pub mod links;
 pub mod path;

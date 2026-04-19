@@ -4,6 +4,7 @@ use crate::index::{
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::bin_tool_layout::rlang_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
@@ -48,17 +49,6 @@ impl RlangPaths {
 
     pub fn version_dir(&self, version_label: &str) -> PathBuf {
         self.versions_dir().join(version_label)
-    }
-}
-
-pub fn rlang_installation_valid(home: &Path) -> bool {
-    #[cfg(windows)]
-    {
-        home.join("bin").join("R.exe").is_file() && home.join("bin").join("Rscript.exe").is_file()
-    }
-    #[cfg(not(windows))]
-    {
-        home.join("bin").join("R").is_file() && home.join("bin").join("Rscript").is_file()
     }
 }
 

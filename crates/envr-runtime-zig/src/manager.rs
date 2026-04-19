@@ -6,6 +6,7 @@ use crate::index::{
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::bin_tool_layout::zig_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use serde_json::Map;
 use std::fs;
@@ -47,18 +48,6 @@ impl ZigPaths {
 
     pub fn version_dir(&self, version_label: &str) -> PathBuf {
         self.versions_dir().join(version_label)
-    }
-}
-
-pub fn zig_installation_valid(home: &Path) -> bool {
-    #[cfg(windows)]
-    {
-        home.join("zig.exe").is_file()
-            || home.join("bin").join("zig.exe").is_file()
-    }
-    #[cfg(not(windows))]
-    {
-        home.join("zig").is_file() || home.join("bin").join("zig").is_file()
     }
 }
 

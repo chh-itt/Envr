@@ -6,6 +6,7 @@ use crate::index::{
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::bin_tool_layout::nim_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
@@ -46,17 +47,6 @@ impl NimPaths {
 
     pub fn version_dir(&self, version_label: &str) -> PathBuf {
         self.versions_dir().join(version_label)
-    }
-}
-
-pub fn nim_installation_valid(home: &Path) -> bool {
-    #[cfg(windows)]
-    {
-        home.join("bin").join("nim.exe").is_file()
-    }
-    #[cfg(not(windows))]
-    {
-        home.join("bin").join("nim").is_file()
     }
 }
 
