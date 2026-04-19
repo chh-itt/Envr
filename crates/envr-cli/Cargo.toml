@@ -31,6 +31,7 @@ envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-resolver = { path = "../envr-resolver" }
 envr-runtime-rust = { path = "../envr-runtime-rust" }
+envr-runtime-lua = { path = "../envr-runtime-lua" }
 envr-runtime-node = { path = "../envr-runtime-node" }
 envr-shim-core = { path = "../envr-shim-core" }
 serde_json = { workspace = true }

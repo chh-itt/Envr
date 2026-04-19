@@ -907,6 +907,8 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
                 "bun",
                 "bunx",
                 "crystal",
+                "lua",
+                "luac",
                 "r",
                 "rscript",
             ];

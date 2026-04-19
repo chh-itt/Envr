@@ -58,6 +58,7 @@ impl RuntimeService {
             Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new()),
             Box::new(envr_runtime_zig::ZigRuntimeProvider::new()),
             Box::new(envr_runtime_julia::JuliaRuntimeProvider::new()),
+            Box::new(envr_runtime_lua::LuaRuntimeProvider::new()),
             Box::new(envr_runtime_nim::NimRuntimeProvider::new()),
             Box::new(envr_runtime_crystal::CrystalRuntimeProvider::new()),
             Box::new(envr_runtime_rlang::RlangRuntimeProvider::new()),
@@ -88,6 +89,7 @@ impl RuntimeService {
             Box::new(envr_runtime_dotnet::DotnetRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_zig::ZigRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_julia::JuliaRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_lua::LuaRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_nim::NimRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(
                 envr_runtime_crystal::CrystalRuntimeProvider::new().with_runtime_root(root.clone()),

@@ -221,6 +221,7 @@ pub(crate) fn run_inner(
                         | RuntimeKind::Crystal
                         | RuntimeKind::Zig
                         | RuntimeKind::Julia
+                        | RuntimeKind::Lua
                         | RuntimeKind::Nim
                         | RuntimeKind::RLang
                 )

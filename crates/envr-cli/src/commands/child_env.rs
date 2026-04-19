@@ -211,6 +211,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "dotnet" => Some("ENVR_DOTNET_VERSION"),
         "zig" => Some("ENVR_ZIG_VERSION"),
         "julia" => Some("ENVR_JULIA_VERSION"),
+        "lua" => Some("ENVR_LUA_VERSION"),
         "nim" => Some("ENVR_NIM_VERSION"),
         "crystal" => Some("ENVR_CRYSTAL_VERSION"),
         "r" => Some("ENVR_R_VERSION"),

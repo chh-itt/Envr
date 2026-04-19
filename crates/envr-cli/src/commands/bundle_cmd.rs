@@ -137,6 +137,7 @@ fn create_inner(
             RuntimeKind::Dotnet,
             RuntimeKind::Zig,
             RuntimeKind::Julia,
+            RuntimeKind::Lua,
             RuntimeKind::Nim,
             RuntimeKind::Crystal,
             RuntimeKind::RLang,

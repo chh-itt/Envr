@@ -2040,6 +2040,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 |st, on| st.runtime.julia.path_proxy_enabled = on,
             )
         }
+        EnvCenterMsg::SetLuaPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::Lua,
+                on,
+                |st, on| st.runtime.lua.path_proxy_enabled = on,
+            )
+        }
         EnvCenterMsg::SetNimPathProxy(on) => {
             persist_path_proxy_toggle(
                 state,

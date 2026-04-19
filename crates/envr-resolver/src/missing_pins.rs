@@ -21,6 +21,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "dotnet",
     "zig",
     "julia",
+    "lua",
     "nim",
     "crystal",
     "r",

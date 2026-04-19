@@ -6,7 +6,8 @@ use envr_config::settings::{
     JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
-    CrystalRuntimeSettings, JuliaRuntimeSettings, NimRuntimeSettings, RlangRuntimeSettings,
+    CrystalRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings,
+    RlangRuntimeSettings,
     RustRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
@@ -83,6 +84,7 @@ pub enum EnvCenterMsg {
     SetDotnetPathProxy(bool),
     SetZigPathProxy(bool),
     SetJuliaPathProxy(bool),
+    SetLuaPathProxy(bool),
     SetNimPathProxy(bool),
     SetCrystalPathProxy(bool),
     SetRLangPathProxy(bool),
@@ -1488,6 +1490,47 @@ fn julia_runtime_settings_section(
     .into()
 }
 
+fn lua_runtime_settings_section(
+    lua: &LuaRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.lua.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.lua.path_proxy.hint",
+            "开启时由 envr 接管 lua / luac；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages lua/luac; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(lua.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetLuaPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.lua.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn rlang_runtime_settings_section(
     rlang: &RlangRuntimeSettings,
     tokens: ThemeTokens,
@@ -1751,6 +1794,7 @@ pub fn env_center_view(
     dotnet_runtime: Option<&DotnetRuntimeSettings>,
     zig_runtime: Option<&ZigRuntimeSettings>,
     julia_runtime: Option<&JuliaRuntimeSettings>,
+    lua_runtime: Option<&LuaRuntimeSettings>,
     nim_runtime: Option<&NimRuntimeSettings>,
     crystal_runtime: Option<&CrystalRuntimeSettings>,
     r_runtime: Option<&RlangRuntimeSettings>,
@@ -1922,6 +1966,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Julia {
         julia_runtime
             .map(|j| julia_runtime_settings_section(j, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Lua {
+        lua_runtime
+            .map(|l| lua_runtime_settings_section(l, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Nim {
         nim_runtime
