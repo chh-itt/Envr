@@ -930,6 +930,7 @@ name = "envr-config"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "envr-domain",
  "envr-error",
  "envr-platform",
  "proptest",
@@ -1308,6 +1309,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "envr-config",
+ "envr-domain",
  "envr-error",
  "envr-platform",
  "tempfile",

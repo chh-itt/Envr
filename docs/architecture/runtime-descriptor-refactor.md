@@ -109,7 +109,7 @@ Acceptance:
 ## Phase 3 progress (capability gating)
 
 - GUI action gating:
-  - `envr-gui/src/app.rs`: `runtime_path_proxy_blocks_use` now checks `runtime_descriptor(kind).supports_path_proxy` first, then reads the matching settings field.
+  - `envr-gui/src/app.rs`: `runtime_path_proxy_blocks_use` delegates to `envr_config::runtime_path_proxy::path_proxy_blocks_managed_use` (descriptor `supports_path_proxy` + consolidated settings read).
   - included `Php/Deno/Bun` and kept `Dotnet`.
 - GUI view gating:
   - `envr-gui/src/view/env_center/panel.rs`: remote error banner + skeleton “waiting remote” conditions now depend on `runtime_descriptor(state.kind).supports_remote_latest` (instead of hardcoded kind lists).

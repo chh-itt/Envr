@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 envr-config = { path = "../envr-config" }
+envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 tempfile = { workspace = true }

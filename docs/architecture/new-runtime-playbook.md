@@ -141,6 +141,7 @@ Typical targets:
 Typical targets:
 
 - `crates/envr-config/src/settings.rs`
+- `crates/envr-config/src/runtime_path_proxy.rs` (PATH-proxy snapshot + `RuntimeSettings::path_proxy_enabled_for_kind`; extend when adding a PATH-proxy runtime)
 - `crates/envr-config/templates/settings.schema.zh.toml`
 
 ### G. CLI parity checklist

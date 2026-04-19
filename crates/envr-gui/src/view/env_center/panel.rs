@@ -1679,11 +1679,9 @@ pub fn env_center_view(
         return rust_env_center_view(state, rust_runtime, tokens);
     }
 
-    let path_proxy_on = envr_core::runtime_path_proxy::path_proxy_enabled_for_kind(
-        state.kind,
-        runtime_settings,
-    )
-    .unwrap_or(true);
+    let path_proxy_on = runtime_settings
+        .path_proxy_enabled_for_kind(state.kind)
+        .unwrap_or(true);
 
     let cur_line = match &state.current {
         Some(v) => {

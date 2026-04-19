@@ -58,7 +58,7 @@
 
 - **HTML as index**: brittle if nim-lang reformats the page; mitigate with **regex on stable URL substrings** + tests on fixture; cache full HTML for debugging.
 - **Nightlies URL coupling**: installable set is defined by whatever the HTML links to—not by semver alone; document in playbook (new-runtime) under “index ≠ semver formula”.
-- **GUI / settings**: PATH-proxy toggles still need a per-runtime settings section in the hub, but **reading** whether proxy is on is centralized (`envr_core::runtime_path_proxy` + full `RuntimeSettings` in env-center view) so new runtimes do not duplicate the large `match` in `path_proxy_on`.
+- **GUI / settings**: PATH-proxy toggles still need a per-runtime settings section in the hub, but **reading** is centralized in `envr_config::runtime_path_proxy` (`RuntimeSettings::path_proxy_enabled_for_kind`, `PathProxyRuntimeSnapshot` for shims, single `RuntimeKind` map in `PathProxyRuntimeSnapshot::enabled_for_kind`).
 
 ### CLI / GUI follow-ups (post-merge smoke)
 

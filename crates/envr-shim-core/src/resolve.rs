@@ -1,8 +1,10 @@
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
+use envr_config::PathProxyRuntimeSnapshot;
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, resolve_runtime_root,
     settings_path_from_platform,
 };
+use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
@@ -10,20 +12,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct ShimSettingsSnapshot {
-    node_path_proxy_enabled: bool,
-    python_path_proxy_enabled: bool,
-    java_path_proxy_enabled: bool,
-    go_path_proxy_enabled: bool,
-    php_path_proxy_enabled: bool,
-    deno_path_proxy_enabled: bool,
-    bun_path_proxy_enabled: bool,
-    dotnet_path_proxy_enabled: bool,
-    zig_path_proxy_enabled: bool,
-    julia_path_proxy_enabled: bool,
-    nim_path_proxy_enabled: bool,
-    ruby_path_proxy_enabled: bool,
-    elixir_path_proxy_enabled: bool,
-    erlang_path_proxy_enabled: bool,
+    /// PATH-proxy flags copied once from settings (see [`PathProxyRuntimeSnapshot`]).
+    pub path_proxy: PathProxyRuntimeSnapshot,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
@@ -32,20 +22,7 @@ pub struct ShimSettingsSnapshot {
 impl Default for ShimSettingsSnapshot {
     fn default() -> Self {
         Self {
-            node_path_proxy_enabled: true,
-            python_path_proxy_enabled: true,
-            java_path_proxy_enabled: true,
-            go_path_proxy_enabled: true,
-            php_path_proxy_enabled: true,
-            deno_path_proxy_enabled: true,
-            bun_path_proxy_enabled: true,
-            dotnet_path_proxy_enabled: true,
-            zig_path_proxy_enabled: true,
-            julia_path_proxy_enabled: true,
-            nim_path_proxy_enabled: true,
-            ruby_path_proxy_enabled: true,
-            elixir_path_proxy_enabled: true,
-            erlang_path_proxy_enabled: true,
+            path_proxy: PathProxyRuntimeSnapshot::default(),
             php_windows_build_want_ts: false,
             deno_registry_env: Vec::new(),
             bun_registry_env: Vec::new(),
@@ -56,20 +33,7 @@ impl Default for ShimSettingsSnapshot {
 impl ShimSettingsSnapshot {
     pub fn from_settings(settings: &Settings) -> Self {
         Self {
-            node_path_proxy_enabled: settings.runtime.node.path_proxy_enabled,
-            python_path_proxy_enabled: settings.runtime.python.path_proxy_enabled,
-            java_path_proxy_enabled: settings.runtime.java.path_proxy_enabled,
-            go_path_proxy_enabled: settings.runtime.go.path_proxy_enabled,
-            php_path_proxy_enabled: settings.runtime.php.path_proxy_enabled,
-            deno_path_proxy_enabled: settings.runtime.deno.path_proxy_enabled,
-            bun_path_proxy_enabled: settings.runtime.bun.path_proxy_enabled,
-            dotnet_path_proxy_enabled: settings.runtime.dotnet.path_proxy_enabled,
-            zig_path_proxy_enabled: settings.runtime.zig.path_proxy_enabled,
-            julia_path_proxy_enabled: settings.runtime.julia.path_proxy_enabled,
-            nim_path_proxy_enabled: settings.runtime.nim.path_proxy_enabled,
-            ruby_path_proxy_enabled: settings.runtime.ruby.path_proxy_enabled,
-            elixir_path_proxy_enabled: settings.runtime.elixir.path_proxy_enabled,
-            erlang_path_proxy_enabled: settings.runtime.erlang.path_proxy_enabled,
+            path_proxy: settings.runtime.path_proxy_snapshot(),
             php_windows_build_want_ts: matches!(
                 settings.runtime.php.windows_build,
                 envr_config::settings::PhpWindowsBuildFlavor::Ts
@@ -96,64 +60,13 @@ pub fn load_shim_settings_snapshot() -> ShimSettingsSnapshot {
 }
 
 fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> bool {
-    if matches!(cmd, CoreCommand::Node | CoreCommand::Npm | CoreCommand::Npx)
-        && !settings.node_path_proxy_enabled
-    {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Python | CoreCommand::Pip) && !settings.python_path_proxy_enabled
-    {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Java | CoreCommand::Javac) && !settings.java_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Go | CoreCommand::Gofmt) && !settings.go_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Php) && !settings.php_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Deno) && !settings.deno_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Bun | CoreCommand::Bunx) && !settings.bun_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Dotnet) && !settings.dotnet_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Zig) && !settings.zig_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Julia) && !settings.julia_path_proxy_enabled {
-        return true;
-    }
-    if matches!(cmd, CoreCommand::Nim) && !settings.nim_path_proxy_enabled {
-        return true;
-    }
-    if matches!(
-        cmd,
-        CoreCommand::Ruby | CoreCommand::Gem | CoreCommand::Bundle | CoreCommand::Irb
-    ) && !settings.ruby_path_proxy_enabled
-    {
-        return true;
-    }
-    if matches!(
-        cmd,
-        CoreCommand::Elixir | CoreCommand::Mix | CoreCommand::Iex
-    ) && !settings.elixir_path_proxy_enabled
-    {
-        return true;
-    }
-    if matches!(
-        cmd,
-        CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript
-    ) && !settings.erlang_path_proxy_enabled
-    {
-        return true;
-    }
-    false
+    let Ok(kind) = parse_runtime_kind(cmd.project_runtime_key()) else {
+        return false;
+    };
+    matches!(
+        settings.path_proxy.enabled_for_kind(kind),
+        Some(false)
+    )
 }
 
 /// Process context for resolving a shim (runtime data root + config search directory).

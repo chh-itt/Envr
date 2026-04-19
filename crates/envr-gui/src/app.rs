@@ -1085,7 +1085,7 @@ fn mark_unified_major_rows_dirty_for_kind(
 }
 
 fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
-    envr_core::runtime_path_proxy::path_proxy_blocks_managed_use(
+    envr_config::runtime_path_proxy::path_proxy_blocks_managed_use(
         state.env_center.kind,
         &state.settings.cache.snapshot().runtime,
     )
