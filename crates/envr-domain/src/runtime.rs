@@ -20,6 +20,7 @@ pub enum RuntimeKind {
     Zig,
     Julia,
     Nim,
+    RLang,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +33,7 @@ pub struct RuntimeDescriptor {
     pub supports_path_proxy: bool,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 15] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 16] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -150,6 +151,14 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 15] = [
         key: "nim",
         label_en: "Nim",
         label_zh: "Nim",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::RLang,
+        key: "r",
+        label_en: "R",
+        label_zh: "R",
         supports_remote_latest: true,
         supports_path_proxy: true,
     },
@@ -323,7 +332,8 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Go
         | RuntimeKind::Zig
         | RuntimeKind::Julia
-        | RuntimeKind::Nim => {
+        | RuntimeKind::Nim
+        | RuntimeKind::RLang => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
             Some(format!("{major}.{minor}"))
@@ -361,7 +371,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 15);
+        assert_eq!(kinds.len(), 16);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -369,6 +379,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Zig));
         assert!(kinds.contains(&RuntimeKind::Julia));
         assert!(kinds.contains(&RuntimeKind::Nim));
+        assert!(kinds.contains(&RuntimeKind::RLang));
     }
 
     #[test]
@@ -436,6 +447,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Nim, "2.0.14").as_deref(),
             Some("2.0")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::RLang, "4.4.2").as_deref(),
+            Some("4.4")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

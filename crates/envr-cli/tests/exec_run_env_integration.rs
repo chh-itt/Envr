@@ -177,6 +177,35 @@ fn write_nim_layout(runtime_root: &Path, version: &str) {
     }
 }
 
+fn write_r_layout(runtime_root: &Path, version: &str) {
+    let r_home = runtime_root.join("runtimes/r");
+    let ver = r_home.join("versions").join(version);
+    let bin = ver.join("bin");
+    fs::create_dir_all(&bin).expect("create R version bin");
+    #[cfg(windows)]
+    {
+        fs::write(bin.join("R.exe"), []).expect("touch R.exe");
+        fs::write(bin.join("Rscript.exe"), []).expect("touch Rscript.exe");
+    }
+    #[cfg(not(windows))]
+    {
+        fs::write(bin.join("R"), []).expect("touch R");
+        fs::write(bin.join("Rscript"), []).expect("touch Rscript");
+    }
+    let current = r_home.join("current");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let rel = format!("versions/{version}");
+        symlink(rel, &current).expect("R current symlink");
+    }
+    #[cfg(windows)]
+    {
+        let abs = fs::canonicalize(&ver).unwrap_or_else(|_| ver.clone());
+        fs::write(&current, format!("{}\n", abs.display())).expect("R current pointer");
+    }
+}
+
 fn write_ruby_layout(runtime_root: &Path, version: &str) {
     let ver = runtime_root.join("runtimes/ruby/versions").join(version);
     let bin = ver.join("bin");
@@ -687,6 +716,64 @@ fn exec_dry_run_nim_resolves_project_pin() {
     assert!(
         path_line.contains("2.0.14") && path_line.to_lowercase().contains("nim"),
         "PATH should include nim version bin; line={path_line:?} full stdout:\n{stdout}"
+    );
+}
+
+#[test]
+fn exec_dry_run_r_resolves_project_pin() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let runtime_root = tmp.path().join("runtime-root");
+    let project = tmp.path().join("project");
+    write_r_layout(&runtime_root, "4.4.2");
+    project_with_runtime_pin(&project, "r", "4.4.2");
+
+    let out = if cfg!(windows) {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "r",
+                "--dry-run",
+                "cmd",
+                "/c",
+                "echo",
+                "noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    } else {
+        run_envr(
+            &[
+                "exec",
+                "--lang",
+                "r",
+                "--dry-run",
+                "sh",
+                "-c",
+                "echo noop",
+            ],
+            &runtime_root,
+            &project,
+        )
+    };
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("R_HOME="),
+        "dry-run should include R_HOME; stdout:\n{stdout}"
+    );
+    let path_line = stdout
+        .lines()
+        .find(|l| l.starts_with("PATH=") || l.starts_with("Path="))
+        .unwrap_or_else(|| panic!("expected PATH in dry-run stdout:\n{stdout}"));
+    assert!(
+        path_line.contains("4.4.2") && path_line.to_lowercase().contains("r"),
+        "PATH should include R version bin; line={path_line:?} full stdout:\n{stdout}"
     );
 }
 

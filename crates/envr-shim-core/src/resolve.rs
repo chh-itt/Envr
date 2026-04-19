@@ -147,6 +147,8 @@ pub enum CoreCommand {
     Zig,
     Julia,
     Nim,
+    R,
+    Rscript,
 }
 
 impl CoreCommand {
@@ -166,6 +168,7 @@ impl CoreCommand {
             CoreCommand::Zig => "zig",
             CoreCommand::Julia => "julia",
             CoreCommand::Nim => "nim",
+            CoreCommand::R | CoreCommand::Rscript => "r",
         }
     }
 }
@@ -188,6 +191,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "zig" => vec![home.to_path_buf(), home.join("bin")],
         "julia" => vec![home.join("bin")],
         "nim" => vec![home.join("bin")],
+        "r" => vec![home.join("bin")],
         _ => vec![],
     }
 }
@@ -252,6 +256,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         ],
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         "julia" => vec![("JULIA_HOME".into(), home_env)],
+        "r" => vec![("R_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -400,6 +405,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "zig" => Some(CoreCommand::Zig),
         "julia" => Some(CoreCommand::Julia),
         "nim" => Some(CoreCommand::Nim),
+        "r" => Some(CoreCommand::R),
+        "rscript" => Some(CoreCommand::Rscript),
         _ => None,
     }
 }
@@ -1009,6 +1016,22 @@ fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::R => Ok(first_existing(&[
+            home.join("bin").join("R.exe"),
+            home.join("bin").join("R"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("R missing under {}", home.display())))?),
+        CoreCommand::Rscript => Ok(first_existing(&[
+            home.join("bin").join("Rscript.exe"),
+            home.join("bin").join("Rscript"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("Rscript missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not an R tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -1028,6 +1051,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Zig => zig_tool_path(home, cmd),
         CoreCommand::Julia => julia_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
+        CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
     }
 }
 
@@ -1174,6 +1198,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Zig => "zig",
         CoreCommand::Julia => "julia",
         CoreCommand::Nim => "nim",
+        CoreCommand::R => "r",
+        CoreCommand::Rscript => "rscript",
     }
 }
 
@@ -1234,6 +1260,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
         CoreCommand::Julia => julia_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
+        CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {
@@ -1327,6 +1354,8 @@ mod tests {
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
+        assert_eq!(parse_core_command("r"), Some(CoreCommand::R));
+        assert_eq!(parse_core_command("rscript"), Some(CoreCommand::Rscript));
         assert_eq!(parse_core_command("unknown"), None);
     }
 

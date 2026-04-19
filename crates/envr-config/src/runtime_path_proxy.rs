@@ -17,6 +17,7 @@ pub struct PathProxyRuntimeSnapshot {
     pub zig: bool,
     pub julia: bool,
     pub nim: bool,
+    pub r: bool,
     pub ruby: bool,
     pub elixir: bool,
     pub erlang: bool,
@@ -36,6 +37,7 @@ impl Default for PathProxyRuntimeSnapshot {
             zig: true,
             julia: true,
             nim: true,
+            r: true,
             ruby: true,
             elixir: true,
             erlang: true,
@@ -57,6 +59,7 @@ impl From<&RuntimeSettings> for PathProxyRuntimeSnapshot {
             zig: r.zig.path_proxy_enabled,
             julia: r.julia.path_proxy_enabled,
             nim: r.nim.path_proxy_enabled,
+            r: r.r.path_proxy_enabled,
             ruby: r.ruby.path_proxy_enabled,
             elixir: r.elixir.path_proxy_enabled,
             erlang: r.erlang.path_proxy_enabled,
@@ -83,6 +86,7 @@ impl PathProxyRuntimeSnapshot {
             RuntimeKind::Zig => Some(self.zig),
             RuntimeKind::Julia => Some(self.julia),
             RuntimeKind::Nim => Some(self.nim),
+            RuntimeKind::RLang => Some(self.r),
         }
     }
 }
@@ -120,6 +124,10 @@ mod tests {
         assert!(path_proxy_blocks_managed_use(RuntimeKind::Nim, &s));
         s.nim.path_proxy_enabled = true;
         assert!(!path_proxy_blocks_managed_use(RuntimeKind::Nim, &s));
+        s.r.path_proxy_enabled = false;
+        assert!(path_proxy_blocks_managed_use(RuntimeKind::RLang, &s));
+        s.r.path_proxy_enabled = true;
+        assert!(!path_proxy_blocks_managed_use(RuntimeKind::RLang, &s));
         assert!(!path_proxy_blocks_managed_use(RuntimeKind::Rust, &s));
     }
 }

@@ -38,6 +38,32 @@ pub fn ensure_link(
     }
 }
 
+/// Managed runtime `current` marker: prefer a symlink to `version_dir`, and on **Windows** fall
+/// back to a **pointer file** containing the absolute `version_dir` path when symlink/junction
+/// creation is blocked (several runtimes share this contract in `read_current`).
+pub fn ensure_runtime_current_symlink_or_pointer(
+    version_dir: &Path,
+    current_link: &Path,
+) -> EnvrResult<()> {
+    let target = fs::canonicalize(version_dir).unwrap_or_else(|_| version_dir.to_path_buf());
+    if let Err(_e) = ensure_link(LinkType::Soft, &target, current_link) {
+        #[cfg(windows)]
+        {
+            if let Some(parent) = current_link.parent() {
+                fs::create_dir_all(parent).map_err(EnvrError::from)?;
+            }
+            let payload = target.display().to_string();
+            crate::fs_atomic::write_atomic(current_link, payload.as_bytes()).map_err(EnvrError::from)?;
+            return Ok(());
+        }
+        #[cfg(not(windows))]
+        {
+            return Err(_e);
+        }
+    }
+    Ok(())
+}
+
 fn remove_path_best_effort(path: &Path) -> EnvrResult<()> {
     // Windows reparse points (junction/symlink) are tricky: remove_file/remove_dir
     // usually removes the link node itself, while remove_dir_all may recurse target.

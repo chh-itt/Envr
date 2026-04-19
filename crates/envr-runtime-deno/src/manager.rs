@@ -8,7 +8,7 @@ use envr_config::settings::{
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::links::{LinkType, ensure_link};
+use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::io::{Read, Write};
@@ -352,27 +352,9 @@ impl DenoManager {
                 version.0
             )));
         }
-        let target = fs::canonicalize(&dir).unwrap_or(dir.clone());
         let link = self.paths.current_link();
-        if let Err(_e) = ensure_link(LinkType::Soft, &target, &link) {
-            // Fall back to pointer file on Windows when symlink/junction creation is blocked.
-            #[cfg(windows)]
-            {
-                if let Some(parent) = link.parent() {
-                    fs::create_dir_all(parent).map_err(EnvrError::from)?;
-                }
-                envr_platform::fs_atomic::write_atomic(
-                    &link,
-                    target.display().to_string().as_bytes(),
-                )
-                .map_err(EnvrError::from)?;
-                return Ok(());
-            }
-            #[cfg(not(windows))]
-            {
-                return Err(_e);
-            }
-        }
+        // Fall back to pointer file on Windows when symlink/junction creation is blocked.
+        ensure_runtime_current_symlink_or_pointer(&dir, &link)?;
         Ok(())
     }
 

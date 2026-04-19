@@ -6,7 +6,8 @@ use envr_config::settings::{
     JavaDownloadSource, JavaRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
-    JuliaRuntimeSettings, NimRuntimeSettings, RustRuntimeSettings, ZigRuntimeSettings,
+    JuliaRuntimeSettings, NimRuntimeSettings, RlangRuntimeSettings, RustRuntimeSettings,
+    ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -83,6 +84,7 @@ pub enum EnvCenterMsg {
     SetZigPathProxy(bool),
     SetJuliaPathProxy(bool),
     SetNimPathProxy(bool),
+    SetRLangPathProxy(bool),
     SetRubyPathProxy(bool),
     SetElixirPathProxy(bool),
     SetErlangPathProxy(bool),
@@ -1485,6 +1487,47 @@ fn julia_runtime_settings_section(
     .into()
 }
 
+fn rlang_runtime_settings_section(
+    rlang: &RlangRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.r.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.r.path_proxy.hint",
+            "开启时由 envr 接管 R / Rscript；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages R/Rscript; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(rlang.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetRLangPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.r.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn nim_runtime_settings_section(
     nim: &NimRuntimeSettings,
     tokens: ThemeTokens,
@@ -1667,6 +1710,7 @@ pub fn env_center_view(
     zig_runtime: Option<&ZigRuntimeSettings>,
     julia_runtime: Option<&JuliaRuntimeSettings>,
     nim_runtime: Option<&NimRuntimeSettings>,
+    r_runtime: Option<&RlangRuntimeSettings>,
     runtime_settings: &RuntimeSettings,
     tokens: ThemeTokens,
 ) -> Element<'static, Message> {
@@ -1839,6 +1883,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Nim {
         nim_runtime
             .map(|n| nim_runtime_settings_section(n, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::RLang {
+        r_runtime
+            .map(|r| rlang_runtime_settings_section(r, tokens))
             .unwrap_or_else(|| column![].into())
     } else {
         column![].into()

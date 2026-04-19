@@ -59,6 +59,7 @@ impl RuntimeService {
             Box::new(envr_runtime_zig::ZigRuntimeProvider::new()),
             Box::new(envr_runtime_julia::JuliaRuntimeProvider::new()),
             Box::new(envr_runtime_nim::NimRuntimeProvider::new()),
+            Box::new(envr_runtime_rlang::RlangRuntimeProvider::new()),
         ])
     }
 
@@ -87,6 +88,7 @@ impl RuntimeService {
             Box::new(envr_runtime_zig::ZigRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_julia::JuliaRuntimeProvider::new().with_runtime_root(root.clone())),
             Box::new(envr_runtime_nim::NimRuntimeProvider::new().with_runtime_root(root.clone())),
+            Box::new(envr_runtime_rlang::RlangRuntimeProvider::new().with_runtime_root(root.clone())),
         ])?;
         svc.runtime_root_override = Some(root_override);
         Ok(svc)

@@ -963,6 +963,7 @@ dependencies = [
  "envr-runtime-node",
  "envr-runtime-php",
  "envr-runtime-python",
+ "envr-runtime-rlang",
  "envr-runtime-ruby",
  "envr-runtime-rust",
  "envr-runtime-zig",
@@ -1242,6 +1243,20 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-rlang"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
  "reqwest",
  "serde",
  "serde_json",

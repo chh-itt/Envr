@@ -35,6 +35,7 @@ Create a runtime-specific plan first. It should answer:
 - Whether project-local config outside `.envr.toml` can override runtime selection
   - for example `.ruby-version`, `Gemfile`, toolchain files, etc.
 - **Index / URL discovery shape**: many runtimes use one JSON or simple URL rules, but some ship installable artifacts only through a **scraped HTML matrix** or other non-formulaic index (example: Nim’s `install.html` on nim-lang.org → nightlies GitHub assets). Document parsing, caching, TTL, and optional checksum sidecars (`.sha256`) up front.
+- **Installer-backed Windows runtimes** (no portable zip): some vendors only ship an `.exe` setup (examples: CRAN `R-*-win.exe` Inno; Rust **`rustup-init.exe`**). Plan for **spawn installer with documented silent flags**, **target directory layout**, **post-install validation**, and **Windows `current` pointer-file fallback** when symlinks are blocked—do not assume `extract_archive` alone can install.
 
 Do not start coding before these decisions are written down.
 
@@ -449,3 +450,13 @@ Post-integration real-machine validation surfaced two subtle but important guard
 
 - **Current-version visibility should be resilient to transient installed-scan lag**:
   - Even if installed scan is temporarily empty, active `current` version should still be merged into derived list keys to avoid "Current shown, but row missing" UX breaks.
+
+### 8.10 R (CRAN Windows) / Inno installer-backed bring-up
+
+R validates the **installer-exe** pattern called out in §2 “Before coding”:
+
+- **Provider**: `envr-runtime-rlang` — JSON index (rversions) + `cran_windows_r_installer_url` + silent Inno run + `bin/R.exe` / `bin/Rscript.exe` validation.
+- **Settings**: TOML table **`[runtime.r]`** maps to `RuntimeSettings.r` (field name `r`); do not confuse with `RuntimeKind::Rust` (`rust`).
+- **Shims**: two core commands (`R`, `Rscript`) sharing runtime key `r`; **`R_HOME`** in `runtime_home_env_for_key`.
+- **Friction logged in** `docs/runtime/r-integration-plan.md`: third-party index, non-Windows policy, PATH substring ambiguity in dry-run output when the runtime directory segment is literally `...\r\...`.
+- **Shared primitive**: `envr_platform::links::ensure_runtime_current_symlink_or_pointer` centralizes symlink-then-pointer-file `current` updates for several zip-style runtimes (Julia/Nim/Zig/Deno/Bun/R and others with the same contract).

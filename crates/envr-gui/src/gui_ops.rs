@@ -895,8 +895,19 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
             let t_copy = Instant::now();
             let from_dir = runtime_root.join("shims");
             let to_core_stems = [
-                "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
+                "node",
+                "npm",
+                "npx",
+                "python",
+                "python3",
+                "pip",
+                "pip3",
+                "java",
+                "javac",
+                "bun",
                 "bunx",
+                "r",
+                "rscript",
             ];
 
             for to_root in roots {

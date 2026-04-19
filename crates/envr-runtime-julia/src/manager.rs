@@ -6,7 +6,7 @@ use crate::index::{
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::links::{LinkType, ensure_link};
+use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use serde_json::Value;
 use std::fs;
 use std::io::{Read, Write};
@@ -369,26 +369,8 @@ impl JuliaManager {
                 dir.display()
             )));
         }
-        let target = fs::canonicalize(&dir).unwrap_or(dir.clone());
         let link = self.paths.current_link();
-        if let Err(_e) = ensure_link(LinkType::Soft, &target, &link) {
-            #[cfg(windows)]
-            {
-                if let Some(parent) = link.parent() {
-                    fs::create_dir_all(parent).map_err(EnvrError::from)?;
-                }
-                envr_platform::fs_atomic::write_atomic(
-                    &link,
-                    target.display().to_string().as_bytes(),
-                )
-                .map_err(EnvrError::from)?;
-                return Ok(());
-            }
-            #[cfg(not(windows))]
-            {
-                return Err(_e);
-            }
-        }
+        ensure_runtime_current_symlink_or_pointer(&dir, &link)?;
         Ok(())
     }
 

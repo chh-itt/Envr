@@ -2048,6 +2048,14 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 |st, on| st.runtime.nim.path_proxy_enabled = on,
             )
         }
+        EnvCenterMsg::SetRLangPathProxy(on) => {
+            persist_path_proxy_toggle(
+                state,
+                envr_domain::runtime::RuntimeKind::RLang,
+                on,
+                |st, on| st.runtime.r.path_proxy_enabled = on,
+            )
+        }
         EnvCenterMsg::SetRubyPathProxy(on) => {
             persist_path_proxy_toggle(
                 state,

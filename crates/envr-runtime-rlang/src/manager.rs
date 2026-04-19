@@ -1,10 +1,8 @@
 use crate::index::{
-    NimUrlIndex, blocking_http_client, fetch_install_html, list_remote_latest_per_major_lines,
-    list_remote_versions, nim_host_platform_slot, parse_install_html,
-    pick_download_url, resolve_nim_version,
+    blocking_http_client, cran_windows_r_installer_url, fetch_text, list_remote_latest_per_major_lines,
+    list_remote_versions, parse_latest_win_release_version, parse_r_versions_list, resolve_r_version,
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
-use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
@@ -15,33 +13,37 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
-pub struct NimPaths {
+pub struct RlangPaths {
     runtime_root: PathBuf,
 }
 
-impl NimPaths {
+impl RlangPaths {
     pub fn new(runtime_root: PathBuf) -> Self {
         Self { runtime_root }
     }
 
-    pub fn nim_home(&self) -> PathBuf {
-        self.runtime_root.join("runtimes").join("nim")
+    pub fn rlang_home(&self) -> PathBuf {
+        self.runtime_root.join("runtimes").join("r")
     }
 
     pub fn versions_dir(&self) -> PathBuf {
-        self.nim_home().join("versions")
+        self.rlang_home().join("versions")
     }
 
     pub fn current_link(&self) -> PathBuf {
-        self.nim_home().join("current")
+        self.rlang_home().join("current")
     }
 
     pub fn cache_dir(&self) -> PathBuf {
-        self.runtime_root.join("cache").join("nim")
+        self.runtime_root.join("cache").join("r")
     }
 
-    pub fn install_html_cache(&self) -> PathBuf {
-        self.cache_dir().join("install.html")
+    pub fn versions_json_cache(&self) -> PathBuf {
+        self.cache_dir().join("r-versions.json")
+    }
+
+    pub fn release_win_json_cache(&self) -> PathBuf {
+        self.cache_dir().join("r-release-win.json")
     }
 
     pub fn version_dir(&self, version_label: &str) -> PathBuf {
@@ -49,18 +51,18 @@ impl NimPaths {
     }
 }
 
-pub fn nim_installation_valid(home: &Path) -> bool {
+pub fn rlang_installation_valid(home: &Path) -> bool {
     #[cfg(windows)]
     {
-        home.join("bin").join("nim.exe").is_file()
+        home.join("bin").join("R.exe").is_file() && home.join("bin").join("Rscript.exe").is_file()
     }
     #[cfg(not(windows))]
     {
-        home.join("bin").join("nim").is_file()
+        home.join("bin").join("R").is_file() && home.join("bin").join("Rscript").is_file()
     }
 }
 
-pub fn list_installed_versions(paths: &NimPaths) -> EnvrResult<Vec<RuntimeVersion>> {
+pub fn list_installed_versions(paths: &RlangPaths) -> EnvrResult<Vec<RuntimeVersion>> {
     let dir = paths.versions_dir();
     if !dir.is_dir() {
         return Ok(vec![]);
@@ -72,7 +74,7 @@ pub fn list_installed_versions(paths: &NimPaths) -> EnvrResult<Vec<RuntimeVersio
             continue;
         }
         let p = e.path();
-        if nim_installation_valid(&p) {
+        if rlang_installation_valid(&p) {
             out.push(RuntimeVersion(e.file_name().to_string_lossy().into_owned()));
         }
     }
@@ -80,7 +82,7 @@ pub fn list_installed_versions(paths: &NimPaths) -> EnvrResult<Vec<RuntimeVersio
     Ok(out)
 }
 
-pub fn read_current(paths: &NimPaths) -> EnvrResult<Option<RuntimeVersion>> {
+pub fn read_current(paths: &RlangPaths) -> EnvrResult<Option<RuntimeVersion>> {
     let cur = paths.current_link();
     if !cur.exists() {
         return Ok(None);
@@ -118,10 +120,9 @@ pub fn read_current(paths: &NimPaths) -> EnvrResult<Option<RuntimeVersion>> {
         .unwrap_or("")
         .to_string();
     if name.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(RuntimeVersion(name)))
+        return Ok(None);
     }
+    Ok(Some(RuntimeVersion(name)))
 }
 
 fn remove_path_if_exists(path: &Path) {
@@ -187,130 +188,135 @@ fn download_to_path(
     Ok(())
 }
 
-fn try_fetch_sha256_sidecar(
-    client: &reqwest::blocking::Client,
-    archive_url: &str,
-) -> Option<String> {
-    let sum_url = format!("{archive_url}.sha256");
-    let response = client.get(&sum_url).send().ok()?;
-    if !response.status().is_success() {
-        return None;
+#[cfg(windows)]
+fn run_cran_r_windows_installer(installer: &Path, target_dir: &Path) -> EnvrResult<()> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let dir_os = target_dir.as_os_str().to_string_lossy().to_string();
+    let status = std::process::Command::new(installer)
+        .raw_arg("/VERYSILENT")
+        .raw_arg("/SUPPRESSMSGBOXES")
+        .raw_arg("/NORESTART")
+        .raw_arg(format!("/DIR={dir_os}"))
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .map_err(|e| EnvrError::Runtime(format!("failed to spawn R installer: {e}")))?;
+    if !status.success() {
+        return Err(EnvrError::Runtime(format!(
+            "R Windows installer exited with status {status}"
+        )));
     }
-    let body = response.text().ok()?;
-    let token = body.split_whitespace().next()?.trim();
-    if token.len() == 64 && token.chars().all(|c| c.is_ascii_hexdigit()) {
-        Some(token.to_ascii_lowercase())
-    } else {
-        None
-    }
-}
-
-pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
-    use envr_platform::install_layout;
-
-    let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
-    let first = iter
-        .next()
-        .transpose()
-        .map_err(EnvrError::from)?
-        .ok_or_else(|| EnvrError::Validation("empty nim archive".into()))?;
-    if iter.next().transpose().map_err(EnvrError::from)?.is_some() {
-        return Err(EnvrError::Validation(
-            "expected exactly one root directory in nim archive".into(),
-        ));
-    }
-    let inner = first.path();
-    if !inner.is_dir() {
-        return Err(EnvrError::Validation(
-            "expected nim archive root to be a directory".into(),
-        ));
-    }
-    install_layout::ensure_final_parent(final_dir)?;
-    let staging_final = install_layout::sibling_staging_path(final_dir)?;
-    install_layout::remove_if_exists(&staging_final)?;
-
-    fs::rename(&inner, &staging_final).map_err(EnvrError::from)?;
-
-    if !nim_installation_valid(&staging_final) {
-        let _ = fs::remove_dir_all(&staging_final);
-        return Err(EnvrError::Validation(
-            "extracted nim layout missing bin/nim".into(),
-        ));
-    }
-
-    install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
 }
 
-pub struct NimManager {
-    pub paths: NimPaths,
-    index_url: String,
+#[cfg(not(windows))]
+fn run_cran_r_windows_installer(_installer: &Path, _target_dir: &Path) -> EnvrResult<()> {
+    Err(EnvrError::Validation(
+        "R managed install is only implemented on Windows in this release".into(),
+    ))
+}
+
+fn require_windows_managed_r() -> EnvrResult<()> {
+    #[cfg(windows)]
+    {
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(EnvrError::Validation(
+            "envr R: managed install and remote index are only supported on Windows in this release"
+                .into(),
+        ))
+    }
+}
+
+pub struct RlangManager {
+    pub paths: RlangPaths,
+    versions_url: String,
+    release_win_url: String,
     client: reqwest::blocking::Client,
 }
 
-impl NimManager {
-    pub fn try_new(runtime_root: PathBuf, index_url: String) -> EnvrResult<Self> {
+impl RlangManager {
+    pub fn try_new(runtime_root: PathBuf, versions_url: String, release_win_url: String) -> EnvrResult<Self> {
         Ok(Self {
-            paths: NimPaths::new(runtime_root),
-            index_url,
+            paths: RlangPaths::new(runtime_root),
+            versions_url,
+            release_win_url,
             client: blocking_http_client()?,
         })
     }
 
     fn index_ttl_secs() -> u64 {
         const DEFAULT: u64 = 60 * 60;
-        std::env::var("ENVR_NIM_INDEX_CACHE_TTL_SECS")
+        std::env::var("ENVR_RLANG_INDEX_CACHE_TTL_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT)
     }
 
-    pub fn load_url_index(&self) -> EnvrResult<NimUrlIndex> {
-        let cache_path = self.paths.install_html_cache();
+    fn load_versions_list_cached(&self) -> EnvrResult<Vec<String>> {
+        require_windows_managed_r()?;
+        let cache_path = self.paths.versions_json_cache();
         let ttl = Self::index_ttl_secs();
         if let Ok(meta) = fs::metadata(&cache_path) {
             if let Ok(modified) = meta.modified() {
                 if let Ok(age) = SystemTime::now().duration_since(modified) {
                     if age.as_secs() < ttl {
                         if let Ok(body) = fs::read_to_string(&cache_path) {
-                            let idx = parse_install_html(&body);
-                            if !idx.is_empty() {
-                                return Ok(idx);
+                            if let Ok(v) = parse_r_versions_list(&body) {
+                                if !v.is_empty() {
+                                    return Ok(v);
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        let body = fetch_install_html(&self.client, &self.index_url)?;
+        let body = fetch_text(&self.client, &self.versions_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
-        let idx = parse_install_html(&body);
-        if idx.is_empty() {
-            return Err(EnvrError::Validation(
-                "nim install index contained no recognized download URLs; nim-lang.org page format may have changed"
-                    .into(),
-            ));
+        parse_r_versions_list(&body)
+    }
+
+    fn load_latest_win_version_cached(&self) -> EnvrResult<String> {
+        let cache_path = self.paths.release_win_json_cache();
+        let ttl = Self::index_ttl_secs();
+        if let Ok(meta) = fs::metadata(&cache_path) {
+            if let Ok(modified) = meta.modified() {
+                if let Ok(age) = SystemTime::now().duration_since(modified) {
+                    if age.as_secs() < ttl {
+                        if let Ok(body) = fs::read_to_string(&cache_path) {
+                            if let Ok(v) = parse_latest_win_release_version(&body) {
+                                if !v.is_empty() {
+                                    return Ok(v);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        Ok(idx)
+        let body = fetch_text(&self.client, &self.release_win_url)?;
+        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        parse_latest_win_release_version(&body)
     }
 
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        let idx = self.load_url_index()?;
-        let slot = nim_host_platform_slot()?;
-        list_remote_versions(&idx, slot, filter)
+        let v = self.load_versions_list_cached()?;
+        Ok(list_remote_versions(&v, filter))
     }
 
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        let idx = self.load_url_index()?;
-        let slot = nim_host_platform_slot()?;
-        Ok(list_remote_latest_per_major_lines(&idx, slot))
+        let v = self.load_versions_list_cached()?;
+        Ok(list_remote_latest_per_major_lines(&v))
     }
 
     pub fn resolve_label(&self, spec: &str) -> EnvrResult<String> {
-        let idx = self.load_url_index()?;
-        let slot = nim_host_platform_slot()?;
-        resolve_nim_version(&idx, slot, spec)
+        let v = self.load_versions_list_cached()?;
+        resolve_r_version(&v, spec)
     }
 
     pub fn install_resolved_version(
@@ -320,45 +326,48 @@ impl NimManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
+        require_windows_managed_r()?;
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let idx = self.load_url_index()?;
-        let slot = nim_host_platform_slot()?;
-        let url = pick_download_url(&idx, version_label, slot)?;
-        let sha256 = try_fetch_sha256_sidecar(&self.client, &url);
-
-        let ext = if url.to_ascii_lowercase().ends_with(".zip") {
-            ".zip"
-        } else if url.to_ascii_lowercase().ends_with(".tar.xz") {
-            ".tar.xz"
-        } else {
+        let versions = self.load_versions_list_cached()?;
+        if !versions.iter().any(|v| v == version_label) {
             return Err(EnvrError::Validation(format!(
-                "unsupported nim archive URL suffix: {url}"
+                "R version `{version_label}` is not in the r-versions index for this host policy"
             )));
-        };
+        }
+        let latest = self.load_latest_win_version_cached()?;
+        let url = cran_windows_r_installer_url(version_label, &latest);
 
-        let cache_dir = self.paths.cache_dir().join(version_label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
-        let archive_path = cache_dir.join(format!("nim{ext}"));
+        let final_dir = self.paths.version_dir(version_label);
+        if final_dir.exists() {
+            let _ = fs::remove_dir_all(&final_dir);
+        }
+        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
+        let installer_path = self
+            .paths
+            .cache_dir()
+            .join(format!("R-{version_label}-win-installer.exe"));
         download_to_path(
             &self.client,
             &url,
-            &archive_path,
+            &installer_path,
             progress_downloaded,
             progress_total,
             cancel,
         )?;
-        if let Some(ref h) = sha256 {
-            checksum::verify_sha256_hex(&archive_path, h)?;
+
+        fs::create_dir_all(self.paths.versions_dir()).map_err(EnvrError::from)?;
+        run_cran_r_windows_installer(&installer_path, &final_dir)?;
+
+        if !rlang_installation_valid(&final_dir) {
+            let _ = fs::remove_dir_all(&final_dir);
+            return Err(EnvrError::Validation(
+                "R install finished but bin/R.exe or bin/Rscript.exe is missing".into(),
+            ));
         }
 
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
-        let final_dir = self.paths.version_dir(version_label);
-        promote_single_root_dir(staging.path(), &final_dir)?;
+        let _ = fs::remove_file(&installer_path);
         self.set_current(&RuntimeVersion(version_label.to_string()))?;
         Ok(RuntimeVersion(version_label.to_string()))
     }
@@ -375,11 +384,10 @@ impl NimManager {
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
-        if !nim_installation_valid(&dir) {
+        if !rlang_installation_valid(&dir) {
             return Err(EnvrError::Validation(format!(
-                "nim {} is not installed under {}",
-                version.0,
-                dir.display()
+                "cannot set current R to {}: installation invalid or missing",
+                version.0
             )));
         }
         let link = self.paths.current_link();
@@ -389,10 +397,10 @@ impl NimManager {
 
     pub fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
-        if dir.is_dir() {
+        if dir.exists() {
             fs::remove_dir_all(&dir).map_err(EnvrError::from)?;
         }
-        if read_current(&self.paths)?.is_some_and(|c| c.0 == version.0) {
+        if read_current(&self.paths)?.as_ref() == Some(version) {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())

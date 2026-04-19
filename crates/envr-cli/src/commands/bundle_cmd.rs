@@ -138,6 +138,7 @@ fn create_inner(
             RuntimeKind::Zig,
             RuntimeKind::Julia,
             RuntimeKind::Nim,
+            RuntimeKind::RLang,
         ] {
             if let Ok(Some(v)) = service.current(kind) {
                 global_current.push((crate::commands::common::kind_label(kind).to_string(), v.0));
