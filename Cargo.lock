@@ -955,6 +955,7 @@ dependencies = [
  "envr-runtime-bun",
  "envr-runtime-clojure",
  "envr-runtime-crystal",
+ "envr-runtime-dart",
  "envr-runtime-deno",
  "envr-runtime-dotnet",
  "envr-runtime-elixir",
@@ -1121,6 +1122,20 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-dart"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
  "reqwest",
  "serde",
  "serde_json",

@@ -1997,6 +1997,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.v.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetDartPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Dart,
+            on,
+            |st, on| st.runtime.dart.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetGoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.download_source = src;

@@ -136,6 +136,7 @@ pub enum CoreCommand {
     Groovyc,
     Terraform,
     V,
+    Dart,
     Go,
     Gofmt,
     Php,
@@ -175,6 +176,7 @@ impl CoreCommand {
             CoreCommand::Groovy | CoreCommand::Groovyc => "groovy",
             CoreCommand::Terraform => "terraform",
             CoreCommand::V => "v",
+            CoreCommand::Dart => "dart",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -205,6 +207,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "groovy" => vec![home.join("bin")],
         "terraform" => vec![home.to_path_buf(), home.join("bin")],
         "v" => vec![home.to_path_buf(), home.join("bin")],
+        "dart" => vec![home.join("bin"), home.to_path_buf()],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -290,6 +293,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "groovy" => vec![("GROOVY_HOME".into(), home_env)],
         "terraform" => vec![("TERRAFORM_HOME".into(), home_env)],
         "v" => vec![("V_HOME".into(), home_env)],
+        "dart" => vec![("DART_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -428,6 +432,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "groovyc" => Some(CoreCommand::Groovyc),
         "terraform" => Some(CoreCommand::Terraform),
         "v" => Some(CoreCommand::V),
+        "dart" => Some(CoreCommand::Dart),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -963,6 +968,19 @@ fn v_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn dart_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Dart => Ok(first_existing(&[
+            home.join("bin").join("dart.exe"),
+            home.join("bin").join("dart"),
+            home.join("dart.exe"),
+            home.join("dart"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("dart missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a dart tool".into())),
+    }
+}
+
 fn kotlin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -1216,6 +1234,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(home, cmd),
         CoreCommand::Terraform => terraform_tool_path(home, cmd),
         CoreCommand::V => v_tool_path(home, cmd),
+        CoreCommand::Dart => dart_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1368,6 +1387,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Groovyc => "groovyc",
         CoreCommand::Terraform => "terraform",
         CoreCommand::V => "v",
+        CoreCommand::Dart => "dart",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1453,6 +1473,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(&home, cmd)?,
         CoreCommand::Terraform => terraform_tool_path(&home, cmd)?,
         CoreCommand::V => v_tool_path(&home, cmd)?,
+        CoreCommand::Dart => dart_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

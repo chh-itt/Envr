@@ -526,3 +526,15 @@ Recent runtime bring-up/field validation reinforced this policy for GitHub-backe
 - **Always provide a non-API fallback for release discovery where possible**:
   - Prefer `releases.atom` tag extraction + synthetic asset URL construction when API calls fail (e.g. 403/rate-limit/proxy blocks).
   - Guard fallback with host-asset candidate tables and explicit “no installable rows for this host” errors.
+
+### 8.14 Dart follow-up friction (GCS prefix index filtering)
+
+Dart stable version discovery uses GCS prefix listing, which has a different failure mode:
+
+- **Bucket prefix listings may include non-semver release markers in the same namespace**:
+  - `channels/stable/release/` can surface raw numeric revision-like prefixes in addition to semantic version labels.
+  - Provider parsing should explicitly enforce version-shape rules before exposing remote rows.
+
+- **Cache read-path should re-validate index rows, not trust historical cache schema forever**:
+  - If earlier code persisted malformed rows, subsequent runs may keep surfacing bad data.
+  - Normalize/filter cached rows at read time and allow user `remote -u` to force fresh rebuild when needed.

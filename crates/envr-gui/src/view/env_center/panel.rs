@@ -2,7 +2,7 @@
 
 use envr_config::settings::{
     BunRuntimeSettings, ClojureRuntimeSettings, CrystalRuntimeSettings, DenoDownloadSource,
-    DenoRuntimeSettings, DotnetRuntimeSettings, ElixirRuntimeSettings, ErlangRuntimeSettings,
+    DenoRuntimeSettings, DartRuntimeSettings, DotnetRuntimeSettings, ElixirRuntimeSettings, ErlangRuntimeSettings,
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
     LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
@@ -73,6 +73,7 @@ pub enum EnvCenterMsg {
     SetJvmPathProxy(RuntimeKind, bool),
     SetTerraformPathProxy(bool),
     SetVPathProxy(bool),
+    SetDartPathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     SetGoPathProxy(bool),
@@ -1753,6 +1754,45 @@ fn v_runtime_settings_section(v: &VRuntimeSettings, tokens: ThemeTokens) -> Elem
     .into()
 }
 
+fn dart_runtime_settings_section(
+    dart: &DartRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.dart.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.dart.path_proxy.hint",
+            "开启时由 envr 接管 dart；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages dart; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(dart.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|on| Message::EnvCenter(EnvCenterMsg::SetDartPathProxy(on)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.dart.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn lua_runtime_settings_section(
     lua: &LuaRuntimeSettings,
     tokens: ThemeTokens,
@@ -2219,6 +2259,8 @@ pub fn env_center_view(
         terraform_runtime_settings_section(&runtime_settings.terraform, tokens)
     } else if state.kind == RuntimeKind::V {
         v_runtime_settings_section(&runtime_settings.v, tokens)
+    } else if state.kind == RuntimeKind::Dart {
+        dart_runtime_settings_section(&runtime_settings.dart, tokens)
     } else if state.kind == RuntimeKind::Go {
         go_runtime
             .map(|g| {

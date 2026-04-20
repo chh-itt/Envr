@@ -57,6 +57,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         ],
         RuntimeKind::Terraform => &[(CoreCommand::Terraform, "terraform")],
         RuntimeKind::V => &[(CoreCommand::V, "v")],
+        RuntimeKind::Dart => &[(CoreCommand::Dart, "dart")],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
         RuntimeKind::Ruby => &[
@@ -618,6 +619,7 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "groovyc"
             | "terraform"
             | "v"
+            | "dart"
             | "php"
             | "bun"
             | "bunx"

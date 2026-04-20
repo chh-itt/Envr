@@ -147,7 +147,7 @@ pub fn resolve_run_lang_home(
         "ruby" => resolve_ruby_home(ctx, cfg, None),
         "go" => resolve_go_home(ctx, cfg, None),
         "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "groovy" | "terraform"
-        | "v"
+        | "v" | "dart"
         | "zig" | "julia" | "nim" | "crystal" | "r" | "elixir" | "erlang" => {
             resolve_runtime_home_for_lang(ctx, lang, None)
         }

@@ -155,6 +155,7 @@ const COMMON_RUN_FIRST_TOKEN: &[&str] = &[
     "tar",
     "terraform",
     "v",
+    "dart",
     "test",
     "true",
     "vim",

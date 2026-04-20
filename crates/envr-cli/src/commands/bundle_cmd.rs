@@ -132,6 +132,7 @@ fn create_inner(
             RuntimeKind::Groovy,
             RuntimeKind::Terraform,
             RuntimeKind::V,
+            RuntimeKind::Dart,
             RuntimeKind::Go,
             RuntimeKind::Rust,
             RuntimeKind::Ruby,

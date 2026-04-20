@@ -35,6 +35,16 @@ pub fn resolve_julia_exe(home: &Path) -> Option<PathBuf> {
     resolve_bin_tool_exe(home, "julia")
 }
 
+// --- Dart -------------------------------------------------------------------------------------
+
+pub fn dart_installation_valid(home: &Path) -> bool {
+    resolve_dart_exe(home).is_some()
+}
+
+pub fn resolve_dart_exe(home: &Path) -> Option<PathBuf> {
+    resolve_bin_tool_exe(home, "dart")
+}
+
 // --- Zig (root or `bin/`, same order as shim) -------------------------------------------------
 
 pub fn zig_installation_valid(home: &Path) -> bool {
