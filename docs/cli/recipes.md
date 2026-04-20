@@ -13,6 +13,7 @@ Short **end-to-end flows** for common goals. Command details and flags live in `
 
 - **Merged multi-language PATH** (project + pins): `envr shell` or `eval "$(envr env)"` on POSIX.
 - **Single language, one shot**: `envr exec --lang node -- npm test`.
+- **Shell resiliency**: if merged run-stack validation fails (for example, a JVM-hosted runtime/JDK mismatch), `envr shell` still starts with base OS env + project `[env]` overlay so recovery commands remain usable.
 
 Global default version for new terminals remains `envr use <runtime> <version>` (updates `current` under the runtime root).
 
