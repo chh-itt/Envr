@@ -18,6 +18,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "terraform",
     "v",
     "dart",
+    "flutter",
     "go",
     "ruby",
     "elixir",

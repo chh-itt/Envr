@@ -580,6 +580,21 @@ impl Default for DartRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlutterRuntimeSettings {
+    /// When false, flutter shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::flutter_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for FlutterRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::flutter_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -630,6 +645,8 @@ pub struct RuntimeSettings {
     pub v: VRuntimeSettings,
     #[serde(default)]
     pub dart: DartRuntimeSettings,
+    #[serde(default)]
+    pub flutter: FlutterRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -1825,6 +1842,17 @@ pub fn dart_path_proxy_enabled_from_disk() -> bool {
         .unwrap_or(true)
 }
 
+/// Read [`FlutterRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn flutter_path_proxy_enabled_from_disk() -> bool {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return true;
+    };
+    let path = settings_path_from_platform(&platform);
+    Settings::load_or_default_from(&path)
+        .map(|s| s.runtime.flutter.path_proxy_enabled)
+        .unwrap_or(true)
+}
+
 /// Read [`RubyRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn ruby_path_proxy_enabled_from_disk() -> bool {
     let Ok(platform) = envr_platform::paths::current_platform_paths() else {
@@ -1968,6 +1996,10 @@ mod defaults {
         true
     }
 
+    pub fn flutter_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn go_path_proxy_enabled() -> bool {
         true
     }
@@ -2097,6 +2129,7 @@ mod tests {
                 terraform: TerraformRuntimeSettings::default(),
                 v: VRuntimeSettings::default(),
                 dart: DartRuntimeSettings::default(),
+                flutter: FlutterRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                     ..Default::default()

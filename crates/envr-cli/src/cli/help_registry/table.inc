@@ -453,7 +453,7 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
                 help: I18n(
                     "cli.help.arg.lang_key",
                     "语言键：node、python、java 等",
-                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, etc.",
+                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, `flutter`, etc.",
                 ),
                 long_help: None,
             },
@@ -496,7 +496,7 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
                 help: I18n(
                     "cli.help.arg.lang_key",
                     "语言键：node、python、java 等",
-                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, …",
+                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, `flutter`, …",
                 ),
                 long_help: None,
             },
@@ -547,7 +547,7 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
                 help: I18n(
                     "cli.help.arg.lang_key",
                     "语言键：node、python、java 等",
-                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, …",
+                    "Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, `dart`, `flutter`, …",
                 ),
                 long_help: None,
             },

@@ -29,13 +29,11 @@ This plan is intentionally design-first and cross-references Dart integration de
 
 User suggestion: remove `$FLUTTER_ROOT/.git` after install to reduce accidental self-managed mutation.
 
-Recommendation:
+Revised recommendation (after real-machine verification):
 
-- **Default: yes, remove `.git` in envr-managed Flutter installs** to discourage `flutter upgrade/channel` inside managed directories.
-- Keep this behavior explicit in docs and guarded by an opt-out env knob (future), e.g. `ENVR_FLUTTER_KEEP_GIT=1`.
-- Rationale:
-  - aligns source of truth with envr-managed versions;
-  - reduces drift between `envr current` and Flutter internal update state.
+- **Default: keep `.git`** in envr-managed Flutter installs.
+- Reason: `flutter` CLI requires repository metadata; stripping `.git` breaks normal commands like `flutter --version`.
+- Optional explicit override for special environments: `ENVR_FLUTTER_STRIP_GIT=1`.
 
 ## CLI/GUI risk notes (pre-implementation)
 
@@ -52,27 +50,33 @@ Recommendation:
 
 ### Phase A — Domain
 
-- [ ] Add `RuntimeKind::Flutter` descriptor (`key=flutter`, remote/path proxy true).
-- [ ] Define whether Flutter uses major-only or major.minor grouping in UI.
+- [x] Add `RuntimeKind::Flutter` descriptor (`key=flutter`, remote/path proxy true).
+- [x] Define whether Flutter uses major-only or major.minor grouping in UI.
 
 ### Phase B — Provider crate `envr-runtime-flutter`
 
-- [ ] Parse stable release metadata.
-- [ ] Install SDK archive and validate `flutter` executable.
-- [ ] Remove `$FLUTTER_ROOT/.git` after successful promote (default-on).
+- [x] Parse stable release metadata.
+- [x] Install SDK archive and validate `flutter` executable.
+- [x] Keep `$FLUTTER_ROOT/.git` by default; add optional strip override (`ENVR_FLUTTER_STRIP_GIT=1`).
 
 ### Phase C — Core/CLI/resolver/shims
 
-- [ ] Register provider + add `flutter` shim.
-- [ ] Add `FLUTTER_HOME` and runtime bin-dir mapping.
-- [ ] Add `ENVR_FLUTTER_VERSION` parity in run/list/status/bundle/missing-pins.
+- [x] Register provider + add `flutter` shim.
+- [x] Add `FLUTTER_HOME` and runtime bin-dir mapping.
+- [x] Add `ENVR_FLUTTER_VERSION` parity in run/list/status/bundle/missing-pins.
 
 ### Phase D — Config/GUI
 
-- [ ] Add `[runtime.flutter] path_proxy_enabled`.
-- [ ] Add Env Center settings section with explicit Dart coexistence note.
+- [x] Add `[runtime.flutter] path_proxy_enabled`.
+- [x] Add Env Center settings section with explicit Dart coexistence note.
 
 ### Phase E — Docs/playbook polish
 
-- [ ] Add `docs/runtime/flutter.md` (include “envr-managed flutter does not use flutter self-upgrade” guidance).
-- [ ] Add a Dart/Flutter coexistence matrix doc section.
+- [x] Add `docs/runtime/flutter.md` (include “envr-managed flutter does not use flutter self-upgrade” guidance).
+- [x] Add a Dart/Flutter coexistence matrix doc section.
+
+## Development notes (actual)
+
+- Flutter host index is JSON-based and host-specific, unlike Dart’s GCS prefix listing model.
+- Linux uses `.tar.xz` archive while Windows/macOS use `.zip`; manager now supports both by extension.
+- Real-machine validation showed Flutter CLI fails without `.git`; policy changed to keep `.git` by default, with opt-in strip override for exceptional cases.

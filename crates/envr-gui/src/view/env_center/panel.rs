@@ -3,6 +3,7 @@
 use envr_config::settings::{
     BunRuntimeSettings, ClojureRuntimeSettings, CrystalRuntimeSettings, DenoDownloadSource,
     DenoRuntimeSettings, DartRuntimeSettings, DotnetRuntimeSettings, ElixirRuntimeSettings, ErlangRuntimeSettings,
+    FlutterRuntimeSettings,
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
     LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
@@ -74,6 +75,7 @@ pub enum EnvCenterMsg {
     SetTerraformPathProxy(bool),
     SetVPathProxy(bool),
     SetDartPathProxy(bool),
+    SetFlutterPathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     SetGoPathProxy(bool),
@@ -1793,6 +1795,45 @@ fn dart_runtime_settings_section(
     .into()
 }
 
+fn flutter_runtime_settings_section(
+    flutter: &FlutterRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.flutter.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.flutter.path_proxy.hint",
+            "开启时由 envr 接管 flutter；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages flutter; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(flutter.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|on| Message::EnvCenter(EnvCenterMsg::SetFlutterPathProxy(on)))
+            .into(),
+    );
+    let coexist_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.flutter.coexistence.note",
+        "提示：Flutter 与 Dart 在 envr 中是独立运行时，flutter 不会自动改写 dart shim。",
+        "Note: Flutter and Dart are independent runtimes in envr; flutter does not rewrite dart shim automatically.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+    container(
+        column![proxy_toggle, coexist_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn lua_runtime_settings_section(
     lua: &LuaRuntimeSettings,
     tokens: ThemeTokens,
@@ -2261,6 +2302,8 @@ pub fn env_center_view(
         v_runtime_settings_section(&runtime_settings.v, tokens)
     } else if state.kind == RuntimeKind::Dart {
         dart_runtime_settings_section(&runtime_settings.dart, tokens)
+    } else if state.kind == RuntimeKind::Flutter {
+        flutter_runtime_settings_section(&runtime_settings.flutter, tokens)
     } else if state.kind == RuntimeKind::Go {
         go_runtime
             .map(|g| {

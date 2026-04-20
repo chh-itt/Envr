@@ -45,6 +45,21 @@ pub fn resolve_dart_exe(home: &Path) -> Option<PathBuf> {
     resolve_bin_tool_exe(home, "dart")
 }
 
+// --- Flutter ----------------------------------------------------------------------------------
+
+pub fn flutter_installation_valid(home: &Path) -> bool {
+    resolve_flutter_exe(home).is_some()
+}
+
+pub fn resolve_flutter_exe(home: &Path) -> Option<PathBuf> {
+    first_existing_path(&[
+        home.join("bin").join("flutter.bat"),
+        home.join("bin").join("flutter.cmd"),
+        home.join("bin").join("flutter.exe"),
+        home.join("bin").join("flutter"),
+    ])
+}
+
 // --- Zig (root or `bin/`, same order as shim) -------------------------------------------------
 
 pub fn zig_installation_valid(home: &Path) -> bool {
@@ -109,5 +124,22 @@ mod tests {
         assert!(rlang_installation_valid(home));
         assert!(resolve_r_exe(home).is_some());
         assert!(resolve_rscript_exe(home).is_some());
+    }
+
+    #[test]
+    fn flutter_valid_when_launcher_exists_under_bin() {
+        let tmp = tempdir().unwrap();
+        let home = tmp.path();
+        std::fs::create_dir_all(home.join("bin")).unwrap();
+        #[cfg(windows)]
+        {
+            std::fs::write(home.join("bin").join("flutter.bat"), "").unwrap();
+        }
+        #[cfg(not(windows))]
+        {
+            std::fs::write(home.join("bin").join("flutter"), "").unwrap();
+        }
+        assert!(flutter_installation_valid(home));
+        assert!(resolve_flutter_exe(home).is_some());
     }
 }

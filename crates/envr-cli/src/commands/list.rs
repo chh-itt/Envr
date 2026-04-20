@@ -67,6 +67,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
         | RuntimeKind::Terraform
         | RuntimeKind::V
         | RuntimeKind::Dart
+        | RuntimeKind::Flutter
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => { version_line_key_for_kind(kind, t) }

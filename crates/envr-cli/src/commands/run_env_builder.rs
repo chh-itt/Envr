@@ -23,6 +23,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "terraform",
     "v",
     "dart",
+    "flutter",
     "go",
     "rust",
     "ruby",

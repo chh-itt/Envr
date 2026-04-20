@@ -74,6 +74,11 @@ fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeP
         )) as Box<dyn RuntimeProvider>,
         Box::new(attach_runtime_root(
             &runtime_root,
+            envr_runtime_flutter::FlutterRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
             envr_runtime_go::GoRuntimeProvider::new,
             |p, r| p.with_runtime_root(r),
         )) as Box<dyn RuntimeProvider>,

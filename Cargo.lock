@@ -960,6 +960,7 @@ dependencies = [
  "envr-runtime-dotnet",
  "envr-runtime-elixir",
  "envr-runtime-erlang",
+ "envr-runtime-flutter",
  "envr-runtime-go",
  "envr-runtime-groovy",
  "envr-runtime-java",
@@ -1186,6 +1187,20 @@ dependencies = [
 
 [[package]]
 name = "envr-runtime-erlang"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-flutter"
 version = "0.1.0"
 dependencies = [
  "envr-domain",

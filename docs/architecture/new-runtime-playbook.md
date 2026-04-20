@@ -538,3 +538,23 @@ Dart stable version discovery uses GCS prefix listing, which has a different fai
 - **Cache read-path should re-validate index rows, not trust historical cache schema forever**:
   - If earlier code persisted malformed rows, subsequent runs may keep surfacing bad data.
   - Normalize/filter cached rows at read time and allow user `remote -u` to force fresh rebuild when needed.
+
+### 8.15 Flutter follow-up friction (managed SDK policy + host feed split)
+
+Flutter surfaced a different set of operational guardrails:
+
+- **Treat Flutter and Dart as separate runtime contracts in shim resolution**:
+  - Flutter bundles an embedded Dart, but default shim policy should stay explicit: `flutter` shim for Flutter SDK, `dart` shim for standalone Dart SDK.
+  - Avoid implicit cross-runtime remapping unless a future policy flag explicitly requests it.
+
+- **Do not assume `.git` removal is safe for Flutter SDK distributions**:
+  - Flutter installs include a `.git` directory, and core `flutter` commands can require repository metadata.
+  - Keep `.git` by default for runtime correctness; if a constrained environment needs stripping, gate it behind an explicit opt-in switch and document reduced capability.
+
+- **Host feed format can vary by platform, including archive extension**:
+  - Flutter release feeds are split by host (`releases_windows.json`, `releases_linux.json`, `releases_macos.json`).
+  - Linux stable artifacts are `.tar.xz` while Windows/macOS are `.zip`; provider install flow should dispatch by archive extension.
+
+- **Script-launcher runtimes can depend on host PATH essentials beyond the managed binary itself**:
+  - Flutter launcher scripts may require Git and host utilities such as `where.exe` (Windows/System32) at runtime.
+  - Runtime docs should explicitly call out these host prerequisites and expected first-run bootstrap cost (tool build / dependency warmup).

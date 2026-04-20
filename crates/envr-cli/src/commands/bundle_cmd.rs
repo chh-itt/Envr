@@ -133,6 +133,7 @@ fn create_inner(
             RuntimeKind::Terraform,
             RuntimeKind::V,
             RuntimeKind::Dart,
+            RuntimeKind::Flutter,
             RuntimeKind::Go,
             RuntimeKind::Rust,
             RuntimeKind::Ruby,
