@@ -1,11 +1,19 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
 use envr_error::{EnvrError, EnvrResult};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const DEFAULT_V_RELEASES_API_URL: &str = "https://api.github.com/repos/vlang/v/releases";
+const V_RELEASES_ATOM_URL: &str = "https://github.com/vlang/v/releases.atom";
+
+static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"https://github\.com/vlang/v/releases/tag/([^"<>]+)"#)
+        .expect("atom release tag regex")
+});
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GhAsset {
@@ -112,6 +120,21 @@ pub fn v_asset_candidates() -> Vec<&'static str> {
     }
 }
 
+fn synthetic_v_release(tag: &str) -> Option<GhRelease> {
+    let _label = label_from_tag(tag)?;
+    let fname = v_asset_candidates().into_iter().next()?;
+    let url = format!("https://github.com/vlang/v/releases/download/{tag}/{fname}");
+    Some(GhRelease {
+        tag_name: tag.to_string(),
+        draft: false,
+        prerelease: false,
+        assets: vec![GhAsset {
+            name: fname.to_string(),
+            browser_download_url: url,
+        }],
+    })
+}
+
 pub fn pick_v_asset_url(assets: &[GhAsset]) -> Option<String> {
     for name in v_asset_candidates() {
         if let Some(a) = assets.iter().find(|a| a.name == name) {
@@ -121,7 +144,33 @@ pub fn pick_v_asset_url(assets: &[GhAsset]) -> Option<String> {
     None
 }
 
-pub fn fetch_v_github_releases_index(
+fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
+    let u = url.trim();
+    const NEEDLE: &str = "https://api.github.com/";
+    let i = u.find(NEEDLE)?;
+    Some(u[i..].to_string())
+}
+
+fn candidate_v_releases_api_bases(primary: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |s: &str| {
+        let t = s.trim();
+        if t.is_empty() {
+            return;
+        }
+        if !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    };
+    push(primary);
+    if let Some(inner) = strip_known_github_api_proxy_prefix(primary) {
+        push(&inner);
+    }
+    push(DEFAULT_V_RELEASES_API_URL);
+    out
+}
+
+fn fetch_v_releases_via_github_api(
     client: &reqwest::blocking::Client,
     api_base_url: &str,
 ) -> EnvrResult<Vec<GhRelease>> {
@@ -163,6 +212,69 @@ pub fn fetch_v_github_releases_index(
         }
     }
     Ok(merged)
+}
+
+fn fetch_v_releases_via_releases_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<GhRelease>> {
+    let mut seen_tags = HashSet::new();
+    let mut tags_in_order = Vec::new();
+    for page in 1_u32..=50 {
+        let url = if page == 1 {
+            V_RELEASES_ATOM_URL.to_string()
+        } else {
+            format!("{V_RELEASES_ATOM_URL}?page={page}")
+        };
+        let body = fetch_text(client, &url)?;
+        let mut new_this_page = 0usize;
+        for cap in ATOM_RELEASE_TAG_RE.captures_iter(&body) {
+            let Some(m) = cap.get(1) else {
+                continue;
+            };
+            let tag = m.as_str().trim().trim_end_matches('/');
+            if tag.is_empty() || label_from_tag(tag).is_none() {
+                continue;
+            }
+            if seen_tags.insert(tag.to_string()) {
+                tags_in_order.push(tag.to_string());
+                new_this_page += 1;
+            }
+        }
+        if page == 1 && new_this_page == 0 && seen_tags.is_empty() {
+            return Err(EnvrError::Download(
+                "v: releases.atom contained no release tag links".into(),
+            ));
+        }
+        if page > 1 && new_this_page == 0 {
+            break;
+        }
+    }
+    let mut out: Vec<GhRelease> = tags_in_order
+        .into_iter()
+        .filter_map(|t| synthetic_v_release(&t))
+        .collect();
+    if out.is_empty() {
+        return Err(EnvrError::Download(
+            "v: atom index produced no installable rows for this platform".into(),
+        ));
+    }
+    out.sort_by(|a, b| {
+        let la = label_from_tag(&a.tag_name).unwrap_or_default();
+        let lb = label_from_tag(&b.tag_name).unwrap_or_default();
+        cmp_semver_release_labels(&lb, &la)
+    });
+    Ok(out)
+}
+
+pub fn fetch_v_github_releases_index(
+    client: &reqwest::blocking::Client,
+    api_base_url: &str,
+) -> EnvrResult<Vec<GhRelease>> {
+    for base in candidate_v_releases_api_bases(api_base_url) {
+        match fetch_v_releases_via_github_api(client, &base) {
+            Ok(rows) if !rows.is_empty() => return Ok(rows),
+            Ok(_) | Err(_) => {}
+        }
+    }
+    fetch_v_releases_via_releases_atom(client)
 }
 
 pub fn installable_rows_from_releases(releases: &[GhRelease]) -> Vec<VInstallableRow> {
@@ -247,4 +359,71 @@ pub fn resolve_v_version(rows: &[VInstallableRow], spec: &str) -> EnvrResult<Str
     Err(EnvrError::Validation(format!(
         "no v release matches spec `{s}`"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candidate_api_bases_include_default_and_strip_proxy_wrappers() {
+        let wrapped = "https://ghproxy.net/https://api.github.com/repos/vlang/v/releases?per_page=100";
+        let bases = candidate_v_releases_api_bases(wrapped);
+        assert!(bases.iter().any(|b| b == DEFAULT_V_RELEASES_API_URL));
+        assert!(
+            bases
+                .iter()
+                .any(|b| b == "https://api.github.com/repos/vlang/v/releases?per_page=100")
+        );
+    }
+
+    #[test]
+    fn installable_rows_keep_stable_only_and_order_desc() {
+        let rows = installable_rows_from_releases(&[
+            GhRelease {
+                tag_name: "0.5.1".into(),
+                draft: false,
+                prerelease: false,
+                assets: vec![GhAsset {
+                    name: "v_windows.zip".into(),
+                    browser_download_url: "https://example/v_windows.zip".into(),
+                }],
+            },
+            GhRelease {
+                tag_name: "0.5.2-rc1".into(),
+                draft: false,
+                prerelease: true,
+                assets: vec![GhAsset {
+                    name: "v_windows.zip".into(),
+                    browser_download_url: "https://example/v_windows.zip".into(),
+                }],
+            },
+            GhRelease {
+                tag_name: "0.4.12".into(),
+                draft: false,
+                prerelease: false,
+                assets: vec![GhAsset {
+                    name: "v_windows.zip".into(),
+                    browser_download_url: "https://example/v_windows.zip".into(),
+                }],
+            },
+        ]);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].version, "0.5.1");
+        assert_eq!(rows[1].version, "0.4.12");
+    }
+
+    #[test]
+    fn synthetic_release_uses_host_primary_asset_name() {
+        let rel = synthetic_v_release("0.5.1").expect("synthetic");
+        let cands = v_asset_candidates();
+        let first = cands.first().expect("asset");
+        assert_eq!(rel.assets.len(), 1);
+        assert_eq!(rel.assets[0].name, *first);
+        assert!(
+            rel.assets[0]
+                .browser_download_url
+                .contains("releases/download/0.5.1/")
+        );
+    }
 }

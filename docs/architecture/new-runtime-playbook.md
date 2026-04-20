@@ -514,3 +514,15 @@ V highlights two standalone-runtime guardrails:
 - **ZIP promotion should handle both single-root and flat-root archives before validation**:
   - Some bundles unpack as one top directory; others can be flatter.
   - Install flow should normalize either shape and only then validate expected executable presence.
+
+### 8.13 GitHub API resilience follow-up (403 fallback policy)
+
+Recent runtime bring-up/field validation reinforced this policy for GitHub-backed indexes:
+
+- **Do not rely on one GitHub API URL only**:
+  - Keep candidate URL normalization (strip known proxy wrappers and include the canonical API URL).
+  - Respect token envs (`GITHUB_TOKEN`, `GH_TOKEN`, `ENVR_GITHUB_TOKEN`) automatically.
+
+- **Always provide a non-API fallback for release discovery where possible**:
+  - Prefer `releases.atom` tag extraction + synthetic asset URL construction when API calls fail (e.g. 403/rate-limit/proxy blocks).
+  - Guard fallback with host-asset candidate tables and explicit “no installable rows for this host” errors.

@@ -1415,6 +1415,7 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
