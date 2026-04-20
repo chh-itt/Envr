@@ -146,12 +146,8 @@ pub struct EnvCenterState {
     pub remote_error: Option<String>,
     /// Elixir prerequisites check result (Erlang/OTP runtime).
     pub elixir_prereq_error: Option<String>,
-    /// Kotlin vs global Java `current` heuristic (JDK too new for bundled compiler, etc.).
-    pub kotlin_jdk_hint: Option<String>,
-    /// Scala needs a global Java `current` (JVM host); set when Scala is selected / after install-use.
-    pub scala_java_hint: Option<String>,
-    /// Clojure needs a global Java `current` (JVM host); set when Clojure is selected / after install-use.
-    pub clojure_java_hint: Option<String>,
+    /// JVM-hosted runtime vs global Java `current` hints (Kotlin/Scala/Clojure).
+    pub jvm_java_hints: HashMap<RuntimeKind, String>,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -190,9 +186,7 @@ impl Default for EnvCenterState {
             busy: false,
             remote_error: None,
             elixir_prereq_error: None,
-            kotlin_jdk_hint: None,
-            scala_java_hint: None,
-            clojure_java_hint: None,
+            jvm_java_hints: HashMap::new(),
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -2043,16 +2037,22 @@ pub fn env_center_view(
         None
     };
 
-    let kotlin_jdk_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Kotlin {
-        state.kotlin_jdk_hint.as_ref().map(|msg| {
+    let jvm_java_hint: Option<Element<'static, Message>> =
+        state.jvm_java_hints.get(&state.kind).map(|msg| {
             let msg = msg.clone();
             let ty = tokens.typography();
             let muted = gui_theme::to_color(tokens.colors.text_muted);
             let warn = gui_theme::to_color(tokens.colors.warning);
+            let (title_zh, title_en) = match state.kind {
+                RuntimeKind::Kotlin => ("JDK 与 Kotlin 编译器", "JDK vs Kotlin compiler"),
+                RuntimeKind::Scala => ("Scala 与 JDK", "Scala and JDK"),
+                RuntimeKind::Clojure => ("Clojure 与 JDK", "Clojure and JDK"),
+                _ => ("JVM 运行时与 JDK", "JVM runtime and JDK"),
+            };
             let title = text(envr_core::i18n::tr_key(
-                "gui.runtime.kotlin.jdk.title",
-                "JDK 与 Kotlin 编译器",
-                "JDK vs Kotlin compiler",
+                "gui.runtime.jvm.java.title",
+                title_zh,
+                title_en,
             ))
             .size(ty.caption)
             .color(warn);
@@ -2061,55 +2061,7 @@ pub fn env_center_view(
                 .padding(Padding::from([sp.sm as f32, sp.md as f32]))
                 .style(card_container_style(tokens, 1))
                 .into()
-        })
-    } else {
-        None
-    };
-
-    let scala_java_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Scala {
-        state.scala_java_hint.as_ref().map(|msg| {
-            let msg = msg.clone();
-            let ty = tokens.typography();
-            let muted = gui_theme::to_color(tokens.colors.text_muted);
-            let warn = gui_theme::to_color(tokens.colors.warning);
-            let title = text(envr_core::i18n::tr_key(
-                "gui.runtime.scala.java.title",
-                "Scala 与 JDK",
-                "Scala and JDK",
-            ))
-            .size(ty.caption)
-            .color(warn);
-            let body = text(msg).size(ty.caption).color(muted);
-            container(column![title, body].spacing(sp.xs as f32))
-                .padding(Padding::from([sp.sm as f32, sp.md as f32]))
-                .style(card_container_style(tokens, 1))
-                .into()
-        })
-    } else {
-        None
-    };
-    let clojure_java_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Clojure {
-        state.clojure_java_hint.as_ref().map(|msg| {
-            let msg = msg.clone();
-            let ty = tokens.typography();
-            let muted = gui_theme::to_color(tokens.colors.text_muted);
-            let warn = gui_theme::to_color(tokens.colors.warning);
-            let title = text(envr_core::i18n::tr_key(
-                "gui.runtime.clojure.java.title",
-                "Clojure 与 JDK",
-                "Clojure and JDK",
-            ))
-            .size(ty.caption)
-            .color(warn);
-            let body = text(msg).size(ty.caption).color(muted);
-            container(column![title, body].spacing(sp.xs as f32))
-                .padding(Padding::from([sp.sm as f32, sp.md as f32]))
-                .style(card_container_style(tokens, 1))
-                .into()
-        })
-    } else {
-        None
-    };
+        });
 
     let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
         column![].into()
@@ -2997,13 +2949,7 @@ pub fn env_center_view(
     if let Some(hint) = prereq_hint {
         col = col.push(hint);
     }
-    if let Some(hint) = kotlin_jdk_hint {
-        col = col.push(hint);
-    }
-    if let Some(hint) = scala_java_hint {
-        col = col.push(hint);
-    }
-    if let Some(hint) = clojure_java_hint {
+    if let Some(hint) = jvm_java_hint {
         col = col.push(hint);
     }
     if busy {

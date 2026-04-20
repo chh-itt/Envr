@@ -1511,9 +1511,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.env_center.kind = k;
-            state.env_center.kotlin_jdk_hint = None;
-            state.env_center.scala_java_hint = None;
-            state.env_center.clojure_java_hint = None;
+            state.env_center.jvm_java_hints.clear();
             state.env_center.remote_error = None;
             state.env_center.rust_status = None;
             state.env_center.rust_components.clear();
@@ -1564,15 +1562,54 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::KotlinJdkChecked(res) => {
-            state.env_center.kotlin_jdk_hint = res.err();
+            match res {
+                Ok(()) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .remove(&envr_domain::runtime::RuntimeKind::Kotlin);
+                }
+                Err(msg) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .insert(envr_domain::runtime::RuntimeKind::Kotlin, msg);
+                }
+            }
             Task::none()
         }
         EnvCenterMsg::ScalaJavaChecked(res) => {
-            state.env_center.scala_java_hint = res.err();
+            match res {
+                Ok(()) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .remove(&envr_domain::runtime::RuntimeKind::Scala);
+                }
+                Err(msg) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .insert(envr_domain::runtime::RuntimeKind::Scala, msg);
+                }
+            }
             Task::none()
         }
         EnvCenterMsg::ClojureJavaChecked(res) => {
-            state.env_center.clojure_java_hint = res.err();
+            match res {
+                Ok(()) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .remove(&envr_domain::runtime::RuntimeKind::Clojure);
+                }
+                Err(msg) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .insert(envr_domain::runtime::RuntimeKind::Clojure, msg);
+                }
+            }
             Task::none()
         }
         EnvCenterMsg::InstallInput(s) => {
