@@ -1507,6 +1507,39 @@ fn env_center_jvm_check_task(kind: envr_domain::runtime::RuntimeKind) -> Task<Me
     }
 }
 
+fn set_jvm_java_hint(
+    state: &mut AppState,
+    kind: envr_domain::runtime::RuntimeKind,
+    res: Result<(), String>,
+) {
+    match res {
+        Ok(()) => {
+            state.env_center.jvm_java_hints.remove(&kind);
+        }
+        Err(msg) => {
+            state.env_center.jvm_java_hints.insert(kind, msg);
+        }
+    }
+}
+
+fn persist_jvm_path_proxy_toggle(state: &mut AppState, kind: envr_domain::runtime::RuntimeKind, on: bool) -> Task<Message> {
+    match kind {
+        envr_domain::runtime::RuntimeKind::Kotlin => {
+            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.kotlin.path_proxy_enabled = on)
+        }
+        envr_domain::runtime::RuntimeKind::Scala => {
+            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.scala.path_proxy_enabled = on)
+        }
+        envr_domain::runtime::RuntimeKind::Clojure => {
+            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.clojure.path_proxy_enabled = on)
+        }
+        envr_domain::runtime::RuntimeKind::Groovy => {
+            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.groovy.path_proxy_enabled = on)
+        }
+        _ => Task::none(),
+    }
+}
+
 fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
     match msg {
         EnvCenterMsg::PickKind(k) => {
@@ -1564,72 +1597,8 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.elixir_prereq_error = res.err();
             Task::none()
         }
-        EnvCenterMsg::KotlinJdkChecked(res) => {
-            match res {
-                Ok(()) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .remove(&envr_domain::runtime::RuntimeKind::Kotlin);
-                }
-                Err(msg) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .insert(envr_domain::runtime::RuntimeKind::Kotlin, msg);
-                }
-            }
-            Task::none()
-        }
-        EnvCenterMsg::ScalaJavaChecked(res) => {
-            match res {
-                Ok(()) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .remove(&envr_domain::runtime::RuntimeKind::Scala);
-                }
-                Err(msg) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .insert(envr_domain::runtime::RuntimeKind::Scala, msg);
-                }
-            }
-            Task::none()
-        }
-        EnvCenterMsg::ClojureJavaChecked(res) => {
-            match res {
-                Ok(()) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .remove(&envr_domain::runtime::RuntimeKind::Clojure);
-                }
-                Err(msg) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .insert(envr_domain::runtime::RuntimeKind::Clojure, msg);
-                }
-            }
-            Task::none()
-        }
-        EnvCenterMsg::GroovyJavaChecked(res) => {
-            match res {
-                Ok(()) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .remove(&envr_domain::runtime::RuntimeKind::Groovy);
-                }
-                Err(msg) => {
-                    state
-                        .env_center
-                        .jvm_java_hints
-                        .insert(envr_domain::runtime::RuntimeKind::Groovy, msg);
-                }
-            }
+        EnvCenterMsg::JvmJavaChecked(kind, res) => {
+            set_jvm_java_hint(state, kind, res);
             Task::none()
         }
         EnvCenterMsg::InstallInput(s) => {
@@ -2003,30 +1972,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.java.path_proxy_enabled = on,
         ),
-        EnvCenterMsg::SetKotlinPathProxy(on) => persist_path_proxy_toggle(
-            state,
-            envr_domain::runtime::RuntimeKind::Kotlin,
-            on,
-            |st, on| st.runtime.kotlin.path_proxy_enabled = on,
-        ),
-        EnvCenterMsg::SetScalaPathProxy(on) => persist_path_proxy_toggle(
-            state,
-            envr_domain::runtime::RuntimeKind::Scala,
-            on,
-            |st, on| st.runtime.scala.path_proxy_enabled = on,
-        ),
-        EnvCenterMsg::SetClojurePathProxy(on) => persist_path_proxy_toggle(
-            state,
-            envr_domain::runtime::RuntimeKind::Clojure,
-            on,
-            |st, on| st.runtime.clojure.path_proxy_enabled = on,
-        ),
-        EnvCenterMsg::SetGroovyPathProxy(on) => persist_path_proxy_toggle(
-            state,
-            envr_domain::runtime::RuntimeKind::Groovy,
-            on,
-            |st, on| st.runtime.groovy.path_proxy_enabled = on,
-        ),
+        EnvCenterMsg::SetJvmPathProxy(kind, on) => persist_jvm_path_proxy_toggle(state, kind, on),
         EnvCenterMsg::SetGoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.download_source = src;

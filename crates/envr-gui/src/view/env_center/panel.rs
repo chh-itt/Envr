@@ -49,10 +49,7 @@ pub enum EnvCenterMsg {
     UnifiedChildrenRefreshed(RuntimeKind, String, Result<Vec<RuntimeVersion>, String>),
     ToggleUnifiedMajorExpanded(String),
     ElixirPrereqChecked(Result<(), String>),
-    KotlinJdkChecked(Result<(), String>),
-    ScalaJavaChecked(Result<(), String>),
-    ClojureJavaChecked(Result<(), String>),
-    GroovyJavaChecked(Result<(), String>),
+    JvmJavaChecked(RuntimeKind, Result<(), String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
@@ -73,10 +70,7 @@ pub enum EnvCenterMsg {
     SetJavaDistro(JavaDistro),
     SetJavaDownloadSource(JavaDownloadSource),
     SetJavaPathProxy(bool),
-    SetKotlinPathProxy(bool),
-    SetScalaPathProxy(bool),
-    SetClojurePathProxy(bool),
-    SetGroovyPathProxy(bool),
+    SetJvmPathProxy(RuntimeKind, bool),
     SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     SetGoPathProxy(bool),
@@ -1528,7 +1522,9 @@ fn kotlin_runtime_settings_section(
             .label("")
             .size(20.0)
             .spacing(0.0)
-            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetKotlinPathProxy(v)))
+            .on_toggle(|v| {
+                Message::EnvCenter(EnvCenterMsg::SetJvmPathProxy(RuntimeKind::Kotlin, v))
+            })
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
@@ -1569,7 +1565,9 @@ fn scala_runtime_settings_section(
             .label("")
             .size(20.0)
             .spacing(0.0)
-            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetScalaPathProxy(v)))
+            .on_toggle(|v| {
+                Message::EnvCenter(EnvCenterMsg::SetJvmPathProxy(RuntimeKind::Scala, v))
+            })
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
@@ -1610,7 +1608,9 @@ fn clojure_runtime_settings_section(
             .label("")
             .size(20.0)
             .spacing(0.0)
-            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetClojurePathProxy(v)))
+            .on_toggle(|v| {
+                Message::EnvCenter(EnvCenterMsg::SetJvmPathProxy(RuntimeKind::Clojure, v))
+            })
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
@@ -1651,7 +1651,9 @@ fn groovy_runtime_settings_section(
             .label("")
             .size(20.0)
             .spacing(0.0)
-            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetGroovyPathProxy(v)))
+            .on_toggle(|v| {
+                Message::EnvCenter(EnvCenterMsg::SetJvmPathProxy(RuntimeKind::Groovy, v))
+            })
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
