@@ -131,6 +131,7 @@ fn create_inner(
             RuntimeKind::Clojure,
             RuntimeKind::Groovy,
             RuntimeKind::Terraform,
+            RuntimeKind::V,
             RuntimeKind::Go,
             RuntimeKind::Rust,
             RuntimeKind::Ruby,

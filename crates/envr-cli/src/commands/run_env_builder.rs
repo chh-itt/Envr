@@ -21,6 +21,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "clojure",
     "groovy",
     "terraform",
+    "v",
     "go",
     "rust",
     "ruby",

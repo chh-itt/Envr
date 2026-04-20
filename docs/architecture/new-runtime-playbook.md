@@ -502,3 +502,15 @@ Terraform bring-up surfaced two reusable guardrails:
 - **`envr shell` should remain launchable when unrelated runtime validation fails**:
   - Run-stack env assembly can surface hosted-runtime validation errors (for example JVM mismatch).
   - `shell` now degrades to "base env + project `[env]` overlay" on validation failure so ad-hoc recovery commands stay available.
+
+### 8.12 V follow-up friction (asset-name mapping + zip-root variance)
+
+V highlights two standalone-runtime guardrails:
+
+- **Asset-name mapping should be host table-driven, not inferred from a single filename template**:
+  - Upstream publishes artifacts like `v_windows.zip`, `v_linux_arm64.zip`, `v_macos_x86_64.zip`.
+  - Provider code should keep an explicit `(OS, ARCH) -> candidate asset names` table with ordered fallbacks.
+
+- **ZIP promotion should handle both single-root and flat-root archives before validation**:
+  - Some bundles unpack as one top directory; others can be flatter.
+  - Install flow should normalize either shape and only then validate expected executable presence.

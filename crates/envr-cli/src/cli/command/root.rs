@@ -94,7 +94,7 @@ pub enum Command {
     },
     /// Print the runtime home directory shims would use (project pin, or global current)
     Resolve {
-        /// Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, …
+        /// Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, …
         #[arg(value_name = "LANG")]
         lang: String,
         /// Version spec override (ignores project pin for this invocation)
@@ -105,7 +105,7 @@ pub enum Command {
     },
     /// Run a subprocess with PATH and env for one language (project pins + `ENVR_PROFILE` / `--profile`)
     Exec {
-        /// Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, …
+        /// Language key: `node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, …
         #[arg(long, value_name = "LANG")]
         lang: String,
         #[arg(long, value_name = "SPEC")]
@@ -124,7 +124,7 @@ pub enum Command {
         )]
         args: Vec<String>,
     },
-    /// Run a subprocess with merged PATH for configured runtimes (e.g. node, python, java, kotlin, scala, clojure, groovy, terraform) plus project `env`.
+    /// Run a subprocess with merged PATH for configured runtimes (e.g. node, python, java, kotlin, scala, clojure, groovy, terraform, v) plus project `env`.
     /// If the first token matches `[scripts]` in `.envr.toml`, it is run as a shell one-liner.
     Run {
         #[command(flatten)]
@@ -171,7 +171,7 @@ pub enum Command {
     Hook(HookCmd),
     /// Remove installed versions except the active `current` selection
     Prune {
-        /// Limit to one language (`node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, …); default: all
+        /// Limit to one language (`node`, `python`, `java`, `kotlin`, `scala`, `clojure`, `groovy`, `terraform`, `v`, …); default: all
         #[arg(value_name = "LANG")]
         lang: Option<String>,
         /// Actually uninstall (default is a dry-run plan only)

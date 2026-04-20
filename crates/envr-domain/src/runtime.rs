@@ -13,6 +13,7 @@ pub enum RuntimeKind {
     Clojure,
     Groovy,
     Terraform,
+    V,
     Go,
     Rust,
     Ruby,
@@ -42,7 +43,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 23] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 24] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -111,6 +112,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 23] = [
         key: "terraform",
         label_en: "Terraform",
         label_zh: "Terraform",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::V,
+        key: "v",
+        label_en: "V",
+        label_zh: "V",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: None,
@@ -432,6 +442,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Clojure
         | RuntimeKind::Groovy
         | RuntimeKind::Terraform
+        | RuntimeKind::V
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
@@ -477,7 +488,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 23);
+        assert_eq!(kinds.len(), 24);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -493,6 +504,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Clojure));
         assert!(kinds.contains(&RuntimeKind::Groovy));
         assert!(kinds.contains(&RuntimeKind::Terraform));
+        assert!(kinds.contains(&RuntimeKind::V));
     }
 
     #[test]
@@ -631,6 +643,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Terraform, "1.14.8").as_deref(),
             Some("1.14")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::V, "0.5.1").as_deref(),
+            Some("0.5")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

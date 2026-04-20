@@ -16,6 +16,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "clojure",
     "groovy",
     "terraform",
+    "v",
     "go",
     "ruby",
     "elixir",
