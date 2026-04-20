@@ -50,6 +50,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Scala, "scala"),
             (CoreCommand::Scalac, "scalac"),
         ],
+        RuntimeKind::Clojure => &[
+            (CoreCommand::Clojure, "clojure"),
+            (CoreCommand::Clj, "clj"),
+        ],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
         RuntimeKind::Ruby => &[
@@ -611,6 +615,8 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "pip3"
             | "java"
             | "javac"
+            | "clojure"
+            | "clj"
             | "php"
             | "bun"
             | "bunx"

@@ -45,6 +45,52 @@ fn check_jvm_runtime_java_compat_sync(
     Ok(())
 }
 
+fn jvm_missing_java_msg(kind: RuntimeKind) -> Option<&'static str> {
+    match kind {
+        RuntimeKind::Kotlin => {
+            Some("Kotlin 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。")
+        }
+        RuntimeKind::Scala => {
+            Some("Scala 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。")
+        }
+        RuntimeKind::Clojure => {
+            Some("Clojure 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。")
+        }
+        _ => None,
+    }
+}
+
+fn jvm_checked_msg(kind: RuntimeKind, res: Result<(), String>) -> EnvCenterMsg {
+    match kind {
+        RuntimeKind::Kotlin => EnvCenterMsg::KotlinJdkChecked(res),
+        RuntimeKind::Scala => EnvCenterMsg::ScalaJavaChecked(res),
+        RuntimeKind::Clojure => EnvCenterMsg::ClojureJavaChecked(res),
+        _ => EnvCenterMsg::DataLoaded(Err(format!(
+            "internal: unsupported JVM-hosted runtime: {kind:?}"
+        ))),
+    }
+}
+
+pub fn check_jvm_runtime_java_compat(kind: RuntimeKind) -> Task<Message> {
+    let Some(missing_java_msg) = jvm_missing_java_msg(kind) else {
+        return Task::none();
+    };
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || check_jvm_runtime_java_compat_sync(kind, missing_java_msg))
+            .await;
+        Message::EnvCenter(jvm_checked_msg(
+            kind,
+            match res {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(e),
+                Err(e) => Err(e.to_string()),
+            },
+        ))
+    })
+}
+
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
@@ -70,46 +116,6 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
             Err(e) => EnvCenterMsg::DataLoaded(Err(e.to_string())),
         };
         Message::EnvCenter(msg)
-    })
-}
-
-pub fn check_scala_java_compat() -> Task<Message> {
-    let handle = runtime().handle().clone();
-    Task::future(async move {
-        let res = handle
-            .spawn_blocking(move || {
-                check_jvm_runtime_java_compat_sync(
-                    RuntimeKind::Scala,
-                    "Scala 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。",
-                )
-            })
-            .await;
-
-        Message::EnvCenter(EnvCenterMsg::ScalaJavaChecked(match res {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(e),
-            Err(e) => Err(e.to_string()),
-        }))
-    })
-}
-
-pub fn check_kotlin_jdk_compat() -> Task<Message> {
-    let handle = runtime().handle().clone();
-    Task::future(async move {
-        let res = handle
-            .spawn_blocking(move || {
-                check_jvm_runtime_java_compat_sync(
-                    RuntimeKind::Kotlin,
-                    "Kotlin 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。",
-                )
-            })
-            .await;
-
-        Message::EnvCenter(EnvCenterMsg::KotlinJdkChecked(match res {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(e),
-            Err(e) => Err(e.to_string()),
-        }))
     })
 }
 

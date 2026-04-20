@@ -2,7 +2,7 @@
 
 - **Status:** Accepted  
 - **Date:** 2026-04-19  
-- **Scope:** Product model + domain/shim/install/GUI contracts for **JVM-hosted languages**, with **Kotlin** as the first consumer and **Scala** (`RuntimeKind::Scala`, `scala/scala3` releases) as the second (same `host_runtime = Java`, `JAVA_HOME` merge, install/use preflight).  
+- **Scope:** Product model + domain/shim/install/GUI contracts for **JVM-hosted languages**, with **Kotlin** as the first consumer, **Scala** (`RuntimeKind::Scala`, `scala/scala3` releases) as the second, and **Clojure** (`RuntimeKind::Clojure`, `clojure/brew-install` releases) as the third (same `host_runtime = Java`, `JAVA_HOME` merge, install/use preflight).
 - **Related:** `docs/architecture/runtime-descriptor-refactor.md`, `docs/architecture/new-runtime-playbook.md` §2.1, `envr-domain::RuntimeDescriptor`, `envr-shim-core::runtime_home_env_for_key` (today sets `JAVA_HOME` only for key `"java"`).
 
 ---

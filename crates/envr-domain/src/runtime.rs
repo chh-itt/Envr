@@ -10,6 +10,7 @@ pub enum RuntimeKind {
     Java,
     Kotlin,
     Scala,
+    Clojure,
     Go,
     Rust,
     Ruby,
@@ -39,7 +40,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 20] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 21] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -81,6 +82,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 20] = [
         key: "scala",
         label_en: "Scala",
         label_zh: "Scala",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: Some(RuntimeKind::Java),
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Clojure,
+        key: "clojure",
+        label_en: "Clojure",
+        label_zh: "Clojure",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: Some(RuntimeKind::Java),
@@ -399,6 +409,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Lua
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
+        | RuntimeKind::Clojure
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
@@ -444,7 +455,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 20);
+        assert_eq!(kinds.len(), 21);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -457,6 +468,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Lua));
         assert!(kinds.contains(&RuntimeKind::Kotlin));
         assert!(kinds.contains(&RuntimeKind::Scala));
+        assert!(kinds.contains(&RuntimeKind::Clojure));
     }
 
     #[test]
@@ -467,6 +479,10 @@ mod tests {
         );
         assert_eq!(
             runtime_host_runtime(RuntimeKind::Scala),
+            Some(RuntimeKind::Java)
+        );
+        assert_eq!(
+            runtime_host_runtime(RuntimeKind::Clojure),
             Some(RuntimeKind::Java)
         );
         assert_eq!(runtime_host_runtime(RuntimeKind::Java), None);
@@ -575,6 +591,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Scala, "3.4.3").as_deref(),
             Some("3.4")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Clojure, "1.12.4.1629").as_deref(),
+            Some("1.12")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

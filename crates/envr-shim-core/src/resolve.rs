@@ -133,6 +133,8 @@ pub enum CoreCommand {
     Kotlinc,
     Scala,
     Scalac,
+    Clojure,
+    Clj,
     Go,
     Gofmt,
     Php,
@@ -168,6 +170,7 @@ impl CoreCommand {
             CoreCommand::Java | CoreCommand::Javac => "java",
             CoreCommand::Kotlin | CoreCommand::Kotlinc => "kotlin",
             CoreCommand::Scala | CoreCommand::Scalac => "scala",
+            CoreCommand::Clojure | CoreCommand::Clj => "clojure",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -194,6 +197,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "java" => vec![home.join("bin")],
         "kotlin" => vec![home.join("bin")],
         "scala" => vec![home.join("bin")],
+        "clojure" => vec![home.to_path_buf(), home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -275,6 +279,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "julia" => vec![("JULIA_HOME".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
         "scala" => vec![("SCALA_HOME".into(), home_env)],
+        "clojure" => vec![("CLOJURE_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -407,6 +412,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "kotlinc" => Some(CoreCommand::Kotlinc),
         "scala" => Some(CoreCommand::Scala),
         "scalac" => Some(CoreCommand::Scalac),
+        "clojure" => Some(CoreCommand::Clojure),
+        "clj" => Some(CoreCommand::Clj),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -863,6 +870,35 @@ fn scala_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn clojure_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bases = [home.to_path_buf(), home.join("bin")];
+    let mut cands = Vec::new();
+    match cmd {
+        CoreCommand::Clojure => {
+            for base in &bases {
+                cands.push(base.join("clojure.cmd"));
+                cands.push(base.join("clojure.bat"));
+                cands.push(base.join("clojure.exe"));
+                cands.push(base.join("clojure"));
+            }
+            Ok(first_existing(&cands).ok_or_else(|| {
+                EnvrError::Runtime(format!("clojure missing under {}", home.display()))
+            })?)
+        }
+        CoreCommand::Clj => {
+            for base in &bases {
+                cands.push(base.join("clj.cmd"));
+                cands.push(base.join("clj.bat"));
+                cands.push(base.join("clj.exe"));
+                cands.push(base.join("clj"));
+            }
+            Ok(first_existing(&cands)
+                .ok_or_else(|| EnvrError::Runtime(format!("clj missing under {}", home.display())))?)
+        }
+        _ => Err(EnvrError::Runtime("internal: not a clojure tool".into())),
+    }
+}
+
 fn kotlin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -1119,6 +1155,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(home, cmd),
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(home, cmd),
+        CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1265,6 +1302,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Kotlinc => "kotlinc",
         CoreCommand::Scala => "scala",
         CoreCommand::Scalac => "scalac",
+        CoreCommand::Clojure => "clojure",
+        CoreCommand::Clj => "clj",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1350,6 +1389,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(&home, cmd)?,
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(&home, cmd)?,
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(&home, cmd)?,
+        CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

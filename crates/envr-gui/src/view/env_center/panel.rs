@@ -3,8 +3,8 @@
 use envr_config::settings::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
     ElixirRuntimeSettings, ErlangRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
-    JavaDownloadSource, JavaRuntimeSettings, KotlinRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
-    ScalaRuntimeSettings,
+    ClojureRuntimeSettings, JavaDownloadSource, JavaRuntimeSettings, KotlinRuntimeSettings,
+    NodeDownloadSource, NodeRuntimeSettings, ScalaRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
     CrystalRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings,
@@ -49,6 +49,7 @@ pub enum EnvCenterMsg {
     ElixirPrereqChecked(Result<(), String>),
     KotlinJdkChecked(Result<(), String>),
     ScalaJavaChecked(Result<(), String>),
+    ClojureJavaChecked(Result<(), String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
@@ -71,6 +72,7 @@ pub enum EnvCenterMsg {
     SetJavaPathProxy(bool),
     SetKotlinPathProxy(bool),
     SetScalaPathProxy(bool),
+    SetClojurePathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     SetGoPathProxy(bool),
@@ -148,6 +150,8 @@ pub struct EnvCenterState {
     pub kotlin_jdk_hint: Option<String>,
     /// Scala needs a global Java `current` (JVM host); set when Scala is selected / after install-use.
     pub scala_java_hint: Option<String>,
+    /// Clojure needs a global Java `current` (JVM host); set when Clojure is selected / after install-use.
+    pub clojure_java_hint: Option<String>,
     /// Optional version spec for direct install (right of search).
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
@@ -188,6 +192,7 @@ impl Default for EnvCenterState {
             elixir_prereq_error: None,
             kotlin_jdk_hint: None,
             scala_java_hint: None,
+            clojure_java_hint: None,
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
@@ -1583,6 +1588,47 @@ fn scala_runtime_settings_section(
     .into()
 }
 
+fn clojure_runtime_settings_section(
+    clojure: &ClojureRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.clojure.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.clojure.path_proxy.hint",
+            "开启时由 envr 接管 clojure / clj；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages clojure/clj; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(clojure.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetClojurePathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.clojure.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn lua_runtime_settings_section(
     lua: &LuaRuntimeSettings,
     tokens: ThemeTokens,
@@ -2042,6 +2088,28 @@ pub fn env_center_view(
     } else {
         None
     };
+    let clojure_java_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Clojure {
+        state.clojure_java_hint.as_ref().map(|msg| {
+            let msg = msg.clone();
+            let ty = tokens.typography();
+            let muted = gui_theme::to_color(tokens.colors.text_muted);
+            let warn = gui_theme::to_color(tokens.colors.warning);
+            let title = text(envr_core::i18n::tr_key(
+                "gui.runtime.clojure.java.title",
+                "Clojure 与 JDK",
+                "Clojure and JDK",
+            ))
+            .size(ty.caption)
+            .color(warn);
+            let body = text(msg).size(ty.caption).color(muted);
+            container(column![title, body].spacing(sp.xs as f32))
+                .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+                .style(card_container_style(tokens, 1))
+                .into()
+        })
+    } else {
+        None
+    };
 
     let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
         column![].into()
@@ -2061,6 +2129,8 @@ pub fn env_center_view(
         kotlin_runtime_settings_section(&runtime_settings.kotlin, tokens)
     } else if state.kind == RuntimeKind::Scala {
         scala_runtime_settings_section(&runtime_settings.scala, tokens)
+    } else if state.kind == RuntimeKind::Clojure {
+        clojure_runtime_settings_section(&runtime_settings.clojure, tokens)
     } else if state.kind == RuntimeKind::Go {
         go_runtime
             .map(|g| {
@@ -2931,6 +3001,9 @@ pub fn env_center_view(
         col = col.push(hint);
     }
     if let Some(hint) = scala_java_hint {
+        col = col.push(hint);
+    }
+    if let Some(hint) = clojure_java_hint {
         col = col.push(hint);
     }
     if busy {

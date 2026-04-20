@@ -18,6 +18,7 @@ envr-runtime-python = { path = "../envr-runtime-python" }
 envr-runtime-java = { path = "../envr-runtime-java" }
 envr-runtime-kotlin = { path = "../envr-runtime-kotlin" }
 envr-runtime-scala = { path = "../envr-runtime-scala" }
+envr-runtime-clojure = { path = "../envr-runtime-clojure" }
 envr-runtime-go = { path = "../envr-runtime-go" }
 envr-runtime-rust = { path = "../envr-runtime-rust" }
 envr-runtime-ruby = { path = "../envr-runtime-ruby" }

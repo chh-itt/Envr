@@ -250,6 +250,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "r" => Some("ENVR_R_VERSION"),
         "kotlin" => Some("ENVR_KOTLIN_VERSION"),
         "scala" => Some("ENVR_SCALA_VERSION"),
+        "clojure" => Some("ENVR_CLOJURE_VERSION"),
         _ => None,
     }
 }

@@ -18,6 +18,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "java",
     "kotlin",
     "scala",
+    "clojure",
     "go",
     "rust",
     "ruby",
