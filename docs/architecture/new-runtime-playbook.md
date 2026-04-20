@@ -558,3 +558,16 @@ Flutter surfaced a different set of operational guardrails:
 - **Script-launcher runtimes can depend on host PATH essentials beyond the managed binary itself**:
   - Flutter launcher scripts may require Git and host utilities such as `where.exe` (Windows/System32) at runtime.
   - Runtime docs should explicitly call out these host prerequisites and expected first-run bootstrap cost (tool build / dependency warmup).
+
+#### 8.15.1 Dart/Flutter coexistence completion checklist
+
+When both Dart and Flutter are supported in the same product surface, treat this as a required closure pass:
+
+- [ ] Runtime docs include an explicit coexistence matrix (`dart` vs `flutter` commands, expected resolver behavior).
+- [ ] Runtime docs include host prerequisite troubleshooting (`git`, Windows `where.exe`/`System32` PATH) for Flutter launcher scripts.
+- [ ] Docs state `.git` retention policy clearly (default keep; any strip behavior must be explicit opt-in and marked as reduced capability).
+- [ ] At least one command-path sanity check is recorded for both runtimes:
+  - `envr which dart` and `envr which flutter`
+  - `envr exec --lang dart -- dart --version`
+  - `envr exec --lang flutter -- flutter --version`
+- [ ] Playbook and runtime docs are cross-linked so operators can start from either entry point without missing policy context.

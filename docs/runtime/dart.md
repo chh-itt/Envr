@@ -16,6 +16,12 @@
 - Home env for shims: `DART_HOME`
 - Runtime env marker: `ENVR_DART_VERSION`
 
+## Flutter coexistence note
+
+- Dart and Flutter are intentionally managed as independent runtimes in envr.
+- Running `envr use flutter <version>` does not change `dart` shim target automatically.
+- If you also manage Flutter, see `docs/runtime/flutter.md` for the coexistence matrix and troubleshooting guide.
+
 ## Commands
 
 ```bash
