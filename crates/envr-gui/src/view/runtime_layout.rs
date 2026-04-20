@@ -164,7 +164,7 @@ mod tests {
         layout.order = vec!["python".into(), "node".into()];
         let keys = effective_key_order(&layout);
         assert!(keys.iter().position(|k| k == "python").unwrap() < keys.iter().position(|k| k == "node").unwrap());
-        assert_eq!(keys.len(), 19);
+        assert_eq!(keys.len(), 20);
     }
 
     #[test]

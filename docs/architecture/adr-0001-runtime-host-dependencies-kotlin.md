@@ -2,7 +2,7 @@
 
 - **Status:** Accepted  
 - **Date:** 2026-04-19  
-- **Scope:** Product model + domain/shim/install/GUI contracts for **JVM-hosted languages**, with **Kotlin** as the first consumer.  
+- **Scope:** Product model + domain/shim/install/GUI contracts for **JVM-hosted languages**, with **Kotlin** as the first consumer and **Scala** (`RuntimeKind::Scala`, `scala/scala3` releases) as the second (same `host_runtime = Java`, `JAVA_HOME` merge, install/use preflight).  
 - **Related:** `docs/architecture/runtime-descriptor-refactor.md`, `docs/architecture/new-runtime-playbook.md` §2.1, `envr-domain::RuntimeDescriptor`, `envr-shim-core::runtime_home_env_for_key` (today sets `JAVA_HOME` only for key `"java"`).
 
 ---
@@ -140,7 +140,8 @@
 2. **Install service:** topological or fixed order (Java check before Kotlin unpack/commit).  
 3. **Shim:** `CoreCommand::Kotlin` / `kotlinc`, `runtime_bin_dirs_for_key`, merged `JAVA_HOME` via shared Java resolution.  
 4. **GUI:** host subtitle + empty-state when Java missing.  
-5. **Docs + playbook:** update `docs/architecture/new-runtime-playbook.md` with “hosted runtime” section.
+5. **Cross-runtime compatibility abstraction:** keep per-runtime policies (e.g. `kotlin_java`, `scala_java`) but route callers through a shared hosted-runtime helper (`envr_domain::jvm_hosted`) to avoid drift across shim/exec/run/GUI code paths.
+6. **Docs + playbook:** update `docs/architecture/new-runtime-playbook.md` with “hosted runtime” section.
 
 ---
 

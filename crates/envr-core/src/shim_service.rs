@@ -46,6 +46,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Kotlin, "kotlin"),
             (CoreCommand::Kotlinc, "kotlinc"),
         ],
+        RuntimeKind::Scala => &[
+            (CoreCommand::Scala, "scala"),
+            (CoreCommand::Scalac, "scalac"),
+        ],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
         RuntimeKind::Ruby => &[

@@ -44,7 +44,12 @@ Some runtimes **depend on another envr-managed runtime** (example: Kotlin needs 
 
 **Normative design:** **[ADR-0001: Runtime host dependencies & Kotlin on the JVM](./adr-0001-runtime-host-dependencies-kotlin.md)** (Accepted).
 
-When adding a **hosted** runtime, follow §3 of this playbook **and** the ADR (descriptor `host_runtime` / future `host_runtimes`, acyclic checks, shared Java home resolution, install/`use` preflight policy, shim `extra_env` merge, Env Center subtitle). Reuse the same pattern for later JVM-family languages (Scala, Clojure, Groovy) unless a new ADR supersedes it.
+When adding a **hosted** runtime, follow §3 of this playbook **and** the ADR (descriptor `host_runtime` / future `host_runtimes`, acyclic checks, shared Java home resolution, install/`use` preflight policy, shim `extra_env` merge, Env Center subtitle). **Scala** (`RuntimeKind::Scala`) is implemented with the same pattern as Kotlin; reuse it for later JVM-family languages (Clojure, Groovy) unless a new ADR supersedes it.
+
+JVM-family guardrail (current codebase):
+
+- Keep runtime-specific compatibility tables in domain modules (`kotlin_java`, `scala_java`), but route call sites through shared `envr_domain::jvm_hosted` helpers (`is_jvm_hosted_runtime`, `hosted_runtime_jdk_mismatch_message`) so shim/exec/run/GUI paths stay aligned.
+- Prefer one hosted-runtime branch (`if is_jvm_hosted_runtime(...)`) over per-runtime duplicated `if key == "kotlin"` / `if key == "scala"` blocks when behavior is structurally identical (resolve Java home, emit mismatch message, merge `JAVA_HOME`).
 
 Do not start coding before these decisions are written down.
 

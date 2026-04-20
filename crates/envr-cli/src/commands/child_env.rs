@@ -8,7 +8,7 @@ use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
 };
-use envr_domain::kotlin_java;
+use envr_domain::jvm_hosted;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::paths::current_platform_paths;
 // Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …
@@ -185,14 +185,14 @@ pub fn collect_exec_env(
                 for (k, v) in runtime_home_env_for_key(&home, lang) {
                     env.insert(k, v);
                 }
-                if lang == "kotlin" {
+                if jvm_hosted::is_jvm_hosted_runtime(&lang) {
                     let java_home = resolve_runtime_home_for_lang_with_project(
                         ctx,
                         "java",
                         spec_override,
                         cfg,
                     )?;
-                    let kotlin_label = home
+                    let runtime_label = home
                         .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("");
@@ -200,9 +200,13 @@ pub fn collect_exec_env(
                         .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("");
-                    if !kotlin_label.is_empty()
+                    if !runtime_label.is_empty()
                         && let Some(msg) =
-                            kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+                            jvm_hosted::hosted_runtime_jdk_mismatch_message(
+                                lang,
+                                runtime_label,
+                                java_label,
+                            )
                     {
                         return Err(EnvrError::Validation(msg));
                     }
@@ -245,6 +249,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "crystal" => Some("ENVR_CRYSTAL_VERSION"),
         "r" => Some("ENVR_R_VERSION"),
         "kotlin" => Some("ENVR_KOTLIN_VERSION"),
+        "scala" => Some("ENVR_SCALA_VERSION"),
         _ => None,
     }
 }
@@ -314,16 +319,19 @@ fn collect_run_env_impl(
                 for (k, v) in runtime_home_env_for_key(&home, &lang) {
                     runtime_home_env.insert(k, v);
                 }
-                if lang == "kotlin" {
+                if jvm_hosted::is_jvm_hosted_runtime(&lang) {
                     let java_home = resolve_run_lang_home(ctx, cfg, "java")?;
                     let java_home = std::fs::canonicalize(&java_home).unwrap_or(java_home);
-                    let kotlin_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     let java_label = java_home
                         .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("");
-                    if let Some(msg) =
-                        kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+                    if let Some(msg) = jvm_hosted::hosted_runtime_jdk_mismatch_message(
+                        &lang,
+                        runtime_label,
+                        java_label,
+                    )
                     {
                         return Err(EnvrError::Validation(msg));
                     }

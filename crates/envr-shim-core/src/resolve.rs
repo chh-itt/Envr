@@ -131,6 +131,8 @@ pub enum CoreCommand {
     Javac,
     Kotlin,
     Kotlinc,
+    Scala,
+    Scalac,
     Go,
     Gofmt,
     Php,
@@ -165,6 +167,7 @@ impl CoreCommand {
             CoreCommand::Python | CoreCommand::Pip => "python",
             CoreCommand::Java | CoreCommand::Javac => "java",
             CoreCommand::Kotlin | CoreCommand::Kotlinc => "kotlin",
+            CoreCommand::Scala | CoreCommand::Scalac => "scala",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -190,6 +193,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "python" => vec![home.join("Scripts"), home.join("bin")],
         "java" => vec![home.join("bin")],
         "kotlin" => vec![home.join("bin")],
+        "scala" => vec![home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -270,6 +274,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         "julia" => vec![("JULIA_HOME".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
+        "scala" => vec![("SCALA_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -400,6 +405,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "javac" => Some(CoreCommand::Javac),
         "kotlin" => Some(CoreCommand::Kotlin),
         "kotlinc" => Some(CoreCommand::Kotlinc),
+        "scala" => Some(CoreCommand::Scala),
+        "scalac" => Some(CoreCommand::Scalac),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -835,6 +842,27 @@ fn python_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn scala_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Scala => Ok(first_existing(&[
+            bin.join("scala.cmd"),
+            bin.join("scala.bat"),
+            bin.join("scala.exe"),
+            bin.join("scala"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("scala missing under {}", home.display())))?),
+        CoreCommand::Scalac => Ok(first_existing(&[
+            bin.join("scalac.cmd"),
+            bin.join("scalac.bat"),
+            bin.join("scalac.exe"),
+            bin.join("scalac"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("scalac missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a scala tool".into())),
+    }
+}
+
 fn kotlin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -1090,6 +1118,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(home, cmd),
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(home, cmd),
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(home, cmd),
+        CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1234,6 +1263,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Javac => "javac",
         CoreCommand::Kotlin => "kotlin",
         CoreCommand::Kotlinc => "kotlinc",
+        CoreCommand::Scala => "scala",
+        CoreCommand::Scalac => "scalac",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1293,16 +1324,20 @@ pub fn resolve_core_shim_command_with_settings(
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, settings)?;
 
     let mut extra_env = runtime_home_env_for_key(&home, key);
-    if key == "kotlin" {
+    if envr_domain::jvm_hosted::is_jvm_hosted_runtime(key) {
         let java_home = runtime_home_for_key(ctx, "java", cfg.as_ref(), None, settings)?;
-        let kotlin_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let java_label = java_home
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        if !kotlin_label.is_empty()
+        if !runtime_label.is_empty()
             && let Some(msg) =
-                envr_domain::kotlin_java::kotlin_jdk_mismatch_message(kotlin_label, java_label)
+                envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(
+                    key,
+                    runtime_label,
+                    java_label,
+                )
         {
             return Err(EnvrError::Runtime(msg));
         }
@@ -1314,6 +1349,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Python | CoreCommand::Pip => python_tool_path(&home, cmd)?,
         CoreCommand::Java | CoreCommand::Javac => java_tool_path(&home, cmd)?,
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(&home, cmd)?,
+        CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

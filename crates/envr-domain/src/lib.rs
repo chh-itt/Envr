@@ -1,3 +1,5 @@
 pub mod crystal_paths;
+pub mod jvm_hosted;
 pub mod kotlin_java;
 pub mod runtime;
+pub mod scala_java;

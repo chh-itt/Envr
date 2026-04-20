@@ -196,11 +196,11 @@ pub(crate) fn run_inner(
     let mut prefix_fallback = false;
     for kind in kinds {
         if update {
-            let vers = service
-                .list_remote(kind, &filter)?
-                .into_iter()
-                .map(|v| v.0)
-                .collect::<Vec<_>>();
+            let full = service.list_remote(kind, &filter)?;
+            if filter.prefix.is_none() {
+                let _ = service.persist_full_remote_installable_snapshot(kind, &full);
+            }
+            let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
             if filter.prefix.is_none() {
                 let _ = service.list_remote_latest_per_major(kind);
             }
@@ -226,11 +226,9 @@ pub(crate) fn run_inner(
             // Single-runtime cold start: an empty on-disk snapshot should not print "(无)" —
             // block once on the same `list_remote` path as `-u` / update so the first run is useful.
             if single_runtime {
-                let vers = service
-                    .list_remote(kind, &RemoteFilter { prefix: None })?
-                    .into_iter()
-                    .map(|v| v.0)
-                    .collect::<Vec<_>>();
+                let full = service.list_remote(kind, &RemoteFilter { prefix: None })?;
+                let _ = service.persist_full_remote_installable_snapshot(kind, &full);
+                let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
                 let _ = service.list_remote_latest_per_major(kind);
                 rows.push((kind, RemoteRow::Plain(vers)));
                 continue;
@@ -290,7 +288,11 @@ pub(crate) fn run_inner(
                 if let Ok(svc) = runtime_service() {
                     for kind in kinds_for_refresh {
                         let _ = svc.list_remote_latest_per_major(kind);
-                        let _ = svc.list_remote(kind, &filter_bg);
+                        if let Ok(full) = svc.list_remote(kind, &filter_bg) {
+                            if filter_bg.prefix.is_none() {
+                                let _ = svc.persist_full_remote_installable_snapshot(kind, &full);
+                            }
+                        }
                     }
                 }
             });

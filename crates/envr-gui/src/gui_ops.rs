@@ -1,10 +1,9 @@
 //! Async bridge: run blocking `RuntimeService` calls on the Tokio blocking pool.
 
 use envr_core::shim_service::ShimService;
-use envr_domain::kotlin_java;
 use envr_domain::runtime::{
     InstallRequest, MajorVersionRecord, RuntimeKind, RuntimeVersion, VersionRecord, VersionSpec,
-    runtime_kinds_all,
+    runtime_descriptor, runtime_kinds_all,
 };
 use envr_download::task::CancelToken;
 use envr_error::{EnvrError, EnvrResult};
@@ -25,6 +24,26 @@ use envr_runtime_rust::{RustChannel, RustManager, RustupMode, install_rustup_man
 use std::process::Command;
 
 type RefreshRuntimesOk = (Vec<RuntimeVersion>, Option<RuntimeVersion>, Option<bool>);
+
+fn check_jvm_runtime_java_compat_sync(
+    kind: RuntimeKind,
+    missing_java_msg: &'static str,
+) -> Result<(), String> {
+    let svc = open_runtime_service().map_err(|e| e.to_string())?;
+    let Some(runtime_cur) = svc.current(kind).map_err(|e| e.to_string())? else {
+        return Ok(());
+    };
+    let Some(java_cur) = svc.current(RuntimeKind::Java).map_err(|e| e.to_string())? else {
+        return Err(missing_java_msg.into());
+    };
+    let key = runtime_descriptor(kind).key;
+    if let Some(msg) =
+        envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(key, &runtime_cur.0, &java_cur.0)
+    {
+        return Err(msg);
+    }
+    Ok(())
+}
 
 pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
@@ -54,33 +73,35 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
     })
 }
 
+pub fn check_scala_java_compat() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(move || {
+                check_jvm_runtime_java_compat_sync(
+                    RuntimeKind::Scala,
+                    "Scala 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。",
+                )
+            })
+            .await;
+
+        Message::EnvCenter(EnvCenterMsg::ScalaJavaChecked(match res {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(e.to_string()),
+        }))
+    })
+}
+
 pub fn check_kotlin_jdk_compat() -> Task<Message> {
     let handle = runtime().handle().clone();
     Task::future(async move {
         let res = handle
-            .spawn_blocking(move || -> Result<(), String> {
-                let svc = open_runtime_service().map_err(|e| e.to_string())?;
-                let Some(kv) = svc
-                    .current(RuntimeKind::Kotlin)
-                    .map_err(|e| e.to_string())?
-                else {
-                    return Ok(());
-                };
-                let Some(java_cur) = svc
-                    .current(RuntimeKind::Java)
-                    .map_err(|e| e.to_string())?
-                else {
-                    return Err(
-                        "Kotlin 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。"
-                            .into(),
-                    );
-                };
-                if let Some(msg) =
-                    kotlin_java::kotlin_jdk_mismatch_message(kv.0.as_str(), java_cur.0.as_str())
-                {
-                    return Err(msg);
-                }
-                Ok(())
+            .spawn_blocking(move || {
+                check_jvm_runtime_java_compat_sync(
+                    RuntimeKind::Kotlin,
+                    "Kotlin 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。",
+                )
             })
             .await;
 

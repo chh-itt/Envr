@@ -44,6 +44,11 @@ fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeP
         )) as Box<dyn RuntimeProvider>,
         Box::new(attach_runtime_root(
             &runtime_root,
+            envr_runtime_scala::ScalaRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
             envr_runtime_go::GoRuntimeProvider::new,
             |p, r| p.with_runtime_root(r),
         )) as Box<dyn RuntimeProvider>,
@@ -386,6 +391,19 @@ impl RuntimeService {
     pub fn try_load_full_remote_installable_from_disk(&self, kind: RuntimeKind) -> Vec<RuntimeVersion> {
         self.try_read_full_remote_installable_stale_ok(kind)
             .unwrap_or_default()
+    }
+
+    /// Persist the full installable remote list for [`Self::try_load_full_remote_installable_from_disk`]
+    /// (used by `envr remote` without `-u` so the CLI can show the same rows as a fresh `list_remote`).
+    pub fn persist_full_remote_installable_snapshot(
+        &self,
+        kind: RuntimeKind,
+        versions: &[RuntimeVersion],
+    ) -> EnvrResult<()> {
+        if versions.is_empty() {
+            return Ok(());
+        }
+        self.write_full_remote_installable(kind, versions)
     }
 
     fn write_full_remote_installable(

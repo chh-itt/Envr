@@ -970,6 +970,7 @@ dependencies = [
  "envr-runtime-rlang",
  "envr-runtime-ruby",
  "envr-runtime-rust",
+ "envr-runtime-scala",
  "envr-runtime-zig",
  "envr-shim-core",
  "serde_json",
@@ -1336,6 +1337,22 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "reqwest",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-scala"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "envr-shim-core",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 
