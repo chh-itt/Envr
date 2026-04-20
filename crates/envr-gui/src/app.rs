@@ -1522,19 +1522,31 @@ fn set_jvm_java_hint(
     }
 }
 
-fn persist_jvm_path_proxy_toggle(state: &mut AppState, kind: envr_domain::runtime::RuntimeKind, on: bool) -> Task<Message> {
+fn persist_jvm_path_proxy_toggle(
+    state: &mut AppState,
+    kind: envr_domain::runtime::RuntimeKind,
+    on: bool,
+) -> Task<Message> {
     match kind {
         envr_domain::runtime::RuntimeKind::Kotlin => {
-            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.kotlin.path_proxy_enabled = on)
+            persist_path_proxy_toggle(state, kind, on, |st, on| {
+                st.runtime.kotlin.path_proxy_enabled = on
+            })
         }
         envr_domain::runtime::RuntimeKind::Scala => {
-            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.scala.path_proxy_enabled = on)
+            persist_path_proxy_toggle(state, kind, on, |st, on| {
+                st.runtime.scala.path_proxy_enabled = on
+            })
         }
         envr_domain::runtime::RuntimeKind::Clojure => {
-            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.clojure.path_proxy_enabled = on)
+            persist_path_proxy_toggle(state, kind, on, |st, on| {
+                st.runtime.clojure.path_proxy_enabled = on
+            })
         }
         envr_domain::runtime::RuntimeKind::Groovy => {
-            persist_path_proxy_toggle(state, kind, on, |st, on| st.runtime.groovy.path_proxy_enabled = on)
+            persist_path_proxy_toggle(state, kind, on, |st, on| {
+                st.runtime.groovy.path_proxy_enabled = on
+            })
         }
         _ => Task::none(),
     }
@@ -1973,6 +1985,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             |st, on| st.runtime.java.path_proxy_enabled = on,
         ),
         EnvCenterMsg::SetJvmPathProxy(kind, on) => persist_jvm_path_proxy_toggle(state, kind, on),
+        EnvCenterMsg::SetTerraformPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Terraform,
+            on,
+            |st, on| st.runtime.terraform.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetGoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.download_source = src;

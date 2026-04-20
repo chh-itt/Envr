@@ -39,6 +39,7 @@ fn core_command_for_project_key(key: &str) -> Option<CoreCommand> {
         "scala" => Some(CoreCommand::Scala),
         "clojure" => Some(CoreCommand::Clojure),
         "groovy" => Some(CoreCommand::Groovy),
+        "terraform" => Some(CoreCommand::Terraform),
         "go" => Some(CoreCommand::Go),
         "php" => Some(CoreCommand::Php),
         "deno" => Some(CoreCommand::Deno),
@@ -50,7 +51,17 @@ fn core_command_for_project_key(key: &str) -> Option<CoreCommand> {
 fn collect_lang_keys(cfg: Option<&ProjectConfig>) -> Vec<String> {
     let mut keys: BTreeSet<String> = BTreeSet::new();
     for k in [
-        "node", "python", "java", "kotlin", "scala", "clojure", "groovy", "go", "deno", "bun",
+        "node",
+        "python",
+        "java",
+        "kotlin",
+        "scala",
+        "clojure",
+        "groovy",
+        "terraform",
+        "go",
+        "deno",
+        "bun",
         "php",
     ] {
         keys.insert(k.to_string());

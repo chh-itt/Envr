@@ -535,6 +535,21 @@ impl Default for GroovyRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerraformRuntimeSettings {
+    /// When false, terraform shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::terraform_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for TerraformRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::terraform_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -579,6 +594,8 @@ pub struct RuntimeSettings {
     pub clojure: ClojureRuntimeSettings,
     #[serde(default)]
     pub groovy: GroovyRuntimeSettings,
+    #[serde(default)]
+    pub terraform: TerraformRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -1883,6 +1900,10 @@ mod defaults {
         true
     }
 
+    pub fn terraform_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn go_path_proxy_enabled() -> bool {
         true
     }
@@ -2009,6 +2030,7 @@ mod tests {
                 scala: ScalaRuntimeSettings::default(),
                 clojure: ClojureRuntimeSettings::default(),
                 groovy: GroovyRuntimeSettings::default(),
+                terraform: TerraformRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                     ..Default::default()

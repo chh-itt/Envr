@@ -973,6 +973,7 @@ dependencies = [
  "envr-runtime-ruby",
  "envr-runtime-rust",
  "envr-runtime-scala",
+ "envr-runtime-terraform",
  "envr-runtime-zig",
  "envr-shim-core",
  "serde_json",
@@ -1383,6 +1384,21 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "envr-shim-core",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-terraform"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
  "regex",
  "reqwest",
  "serde",

@@ -6,7 +6,7 @@ use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::child_env;
 use crate::output::{self, fmt_template};
 
-use envr_error::EnvrResult;
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -22,7 +22,15 @@ pub(crate) fn run_inner(
     let session = CliPathProfile::new(path, profile).load_project()?;
     let ctx = &session.ctx;
 
-    let env_map = child_env::collect_run_env(ctx, false, session.project_config())?;
+    let env_map = match child_env::collect_run_env(ctx, false, session.project_config()) {
+        Ok(env) => env,
+        Err(EnvrError::Validation(_)) => {
+            // Keep `envr shell` resilient: if one managed runtime is currently incompatible
+            // (e.g. hosted-runtime JDK mismatch), still launch a subshell with base env + project env.
+            child_env::base_env_with_project_env(session.project_config())
+        }
+        Err(e) => return Err(e),
+    };
 
     let (program, extra_args) = resolve_shell_invocation(shell)?;
 

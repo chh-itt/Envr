@@ -107,6 +107,16 @@ fn load_settings() -> EnvrResult<Settings> {
     Settings::load_or_default_from(&sp)
 }
 
+pub(crate) fn base_env_with_project_env(cfg: Option<&ProjectConfig>) -> HashMap<String, String> {
+    let mut env: HashMap<String, String> = std::env::vars().collect();
+    if let Some(c) = cfg {
+        for (k, v) in &c.env {
+            env.insert(k.clone(), v.clone());
+        }
+    }
+    env
+}
+
 /// After `--spec` override, fall back to the project pin for `lang` (for install + retry).
 pub fn effective_install_spec_for_exec(
     ctx: &ShimContext,
@@ -245,6 +255,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "scala" => Some("ENVR_SCALA_VERSION"),
         "clojure" => Some("ENVR_CLOJURE_VERSION"),
         "groovy" => Some("ENVR_GROOVY_VERSION"),
+        "terraform" => Some("ENVR_TERRAFORM_VERSION"),
         _ => None,
     }
 }
@@ -290,12 +301,7 @@ fn collect_run_env_impl(
     template_keys: &mut HashMap<String, String>,
     cfg: Option<&ProjectConfig>,
 ) -> EnvrResult<HashMap<String, String>> {
-    let mut env: HashMap<String, String> = std::env::vars().collect();
-    if let Some(c) = cfg {
-        for (k, v) in &c.env {
-            env.insert(k.clone(), v.clone());
-        }
-    }
+    let mut env = base_env_with_project_env(cfg);
     let mut path_entries: Vec<PathBuf> = Vec::new();
     let mut runtime_home_env: HashMap<String, String> = HashMap::new();
     let mut java_suffix_entries: Vec<PathBuf> = Vec::new();

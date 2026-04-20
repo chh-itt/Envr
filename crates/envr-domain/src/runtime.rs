@@ -12,6 +12,7 @@ pub enum RuntimeKind {
     Scala,
     Clojure,
     Groovy,
+    Terraform,
     Go,
     Rust,
     Ruby,
@@ -41,7 +42,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 22] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 23] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -104,6 +105,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 22] = [
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: Some(RuntimeKind::Java),
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Terraform,
+        key: "terraform",
+        label_en: "Terraform",
+        label_zh: "Terraform",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Go,
@@ -421,6 +431,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Scala
         | RuntimeKind::Clojure
         | RuntimeKind::Groovy
+        | RuntimeKind::Terraform
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
@@ -466,7 +477,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 22);
+        assert_eq!(kinds.len(), 23);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -481,6 +492,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Scala));
         assert!(kinds.contains(&RuntimeKind::Clojure));
         assert!(kinds.contains(&RuntimeKind::Groovy));
+        assert!(kinds.contains(&RuntimeKind::Terraform));
     }
 
     #[test]
@@ -615,6 +627,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Groovy, "4.0.31").as_deref(),
             Some("4.0")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Terraform, "1.14.8").as_deref(),
+            Some("1.14")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),

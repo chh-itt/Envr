@@ -67,10 +67,9 @@ fn jvm_missing_java_msg(kind: RuntimeKind) -> Option<&'static str> {
 
 fn jvm_checked_msg(kind: RuntimeKind, res: Result<(), String>) -> EnvCenterMsg {
     match kind {
-        RuntimeKind::Kotlin
-        | RuntimeKind::Scala
-        | RuntimeKind::Clojure
-        | RuntimeKind::Groovy => EnvCenterMsg::JvmJavaChecked(kind, res),
+        RuntimeKind::Kotlin | RuntimeKind::Scala | RuntimeKind::Clojure | RuntimeKind::Groovy => {
+            EnvCenterMsg::JvmJavaChecked(kind, res)
+        }
         _ => EnvCenterMsg::DataLoaded(Err(format!(
             "internal: unsupported JVM-hosted runtime: {kind:?}"
         ))),

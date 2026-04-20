@@ -58,6 +58,14 @@ JVM-family matrix checklist (minimum for each new JVM-hosted runtime):
 - [ ] Shim/exec/run all share the same hosted-runtime branch (no per-runtime duplicated Java merge code).
 - [ ] GUI Env Center triggers Java-host compatibility check on enter + after install/use.
 
+Standalone single-binary runtime checklist (minimum):
+
+- [ ] Release discovery source is explicit (JSON API or HTML index) with cache + TTL knob.
+- [ ] Install artifact URL template is documented and covered by parser/resolve tests.
+- [ ] Extraction promotion validates expected executable(s) in final layout (no blind rename).
+- [ ] Shim resolution and PATH entries are aligned with install layout (`root` vs `bin/`).
+- [ ] Runtime home env var contract is explicit when needed (e.g. `TERRAFORM_HOME`).
+
 Do not start coding before these decisions are written down.
 
 ## 3) Standard implementation checklist
@@ -482,3 +490,15 @@ R validates the **installer-exe** pattern called out in §2 “Before coding”:
 - **Shims**: two core commands (`R`, `Rscript`) sharing runtime key `r`; **`R_HOME`** in `runtime_home_env_for_key`.
 - **Friction logged in** `docs/runtime/r-integration-plan.md`: third-party index, non-Windows policy, PATH substring ambiguity in dry-run output when the runtime directory segment is literally `...\r\...`.
 - **Shared primitive**: `envr_platform::links::ensure_runtime_current_symlink_or_pointer` centralizes symlink-then-pointer-file `current` updates for several zip-style runtimes (Julia/Nim/Zig/Deno/Bun/R and others with the same contract).
+
+### 8.11 Terraform follow-up friction (HTML index parsing + shell resiliency)
+
+Terraform bring-up surfaced two reusable guardrails:
+
+- **HTML index parsing should anchor on link paths, not assumed filename text**:
+  - HashiCorp releases expose stable versions through `/terraform/<version>/` links.
+  - Parser regex should lock onto href path shape and have a unit test with realistic HTML snippets.
+
+- **`envr shell` should remain launchable when unrelated runtime validation fails**:
+  - Run-stack env assembly can surface hosted-runtime validation errors (for example JVM mismatch).
+  - `shell` now degrades to "base env + project `[env]` overlay" on validation failure so ad-hoc recovery commands stay available.

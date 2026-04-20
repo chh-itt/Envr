@@ -134,6 +134,7 @@ pub enum CoreCommand {
     Clj,
     Groovy,
     Groovyc,
+    Terraform,
     Go,
     Gofmt,
     Php,
@@ -171,6 +172,7 @@ impl CoreCommand {
             CoreCommand::Scala | CoreCommand::Scalac => "scala",
             CoreCommand::Clojure | CoreCommand::Clj => "clojure",
             CoreCommand::Groovy | CoreCommand::Groovyc => "groovy",
+            CoreCommand::Terraform => "terraform",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -199,6 +201,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "scala" => vec![home.join("bin")],
         "clojure" => vec![home.to_path_buf(), home.join("bin")],
         "groovy" => vec![home.join("bin")],
+        "terraform" => vec![home.to_path_buf(), home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -282,6 +285,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "scala" => vec![("SCALA_HOME".into(), home_env)],
         "clojure" => vec![("CLOJURE_HOME".into(), home_env)],
         "groovy" => vec![("GROOVY_HOME".into(), home_env)],
+        "terraform" => vec![("TERRAFORM_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -418,6 +422,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "clj" => Some(CoreCommand::Clj),
         "groovy" => Some(CoreCommand::Groovy),
         "groovyc" => Some(CoreCommand::Groovyc),
+        "terraform" => Some(CoreCommand::Terraform),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -925,6 +930,21 @@ fn groovy_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn terraform_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Terraform => Ok(first_existing(&[
+            home.join("terraform.exe"),
+            home.join("terraform"),
+            home.join("bin").join("terraform.exe"),
+            home.join("bin").join("terraform"),
+        ])
+        .ok_or_else(|| {
+            EnvrError::Runtime(format!("terraform missing under {}", home.display()))
+        })?),
+        _ => Err(EnvrError::Runtime("internal: not a terraform tool".into())),
+    }
+}
+
 fn kotlin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     let bin = home.join("bin");
     match cmd {
@@ -1176,6 +1196,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(home, cmd),
         CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(home, cmd),
         CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(home, cmd),
+        CoreCommand::Terraform => terraform_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1326,6 +1347,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Clj => "clj",
         CoreCommand::Groovy => "groovy",
         CoreCommand::Groovyc => "groovyc",
+        CoreCommand::Terraform => "terraform",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1409,6 +1431,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(&home, cmd)?,
         CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(&home, cmd)?,
         CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(&home, cmd)?,
+        CoreCommand::Terraform => terraform_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

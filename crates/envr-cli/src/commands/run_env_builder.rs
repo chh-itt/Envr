@@ -13,8 +13,28 @@ use std::path::PathBuf;
 
 /// Languages merged for `envr run` / `run --verbose` (fixed order; includes rust).
 pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
-    "node", "python", "java", "kotlin", "scala", "clojure", "groovy", "go", "rust", "ruby",
-    "elixir", "erlang", "php", "deno", "bun", "dotnet", "zig", "julia", "lua", "nim", "crystal",
+    "node",
+    "python",
+    "java",
+    "kotlin",
+    "scala",
+    "clojure",
+    "groovy",
+    "terraform",
+    "go",
+    "rust",
+    "ruby",
+    "elixir",
+    "erlang",
+    "php",
+    "deno",
+    "bun",
+    "dotnet",
+    "zig",
+    "julia",
+    "lua",
+    "nim",
+    "crystal",
     "r",
 ];
 
