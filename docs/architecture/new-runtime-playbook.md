@@ -44,11 +44,11 @@ Some runtimes **depend on another envr-managed runtime** (example: Kotlin needs 
 
 **Normative design:** **[ADR-0001: Runtime host dependencies & Kotlin on the JVM](./adr-0001-runtime-host-dependencies-kotlin.md)** (Accepted).
 
-When adding a **hosted** runtime, follow §3 of this playbook **and** the ADR (descriptor `host_runtime` / future `host_runtimes`, acyclic checks, shared Java home resolution, install/`use` preflight policy, shim `extra_env` merge, Env Center subtitle). **Scala** (`RuntimeKind::Scala`) and **Clojure** (`RuntimeKind::Clojure`) are implemented with the same pattern as Kotlin; reuse this JVM-family path for later languages (for example Groovy) unless a new ADR supersedes it.
+When adding a **hosted** runtime, follow §3 of this playbook **and** the ADR (descriptor `host_runtime` / future `host_runtimes`, acyclic checks, shared Java home resolution, install/`use` preflight policy, shim `extra_env` merge, Env Center subtitle). **Scala** (`RuntimeKind::Scala`), **Clojure** (`RuntimeKind::Clojure`) and **Groovy** (`RuntimeKind::Groovy`) are implemented with the same pattern as Kotlin; reuse this JVM-family path for later languages unless a new ADR supersedes it.
 
 JVM-family guardrail (current codebase):
 
-- Keep runtime-specific compatibility tables in domain modules (`kotlin_java`, `scala_java`), but route call sites through shared `envr_domain::jvm_hosted` helpers (`is_jvm_hosted_runtime`, `hosted_runtime_jdk_mismatch_message`) so shim/exec/run/GUI paths stay aligned.
+- Keep runtime-specific compatibility tables in domain modules (`kotlin_java`, `scala_java`, `clojure_java`, `groovy_java`), but route call sites through shared `envr_domain::jvm_hosted` helpers (`is_jvm_hosted_runtime`, `hosted_runtime_jdk_mismatch_message`) so shim/exec/run/GUI paths stay aligned.
 - Prefer one hosted-runtime branch (`if is_jvm_hosted_runtime(...)`) over per-runtime duplicated `if key == "kotlin"` / `if key == "scala"` / `if key == "clojure"` blocks when behavior is structurally identical (resolve Java home, emit mismatch message, merge `JAVA_HOME`).
 
 JVM-family matrix checklist (minimum for each new JVM-hosted runtime):

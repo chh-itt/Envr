@@ -129,6 +129,7 @@ fn create_inner(
             RuntimeKind::Kotlin,
             RuntimeKind::Scala,
             RuntimeKind::Clojure,
+            RuntimeKind::Groovy,
             RuntimeKind::Go,
             RuntimeKind::Rust,
             RuntimeKind::Ruby,

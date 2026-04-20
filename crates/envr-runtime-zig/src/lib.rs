@@ -3,13 +3,13 @@
 mod index;
 mod manager;
 
+pub use envr_platform::bin_tool_layout::zig_installation_valid;
 pub use index::{
     DEFAULT_ZIG_INDEX_URL, artifact_for_platform, blocking_http_client, fetch_index_json,
     find_version_entry, is_stable_release_top_key, list_remote_latest_per_major_lines,
-    list_remote_versions, list_stable_versions_with_platform, parse_index_root, resolve_zig_version,
-    zig_json_platform_key,
+    list_remote_versions, list_stable_versions_with_platform, parse_index_root,
+    resolve_zig_version, zig_json_platform_key,
 };
-pub use envr_platform::bin_tool_layout::zig_installation_valid;
 pub use manager::{
     ZigManager, ZigPaths, list_installed_versions, promote_single_root_dir, read_current,
 };

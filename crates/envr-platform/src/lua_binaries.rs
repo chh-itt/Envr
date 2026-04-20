@@ -112,14 +112,7 @@ fn luac_candidate_paths_windows(home: &Path) -> Vec<PathBuf> {
 
 #[cfg(not(windows))]
 fn lua_interpreter_candidate_paths_unix(home: &Path) -> Vec<PathBuf> {
-    const ROOT: &[&str] = &[
-        "lua",
-        "lua5.5",
-        "lua5.4",
-        "lua5.3",
-        "lua5.2",
-        "lua5.1",
-    ];
+    const ROOT: &[&str] = &["lua", "lua5.5", "lua5.4", "lua5.3", "lua5.2", "lua5.1"];
     const UNDER_BIN: &[&str] = &["lua", "lua5.5", "lua5.4", "lua5.3"];
     let mut v = Vec::with_capacity(ROOT.len() + UNDER_BIN.len());
     for name in ROOT {

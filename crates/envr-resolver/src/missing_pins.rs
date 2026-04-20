@@ -8,26 +8,8 @@ use envr_error::EnvrError;
 
 /// Languages considered by `envr project sync` / missing-pin planning when checking pins (fixed order).
 pub const RUNTIME_PLAN_ORDER: &[&str] = &[
-    "node",
-    "python",
-    "java",
-    "kotlin",
-    "scala",
-    "clojure",
-    "go",
-    "ruby",
-    "elixir",
-    "erlang",
-    "php",
-    "deno",
-    "bun",
-    "dotnet",
-    "zig",
-    "julia",
-    "lua",
-    "nim",
-    "crystal",
-    "r",
+    "node", "python", "java", "kotlin", "scala", "clojure", "groovy", "go", "ruby", "elixir",
+    "erlang", "php", "deno", "bun", "dotnet", "zig", "julia", "lua", "nim", "crystal", "r",
 ];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and

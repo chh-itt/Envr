@@ -8,8 +8,8 @@ use envr_platform::lua_binaries::lua_installation_valid;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -315,9 +315,7 @@ impl LuaManager {
     }
 
     fn remote_latest_per_major_cache_path(&self) -> PathBuf {
-        self.paths
-            .cache_dir()
-            .join("remote_latest_per_major.json")
+        self.paths.cache_dir().join("remote_latest_per_major.json")
     }
 
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -479,15 +477,12 @@ mod tests {
             tmp.path().to_path_buf(),
             crate::index::DEFAULT_LUA_DOWNLOAD_PAGE_URL.to_string(),
         )
-            .expect("mgr");
+        .expect("mgr");
         let ver = RuntimeVersion("5.4.8".to_string());
         let home = mgr.paths.version_dir(&ver.0);
         touch_lua_exe(&home);
         mgr.set_current(&ver).expect("set");
-        assert_eq!(
-            read_current(&mgr.paths).expect("cur"),
-            Some(ver.clone())
-        );
+        assert_eq!(read_current(&mgr.paths).expect("cur"), Some(ver.clone()));
         mgr.uninstall(&ver).expect("rm");
         assert!(!home.exists());
         assert_eq!(read_current(&mgr.paths).expect("cur2"), None);

@@ -3,12 +3,13 @@
 mod index;
 mod manager;
 
-pub use index::{
-    DEFAULT_RVERSIONS_JSON_URL, DEFAULT_RVERSIONS_RELEASE_WIN_URL, blocking_http_client, cran_windows_r_installer_url,
-    fetch_text, list_remote_latest_per_major_lines, list_remote_versions, parse_latest_win_release_version,
-    parse_r_versions_list, resolve_r_version,
-};
 pub use envr_platform::bin_tool_layout::rlang_installation_valid;
+pub use index::{
+    DEFAULT_RVERSIONS_JSON_URL, DEFAULT_RVERSIONS_RELEASE_WIN_URL, blocking_http_client,
+    cran_windows_r_installer_url, fetch_text, list_remote_latest_per_major_lines,
+    list_remote_versions, parse_latest_win_release_version, parse_r_versions_list,
+    resolve_r_version,
+};
 pub use manager::{RlangManager, RlangPaths, list_installed_versions, read_current};
 
 use envr_domain::runtime::{
@@ -66,9 +67,7 @@ impl RlangRuntimeProvider {
 
     fn remote_latest_per_major_cache_path(&self) -> EnvrResult<PathBuf> {
         let paths = RlangPaths::new(self.runtime_root()?);
-        Ok(paths
-            .cache_dir()
-            .join("remote_latest_per_major_win.json"))
+        Ok(paths.cache_dir().join("remote_latest_per_major_win.json"))
     }
 
     fn remote_cache_ttl_secs() -> u64 {

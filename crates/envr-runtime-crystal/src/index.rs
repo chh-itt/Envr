@@ -62,9 +62,7 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -129,7 +127,8 @@ fn fetch_release_index_via_github_api(
             format!("{base_url}?per_page=100&page={page}")
         };
         let body = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let v: Value =
+            serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
         let page_len = v.as_array().map(|a| a.len()).unwrap_or(0);
         if page_len == 0 {
             break;
@@ -185,7 +184,10 @@ fn fetch_release_index_via_releases_atom(
     }
     let mut rows = Vec::new();
     for tag in tags_in_order {
-        let version = tag.trim_start_matches('v').trim_start_matches('V').to_string();
+        let version = tag
+            .trim_start_matches('v')
+            .trim_start_matches('V')
+            .to_string();
         let Some(download_url) = synthetic_crystal_release_asset_url(&tag, host_slug) else {
             continue;
         };
@@ -259,14 +261,14 @@ pub fn is_stable_crystal_tag(tag: &str) -> bool {
 
 fn normalize_sha256_digest(d: &str) -> String {
     let t = d.trim();
-    t.strip_prefix("sha256:")
-        .unwrap_or(t)
-        .trim()
-        .to_string()
+    t.strip_prefix("sha256:").unwrap_or(t).trim().to_string()
 }
 
 /// Pick `(browser_download_url, optional_sha256_hex)` for this host from one release's `assets` array.
-pub fn pick_crystal_asset_for_host(assets: &[Value], host_slug: &str) -> Option<(String, Option<String>)> {
+pub fn pick_crystal_asset_for_host(
+    assets: &[Value],
+    host_slug: &str,
+) -> Option<(String, Option<String>)> {
     for a in assets {
         let name = a.get("name").and_then(|x| x.as_str())?;
         let url = a.get("browser_download_url").and_then(|x| x.as_str())?;
@@ -274,19 +276,11 @@ pub fn pick_crystal_asset_for_host(assets: &[Value], host_slug: &str) -> Option<
             continue;
         }
         let ok = match host_slug {
-            "linux-x86_64" => {
-                name.ends_with("-linux-x86_64.tar.gz") && !name.contains("bundled")
-            }
-            "linux-aarch64" => {
-                name.ends_with("-linux-aarch64.tar.gz") && !name.contains("bundled")
-            }
+            "linux-x86_64" => name.ends_with("-linux-x86_64.tar.gz") && !name.contains("bundled"),
+            "linux-aarch64" => name.ends_with("-linux-aarch64.tar.gz") && !name.contains("bundled"),
             "darwin-universal" => name.contains("darwin-universal") && name.ends_with(".tar.gz"),
-            "windows-x86_64-msvc" => {
-                name.contains("windows-x86_64-msvc") && name.ends_with(".zip")
-            }
-            "windows-aarch64-gnu" => {
-                name.contains("windows-aarch64-gnu") && name.ends_with(".zip")
-            }
+            "windows-x86_64-msvc" => name.contains("windows-x86_64-msvc") && name.ends_with(".zip"),
+            "windows-aarch64-gnu" => name.contains("windows-aarch64-gnu") && name.ends_with(".zip"),
             _ => false,
         };
         if !ok {
@@ -315,11 +309,14 @@ pub fn parse_cached_install_rows(json: &str) -> EnvrResult<Vec<CrystalReleaseRow
 }
 
 /// Parse GitHub releases **array** JSON into installable rows for `host_slug` (newest first).
-pub fn parse_github_releases_for_host(json: &str, host_slug: &str) -> EnvrResult<Vec<CrystalReleaseRow>> {
+pub fn parse_github_releases_for_host(
+    json: &str,
+    host_slug: &str,
+) -> EnvrResult<Vec<CrystalReleaseRow>> {
     let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
-    let arr = v.as_array().ok_or_else(|| {
-        EnvrError::Validation("GitHub releases JSON must be an array".into())
-    })?;
+    let arr = v
+        .as_array()
+        .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
     let mut out = Vec::new();
     for rel in arr {
         let Some(obj) = rel.as_object() else {
@@ -331,11 +328,18 @@ pub fn parse_github_releases_for_host(json: &str, host_slug: &str) -> EnvrResult
         if obj.get("prerelease").and_then(|x| x.as_bool()) == Some(true) {
             continue;
         }
-        let tag = obj.get("tag_name").and_then(|x| x.as_str()).unwrap_or("").trim();
+        let tag = obj
+            .get("tag_name")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .trim();
         if tag.is_empty() || !is_stable_crystal_tag(tag) {
             continue;
         }
-        let version = tag.trim_start_matches('v').trim_start_matches('V').to_string();
+        let version = tag
+            .trim_start_matches('v')
+            .trim_start_matches('V')
+            .to_string();
         let assets = obj
             .get("assets")
             .and_then(|x| x.as_array())
@@ -354,7 +358,10 @@ pub fn parse_github_releases_for_host(json: &str, host_slug: &str) -> EnvrResult
     Ok(out)
 }
 
-pub fn list_remote_versions(rows: &[CrystalReleaseRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[CrystalReleaseRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut keys: Vec<String> = rows.iter().map(|r| r.version.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();
@@ -468,7 +475,8 @@ mod tests {
     #[test]
     fn fixture_parses_linux_x86_64_rows() {
         let json = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/crystal_releases_snippet.json"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/crystal_releases_snippet.json"),
         )
         .expect("read");
         let rows = parse_github_releases_for_host(&json, "linux-x86_64").expect("parse");
@@ -481,12 +489,19 @@ mod tests {
     #[test]
     fn resolve_line_and_exact() {
         let json = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/crystal_releases_snippet.json"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/crystal_releases_snippet.json"),
         )
         .expect("read");
         let rows = parse_github_releases_for_host(&json, "linux-x86_64").expect("parse");
-        assert_eq!(resolve_crystal_version(&rows, "1.20").expect("line"), "1.20.0");
-        assert_eq!(resolve_crystal_version(&rows, "1.20.0").expect("exact"), "1.20.0");
+        assert_eq!(
+            resolve_crystal_version(&rows, "1.20").expect("line"),
+            "1.20.0"
+        );
+        assert_eq!(
+            resolve_crystal_version(&rows, "1.20.0").expect("exact"),
+            "1.20.0"
+        );
     }
 
     #[test]
@@ -520,7 +535,8 @@ mod tests {
 
     #[test]
     fn strip_proxy_prefix_recover_api_url() {
-        let wrapped = "https://ghproxy.net/https://api.github.com/repos/crystal-lang/crystal/releases";
+        let wrapped =
+            "https://ghproxy.net/https://api.github.com/repos/crystal-lang/crystal/releases";
         assert_eq!(
             strip_known_github_api_proxy_prefix(wrapped).as_deref(),
             Some("https://api.github.com/repos/crystal-lang/crystal/releases")

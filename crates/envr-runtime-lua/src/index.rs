@@ -10,8 +10,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-pub const DEFAULT_LUA_DOWNLOAD_PAGE_URL: &str =
-    "https://luabinaries.sourceforge.net/download.html";
+pub const DEFAULT_LUA_DOWNLOAD_PAGE_URL: &str = "https://luabinaries.sourceforge.net/download.html";
 
 static LUA_WIN64_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"lua-(\d+)\.(\d+)\.(\d+)_Win64_bin\.zip").expect("lua win64 regex")
@@ -45,9 +44,18 @@ pub fn fetch_download_page(client: &reqwest::blocking::Client, url: &str) -> Env
 pub fn parse_installable_versions(html: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     for cap in LUA_WIN64_RE.captures_iter(html) {
-        let major: u32 = cap.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
-        let minor: u32 = cap.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
-        let patch: u32 = cap.get(3).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
+        let major: u32 = cap
+            .get(1)
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0);
+        let minor: u32 = cap
+            .get(2)
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0);
+        let patch: u32 = cap
+            .get(3)
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0);
         // Skip legacy 5.1 naming (lua5_1_5_...) — only `lua-X.Y.Z_*` Win64 rows.
         if major < 5 || (major == 5 && minor < 2) {
             continue;
@@ -105,14 +113,13 @@ fn linux_tools_middle_label(version: &str) -> &'static str {
 pub fn tools_executable_filename(version: &str, host: LuaHostKind) -> EnvrResult<String> {
     let v = version.trim();
     if numeric_version_segments(v).is_none() {
-        return Err(EnvrError::Validation(format!("invalid lua version label: {v}")));
+        return Err(EnvrError::Validation(format!(
+            "invalid lua version label: {v}"
+        )));
     }
     Ok(match host {
         LuaHostKind::WindowsX64 => format!("lua-{v}_Win64_bin.zip"),
-        LuaHostKind::LinuxX64Glibc => format!(
-            "lua-{v}_{}_bin.tar.gz",
-            linux_tools_middle_label(v)
-        ),
+        LuaHostKind::LinuxX64Glibc => format!("lua-{v}_{}_bin.tar.gz", linux_tools_middle_label(v)),
         LuaHostKind::MacOsX64 => format!("lua-{v}_MacOS1011_bin.tar.gz"),
     })
 }
@@ -136,7 +143,10 @@ pub fn versions_for_filter(versions: &[String], filter: &RemoteFilter) -> Vec<St
     keys
 }
 
-pub fn list_remote_versions(versions: &[String], filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+pub fn list_remote_versions(
+    versions: &[String],
+    filter: &RemoteFilter,
+) -> EnvrResult<Vec<RuntimeVersion>> {
     Ok(versions_for_filter(versions, filter)
         .into_iter()
         .map(RuntimeVersion)
@@ -191,7 +201,8 @@ pub fn resolve_lua_version(versions: &[String], spec: &str) -> EnvrResult<String
                 let best = versions
                     .iter()
                     .filter(|k| {
-                        version_line_key_for_kind(RuntimeKind::Lua, k).as_deref() == Some(line.as_str())
+                        version_line_key_for_kind(RuntimeKind::Lua, k).as_deref()
+                            == Some(line.as_str())
                     })
                     .max_by(|a, b| cmp_semver_desc(a, b))
                     .map(|x| x.as_str());
@@ -250,11 +261,7 @@ mod tests {
 
     #[test]
     fn resolve_exact_and_line() {
-        let v = vec![
-            "5.4.8".into(),
-            "5.4.7".into(),
-            "5.3.6".into(),
-        ];
+        let v = vec!["5.4.8".into(), "5.4.7".into(), "5.3.6".into()];
         assert_eq!(resolve_lua_version(&v, "5.4.7").expect("ex"), "5.4.7");
         assert_eq!(resolve_lua_version(&v, "5.4").expect("line"), "5.4.8");
         assert_eq!(resolve_lua_version(&v, "5").expect("maj"), "5.4.8");

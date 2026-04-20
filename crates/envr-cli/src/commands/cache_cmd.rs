@@ -528,7 +528,9 @@ pub(crate) fn runtime_inner(
     sub: crate::cli::CacheRuntimeCmd,
 ) -> EnvrResult<CliExit> {
     match sub {
-        crate::cli::CacheRuntimeCmd::Status { runtime, all } => runtime_status_inner(g, runtime, all),
+        crate::cli::CacheRuntimeCmd::Status { runtime, all } => {
+            runtime_status_inner(g, runtime, all)
+        }
     }
 }
 
@@ -550,11 +552,7 @@ struct RuntimeCacheStatusRow {
     remote_may_paint_empty: bool,
 }
 
-fn runtime_status_inner(
-    g: &GlobalArgs,
-    runtime: Option<String>,
-    all: bool,
-) -> EnvrResult<CliExit> {
+fn runtime_status_inner(g: &GlobalArgs, runtime: Option<String>, all: bool) -> EnvrResult<CliExit> {
     use envr_domain::runtime::{parse_runtime_kind, runtime_descriptor, runtime_kinds_all};
     use std::time::SystemTime;
 
@@ -612,7 +610,9 @@ fn runtime_status_inner(
             return None;
         }
         let m = meta.modified().ok()?;
-        m.duration_since(SystemTime::UNIX_EPOCH).ok().map(|d| d.as_secs())
+        m.duration_since(SystemTime::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs())
     }
 
     let mut rows: Vec<RuntimeCacheStatusRow> = Vec::new();

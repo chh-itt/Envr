@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 pub fn crystal_compiler_candidate_paths(home: &Path) -> Vec<PathBuf> {
     #[cfg(windows)]
     {
-        vec![home.join("bin").join("crystal.exe"), home.join("crystal.exe")]
+        vec![
+            home.join("bin").join("crystal.exe"),
+            home.join("crystal.exe"),
+        ]
     }
     #[cfg(not(windows))]
     {
@@ -39,10 +42,8 @@ mod tests {
 
     #[test]
     fn detects_bin_layout() {
-        let tmp = std::env::temp_dir().join(format!(
-            "envr_crystal_paths_bin_{}",
-            std::process::id()
-        ));
+        let tmp =
+            std::env::temp_dir().join(format!("envr_crystal_paths_bin_{}", std::process::id()));
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(tmp.join("bin")).expect("mkdir");
         #[cfg(windows)]
@@ -55,10 +56,8 @@ mod tests {
 
     #[test]
     fn detects_portable_root_layout() {
-        let tmp = std::env::temp_dir().join(format!(
-            "envr_crystal_paths_root_{}",
-            std::process::id()
-        ));
+        let tmp =
+            std::env::temp_dir().join(format!("envr_crystal_paths_root_{}", std::process::id()));
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).expect("mkdir");
         #[cfg(windows)]

@@ -192,21 +192,14 @@ pub fn collect_exec_env(
                         spec_override,
                         cfg,
                     )?;
-                    let runtime_label = home
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
-                    let java_label = java_home
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
+                    let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    let java_label = java_home.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if !runtime_label.is_empty()
-                        && let Some(msg) =
-                            jvm_hosted::hosted_runtime_jdk_mismatch_message(
-                                lang,
-                                runtime_label,
-                                java_label,
-                            )
+                        && let Some(msg) = jvm_hosted::hosted_runtime_jdk_mismatch_message(
+                            lang,
+                            runtime_label,
+                            java_label,
+                        )
                     {
                         return Err(EnvrError::Validation(msg));
                     }
@@ -251,6 +244,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "kotlin" => Some("ENVR_KOTLIN_VERSION"),
         "scala" => Some("ENVR_SCALA_VERSION"),
         "clojure" => Some("ENVR_CLOJURE_VERSION"),
+        "groovy" => Some("ENVR_GROOVY_VERSION"),
         _ => None,
     }
 }
@@ -265,7 +259,11 @@ fn join_path_entries(entries: &[PathBuf]) -> String {
 }
 
 #[cfg(windows)]
-fn compose_run_path(front_entries: &[PathBuf], old_path: &str, java_suffix_entries: &[PathBuf]) -> String {
+fn compose_run_path(
+    front_entries: &[PathBuf],
+    old_path: &str,
+    java_suffix_entries: &[PathBuf],
+) -> String {
     let mut merged = prepend_path(front_entries, old_path);
     if !java_suffix_entries.is_empty() {
         if !merged.is_empty() {
@@ -277,7 +275,11 @@ fn compose_run_path(front_entries: &[PathBuf], old_path: &str, java_suffix_entri
 }
 
 #[cfg(not(windows))]
-fn compose_run_path(front_entries: &[PathBuf], old_path: &str, _java_suffix_entries: &[PathBuf]) -> String {
+fn compose_run_path(
+    front_entries: &[PathBuf],
+    old_path: &str,
+    _java_suffix_entries: &[PathBuf],
+) -> String {
     prepend_path(front_entries, old_path)
 }
 
@@ -324,16 +326,12 @@ fn collect_run_env_impl(
                     let java_home = resolve_run_lang_home(ctx, cfg, "java")?;
                     let java_home = std::fs::canonicalize(&java_home).unwrap_or(java_home);
                     let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                    let java_label = java_home
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
+                    let java_label = java_home.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if let Some(msg) = jvm_hosted::hosted_runtime_jdk_mismatch_message(
                         &lang,
                         runtime_label,
                         java_label,
-                    )
-                    {
+                    ) {
                         return Err(EnvrError::Validation(msg));
                     }
                     for (k, v) in runtime_home_env_for_key(&java_home, "java") {
@@ -382,7 +380,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn compose_run_path_puts_java_dirs_at_tail_on_windows() {
-        let front = vec![PathBuf::from(r"D:\envr\shims"), PathBuf::from(r"D:\envr\node\bin")];
+        let front = vec![
+            PathBuf::from(r"D:\envr\shims"),
+            PathBuf::from(r"D:\envr\node\bin"),
+        ];
         let old = r"C:\Windows\System32;C:\Windows";
         let java_tail = vec![PathBuf::from(r"D:\envr\java\bin")];
         let merged = compose_run_path(&front, old, &java_tail);

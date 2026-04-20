@@ -1,19 +1,20 @@
-//! Scala 3 runtime (`scala/scala3` GitHub releases), `runtimes/scala/versions/<label>/`.
-
 mod index;
 mod manager;
 mod releases_url;
 
 pub use index::{
-    blocking_http_client, fetch_releases_json, fetch_scala_github_releases_index,
-    installable_pairs_from_releases, list_remote_latest_per_major_lines, list_remote_versions,
-    resolve_scala_version,
+    GroovyIndexRow, binary_zip_url_for, blocking_http_client, list_remote_latest_per_major_lines,
+    list_remote_versions, merge_rows, parse_groovy_versions_from_index_html,
+    resolve_groovy_version,
 };
 pub use manager::{
-    ScalaManager, ScalaPaths, list_installed_versions, promote_scala_extracted_tree, read_current,
-    scala_installation_valid, scala_tool_candidate,
+    GroovyManager, GroovyPaths, groovy_installation_valid, groovy_tool_candidate,
+    list_installed_versions, promote_groovy_extracted_tree, read_current,
 };
-pub use releases_url::{DEFAULT_SCALA_RELEASES_API_URL, resolved_scala_releases_api_url};
+pub use releases_url::{
+    GROOVY_APACHE_ARCHIVE_INDEX_URL, GROOVY_APACHE_PRIMARY_INDEX_URL,
+    resolved_groovy_archive_index_url, resolved_groovy_primary_index_url,
+};
 
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
@@ -23,21 +24,28 @@ use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
-pub struct ScalaRuntimeProvider {
-    releases_api_url: String,
+pub struct GroovyRuntimeProvider {
+    primary_index_url: String,
+    archive_index_url: String,
     runtime_root_override: Option<PathBuf>,
 }
 
-impl ScalaRuntimeProvider {
+impl GroovyRuntimeProvider {
     pub fn new() -> Self {
         Self {
-            releases_api_url: resolved_scala_releases_api_url(),
+            primary_index_url: resolved_groovy_primary_index_url(),
+            archive_index_url: resolved_groovy_archive_index_url(),
             runtime_root_override: None,
         }
     }
 
-    pub fn with_releases_api_url(mut self, url: impl Into<String>) -> Self {
-        self.releases_api_url = url.into();
+    pub fn with_index_urls(
+        mut self,
+        primary: impl Into<String>,
+        archive: impl Into<String>,
+    ) -> Self {
+        self.primary_index_url = primary.into();
+        self.archive_index_url = archive.into();
         self
     }
 
@@ -53,30 +61,32 @@ impl ScalaRuntimeProvider {
         })
     }
 
-    fn manager(&self) -> EnvrResult<ScalaManager> {
-        ScalaManager::try_new(self.runtime_root()?, self.releases_api_url.clone())
+    fn manager(&self) -> EnvrResult<GroovyManager> {
+        GroovyManager::try_new(
+            self.runtime_root()?,
+            self.primary_index_url.clone(),
+            self.archive_index_url.clone(),
+        )
     }
 }
 
-impl Default for ScalaRuntimeProvider {
+impl Default for GroovyRuntimeProvider {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RuntimeProvider for ScalaRuntimeProvider {
+impl RuntimeProvider for GroovyRuntimeProvider {
     fn kind(&self) -> RuntimeKind {
-        RuntimeKind::Scala
+        RuntimeKind::Groovy
     }
 
     fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        let paths = ScalaPaths::new(self.runtime_root()?);
-        list_installed_versions(&paths)
+        list_installed_versions(&GroovyPaths::new(self.runtime_root()?))
     }
 
     fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
-        let paths = ScalaPaths::new(self.runtime_root()?);
-        read_current(&paths)
+        read_current(&GroovyPaths::new(self.runtime_root()?))
     }
 
     fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
@@ -91,7 +101,7 @@ impl RuntimeProvider for ScalaRuntimeProvider {
         let Ok(root) = self.runtime_root() else {
             return Vec::new();
         };
-        let path = ScalaPaths::new(root)
+        let path = GroovyPaths::new(root)
             .cache_dir()
             .join("remote_latest_per_major.json");
         let Some(list) =
@@ -107,9 +117,8 @@ impl RuntimeProvider for ScalaRuntimeProvider {
     }
 
     fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
-        let label = self.manager()?.resolve_label(&spec.0)?;
         Ok(ResolvedVersion {
-            version: RuntimeVersion(label),
+            version: RuntimeVersion(self.manager()?.resolve_label(&spec.0)?),
         })
     }
 
@@ -125,7 +134,7 @@ impl RuntimeProvider for ScalaRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
-        let paths = ScalaPaths::new(self.runtime_root()?);
-        Ok((vec![paths.version_dir(&version.0)], None))
+        let p = GroovyPaths::new(self.runtime_root()?).version_dir(&version.0);
+        Ok((vec![p], None))
     }
 }

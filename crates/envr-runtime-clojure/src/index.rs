@@ -162,7 +162,10 @@ pub fn installable_pairs_from_releases(releases: &[GhRelease]) -> Vec<(String, S
     out
 }
 
-pub fn list_remote_versions(pairs: &[(String, String)], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    pairs: &[(String, String)],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut labels: Vec<String> = pairs.iter().map(|(l, _)| l.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();

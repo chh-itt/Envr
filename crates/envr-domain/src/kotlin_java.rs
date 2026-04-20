@@ -87,10 +87,7 @@ mod tests {
 
     #[test]
     fn jdk_label_parses_modern() {
-        assert_eq!(
-            jdk_dir_label_effective_major("21.0.6+9-LTS"),
-            Some(21)
-        );
+        assert_eq!(jdk_dir_label_effective_major("21.0.6+9-LTS"), Some(21));
     }
 
     #[test]

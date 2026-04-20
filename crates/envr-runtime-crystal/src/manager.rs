@@ -11,8 +11,8 @@ use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -313,11 +313,13 @@ impl CrystalManager {
                 }
             }
         }
-        let rows = fetch_all_crystal_release_rows(&self.client, &self.releases_url, self.host_slug)?;
+        let rows =
+            fetch_all_crystal_release_rows(&self.client, &self.releases_url, self.host_slug)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let body = serde_json::to_string(&rows)
-            .map_err(|e| EnvrError::Validation(e.to_string()))?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        let body =
+            serde_json::to_string(&rows).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         Ok(rows)
     }
 

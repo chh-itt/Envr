@@ -53,7 +53,8 @@ pub fn ensure_runtime_current_symlink_or_pointer(
                 fs::create_dir_all(parent).map_err(EnvrError::from)?;
             }
             let payload = target.display().to_string();
-            crate::fs_atomic::write_atomic(current_link, payload.as_bytes()).map_err(EnvrError::from)?;
+            crate::fs_atomic::write_atomic(current_link, payload.as_bytes())
+                .map_err(EnvrError::from)?;
             return Ok(());
         }
         #[cfg(not(windows))]

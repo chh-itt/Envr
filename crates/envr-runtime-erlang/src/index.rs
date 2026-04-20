@@ -5,7 +5,8 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-pub const DEFAULT_GITHUB_TAGS_API: &str = "https://api.github.com/repos/erlang/otp/tags?per_page=100";
+pub const DEFAULT_GITHUB_TAGS_API: &str =
+    "https://api.github.com/repos/erlang/otp/tags?per_page=100";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GithubTag {
@@ -216,7 +217,9 @@ pub fn resolve_erlang_version(releases: &[ErlangRelease], spec: &str) -> EnvrRes
     let parts: Vec<&str> = raw.split('.').collect();
     if parts.is_empty()
         || parts.len() > 4
-        || parts.iter().any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()))
+        || parts
+            .iter()
+            .any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()))
     {
         return Err(EnvrError::Validation(format!(
             "unsupported erlang spec {spec:?}; use major (27), major.minor (27.3), or full (27.3.4.10)"
@@ -302,4 +305,3 @@ mod tests {
         );
     }
 }
-

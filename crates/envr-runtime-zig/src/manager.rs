@@ -12,9 +12,9 @@ use serde_json::Map;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub struct ZigPaths {
@@ -256,7 +256,8 @@ impl ZigManager {
         }
         let body = fetch_index_json(&self.client, &self.index_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         parse_index_root(&body)
     }
 

@@ -51,9 +51,9 @@ fn is_stable_three_part(version: &str) -> bool {
 /// Parse `r-versions` JSON array; returns newest-first semver labels (e.g. `4.4.2`).
 pub fn parse_r_versions_list(json: &str) -> EnvrResult<Vec<String>> {
     let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
-    let arr = v.as_array().ok_or_else(|| {
-        EnvrError::Validation("r-versions JSON must be an array".into())
-    })?;
+    let arr = v
+        .as_array()
+        .ok_or_else(|| EnvrError::Validation("r-versions JSON must be an array".into()))?;
     let mut out = Vec::new();
     for item in arr {
         let Some(ver) = item.get("version").and_then(|x| x.as_str()) else {
@@ -71,12 +71,12 @@ pub fn parse_r_versions_list(json: &str) -> EnvrResult<Vec<String>> {
 /// Latest Windows release version string from `r-release-win` (first array element).
 pub fn parse_latest_win_release_version(json: &str) -> EnvrResult<String> {
     let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
-    let arr = v.as_array().ok_or_else(|| {
-        EnvrError::Validation("r-release-win JSON must be an array".into())
-    })?;
-    let first = arr.first().ok_or_else(|| {
-        EnvrError::Validation("r-release-win JSON array is empty".into())
-    })?;
+    let arr = v
+        .as_array()
+        .ok_or_else(|| EnvrError::Validation("r-release-win JSON must be an array".into()))?;
+    let first = arr
+        .first()
+        .ok_or_else(|| EnvrError::Validation("r-release-win JSON array is empty".into()))?;
     let ver = first
         .get("version")
         .and_then(|x| x.as_str())
@@ -141,7 +141,9 @@ pub fn resolve_r_version(versions: &[String], spec: &str) -> EnvrResult<String> 
                     .map(|x| x.as_str());
                 return best
                     .ok_or_else(|| {
-                        EnvrError::Validation(format!("no R release matches major `{s}` for Windows"))
+                        EnvrError::Validation(format!(
+                            "no R release matches major `{s}` for Windows"
+                        ))
                     })
                     .map(|x| x.to_string());
             }
@@ -150,13 +152,16 @@ pub fn resolve_r_version(versions: &[String], spec: &str) -> EnvrResult<String> 
                 let best = versions
                     .iter()
                     .filter(|k| {
-                        version_line_key_for_kind(RuntimeKind::RLang, k).as_deref() == Some(line.as_str())
+                        version_line_key_for_kind(RuntimeKind::RLang, k).as_deref()
+                            == Some(line.as_str())
                     })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
                 return best
                     .ok_or_else(|| {
-                        EnvrError::Validation(format!("no R release matches line `{line}` for Windows"))
+                        EnvrError::Validation(format!(
+                            "no R release matches line `{line}` for Windows"
+                        ))
                     })
                     .map(|x| x.to_string());
             }
@@ -165,17 +170,16 @@ pub fn resolve_r_version(versions: &[String], spec: &str) -> EnvrResult<String> 
                     .iter()
                     .filter(|k| {
                         numeric_version_segments(k).is_some_and(|p| {
-                            p.len() >= 3
-                                && p[0] == parts[0]
-                                && p[1] == parts[1]
-                                && p[2] == parts[2]
+                            p.len() >= 3 && p[0] == parts[0] && p[1] == parts[1] && p[2] == parts[2]
                         })
                     })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
                 return best
                     .ok_or_else(|| {
-                        EnvrError::Validation(format!("no R release matches exact `{s}` for Windows"))
+                        EnvrError::Validation(format!(
+                            "no R release matches exact `{s}` for Windows"
+                        ))
                     })
                     .map(|x| x.to_string());
             }
@@ -193,7 +197,8 @@ mod tests {
     #[test]
     fn fixture_versions_and_cran_url_rule() {
         let json = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/r_versions_snippet.json"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/r_versions_snippet.json"),
         )
         .expect("read fixture");
         let vs = parse_r_versions_list(&json).expect("parse");

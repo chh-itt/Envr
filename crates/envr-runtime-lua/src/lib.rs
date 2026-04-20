@@ -2,12 +2,12 @@ mod index;
 mod manager;
 mod mirror;
 
+pub use envr_platform::lua_binaries::lua_installation_valid;
 pub use index::{
     DEFAULT_LUA_DOWNLOAD_PAGE_URL, LuaHostKind, blocking_http_client, fetch_download_page,
     list_remote_latest_per_major_lines, list_remote_versions, parse_installable_versions,
     resolve_lua_version, sourceforge_tools_download_url, tools_executable_filename,
 };
-pub use envr_platform::lua_binaries::lua_installation_valid;
 pub use manager::{LuaManager, LuaPaths, list_installed_versions, read_current};
 
 use envr_domain::runtime::{

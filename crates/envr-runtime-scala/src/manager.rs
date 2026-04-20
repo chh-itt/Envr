@@ -12,8 +12,8 @@ use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -235,10 +235,7 @@ fn ensure_java_preflight(runtime_root: &Path, scala_version_label: &str) -> Envr
     let working_dir = std::env::current_dir().unwrap_or_else(|_| runtime_root.to_path_buf());
     let ctx = ShimContext::with_runtime_root(runtime_root.to_path_buf(), working_dir, None);
     let java_home = resolve_runtime_home_for_lang(&ctx, "java", None)?;
-    let label = java_home
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let label = java_home.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let Some(maj) = envr_domain::kotlin_java::jdk_dir_label_effective_major(label) else {
         return Err(EnvrError::Validation(format!(
             "could not parse Java major from `{label}` under {}",
@@ -344,10 +341,7 @@ impl ScalaManager {
     }
 
     pub fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
-        let path = self
-            .paths
-            .cache_dir()
-            .join("remote_latest_per_major.json");
+        let path = self.paths.cache_dir().join("remote_latest_per_major.json");
         let Some(list) =
             envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
         else {
@@ -358,10 +352,7 @@ impl ScalaManager {
 
     pub fn persist_remote_latest_per_major_cache(&self, list: &[RuntimeVersion]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir())?;
-        let path = self
-            .paths
-            .cache_dir()
-            .join("remote_latest_per_major.json");
+        let path = self.paths.cache_dir().join("remote_latest_per_major.json");
         let labels: Vec<&str> = list.iter().map(|v| v.0.as_str()).collect();
         let s = serde_json::to_string(&labels)
             .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
@@ -371,10 +362,7 @@ impl ScalaManager {
 
     pub fn list_remote_latest_per_major_cached(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let ttl_secs = Self::index_ttl_secs();
-        let cache_file = self
-            .paths
-            .cache_dir()
-            .join("remote_latest_per_major.json");
+        let cache_file = self.paths.cache_dir().join("remote_latest_per_major.json");
         if let Some(list) = envr_platform::cache_recovery::read_json_string_list(
             &cache_file,
             Some(ttl_secs),
@@ -442,7 +430,9 @@ impl ScalaManager {
             .iter()
             .find(|(l, _)| l == &label)
             .map(|(_, u)| u.as_str())
-            .ok_or_else(|| EnvrError::Validation(format!("scala release `{label}` has no download URL")))?;
+            .ok_or_else(|| {
+                EnvrError::Validation(format!("scala release `{label}` has no download URL"))
+            })?;
         self.install_resolved_version(
             &label,
             url,

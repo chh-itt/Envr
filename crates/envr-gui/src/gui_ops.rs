@@ -37,9 +37,11 @@ fn check_jvm_runtime_java_compat_sync(
         return Err(missing_java_msg.into());
     };
     let key = runtime_descriptor(kind).key;
-    if let Some(msg) =
-        envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(key, &runtime_cur.0, &java_cur.0)
-    {
+    if let Some(msg) = envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(
+        key,
+        &runtime_cur.0,
+        &java_cur.0,
+    ) {
         return Err(msg);
     }
     Ok(())
@@ -56,6 +58,9 @@ fn jvm_missing_java_msg(kind: RuntimeKind) -> Option<&'static str> {
         RuntimeKind::Clojure => {
             Some("Clojure 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。")
         }
+        RuntimeKind::Groovy => {
+            Some("Groovy 需要已设置全局 **Java current**：请先在「Java」页安装并选择 JDK。")
+        }
         _ => None,
     }
 }
@@ -65,6 +70,7 @@ fn jvm_checked_msg(kind: RuntimeKind, res: Result<(), String>) -> EnvCenterMsg {
         RuntimeKind::Kotlin => EnvCenterMsg::KotlinJdkChecked(res),
         RuntimeKind::Scala => EnvCenterMsg::ScalaJavaChecked(res),
         RuntimeKind::Clojure => EnvCenterMsg::ClojureJavaChecked(res),
+        RuntimeKind::Groovy => EnvCenterMsg::GroovyJavaChecked(res),
         _ => EnvCenterMsg::DataLoaded(Err(format!(
             "internal: unsupported JVM-hosted runtime: {kind:?}"
         ))),
@@ -961,22 +967,8 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
             let t_copy = Instant::now();
             let from_dir = runtime_root.join("shims");
             let to_core_stems = [
-                "node",
-                "npm",
-                "npx",
-                "python",
-                "python3",
-                "pip",
-                "pip3",
-                "java",
-                "javac",
-                "bun",
-                "bunx",
-                "crystal",
-                "lua",
-                "luac",
-                "r",
-                "rscript",
+                "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
+                "bunx", "crystal", "lua", "luac", "r", "rscript",
             ];
 
             for to_root in roots {

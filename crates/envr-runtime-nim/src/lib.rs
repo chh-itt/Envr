@@ -3,12 +3,12 @@
 mod index;
 mod manager;
 
-pub use index::{
-    DEFAULT_NIM_INSTALL_HTML_URL, blocking_http_client, fetch_install_html, nim_cache_platform_tag,
-    nim_host_platform_slot, list_remote_latest_per_major_lines, list_remote_versions, parse_install_html,
-    pick_download_url, resolve_nim_version,
-};
 pub use envr_platform::bin_tool_layout::nim_installation_valid;
+pub use index::{
+    DEFAULT_NIM_INSTALL_HTML_URL, blocking_http_client, fetch_install_html,
+    list_remote_latest_per_major_lines, list_remote_versions, nim_cache_platform_tag,
+    nim_host_platform_slot, parse_install_html, pick_download_url, resolve_nim_version,
+};
 pub use manager::{
     NimManager, NimPaths, list_installed_versions, promote_single_root_dir, read_current,
 };

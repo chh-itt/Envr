@@ -1,6 +1,7 @@
 use crate::index::{
-    blocking_http_client, cran_windows_r_installer_url, fetch_text, list_remote_latest_per_major_lines,
-    list_remote_versions, parse_latest_win_release_version, parse_r_versions_list, resolve_r_version,
+    blocking_http_client, cran_windows_r_installer_url, fetch_text,
+    list_remote_latest_per_major_lines, list_remote_versions, parse_latest_win_release_version,
+    parse_r_versions_list, resolve_r_version,
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
@@ -228,7 +229,11 @@ pub struct RlangManager {
 }
 
 impl RlangManager {
-    pub fn try_new(runtime_root: PathBuf, versions_url: String, release_win_url: String) -> EnvrResult<Self> {
+    pub fn try_new(
+        runtime_root: PathBuf,
+        versions_url: String,
+        release_win_url: String,
+    ) -> EnvrResult<Self> {
         Ok(Self {
             paths: RlangPaths::new(runtime_root),
             versions_url,
@@ -266,7 +271,8 @@ impl RlangManager {
         }
         let body = fetch_text(&self.client, &self.versions_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         parse_r_versions_list(&body)
     }
 
@@ -290,7 +296,8 @@ impl RlangManager {
         }
         let body = fetch_text(&self.client, &self.release_win_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         parse_latest_win_release_version(&body)
     }
 

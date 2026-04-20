@@ -11,10 +11,7 @@ pub enum RuntimeLayoutMsg {
     ToggleDashboardLayoutEditing,
     ToggleDashboardHiddenCollapsed,
     ToggleHidden(RuntimeKind),
-    MoveRuntime {
-        kind: RuntimeKind,
-        delta: isize,
-    },
+    MoveRuntime { kind: RuntimeKind, delta: isize },
     OpenRuntime(RuntimeKind),
     ResetToDefaults,
 }
@@ -163,8 +160,11 @@ mod tests {
         let mut layout = RuntimeLayoutSettings::default();
         layout.order = vec!["python".into(), "node".into()];
         let keys = effective_key_order(&layout);
-        assert!(keys.iter().position(|k| k == "python").unwrap() < keys.iter().position(|k| k == "node").unwrap());
-        assert_eq!(keys.len(), 21);
+        assert!(
+            keys.iter().position(|k| k == "python").unwrap()
+                < keys.iter().position(|k| k == "node").unwrap()
+        );
+        assert_eq!(keys.len(), 22);
     }
 
     #[test]

@@ -3,12 +3,12 @@
 mod index;
 mod manager;
 
-pub use index::{
-    DEFAULT_JULIA_VERSIONS_JSON_URL, blocking_http_client, fetch_versions_json, julia_cache_platform_tag,
-    julia_host_target, list_remote_latest_per_major_lines, list_remote_versions, parse_versions_root,
-    pick_file_for_host, resolve_julia_version,
-};
 pub use envr_platform::bin_tool_layout::julia_installation_valid;
+pub use index::{
+    DEFAULT_JULIA_VERSIONS_JSON_URL, blocking_http_client, fetch_versions_json,
+    julia_cache_platform_tag, julia_host_target, list_remote_latest_per_major_lines,
+    list_remote_versions, parse_versions_root, pick_file_for_host, resolve_julia_version,
+};
 pub use manager::{
     JuliaManager, JuliaPaths, list_installed_versions, promote_single_root_dir, read_current,
 };

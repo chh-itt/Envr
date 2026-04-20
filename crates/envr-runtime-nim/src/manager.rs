@@ -1,7 +1,7 @@
 use crate::index::{
     NimUrlIndex, blocking_http_client, fetch_install_html, list_remote_latest_per_major_lines,
-    list_remote_versions, nim_host_platform_slot, parse_install_html,
-    pick_download_url, resolve_nim_version,
+    list_remote_versions, nim_host_platform_slot, parse_install_html, pick_download_url,
+    resolve_nim_version,
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
@@ -274,7 +274,8 @@ impl NimManager {
         }
         let body = fetch_install_html(&self.client, &self.index_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         let idx = parse_install_html(&body);
         if idx.is_empty() {
             return Err(EnvrError::Validation(

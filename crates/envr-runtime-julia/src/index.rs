@@ -82,8 +82,14 @@ pub fn julia_host_target() -> EnvrResult<JuliaHostTarget> {
             os: "linux",
             arch: "aarch64",
         }),
-        ("macos", "x86_64") => Ok(JuliaHostTarget { os: "mac", arch: "x86_64" }),
-        ("macos", "aarch64") => Ok(JuliaHostTarget { os: "mac", arch: "aarch64" }),
+        ("macos", "x86_64") => Ok(JuliaHostTarget {
+            os: "mac",
+            arch: "x86_64",
+        }),
+        ("macos", "aarch64") => Ok(JuliaHostTarget {
+            os: "mac",
+            arch: "aarch64",
+        }),
         _ => Err(EnvrError::Validation(format!(
             "no Julia build mapping for host {OS}-{ARCH}; see docs/runtime/julia-integration-plan.md"
         ))),
@@ -222,7 +228,9 @@ pub fn find_version_entry<'a>(
     version_label: &str,
 ) -> EnvrResult<&'a Value> {
     root.get(version_label).ok_or_else(|| {
-        EnvrError::Validation(format!("julia version `{version_label}` not found in index"))
+        EnvrError::Validation(format!(
+            "julia version `{version_label}` not found in index"
+        ))
     })
 }
 
@@ -324,22 +332,24 @@ mod tests {
         };
         let e = m.get("1.10.5").expect("ver");
         let f = pick_file_for_host(e, linux).expect("linux file");
-        assert!(f
-            .get("url")
-            .and_then(|u| u.as_str())
-            .unwrap()
-            .contains("linux-x86_64.tar.gz"));
+        assert!(
+            f.get("url")
+                .and_then(|u| u.as_str())
+                .unwrap()
+                .contains("linux-x86_64.tar.gz")
+        );
 
         let win = JuliaHostTarget {
             os: "winnt",
             arch: "x86_64",
         };
         let f2 = pick_file_for_host(e, win).expect("win file");
-        assert!(f2
-            .get("url")
-            .and_then(|u| u.as_str())
-            .unwrap()
-            .ends_with(".zip"));
+        assert!(
+            f2.get("url")
+                .and_then(|u| u.as_str())
+                .unwrap()
+                .ends_with(".zip")
+        );
     }
 
     #[test]

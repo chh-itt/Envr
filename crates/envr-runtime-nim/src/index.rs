@@ -79,9 +79,18 @@ pub type NimUrlIndex = HashMap<String, HashMap<String, String>>;
 pub fn parse_install_html(html: &str) -> NimUrlIndex {
     let mut out: NimUrlIndex = HashMap::new();
     for cap in NIM_URL_RE.captures_iter(html) {
-        let ver = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-        let slot = cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
-        let url = cap.get(0).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let ver = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        let slot = cap
+            .get(2)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        let url = cap
+            .get(0)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
         if ver.is_empty() || slot.is_empty() || url.is_empty() {
             continue;
         }
@@ -171,7 +180,8 @@ pub fn resolve_nim_version(index: &NimUrlIndex, slot: &str, spec: &str) -> EnvrR
                 let best = candidates
                     .iter()
                     .filter(|k| {
-                        version_line_key_for_kind(RuntimeKind::Nim, k).as_deref() == Some(line.as_str())
+                        version_line_key_for_kind(RuntimeKind::Nim, k).as_deref()
+                            == Some(line.as_str())
                     })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
@@ -188,17 +198,16 @@ pub fn resolve_nim_version(index: &NimUrlIndex, slot: &str, spec: &str) -> EnvrR
                     .iter()
                     .filter(|k| {
                         numeric_version_segments(k).is_some_and(|p| {
-                            p.len() >= 3
-                                && p[0] == parts[0]
-                                && p[1] == parts[1]
-                                && p[2] == parts[2]
+                            p.len() >= 3 && p[0] == parts[0] && p[1] == parts[1] && p[2] == parts[2]
                         })
                     })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
                 return best
                     .ok_or_else(|| {
-                        EnvrError::Validation(format!("no nim release matches exact `{s}` for this host"))
+                        EnvrError::Validation(format!(
+                            "no nim release matches exact `{s}` for this host"
+                        ))
                     })
                     .map(|x| x.to_string());
             }
@@ -209,7 +218,11 @@ pub fn resolve_nim_version(index: &NimUrlIndex, slot: &str, spec: &str) -> EnvrR
     )))
 }
 
-pub fn pick_download_url(index: &NimUrlIndex, version_label: &str, slot: &str) -> EnvrResult<String> {
+pub fn pick_download_url(
+    index: &NimUrlIndex,
+    version_label: &str,
+    slot: &str,
+) -> EnvrResult<String> {
     let urls = find_urls_for_version(index, version_label).ok_or_else(|| {
         EnvrError::Validation(format!("nim version `{version_label}` not found in index"))
     })?;

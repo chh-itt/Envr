@@ -4,11 +4,11 @@ use crate::index::{
     PythonIndex, blocking_http_client, load_python_index, pick_install_artifact,
     release_id_for_version_label, resolve_python_version,
 };
+use envr_config::settings::PythonWindowsDistribution;
 use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
     settings_path_from_platform,
 };
-use envr_config::settings::PythonWindowsDistribution;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
@@ -187,9 +187,7 @@ fn nuget_nupkg_url(package_id: &str, version: &str) -> String {
     // NuGet v3 flat container: https://api.nuget.org/v3-flatcontainer/<id>/<ver>/<id>.<ver>.nupkg
     let id_lc = package_id.to_ascii_lowercase();
     let ver_lc = version.to_ascii_lowercase();
-    format!(
-        "https://api.nuget.org/v3-flatcontainer/{id_lc}/{ver_lc}/{id_lc}.{ver_lc}.nupkg"
-    )
+    format!("https://api.nuget.org/v3-flatcontainer/{id_lc}/{ver_lc}/{id_lc}.{ver_lc}.nupkg")
 }
 
 #[cfg(windows)]
@@ -743,8 +741,10 @@ impl PythonManager {
             .unwrap_or(PythonWindowsDistribution::Auto);
 
         #[cfg(windows)]
-        let prefer_nuget =
-            matches!(win_dist, PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget);
+        let prefer_nuget = matches!(
+            win_dist,
+            PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget
+        );
 
         // Default artifact selection.
         let embed_artifact = pick_install_artifact(files, os, arch)?;
@@ -822,7 +822,8 @@ impl PythonManager {
 
         if os == "windows" {
             fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
-            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
+            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
+                .map_err(EnvrError::from)?;
             extract::extract_archive(&cache_file, staging.path())?;
             let staging_final = install_layout::sibling_staging_path(&final_dir)?;
             install_layout::remove_if_exists(&staging_final)?;
@@ -885,8 +886,10 @@ impl PythonManager {
             // Install pip *after* promotion to final directory so `pip.exe` launchers do not embed staging paths.
             // For Windows, prefer NuGet full distribution when configured; it includes full stdlib (e.g. `venv`).
             // If `venv` is missing after install, bootstrap via NuGet is expected to fix this (embeddable may not).
-            if matches!(win_dist, PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget)
-                && !python_has_venv(&install_root)
+            if matches!(
+                win_dist,
+                PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget
+            ) && !python_has_venv(&install_root)
             {
                 return Err(EnvrError::Validation(
                     "python install missing stdlib modules (venv/ensurepip); consider runtime.python.windows_distribution = \"nuget\"".into(),

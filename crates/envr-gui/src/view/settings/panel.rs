@@ -7,8 +7,8 @@ use iced::{Alignment, Element, Length};
 
 use crate::app::Message;
 use crate::icons::Lucide;
-use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::theme as gui_theme;
+use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::settings::state::SettingsViewState;
 use crate::widget_styles::{
     ButtonVariant, SegmentPosition, button_content_centered, button_label_for_variant,
@@ -612,7 +612,14 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             .into(),
     );
 
-    column![paths_card, runtime_ui_card, look_card, dl_card, actions, status,]
-        .spacing(sp.lg as f32)
-        .into()
+    column![
+        paths_card,
+        runtime_ui_card,
+        look_card,
+        dl_card,
+        actions,
+        status,
+    ]
+    .spacing(sp.lg as f32)
+    .into()
 }

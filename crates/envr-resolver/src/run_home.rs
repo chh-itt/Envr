@@ -146,7 +146,8 @@ pub fn resolve_run_lang_home(
         "dotnet" => resolve_dotnet_home(ctx, cfg, None),
         "ruby" => resolve_ruby_home(ctx, cfg, None),
         "go" => resolve_go_home(ctx, cfg, None),
-        "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "zig" | "julia" | "nim" | "crystal" | "r" | "elixir" | "erlang" => {
+        "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "groovy" | "zig"
+        | "julia" | "nim" | "crystal" | "r" | "elixir" | "erlang" => {
             resolve_runtime_home_for_lang(ctx, lang, None)
         }
         _ => Err(EnvrError::Validation(format!(

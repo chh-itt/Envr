@@ -74,9 +74,7 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -137,9 +135,7 @@ fn scala_tag_looks_prerelease(tag: &str) -> bool {
 fn synthetic_scala3_gh_release(tag: &str) -> Option<GhRelease> {
     let label = label_from_tag(tag)?;
     let fname = scala3_asset_candidates(&label).into_iter().next()?;
-    let url = format!(
-        "https://github.com/scala/scala3/releases/download/{tag}/{fname}"
-    );
+    let url = format!("https://github.com/scala/scala3/releases/download/{tag}/{fname}");
     Some(GhRelease {
         tag_name: tag.to_string(),
         draft: false,
@@ -350,7 +346,10 @@ pub fn installable_pairs_from_releases(releases: &[GhRelease]) -> Vec<(String, S
     out
 }
 
-pub fn list_remote_versions(pairs: &[(String, String)], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    pairs: &[(String, String)],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut labels: Vec<String> = pairs.iter().map(|(l, _)| l.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();
@@ -389,12 +388,9 @@ pub fn resolve_scala_version(pairs: &[(String, String)], spec: &str) -> EnvrResu
         match parts.len() {
             1 => {
                 let major = parts[0];
-                let best = pairs
-                    .iter()
-                    .map(|(l, _)| l.as_str())
-                    .find(|label| {
-                        numeric_version_segments(label).is_some_and(|p| !p.is_empty() && p[0] == major)
-                    });
+                let best = pairs.iter().map(|(l, _)| l.as_str()).find(|label| {
+                    numeric_version_segments(label).is_some_and(|p| !p.is_empty() && p[0] == major)
+                });
                 if let Some(b) = best {
                     return Ok(b.to_string());
                 }
@@ -433,7 +429,8 @@ mod tests {
 
     #[test]
     fn candidate_api_bases_dedupe_and_strip_proxy() {
-        let wrapped = "https://ghproxy.net/https://api.github.com/repos/scala/scala3/releases?per_page=100";
+        let wrapped =
+            "https://ghproxy.net/https://api.github.com/repos/scala/scala3/releases?per_page=100";
         let bases = candidate_scala_releases_api_bases(wrapped);
         assert!(bases[0].contains("ghproxy"));
         assert!(bases.iter().any(|b| b == DEFAULT_SCALA_RELEASES_API_URL));
@@ -443,7 +440,11 @@ mod tests {
     fn synthetic_release_has_platform_asset_name() {
         let r = synthetic_scala3_gh_release("3.4.3").expect("synthetic");
         assert!(!r.assets.is_empty());
-        assert!(r.assets[0].browser_download_url.contains("releases/download/3.4.3/"));
+        assert!(
+            r.assets[0]
+                .browser_download_url
+                .contains("releases/download/3.4.3/")
+        );
         assert!(r.assets[0].name.starts_with("scala3-3.4.3"));
     }
 }

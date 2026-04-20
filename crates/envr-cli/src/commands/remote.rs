@@ -254,10 +254,11 @@ pub(crate) fn run_inner(
             continue;
         }
         let timeout = Duration::from_millis(900);
-        let vers = try_fetch_remote_with_timeout(kind, filter.clone(), timeout).unwrap_or_else(|| {
-            prefix_fallback = true;
-            filtered_cached_snapshot(service, kind, &filter)
-        });
+        let vers =
+            try_fetch_remote_with_timeout(kind, filter.clone(), timeout).unwrap_or_else(|| {
+                prefix_fallback = true;
+                filtered_cached_snapshot(service, kind, &filter)
+            });
         let payload = if kind == RuntimeKind::Node {
             if let Some(enriched) = try_node_remote_rows(&filter) {
                 RemoteRow::Node(enriched)

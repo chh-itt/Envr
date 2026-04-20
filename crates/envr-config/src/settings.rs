@@ -520,6 +520,21 @@ impl Default for ClojureRuntimeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroovyRuntimeSettings {
+    /// When false, groovy/groovyc shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::groovy_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for GroovyRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::groovy_path_proxy_enabled(),
+        }
+    }
+}
+
 /// Official Node `index.json` URL.
 pub const NODE_INDEX_JSON_OFFICIAL: &str = "https://nodejs.org/dist/index.json";
 /// Common China mirror (npmmirror) `index.json`.
@@ -562,6 +577,8 @@ pub struct RuntimeSettings {
     pub scala: ScalaRuntimeSettings,
     #[serde(default)]
     pub clojure: ClojureRuntimeSettings,
+    #[serde(default)]
+    pub groovy: GroovyRuntimeSettings,
     #[serde(default)]
     pub go: GoRuntimeSettings,
     #[serde(default)]
@@ -1347,8 +1364,14 @@ pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
 pub fn node_index_json_url(settings: &Settings) -> String {
     if prefer_domestic_source(
         settings,
-        matches!(settings.runtime.node.download_source, NodeDownloadSource::Domestic),
-        matches!(settings.runtime.node.download_source, NodeDownloadSource::Auto),
+        matches!(
+            settings.runtime.node.download_source,
+            NodeDownloadSource::Domestic
+        ),
+        matches!(
+            settings.runtime.node.download_source,
+            NodeDownloadSource::Auto
+        ),
     ) {
         NODE_INDEX_JSON_DOMESTIC.to_string()
     } else {
@@ -1391,8 +1414,14 @@ pub fn deno_release_zip_url(settings: &Settings, version: &str) -> EnvrResult<St
     let tuple = deno_host_tuple()?;
     let prefer_domestic = prefer_domestic_source(
         settings,
-        matches!(settings.runtime.deno.download_source, DenoDownloadSource::Domestic),
-        matches!(settings.runtime.deno.download_source, DenoDownloadSource::Auto),
+        matches!(
+            settings.runtime.deno.download_source,
+            DenoDownloadSource::Domestic
+        ),
+        matches!(
+            settings.runtime.deno.download_source,
+            DenoDownloadSource::Auto
+        ),
     );
     if prefer_domestic {
         Ok(format!(
@@ -1479,7 +1508,10 @@ pub fn python_get_pip_url(settings: &Settings) -> &'static str {
             settings.runtime.python.download_source,
             PythonDownloadSource::Domestic
         ),
-        matches!(settings.runtime.python.download_source, PythonDownloadSource::Auto),
+        matches!(
+            settings.runtime.python.download_source,
+            PythonDownloadSource::Auto
+        ),
     ) {
         GET_PIP_URL_DOMESTIC
     } else {
@@ -1498,7 +1530,10 @@ pub fn python_download_url_candidates(settings: &Settings, original_url: &str) -
             settings.runtime.python.download_source,
             PythonDownloadSource::Domestic
         ),
-        matches!(settings.runtime.python.download_source, PythonDownloadSource::Auto),
+        matches!(
+            settings.runtime.python.download_source,
+            PythonDownloadSource::Auto
+        ),
     );
     if !prefer_domestic {
         return vec![original_url.to_string()];
@@ -1544,8 +1579,14 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
 pub fn php_windows_releases_json_url(settings: &Settings) -> &'static str {
     if prefer_domestic_source(
         settings,
-        matches!(settings.runtime.php.download_source, PhpDownloadSource::Domestic),
-        matches!(settings.runtime.php.download_source, PhpDownloadSource::Auto),
+        matches!(
+            settings.runtime.php.download_source,
+            PhpDownloadSource::Domestic
+        ),
+        matches!(
+            settings.runtime.php.download_source,
+            PhpDownloadSource::Auto
+        ),
     ) {
         PHP_WINDOWS_RELEASES_JSON_DOMESTIC
     } else {
@@ -1838,6 +1879,10 @@ mod defaults {
         true
     }
 
+    pub fn groovy_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn go_path_proxy_enabled() -> bool {
         true
     }
@@ -1963,6 +2008,7 @@ mod tests {
                 kotlin: KotlinRuntimeSettings::default(),
                 scala: ScalaRuntimeSettings::default(),
                 clojure: ClojureRuntimeSettings::default(),
+                groovy: GroovyRuntimeSettings::default(),
                 go: GoRuntimeSettings {
                     goproxy: Some("https://proxy.golang.org,direct".to_string()),
                     ..Default::default()

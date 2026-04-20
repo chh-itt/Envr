@@ -89,7 +89,10 @@ pub struct ZigPlatformArtifact {
 }
 
 /// Read `tarball` + `shasum` for a concrete platform entry (not `src` / `bootstrap`).
-pub fn artifact_for_platform(version_entry: &Value, platform_key: &str) -> Option<ZigPlatformArtifact> {
+pub fn artifact_for_platform(
+    version_entry: &Value,
+    platform_key: &str,
+) -> Option<ZigPlatformArtifact> {
     let obj = version_entry.as_object()?;
     if matches!(
         platform_key,
@@ -127,7 +130,9 @@ pub fn list_stable_versions_with_platform(
 ) -> Vec<String> {
     let mut keys: Vec<String> = index
         .iter()
-        .filter(|(k, v)| is_stable_release_top_key(k) && artifact_for_platform(v, platform_key).is_some())
+        .filter(|(k, v)| {
+            is_stable_release_top_key(k) && artifact_for_platform(v, platform_key).is_some()
+        })
         .map(|(k, _)| k.clone())
         .collect();
     keys.sort_by(|a, b| cmp_semver_release_labels(b, a));
@@ -229,29 +234,35 @@ pub fn resolve_zig_version(
                 let best = candidates
                     .iter()
                     .filter(|k| {
-                        numeric_version_segments(k)
-                            .is_some_and(|p| !p.is_empty() && p[0] == major)
+                        numeric_version_segments(k).is_some_and(|p| !p.is_empty() && p[0] == major)
                     })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
-                return best.ok_or_else(|| {
-                    EnvrError::Validation(format!("no zig release matches major `{s}` for this host"))
-                })
-                .map(|x| x.to_string());
+                return best
+                    .ok_or_else(|| {
+                        EnvrError::Validation(format!(
+                            "no zig release matches major `{s}` for this host"
+                        ))
+                    })
+                    .map(|x| x.to_string());
             }
             2 => {
                 let line = format!("{}.{}", parts[0], parts[1]);
                 let best = candidates
                     .iter()
-                    .filter(|k| version_line_key_for_kind(RuntimeKind::Zig, k).as_deref() == Some(line.as_str()))
+                    .filter(|k| {
+                        version_line_key_for_kind(RuntimeKind::Zig, k).as_deref()
+                            == Some(line.as_str())
+                    })
                     .max_by(|a, b| cmp_semver_release_labels(a, b))
                     .map(|x| x.as_str());
-                return best.ok_or_else(|| {
-                    EnvrError::Validation(format!(
-                        "no zig release matches line `{line}` for this host"
-                    ))
-                })
-                .map(|x| x.to_string());
+                return best
+                    .ok_or_else(|| {
+                        EnvrError::Validation(format!(
+                            "no zig release matches line `{line}` for this host"
+                        ))
+                    })
+                    .map(|x| x.to_string());
             }
             3 | _ => {
                 if parts.len() >= 3 {
@@ -259,7 +270,10 @@ pub fn resolve_zig_version(
                         .iter()
                         .filter(|k| {
                             numeric_version_segments(k).is_some_and(|p| {
-                                p.len() >= 3 && p[0] == parts[0] && p[1] == parts[1] && p[2] == parts[2]
+                                p.len() >= 3
+                                    && p[0] == parts[0]
+                                    && p[1] == parts[1]
+                                    && p[2] == parts[2]
                             })
                         })
                         .max_by(|a, b| cmp_semver_release_labels(a, b))

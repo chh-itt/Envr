@@ -1,5 +1,5 @@
-use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::PathProxyRuntimeSnapshot;
+use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, resolve_runtime_root,
     settings_path_from_platform,
@@ -65,10 +65,7 @@ fn uses_path_proxy_bypass(cmd: CoreCommand, settings: &ShimSettingsSnapshot) -> 
     let Ok(kind) = parse_runtime_kind(cmd.project_runtime_key()) else {
         return false;
     };
-    matches!(
-        settings.path_proxy.enabled_for_kind(kind),
-        Some(false)
-    )
+    matches!(settings.path_proxy.enabled_for_kind(kind), Some(false))
 }
 
 /// Process context for resolving a shim (runtime data root + config search directory).
@@ -135,6 +132,8 @@ pub enum CoreCommand {
     Scalac,
     Clojure,
     Clj,
+    Groovy,
+    Groovyc,
     Go,
     Gofmt,
     Php,
@@ -171,6 +170,7 @@ impl CoreCommand {
             CoreCommand::Kotlin | CoreCommand::Kotlinc => "kotlin",
             CoreCommand::Scala | CoreCommand::Scalac => "scala",
             CoreCommand::Clojure | CoreCommand::Clj => "clojure",
+            CoreCommand::Groovy | CoreCommand::Groovyc => "groovy",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
             CoreCommand::Php => "php",
             CoreCommand::Deno => "deno",
@@ -198,6 +198,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "kotlin" => vec![home.join("bin")],
         "scala" => vec![home.join("bin")],
         "clojure" => vec![home.to_path_buf(), home.join("bin")],
+        "groovy" => vec![home.join("bin")],
         "go" => vec![home.join("bin")],
         "rust" => vec![home.to_path_buf()],
         "ruby" => vec![home.join("bin"), home.to_path_buf()],
@@ -280,6 +281,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "r" => vec![("R_HOME".into(), home_env)],
         "scala" => vec![("SCALA_HOME".into(), home_env)],
         "clojure" => vec![("CLOJURE_HOME".into(), home_env)],
+        "groovy" => vec![("GROOVY_HOME".into(), home_env)],
         _ => Vec::new(),
     }
 }
@@ -414,6 +416,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "scalac" => Some(CoreCommand::Scalac),
         "clojure" => Some(CoreCommand::Clojure),
         "clj" => Some(CoreCommand::Clj),
+        "groovy" => Some(CoreCommand::Groovy),
+        "groovyc" => Some(CoreCommand::Groovyc),
         "go" => Some(CoreCommand::Go),
         "gofmt" => Some(CoreCommand::Gofmt),
         "php" => Some(CoreCommand::Php),
@@ -892,10 +896,32 @@ fn clojure_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
                 cands.push(base.join("clj.exe"));
                 cands.push(base.join("clj"));
             }
-            Ok(first_existing(&cands)
-                .ok_or_else(|| EnvrError::Runtime(format!("clj missing under {}", home.display())))?)
+            Ok(first_existing(&cands).ok_or_else(|| {
+                EnvrError::Runtime(format!("clj missing under {}", home.display()))
+            })?)
         }
         _ => Err(EnvrError::Runtime("internal: not a clojure tool".into())),
+    }
+}
+
+fn groovy_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    let bin = home.join("bin");
+    match cmd {
+        CoreCommand::Groovy => Ok(first_existing(&[
+            bin.join("groovy.cmd"),
+            bin.join("groovy.bat"),
+            bin.join("groovy.exe"),
+            bin.join("groovy"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("groovy missing under {}", home.display())))?),
+        CoreCommand::Groovyc => Ok(first_existing(&[
+            bin.join("groovyc.cmd"),
+            bin.join("groovyc.bat"),
+            bin.join("groovyc.exe"),
+            bin.join("groovyc"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("groovyc missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a groovy tool".into())),
     }
 }
 
@@ -1086,39 +1112,34 @@ fn dotnet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn zig_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Zig => bin_tool_layout::resolve_zig_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("zig missing under {}", home.display()))
-        }),
+        CoreCommand::Zig => bin_tool_layout::resolve_zig_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("zig missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not a zig tool".into())),
     }
 }
 
 fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Julia => bin_tool_layout::resolve_julia_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("julia missing under {}", home.display()))
-        }),
+        CoreCommand::Julia => bin_tool_layout::resolve_julia_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("julia missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not a julia tool".into())),
     }
 }
 
 fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("lua missing under {}", home.display()))
-        }),
-        CoreCommand::Luac => lua_binaries::resolve_luac_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("luac missing under {}", home.display()))
-        }),
+        CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("lua missing under {}", home.display()))),
+        CoreCommand::Luac => lua_binaries::resolve_luac_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("luac missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not a lua tool".into())),
     }
 }
 
 fn nim_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Nim => bin_tool_layout::resolve_nim_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("nim missing under {}", home.display()))
-        }),
+        CoreCommand::Nim => bin_tool_layout::resolve_nim_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("nim missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not a nim tool".into())),
     }
 }
@@ -1137,12 +1158,10 @@ fn crystal_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::R => bin_tool_layout::resolve_r_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("R missing under {}", home.display()))
-        }),
-        CoreCommand::Rscript => bin_tool_layout::resolve_rscript_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("Rscript missing under {}", home.display()))
-        }),
+        CoreCommand::R => bin_tool_layout::resolve_r_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("R missing under {}", home.display()))),
+        CoreCommand::Rscript => bin_tool_layout::resolve_rscript_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("Rscript missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not an R tool".into())),
     }
 }
@@ -1156,6 +1175,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(home, cmd),
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(home, cmd),
         CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(home, cmd),
+        CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
         CoreCommand::Php => php_tool_path(home, cmd),
         CoreCommand::Deno => deno_tool_path(home, cmd),
@@ -1304,6 +1324,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Scalac => "scalac",
         CoreCommand::Clojure => "clojure",
         CoreCommand::Clj => "clj",
+        CoreCommand::Groovy => "groovy",
+        CoreCommand::Groovyc => "groovyc",
         CoreCommand::Go => "go",
         CoreCommand::Gofmt => "gofmt",
         CoreCommand::Php => "php",
@@ -1366,17 +1388,13 @@ pub fn resolve_core_shim_command_with_settings(
     if envr_domain::jvm_hosted::is_jvm_hosted_runtime(key) {
         let java_home = runtime_home_for_key(ctx, "java", cfg.as_ref(), None, settings)?;
         let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let java_label = java_home
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let java_label = java_home.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if !runtime_label.is_empty()
-            && let Some(msg) =
-                envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(
-                    key,
-                    runtime_label,
-                    java_label,
-                )
+            && let Some(msg) = envr_domain::jvm_hosted::hosted_runtime_jdk_mismatch_message(
+                key,
+                runtime_label,
+                java_label,
+            )
         {
             return Err(EnvrError::Runtime(msg));
         }
@@ -1390,6 +1408,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Kotlin | CoreCommand::Kotlinc => kotlin_tool_path(&home, cmd)?,
         CoreCommand::Scala | CoreCommand::Scalac => scala_tool_path(&home, cmd)?,
         CoreCommand::Clojure | CoreCommand::Clj => clojure_tool_path(&home, cmd)?,
+        CoreCommand::Groovy | CoreCommand::Groovyc => groovy_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,
         CoreCommand::Php => php_tool_path(&home, cmd)?,
         CoreCommand::Deno => {

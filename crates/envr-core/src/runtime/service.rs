@@ -1,7 +1,7 @@
 use envr_domain::runtime::{
-    InstallRequest, MajorVersionRecord, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider,
-    RuntimeVersion, VersionRecord, VersionSpec, major_line_remote_install_blocked, runtime_descriptor,
-    version_line_key_for_kind,
+    InstallRequest, MajorVersionRecord, RemoteFilter, ResolvedVersion, RuntimeKind,
+    RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec, major_line_remote_install_blocked,
+    runtime_descriptor, version_line_key_for_kind,
 };
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::cache_recovery;
@@ -50,6 +50,11 @@ fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeP
         Box::new(attach_runtime_root(
             &runtime_root,
             envr_runtime_clojure::ClojureRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
+            envr_runtime_groovy::GroovyRuntimeProvider::new,
             |p, r| p.with_runtime_root(r),
         )) as Box<dyn RuntimeProvider>,
         Box::new(attach_runtime_root(
@@ -353,9 +358,13 @@ impl RuntimeService {
             .unwrap_or(DEFAULT)
     }
 
-    fn read_cached_string_list_fresh_or_stale(path: &Path, fresh_ttl: Option<u64>) -> Option<Vec<String>> {
+    fn read_cached_string_list_fresh_or_stale(
+        path: &Path,
+        fresh_ttl: Option<u64>,
+    ) -> Option<Vec<String>> {
         if let Some(ttl) = fresh_ttl {
-            if let Some(xs) = cache_recovery::read_json_string_list(path, Some(ttl), |l| !l.is_empty())
+            if let Some(xs) =
+                cache_recovery::read_json_string_list(path, Some(ttl), |l| !l.is_empty())
             {
                 return Some(xs);
             }
@@ -371,10 +380,14 @@ impl RuntimeService {
 
     /// Full installable remote list (same source as [`Self::list_remote`] with no prefix), with disk cache
     /// so expanding multiple major lines does not re-fetch the upstream index for each expand.
-    fn load_full_remote_installable_cached(&self, kind: RuntimeKind) -> EnvrResult<Vec<RuntimeVersion>> {
+    fn load_full_remote_installable_cached(
+        &self,
+        kind: RuntimeKind,
+    ) -> EnvrResult<Vec<RuntimeVersion>> {
         let ttl = Self::unified_list_full_remote_ttl_secs();
         let path = self.unified_full_remote_installable_cache_file(kind)?;
-        if let Some(list) = cache_recovery::read_json_string_list(&path, Some(ttl), |xs| !xs.is_empty())
+        if let Some(list) =
+            cache_recovery::read_json_string_list(&path, Some(ttl), |xs| !xs.is_empty())
         {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
@@ -393,7 +406,10 @@ impl RuntimeService {
     }
 
     /// Read unified full installable remote snapshot from disk (stale allowed, no network).
-    pub fn try_load_full_remote_installable_from_disk(&self, kind: RuntimeKind) -> Vec<RuntimeVersion> {
+    pub fn try_load_full_remote_installable_from_disk(
+        &self,
+        kind: RuntimeKind,
+    ) -> Vec<RuntimeVersion> {
         self.try_read_full_remote_installable_stale_ok(kind)
             .unwrap_or_default()
     }
@@ -475,17 +491,18 @@ impl RuntimeService {
     fn unified_list_cache_dir(&self, kind: RuntimeKind) -> EnvrResult<PathBuf> {
         let root = self.cache_runtime_root()?;
         let key = runtime_descriptor(kind).key;
-        Ok(root
-            .join("cache")
-            .join(key)
-            .join("unified_version_list"))
+        Ok(root.join("cache").join(key).join("unified_version_list"))
     }
 
     fn unified_major_cache_file(&self, kind: RuntimeKind) -> EnvrResult<PathBuf> {
         Ok(self.unified_list_cache_dir(kind)?.join("major_rows.json"))
     }
 
-    fn unified_children_cache_file(&self, kind: RuntimeKind, major_key: &str) -> EnvrResult<PathBuf> {
+    fn unified_children_cache_file(
+        &self,
+        kind: RuntimeKind,
+        major_key: &str,
+    ) -> EnvrResult<PathBuf> {
         Ok(self
             .unified_list_cache_dir(kind)?
             .join("children")
@@ -537,7 +554,11 @@ impl RuntimeService {
         Ok(())
     }
 
-    fn read_cached_children(&self, kind: RuntimeKind, major_key: &str) -> EnvrResult<Vec<RuntimeVersion>> {
+    fn read_cached_children(
+        &self,
+        kind: RuntimeKind,
+        major_key: &str,
+    ) -> EnvrResult<Vec<RuntimeVersion>> {
         let path = self.unified_children_cache_file(kind, major_key)?;
         if !path.is_file() {
             return Ok(Vec::new());

@@ -255,7 +255,8 @@ impl JuliaManager {
         }
         let body = fetch_versions_json(&self.client, &self.versions_url)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes()).map_err(EnvrError::from)?;
+        envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
+            .map_err(EnvrError::from)?;
         parse_versions_root(&body)
     }
 

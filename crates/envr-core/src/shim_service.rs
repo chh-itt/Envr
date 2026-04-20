@@ -50,9 +50,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
             (CoreCommand::Scala, "scala"),
             (CoreCommand::Scalac, "scalac"),
         ],
-        RuntimeKind::Clojure => &[
-            (CoreCommand::Clojure, "clojure"),
-            (CoreCommand::Clj, "clj"),
+        RuntimeKind::Clojure => &[(CoreCommand::Clojure, "clojure"), (CoreCommand::Clj, "clj")],
+        RuntimeKind::Groovy => &[
+            (CoreCommand::Groovy, "groovy"),
+            (CoreCommand::Groovyc, "groovyc"),
         ],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],
         RuntimeKind::Rust => &[],
@@ -78,16 +79,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Dotnet => &[(CoreCommand::Dotnet, "dotnet")],
         RuntimeKind::Zig => &[(CoreCommand::Zig, "zig")],
         RuntimeKind::Julia => &[(CoreCommand::Julia, "julia")],
-        RuntimeKind::Lua => &[
-            (CoreCommand::Lua, "lua"),
-            (CoreCommand::Luac, "luac"),
-        ],
+        RuntimeKind::Lua => &[(CoreCommand::Lua, "lua"), (CoreCommand::Luac, "luac")],
         RuntimeKind::Nim => &[(CoreCommand::Nim, "nim")],
         RuntimeKind::Crystal => &[(CoreCommand::Crystal, "crystal")],
-        RuntimeKind::RLang => &[
-            (CoreCommand::R, "R"),
-            (CoreCommand::Rscript, "Rscript"),
-        ],
+        RuntimeKind::RLang => &[(CoreCommand::R, "R"), (CoreCommand::Rscript, "Rscript")],
     }
 }
 
@@ -617,6 +612,8 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "javac"
             | "clojure"
             | "clj"
+            | "groovy"
+            | "groovyc"
             | "php"
             | "bun"
             | "bunx"

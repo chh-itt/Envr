@@ -8,11 +8,11 @@ use crate::app::{Message, Route};
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::state::{DashboardState, RuntimeRow};
-use crate::view::env_center::kind_label;
-use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::downloads::{DownloadPanelState, JobState};
 use crate::view::empty_state::{EmptyTone, illustrative_block, illustrative_block_compact};
+use crate::view::env_center::kind_label;
 use crate::view::loading::loading_skeleton;
+use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::widget_styles::{
     ButtonVariant, button_content_centered, button_style, card_container_style,
 };
@@ -206,7 +206,8 @@ fn runtime_overview_section(
     let text_c = gui_theme::to_color(tokens.colors.text);
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let prim = gui_theme::to_color(tokens.colors.primary);
-    let (visible_rows, hidden_rows) = crate::view::runtime_layout::partition_dashboard_rows(layout, rows);
+    let (visible_rows, hidden_rows) =
+        crate::view::runtime_layout::partition_dashboard_rows(layout, rows);
     let editing = dash.runtime_overview_layout_editing;
     let hidden_collapsed = dash.runtime_overview_hidden_collapsed;
 
@@ -284,13 +285,7 @@ fn runtime_overview_section(
         .width(Length::Fill);
     for r in &visible_rows {
         body = body.push(runtime_overview_runtime_card(
-            r,
-            layout,
-            editing,
-            tokens,
-            text_c,
-            muted,
-            prim,
+            r, layout, editing, tokens, text_c, muted, prim,
         ));
     }
 
@@ -350,13 +345,7 @@ fn runtime_overview_section(
         if !hidden_collapsed {
             for r in &hidden_rows {
                 body = body.push(runtime_overview_runtime_card(
-                    r,
-                    layout,
-                    editing,
-                    tokens,
-                    text_c,
-                    muted,
-                    prim,
+                    r, layout, editing, tokens, text_c, muted, prim,
                 ));
             }
         }
@@ -365,15 +354,11 @@ fn runtime_overview_section(
     let card_s = card_container_style(tokens, 2);
     let pad = tokens.card_padding_px();
     let inset = Padding::from([pad + 6.0, pad + 4.0]);
-    container(
-        column![body]
-            .spacing(sp.sm as f32)
-            .width(Length::Fill),
-    )
-    .padding(inset)
-    .width(Length::Fill)
-    .style(move |theme: &Theme| card_s(theme))
-    .into()
+    container(column![body].spacing(sp.sm as f32).width(Length::Fill))
+        .padding(inset)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| card_s(theme))
+        .into()
 }
 
 fn runtime_overview_runtime_card(
@@ -388,9 +373,10 @@ fn runtime_overview_runtime_card(
     let ty = tokens.typography();
     let sp = tokens.space();
     let label = kind_label(r.kind);
-    let cur = r.current.clone().unwrap_or_else(|| {
-        envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)")
-    });
+    let cur = r
+        .current
+        .clone()
+        .unwrap_or_else(|| envr_core::i18n::tr_key("gui.dashboard.not_set", "(未设置)", "(none)"));
     let summary_tpl = envr_core::i18n::tr_key(
         "gui.dashboard.runtime_card_summary",
         "已安装 {installed} 个 · 当前 {current}",
@@ -405,8 +391,9 @@ fn runtime_overview_runtime_card(
     let accent = container(space().width(Length::Fixed(4.0)))
         .height(Length::Fixed(52.0))
         .style(move |_theme: &Theme| {
-            container::Style::default()
-                .background(Background::Color(prim.scale_alpha(if is_hidden { 0.35 } else { 0.85 })))
+            container::Style::default().background(Background::Color(
+                prim.scale_alpha(if is_hidden { 0.35 } else { 0.85 }),
+            ))
         });
 
     let title_col = column![
@@ -416,9 +403,7 @@ fn runtime_overview_runtime_card(
     .spacing(3.0)
     .width(Length::Fill);
 
-    let chevron = text("→")
-        .size(ty.section)
-        .color(muted.scale_alpha(0.75));
+    let chevron = text("→").size(ty.section).color(muted.scale_alpha(0.75));
 
     let hide_lbl = if is_hidden {
         envr_core::i18n::tr_key("gui.dashboard.runtime_card_show", "显示", "Show")
@@ -426,13 +411,10 @@ fn runtime_overview_runtime_card(
         envr_core::i18n::tr_key("gui.dashboard.runtime_card_hide", "隐藏", "Hide")
     };
     let hide_btn = button(button_content_centered(
-        row![
-            Lucide::EyeOff.view(14.0, text_c),
-            text(hide_lbl),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
-        .into(),
+        row![Lucide::EyeOff.view(14.0, text_c), text(hide_lbl),]
+            .spacing(sp.xs as f32)
+            .align_y(Alignment::Center)
+            .into(),
     ))
     .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::ToggleHidden(kind)))
     .height(Length::Fixed(
@@ -464,35 +446,22 @@ fn runtime_overview_runtime_card(
         .style(button_style(tokens, ButtonVariant::Secondary));
 
     let inner: Element<'static, Message> = if editing {
-        row![
-            up_btn,
-            down_btn,
-            accent,
-            title_col,
-            hide_btn,
-        ]
-        .spacing(sp.sm as f32)
-        .align_y(Alignment::Center)
-        .into()
+        row![up_btn, down_btn, accent, title_col, hide_btn,]
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into()
     } else {
-        let main_row = row![
-            accent,
-            title_col,
-            chevron,
-        ]
-        .spacing(sp.md as f32)
-        .align_y(Alignment::Center)
-        .width(Length::Fill);
+        let main_row = row![accent, title_col, chevron,]
+            .spacing(sp.md as f32)
+            .align_y(Alignment::Center)
+            .width(Length::Fill);
         let tappable = mouse_area(main_row)
             .on_press(Message::RuntimeLayout(RuntimeLayoutMsg::OpenRuntime(kind)))
             .interaction(iced::mouse::Interaction::Pointer);
-        row![
-            container(tappable).width(Length::Fill),
-            hide_btn,
-        ]
-        .spacing(sp.sm as f32)
-        .align_y(Alignment::Center)
-        .into()
+        row![container(tappable).width(Length::Fill), hide_btn,]
+            .spacing(sp.sm as f32)
+            .align_y(Alignment::Center)
+            .into()
     };
 
     let inner_card = card_container_style(tokens, if is_hidden { 0 } else { 1 });
@@ -691,4 +660,3 @@ fn recommended_actions_card(tokens: ThemeTokens) -> Element<'static, Message> {
         tokens,
     )
 }
-

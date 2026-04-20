@@ -225,13 +225,14 @@ impl ErlangManager {
         let release = releases
             .iter()
             .find(|r| r.version == version.0)
-            .ok_or_else(|| EnvrError::Validation(format!("erlang release not found: {}", version.0)))?;
+            .ok_or_else(|| {
+                EnvrError::Validation(format!("erlang release not found: {}", version.0))
+            })?;
 
-        let file_name = release
-            .url
-            .rsplit('/')
-            .next()
-            .ok_or_else(|| EnvrError::Validation("erlang release url missing filename".into()))?;
+        let file_name =
+            release.url.rsplit('/').next().ok_or_else(|| {
+                EnvrError::Validation("erlang release url missing filename".into())
+            })?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(file_name);
         download_url_to_path_resumable(
             &self.client,
@@ -333,4 +334,3 @@ mod tests {
         assert_eq!(got.0, "27.3.4.10");
     }
 }
-

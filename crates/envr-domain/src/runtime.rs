@@ -11,6 +11,7 @@ pub enum RuntimeKind {
     Kotlin,
     Scala,
     Clojure,
+    Groovy,
     Go,
     Rust,
     Ruby,
@@ -40,7 +41,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 21] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 22] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -91,6 +92,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 21] = [
         key: "clojure",
         label_en: "Clojure",
         label_zh: "Clojure",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: Some(RuntimeKind::Java),
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Groovy,
+        key: "groovy",
+        label_en: "Groovy",
+        label_zh: "Groovy",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: Some(RuntimeKind::Java),
@@ -410,6 +420,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
         | RuntimeKind::Clojure
+        | RuntimeKind::Groovy
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::RLang => {
@@ -455,7 +466,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 21);
+        assert_eq!(kinds.len(), 22);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -469,6 +480,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Kotlin));
         assert!(kinds.contains(&RuntimeKind::Scala));
         assert!(kinds.contains(&RuntimeKind::Clojure));
+        assert!(kinds.contains(&RuntimeKind::Groovy));
     }
 
     #[test]
@@ -483,6 +495,10 @@ mod tests {
         );
         assert_eq!(
             runtime_host_runtime(RuntimeKind::Clojure),
+            Some(RuntimeKind::Java)
+        );
+        assert_eq!(
+            runtime_host_runtime(RuntimeKind::Groovy),
             Some(RuntimeKind::Java)
         );
         assert_eq!(runtime_host_runtime(RuntimeKind::Java), None);
@@ -597,6 +613,10 @@ mod tests {
             Some("1.12")
         );
         assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Groovy, "4.0.31").as_deref(),
+            Some("4.0")
+        );
+        assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),
             Some("27")
         );
@@ -604,14 +624,8 @@ mod tests {
 
     #[test]
     fn major_line_remote_install_blocked_bun_deno_zero_only() {
-        assert!(major_line_remote_install_blocked(
-            RuntimeKind::Bun,
-            "0"
-        ));
-        assert!(major_line_remote_install_blocked(
-            RuntimeKind::Deno,
-            "0"
-        ));
+        assert!(major_line_remote_install_blocked(RuntimeKind::Bun, "0"));
+        assert!(major_line_remote_install_blocked(RuntimeKind::Deno, "0"));
         assert!(!major_line_remote_install_blocked(RuntimeKind::Bun, "1"));
         assert!(!major_line_remote_install_blocked(RuntimeKind::Node, "0"));
     }

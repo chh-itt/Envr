@@ -67,7 +67,8 @@ pub fn clojure_tool_candidate(home: &Path, stem: &str) -> Option<PathBuf> {
 }
 
 pub fn clojure_installation_valid(home: &Path) -> bool {
-    clojure_tool_candidate(home, "clj").is_some() && clojure_tool_candidate(home, "clojure").is_some()
+    clojure_tool_candidate(home, "clj").is_some()
+        && clojure_tool_candidate(home, "clojure").is_some()
 }
 
 fn find_clojure_distribution_root(extract_root: &Path) -> Option<PathBuf> {
@@ -85,8 +86,13 @@ fn find_clojure_distribution_root(extract_root: &Path) -> Option<PathBuf> {
 }
 
 fn has_clojure_module_layout(home: &Path) -> bool {
-    home.join("ClojureTools").join("ClojureTools.psm1").is_file()
-        || home.join("ClojureTools").join("ClojureTools.psd1").is_file()
+    home.join("ClojureTools")
+        .join("ClojureTools.psm1")
+        .is_file()
+        || home
+            .join("ClojureTools")
+            .join("ClojureTools.psd1")
+            .is_file()
 }
 
 #[cfg(windows)]
@@ -276,10 +282,7 @@ fn ensure_java_preflight(runtime_root: &Path, clojure_version_label: &str) -> En
     let working_dir = std::env::current_dir().unwrap_or_else(|_| runtime_root.to_path_buf());
     let ctx = ShimContext::with_runtime_root(runtime_root.to_path_buf(), working_dir, None);
     let java_home = resolve_runtime_home_for_lang(&ctx, "java", None)?;
-    let label = java_home
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let label = java_home.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let Some(maj) = envr_domain::kotlin_java::jdk_dir_label_effective_major(label) else {
         return Err(EnvrError::Validation(format!(
             "could not parse Java major from `{label}` under {}",
@@ -436,7 +439,7 @@ impl ClojureManager {
         progress_downloaded: Option<&Arc<AtomicU64>>,
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
-) -> EnvrResult<RuntimeVersion> {
+    ) -> EnvrResult<RuntimeVersion> {
         ensure_java_preflight(&self.paths.runtime_root, version_label)?;
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
@@ -471,7 +474,9 @@ impl ClojureManager {
             .iter()
             .find(|(l, _)| l == &label)
             .map(|(_, u)| u.as_str())
-            .ok_or_else(|| EnvrError::Validation(format!("clojure release `{label}` has no download URL")))?;
+            .ok_or_else(|| {
+                EnvrError::Validation(format!("clojure release `{label}` has no download URL"))
+            })?;
         self.install_resolved_version(
             &label,
             url,

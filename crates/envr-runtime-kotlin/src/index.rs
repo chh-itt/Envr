@@ -65,11 +65,7 @@ fn label_from_tag(tag: &str) -> Option<String> {
     if t.is_empty() {
         return None;
     }
-    if !t
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_digit())
-    {
+    if !t.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         return None;
     }
     Some(t.to_string())
@@ -111,7 +107,10 @@ pub fn installable_pairs_from_releases(releases: &[GhRelease]) -> Vec<(String, S
     out
 }
 
-pub fn list_remote_versions(pairs: &[(String, String)], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    pairs: &[(String, String)],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut labels: Vec<String> = pairs.iter().map(|(l, _)| l.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();
@@ -150,12 +149,9 @@ pub fn resolve_kotlin_version(pairs: &[(String, String)], spec: &str) -> EnvrRes
         match parts.len() {
             1 => {
                 let major = parts[0];
-                let best = pairs
-                    .iter()
-                    .map(|(l, _)| l.as_str())
-                    .find(|label| {
-                        numeric_version_segments(label).is_some_and(|p| !p.is_empty() && p[0] == major)
-                    });
+                let best = pairs.iter().map(|(l, _)| l.as_str()).find(|label| {
+                    numeric_version_segments(label).is_some_and(|p| !p.is_empty() && p[0] == major)
+                });
                 if let Some(b) = best {
                     return Ok(b.to_string());
                 }

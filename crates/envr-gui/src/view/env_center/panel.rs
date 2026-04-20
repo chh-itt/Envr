@@ -1,15 +1,15 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
-    ElixirRuntimeSettings, ErlangRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings, JavaDistro,
-    ClojureRuntimeSettings, JavaDownloadSource, JavaRuntimeSettings, KotlinRuntimeSettings,
-    NodeDownloadSource, NodeRuntimeSettings, ScalaRuntimeSettings,
+    BunRuntimeSettings, ClojureRuntimeSettings, CrystalRuntimeSettings, DenoDownloadSource,
+    DenoRuntimeSettings, DotnetRuntimeSettings, ElixirRuntimeSettings, ErlangRuntimeSettings,
+    GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
+    JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
+    LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
-    CrystalRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings,
-    RlangRuntimeSettings,
-    RustRuntimeSettings, ZigRuntimeSettings,
+    PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
+    RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
+    ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -17,7 +17,9 @@ use envr_domain::runtime::{
 };
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
-use iced::widget::{button, column, container, mouse_area, row, rule, space, text, text_input, toggler};
+use iced::widget::{
+    button, column, container, mouse_area, row, rule, space, text, text_input, toggler,
+};
 use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
@@ -50,6 +52,7 @@ pub enum EnvCenterMsg {
     KotlinJdkChecked(Result<(), String>),
     ScalaJavaChecked(Result<(), String>),
     ClojureJavaChecked(Result<(), String>),
+    GroovyJavaChecked(Result<(), String>),
     SubmitInstall(String),
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
@@ -73,6 +76,7 @@ pub enum EnvCenterMsg {
     SetKotlinPathProxy(bool),
     SetScalaPathProxy(bool),
     SetClojurePathProxy(bool),
+    SetGroovyPathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     SetGoPathProxy(bool),
@@ -1013,7 +1017,11 @@ fn php_windows_build_row(
     Some(
         setting_row(
             tokens,
-            envr_core::i18n::tr_key("gui.runtime.php.windows_build", "Windows 构建", "Windows build"),
+            envr_core::i18n::tr_key(
+                "gui.runtime.php.windows_build",
+                "Windows 构建",
+                "Windows build",
+            ),
             Some(envr_core::i18n::tr_key(
                 "gui.runtime.php.windows_build_hint",
                 "切换后列表会刷新（NTS/TS 独立）。",
@@ -1623,6 +1631,47 @@ fn clojure_runtime_settings_section(
     .into()
 }
 
+fn groovy_runtime_settings_section(
+    groovy: &GroovyRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.groovy.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.groovy.path_proxy.hint",
+            "开启时由 envr 接管 groovy / groovyc；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages groovy/groovyc; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(groovy.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetGroovyPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.groovy.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn lua_runtime_settings_section(
     lua: &LuaRuntimeSettings,
     tokens: ThemeTokens,
@@ -1969,8 +2018,7 @@ pub fn env_center_view(
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let show_runtime_fold =
-        envr_domain::runtime::unified_major_list_rollout_enabled(state.kind);
+    let show_runtime_fold = envr_domain::runtime::unified_major_list_rollout_enabled(state.kind);
     let toggle_lbl = if state.runtime_settings_expanded {
         envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
     } else {
@@ -2047,6 +2095,7 @@ pub fn env_center_view(
                 RuntimeKind::Kotlin => ("JDK 与 Kotlin 编译器", "JDK vs Kotlin compiler"),
                 RuntimeKind::Scala => ("Scala 与 JDK", "Scala and JDK"),
                 RuntimeKind::Clojure => ("Clojure 与 JDK", "Clojure and JDK"),
+                RuntimeKind::Groovy => ("Groovy 与 JDK", "Groovy and JDK"),
                 _ => ("JVM 运行时与 JDK", "JVM runtime and JDK"),
             };
             let title = text(envr_core::i18n::tr_key(
@@ -2083,6 +2132,8 @@ pub fn env_center_view(
         scala_runtime_settings_section(&runtime_settings.scala, tokens)
     } else if state.kind == RuntimeKind::Clojure {
         clojure_runtime_settings_section(&runtime_settings.clojure, tokens)
+    } else if state.kind == RuntimeKind::Groovy {
+        groovy_runtime_settings_section(&runtime_settings.groovy, tokens)
     } else if state.kind == RuntimeKind::Go {
         go_runtime
             .map(|g| {
@@ -2219,57 +2270,58 @@ pub fn env_center_view(
     // Use spacing instead of dense horizontal rules for a calmer UI.
     let mut list_col = column![].spacing(sp.sm as f32).width(Length::Fill);
 
-    let render_keys: Vec<String> = if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
-        && unified_major_rows.is_some_and(|rows| !rows.is_empty())
-    {
-        let mut keys: HashSet<String> = unified_major_rows
-            .into_iter()
-            .flatten()
-            .map(|r| r.major_key.clone())
-            .collect();
-        for v in &state.installed {
-            if let Some(k) = version_line_key_for_kind(state.kind, &v.0) {
+    let render_keys: Vec<String> =
+        if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
+            && unified_major_rows.is_some_and(|rows| !rows.is_empty())
+        {
+            let mut keys: HashSet<String> = unified_major_rows
+                .into_iter()
+                .flatten()
+                .map(|r| r.major_key.clone())
+                .collect();
+            for v in &state.installed {
+                if let Some(k) = version_line_key_for_kind(state.kind, &v.0) {
+                    keys.insert(k);
+                }
+            }
+            if let Some(cur) = state.current.as_ref()
+                && let Some(k) = version_line_key_for_kind(state.kind, &cur.0)
+            {
                 keys.insert(k);
             }
-        }
-        if let Some(cur) = state.current.as_ref()
-            && let Some(k) = version_line_key_for_kind(state.kind, &cur.0)
-        {
-            keys.insert(k);
-        }
-        let mut keys: Vec<String> = keys.into_iter().collect();
-        keys.retain(|k| {
-            !major_line_remote_install_blocked(state.kind, k)
-                || state.installed.iter().any(|v| {
-                    version_line_key_for_kind(state.kind, &v.0).as_deref() == Some(k.as_str())
-                })
-                || state
-                    .current
-                    .as_ref()
-                    .and_then(|c| version_line_key_for_kind(state.kind, &c.0))
-                    .as_deref()
-                    == Some(k.as_str())
-        });
-        keys.sort_by(|a, b| parse_python_key_sort(b).cmp(&parse_python_key_sort(a)));
-        if query_norm.is_empty() {
-            keys
-        } else if query_norm.contains('.') {
-            keys.into_iter()
-                .filter(|k| k.starts_with(query_norm))
-                .collect()
+            let mut keys: Vec<String> = keys.into_iter().collect();
+            keys.retain(|k| {
+                !major_line_remote_install_blocked(state.kind, k)
+                    || state.installed.iter().any(|v| {
+                        version_line_key_for_kind(state.kind, &v.0).as_deref() == Some(k.as_str())
+                    })
+                    || state
+                        .current
+                        .as_ref()
+                        .and_then(|c| version_line_key_for_kind(state.kind, &c.0))
+                        .as_deref()
+                        == Some(k.as_str())
+            });
+            keys.sort_by(|a, b| parse_python_key_sort(b).cmp(&parse_python_key_sort(a)));
+            if query_norm.is_empty() {
+                keys
+            } else if query_norm.contains('.') {
+                keys.into_iter()
+                    .filter(|k| k.starts_with(query_norm))
+                    .collect()
+            } else {
+                keys.into_iter()
+                    .filter(|k| {
+                        let mut it = k.split('.');
+                        let major = it.next().unwrap_or("");
+                        let minor = it.next().unwrap_or("");
+                        major == query_norm || minor == query_norm || k.contains(query_norm)
+                    })
+                    .collect()
+            }
         } else {
-            keys.into_iter()
-                .filter(|k| {
-                    let mut it = k.split('.');
-                    let major = it.next().unwrap_or("");
-                    let minor = it.next().unwrap_or("");
-                    major == query_norm || minor == query_norm || k.contains(query_norm)
-                })
-                .collect()
-        }
-    } else {
-        Vec::new()
-    };
+            Vec::new()
+        };
 
     let waiting_remote =
         runtime_descriptor(state.kind).supports_remote_latest && unified_major_rows.is_none();
@@ -2334,18 +2386,23 @@ pub fn env_center_view(
 
             let (maj_row_ver_text, maj_row_is_current_exact): (Option<String>, bool) =
                 if let Some(installed) = primary_installed.as_ref() {
-                    let is_current_exact = state.current.as_ref().is_some_and(|c| c.0 == installed.0)
-                        && path_proxy_on
-                        && if state.kind == RuntimeKind::Php {
-                            flavor_matches_global
-                        } else {
-                            true
-                        };
+                    let is_current_exact =
+                        state.current.as_ref().is_some_and(|c| c.0 == installed.0)
+                            && path_proxy_on
+                            && if state.kind == RuntimeKind::Php {
+                                flavor_matches_global
+                            } else {
+                                true
+                            };
                     let ver_core = if is_current_exact {
                         format!(
                             "{} {}",
                             installed.0,
-                            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)")
+                            envr_core::i18n::tr_key(
+                                "gui.runtime.current_tag",
+                                "(当前)",
+                                "(current)"
+                            )
                         )
                     } else {
                         installed.0.clone()
@@ -2360,8 +2417,9 @@ pub fn env_center_view(
                     (None, false)
                 };
 
-            let unified_major_mode = envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
-                && unified_major_rows.is_some_and(|rows| !rows.is_empty());
+            let unified_major_mode =
+                envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
+                    && unified_major_rows.is_some_and(|rows| !rows.is_empty());
 
             // Node list shows stable major keys; install spec still resolves latest patch elsewhere.
             let label_base = if state.kind == RuntimeKind::Node {
@@ -2406,25 +2464,26 @@ pub fn env_center_view(
                 let is_current_exact = maj_row_is_current_exact;
                 let ver_text = maj_row_ver_text.clone().unwrap_or_default();
 
-                let use_btn = button(button_content_centered(
-                    row![
-                        Lucide::Package.view(14.0, txt),
-                        text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                    ]
-                    .spacing(sp.xs as f32)
-                    .align_y(Alignment::Center)
-                    .into(),
-                ))
-                .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
-                    Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
-                ))
-                .height(Length::Fixed(
-                    tokens
-                        .control_height_secondary
-                        .max(tokens.min_click_target_px()),
-                ))
-                .padding([sp.sm as f32, sp.sm as f32])
-                .style(button_style(tokens, ButtonVariant::Secondary));
+                let use_btn =
+                    button(button_content_centered(
+                        row![
+                            Lucide::Package.view(14.0, txt),
+                            text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                        ]
+                        .spacing(sp.xs as f32)
+                        .align_y(Alignment::Center)
+                        .into(),
+                    ))
+                    .on_press_maybe((!is_current_exact && path_proxy_on).then_some(
+                        Message::EnvCenter(EnvCenterMsg::SubmitUse(installed.0.clone())),
+                    ))
+                    .height(Length::Fixed(
+                        tokens
+                            .control_height_secondary
+                            .max(tokens.min_click_target_px()),
+                    ))
+                    .padding([sp.sm as f32, sp.sm as f32])
+                    .style(button_style(tokens, ButtonVariant::Secondary));
 
                 let uninstall_btn = button(button_content_centered(
                     row![
@@ -2545,28 +2604,22 @@ pub fn env_center_view(
                 let expanded = state.unified_expanded_major_keys.contains(key);
                 let muted = gui_theme::to_color(tokens.colors.text_muted);
                 let chevron_lbl = if expanded { "▾" } else { "▸" };
-                let chevron_cell = container(
-                    text(chevron_lbl)
-                        .size(ty.caption)
-                        .color(muted),
-                )
-                .width(Length::Fixed(22.0))
-                .align_x(Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center);
-                let mut tap_inner = row![
-                    chevron_cell,
-                    text(left_text.clone()).width(Length::Fill),
-                ]
-                .spacing(sp.sm as f32)
-                .align_y(Alignment::Center);
+                let chevron_cell = container(text(chevron_lbl).size(ty.caption).color(muted))
+                    .width(Length::Fixed(22.0))
+                    .align_x(Horizontal::Center)
+                    .align_y(iced::alignment::Vertical::Center);
+                let mut tap_inner =
+                    row![chevron_cell, text(left_text.clone()).width(Length::Fill),]
+                        .spacing(sp.sm as f32)
+                        .align_y(Alignment::Center);
                 if let Some(v) = maj_row_ver_text.clone() {
                     tap_inner = tap_inner.push(text(v).width(Length::Fill));
                 }
                 let expand_strip = container(
                     mouse_area(tap_inner.width(Length::Fill))
-                        .on_press(Message::EnvCenter(EnvCenterMsg::ToggleUnifiedMajorExpanded(
-                            key.clone(),
-                        )))
+                        .on_press(Message::EnvCenter(
+                            EnvCenterMsg::ToggleUnifiedMajorExpanded(key.clone()),
+                        ))
                         .interaction(iced::mouse::Interaction::Pointer),
                 )
                 .width(Length::Fill);
@@ -2584,11 +2637,9 @@ pub fn env_center_view(
             };
 
             list_col = list_col.push(
-                container(
-                    head_row,
-                )
-                .padding([sp.xs as f32, sp.md as f32])
-                .style(card_container_style(tokens, 1)),
+                container(head_row)
+                    .padding([sp.xs as f32, sp.md as f32])
+                    .style(card_container_style(tokens, 1)),
             );
 
             if envr_domain::runtime::unified_major_list_rollout_enabled(state.kind)
@@ -2607,32 +2658,37 @@ pub fn env_center_view(
                         format!(
                             "{} {}",
                             spec,
-                            envr_core::i18n::tr_key("gui.runtime.current_tag", "(当前)", "(current)")
+                            envr_core::i18n::tr_key(
+                                "gui.runtime.current_tag",
+                                "(当前)",
+                                "(current)"
+                            )
                         )
                     } else {
                         spec.clone()
                     };
 
                     let child_actions: Element<'static, Message> = if is_installed {
-                        let use_btn = button(button_content_centered(
-                            row![
-                                Lucide::Package.view(14.0, txt),
-                                text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
-                            ]
-                            .spacing(sp.xs as f32)
-                            .align_y(Alignment::Center)
-                            .into(),
-                        ))
-                        .on_press_maybe((!is_current && path_proxy_on).then_some(
-                            Message::EnvCenter(EnvCenterMsg::SubmitUse(spec.clone())),
-                        ))
-                        .height(Length::Fixed(
-                            tokens
-                                .control_height_secondary
-                                .max(tokens.min_click_target_px()),
-                        ))
-                        .padding([sp.sm as f32, sp.sm as f32])
-                        .style(button_style(tokens, ButtonVariant::Secondary));
+                        let use_btn =
+                            button(button_content_centered(
+                                row![
+                                    Lucide::Package.view(14.0, txt),
+                                    text(envr_core::i18n::tr_key("gui.action.use", "切换", "Use")),
+                                ]
+                                .spacing(sp.xs as f32)
+                                .align_y(Alignment::Center)
+                                .into(),
+                            ))
+                            .on_press_maybe((!is_current && path_proxy_on).then_some(
+                                Message::EnvCenter(EnvCenterMsg::SubmitUse(spec.clone())),
+                            ))
+                            .height(Length::Fixed(
+                                tokens
+                                    .control_height_secondary
+                                    .max(tokens.min_click_target_px()),
+                            ))
+                            .padding([sp.sm as f32, sp.sm as f32])
+                            .style(button_style(tokens, ButtonVariant::Secondary));
 
                         let uninstall_btn = button(button_content_centered(
                             row![
@@ -3500,4 +3556,3 @@ pub(crate) fn env_center_clear_unified_list_render_state(state: &mut EnvCenterSt
     state.unified_children_rows_by_kind_major.clear();
     state.unified_expanded_major_keys.clear();
 }
-

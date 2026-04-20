@@ -821,15 +821,7 @@ fn exec_dry_run_r_resolves_project_pin() {
         )
     } else {
         run_envr(
-            &[
-                "exec",
-                "--lang",
-                "r",
-                "--dry-run",
-                "sh",
-                "-c",
-                "echo noop",
-            ],
+            &["exec", "--lang", "r", "--dry-run", "sh", "-c", "echo noop"],
             &runtime_root,
             &project,
         )

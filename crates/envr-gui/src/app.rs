@@ -1067,7 +1067,10 @@ where
         return Task::none();
     }
     if on {
-        Task::batch([persist_settings_clone_task(st), gui_ops::sync_shims_for_kind(kind)])
+        Task::batch([
+            persist_settings_clone_task(st),
+            gui_ops::sync_shims_for_kind(kind),
+        ])
     } else {
         persist_settings_clone_task(st)
     }
@@ -1612,6 +1615,23 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             }
             Task::none()
         }
+        EnvCenterMsg::GroovyJavaChecked(res) => {
+            match res {
+                Ok(()) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .remove(&envr_domain::runtime::RuntimeKind::Groovy);
+                }
+                Err(msg) => {
+                    state
+                        .env_center
+                        .jvm_java_hints
+                        .insert(envr_domain::runtime::RuntimeKind::Groovy, msg);
+                }
+            }
+            Task::none()
+        }
         EnvCenterMsg::InstallInput(s) => {
             state.env_center.install_input =
                 sanitize_runtime_filter_input(state.env_center.kind, &s);
@@ -1642,7 +1662,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             match res {
                 Ok(rows) => {
                     state.env_center.remote_error = None;
-                    state.env_center.unified_major_rows_by_kind.insert(kind, rows);
+                    state
+                        .env_center
+                        .unified_major_rows_by_kind
+                        .insert(kind, rows);
                 }
                 Err(e) => {
                     state.env_center.remote_error = Some(e);
@@ -1657,7 +1680,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             match res {
                 Ok(rows) => {
                     state.env_center.remote_error = None;
-                    state.env_center.unified_major_rows_by_kind.insert(kind, rows);
+                    state
+                        .env_center
+                        .unified_major_rows_by_kind
+                        .insert(kind, rows);
                 }
                 Err(e) => {
                     state.env_center.remote_error = Some(e);
@@ -1702,7 +1728,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::ToggleUnifiedMajorExpanded(major_key) => {
-            if !state.env_center.unified_expanded_major_keys.remove(&major_key) {
+            if !state
+                .env_center
+                .unified_expanded_major_keys
+                .remove(&major_key)
+            {
                 state
                     .env_center
                     .unified_expanded_major_keys
@@ -1934,14 +1964,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 st.runtime.node.npm_registry_mode = mode;
             })
         }
-        EnvCenterMsg::SetNodePathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Node,
-                on,
-                |st, on| st.runtime.node.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetNodePathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Node,
+            on,
+            |st, on| st.runtime.node.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetPythonDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.python.download_source = src;
@@ -1952,14 +1980,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 st.runtime.python.pip_registry_mode = mode;
             })
         }
-        EnvCenterMsg::SetPythonPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Python,
-                on,
-                |st, on| st.runtime.python.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetPythonPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Python,
+            on,
+            |st, on| st.runtime.python.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetJavaDistro(distro) => {
             state.env_center.remote_error = None;
             persist_runtime_settings_update(state, move |st| {
@@ -1971,38 +1997,36 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 st.runtime.java.download_source = src;
             })
         }
-        EnvCenterMsg::SetJavaPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Java,
-                on,
-                |st, on| st.runtime.java.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetKotlinPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Kotlin,
-                on,
-                |st, on| st.runtime.kotlin.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetScalaPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Scala,
-                on,
-                |st, on| st.runtime.scala.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetClojurePathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Clojure,
-                on,
-                |st, on| st.runtime.clojure.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetJavaPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Java,
+            on,
+            |st, on| st.runtime.java.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetKotlinPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Kotlin,
+            on,
+            |st, on| st.runtime.kotlin.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetScalaPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Scala,
+            on,
+            |st, on| st.runtime.scala.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetClojurePathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Clojure,
+            on,
+            |st, on| st.runtime.clojure.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetGroovyPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Groovy,
+            on,
+            |st, on| st.runtime.groovy.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetGoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.download_source = src;
@@ -2030,14 +2054,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }
             })
         }
-        EnvCenterMsg::SetGoPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Go,
-                on,
-                |st, on| st.runtime.go.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetGoPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Go,
+            on,
+            |st, on| st.runtime.go.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetGoProxyCustomDraft(s) => {
             state.env_center.go_proxy_custom_draft = s;
             Task::none()
@@ -2048,7 +2070,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
         }
         EnvCenterMsg::ApplyGoNetworkSettings => {
             let p = state.env_center.go_proxy_custom_draft.trim().to_string();
-            let pr = state.env_center.go_private_patterns_draft.trim().to_string();
+            let pr = state
+                .env_center
+                .go_private_patterns_draft
+                .trim()
+                .to_string();
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.go.proxy_custom = if p.is_empty() { None } else { Some(p) };
                 st.runtime.go.private_patterns = if pr.is_empty() { None } else { Some(pr) };
@@ -2077,14 +2103,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 }),
             ])
         }
-        EnvCenterMsg::SetPhpPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Php,
-                on,
-                |st, on| st.runtime.php.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetPhpPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Php,
+            on,
+            |st, on| st.runtime.php.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetDenoDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.deno.download_source = src;
@@ -2095,107 +2119,83 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 st.runtime.deno.package_source = mode;
             })
         }
-        EnvCenterMsg::SetDenoPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Deno,
-                on,
-                |st, on| st.runtime.deno.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetDenoPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Deno,
+            on,
+            |st, on| st.runtime.deno.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetBunPackageSource(mode) => {
             persist_runtime_settings_update(state, move |st| {
                 st.runtime.bun.package_source = mode;
             })
         }
-        EnvCenterMsg::SetBunPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Bun,
-                on,
-                |st, on| st.runtime.bun.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetDotnetPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Dotnet,
-                on,
-                |st, on| st.runtime.dotnet.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetZigPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Zig,
-                on,
-                |st, on| st.runtime.zig.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetJuliaPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Julia,
-                on,
-                |st, on| st.runtime.julia.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetLuaPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Lua,
-                on,
-                |st, on| st.runtime.lua.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetNimPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Nim,
-                on,
-                |st, on| st.runtime.nim.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetCrystalPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Crystal,
-                on,
-                |st, on| st.runtime.crystal.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetRLangPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::RLang,
-                on,
-                |st, on| st.runtime.r.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetRubyPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Ruby,
-                on,
-                |st, on| st.runtime.ruby.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetElixirPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Elixir,
-                on,
-                |st, on| st.runtime.elixir.path_proxy_enabled = on,
-            )
-        }
-        EnvCenterMsg::SetErlangPathProxy(on) => {
-            persist_path_proxy_toggle(
-                state,
-                envr_domain::runtime::RuntimeKind::Erlang,
-                on,
-                |st, on| st.runtime.erlang.path_proxy_enabled = on,
-            )
-        }
+        EnvCenterMsg::SetBunPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Bun,
+            on,
+            |st, on| st.runtime.bun.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetDotnetPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Dotnet,
+            on,
+            |st, on| st.runtime.dotnet.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetZigPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Zig,
+            on,
+            |st, on| st.runtime.zig.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetJuliaPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Julia,
+            on,
+            |st, on| st.runtime.julia.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetLuaPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Lua,
+            on,
+            |st, on| st.runtime.lua.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetNimPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Nim,
+            on,
+            |st, on| st.runtime.nim.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetCrystalPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Crystal,
+            on,
+            |st, on| st.runtime.crystal.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetRLangPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::RLang,
+            on,
+            |st, on| st.runtime.r.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetRubyPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Ruby,
+            on,
+            |st, on| st.runtime.ruby.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetElixirPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Elixir,
+            on,
+            |st, on| st.runtime.elixir.path_proxy_enabled = on,
+        ),
+        EnvCenterMsg::SetErlangPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Erlang,
+            on,
+            |st, on| st.runtime.erlang.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::BunGlobalBinDirEdit(s) => {
             state.env_center.bun_global_bin_dir_draft = s;
             Task::none()

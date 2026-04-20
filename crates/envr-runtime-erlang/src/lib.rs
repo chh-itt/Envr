@@ -2,8 +2,8 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_GITHUB_TAGS_API, ErlangRelease, GithubTag, list_latest_per_major, normalize_otp_version,
-    resolve_erlang_version,
+    DEFAULT_GITHUB_TAGS_API, ErlangRelease, GithubTag, list_latest_per_major,
+    normalize_otp_version, resolve_erlang_version,
 };
 pub use manager::{
     ErlangManager, ErlangPaths, erlang_installation_valid, list_installed_versions, read_current,
@@ -168,4 +168,3 @@ impl RuntimeProvider for ErlangRuntimeProvider {
         Ok((vec![paths.version_dir(&version.0)], None))
     }
 }
-

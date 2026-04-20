@@ -8,7 +8,9 @@ use crate::commands::common::{
 use crate::output::{self, fmt_template};
 
 use envr_core::runtime::service::RuntimeService;
-use envr_domain::runtime::{RuntimeKind, RuntimeVersion, runtime_kinds_all, version_line_key_for_kind};
+use envr_domain::runtime::{
+    RuntimeKind, RuntimeVersion, runtime_kinds_all, version_line_key_for_kind,
+};
 use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodePaths, normalize_node_version, parse_node_index};
@@ -61,11 +63,10 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
         | RuntimeKind::Clojure
+        | RuntimeKind::Groovy
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
-        | RuntimeKind::RLang => {
-            version_line_key_for_kind(kind, t)
-        }
+        | RuntimeKind::RLang => { version_line_key_for_kind(kind, t) }
             .unwrap_or_else(|| t.split(['.', '-', '+']).next().unwrap_or(t).to_string()),
         _ => t.split(['.', '-', '+']).next().unwrap_or(t).to_string(),
     }

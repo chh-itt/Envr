@@ -21,11 +21,7 @@ pub fn scala_minimum_java_major_for_compiler(scala_version_label: &str) -> Optio
         return None;
     }
     let minor = parts.next()?.parse::<u64>().ok()?;
-    if minor >= 3 {
-        Some(17)
-    } else {
-        Some(8)
-    }
+    if minor >= 3 { Some(17) } else { Some(8) }
 }
 
 /// `None` = OK; `Some` = user-facing message (CLI / shim / GUI) when JDK is **too old** for this Scala 3 build.

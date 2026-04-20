@@ -109,6 +109,9 @@ path_proxy_enabled = true
 [runtime.clojure]
 path_proxy_enabled = true
 
+[runtime.groovy]
+path_proxy_enabled = true
+
 [runtime.go]
 download_source = "auto"
 # proxy_mode：auto | domestic | official | direct | custom
