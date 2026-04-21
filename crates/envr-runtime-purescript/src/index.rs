@@ -65,13 +65,17 @@ fn github_api_auth_token() -> Option<String> {
         })
 }
 
+fn url_is_github_api(url: &str) -> bool {
+    url.contains("api.github.com")
+}
+
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(tok) = github_api_auth_token() {
-        req = req.header("Authorization", format!("Bearer {tok}"));
+    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    if url_is_github_api(url) {
+        req = req.header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(tok) = github_api_auth_token() {
+            req = req.header("Authorization", format!("Bearer {tok}"));
+        }
     }
     let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
     if !response.status().is_success() {
@@ -83,6 +87,32 @@ fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<Strin
     response
         .text()
         .map_err(|e| EnvrError::Download(e.to_string()))
+}
+
+fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
+    let u = url.trim();
+    const NEEDLE: &str = "https://api.github.com/";
+    let i = u.find(NEEDLE)?;
+    Some(u[i..].to_string())
+}
+
+fn candidate_api_bases(primary: &str, default_url: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |s: &str| {
+        let t = s.trim();
+        if t.is_empty() {
+            return;
+        }
+        if !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    };
+    push(primary);
+    if let Some(inner) = strip_known_github_api_proxy_prefix(primary) {
+        push(&inner);
+    }
+    push(default_url);
+    out
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -145,28 +175,50 @@ pub fn fetch_purescript_github_releases_index(
     releases_api_url: &str,
 ) -> EnvrResult<Vec<GhRelease>> {
     let mut all = Vec::new();
-    let mut page = 1;
-    loop {
-        let url = format!("{releases_api_url}?per_page=100&page={page}");
-        let text = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&text).map_err(|e| EnvrError::Download(e.to_string()))?;
-        let Some(arr) = v.as_array() else {
-            break;
-        };
-        if arr.is_empty() {
+    for base in candidate_api_bases(releases_api_url, DEFAULT_PURESCRIPT_RELEASES_API_URL) {
+        let mut ok = true;
+        let mut page = 1;
+        let mut acc = Vec::new();
+        loop {
+            let url = format!("{base}?per_page=100&page={page}");
+            let text = match fetch_text(client, &url) {
+                Ok(t) => t,
+                Err(_) => {
+                    ok = false;
+                    break;
+                }
+            };
+            let v: Value =
+                serde_json::from_str(&text).map_err(|e| EnvrError::Download(e.to_string()))?;
+            let Some(arr) = v.as_array() else {
+                ok = false;
+                break;
+            };
+            if arr.is_empty() {
+                break;
+            }
+            for item in arr {
+                let r: GhRelease = serde_json::from_value(item.clone())
+                    .map_err(|e| EnvrError::Download(e.to_string()))?;
+                acc.push(r);
+            }
+            if arr.len() < 100 {
+                break;
+            }
+            page += 1;
+        }
+        if ok && !acc.is_empty() {
+            all = acc;
             break;
         }
-        for item in arr {
-            let r: GhRelease =
-                serde_json::from_value(item.clone()).map_err(|e| EnvrError::Download(e.to_string()))?;
-            all.push(r);
-        }
-        if arr.len() < 100 {
-            break;
-        }
-        page += 1;
     }
-    Ok(all)
+    if all.is_empty() {
+        Err(EnvrError::Download(
+            "failed to fetch purescript releases index (all API candidates failed)".into(),
+        ))
+    } else {
+        Ok(all)
+    }
 }
 
 fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<PurescriptInstallableRow>> {
@@ -200,10 +252,11 @@ pub fn fetch_purescript_installable_rows_with_fallback(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
 ) -> EnvrResult<Vec<PurescriptInstallableRow>> {
-    let releases = fetch_purescript_github_releases_index(client, releases_api_url)?;
-    let rows = installable_rows_from_releases(&releases);
-    if !rows.is_empty() {
-        return Ok(rows);
+    if let Ok(releases) = fetch_purescript_github_releases_index(client, releases_api_url) {
+        let rows = installable_rows_from_releases(&releases);
+        if !rows.is_empty() {
+            return Ok(rows);
+        }
     }
     fetch_rows_via_atom(client)
 }
