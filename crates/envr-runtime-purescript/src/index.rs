@@ -18,6 +18,10 @@ static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"https://github\.com/purescript/purescript/releases/tag/([^"<>]+)"#)
         .expect("purescript atom release tag regex")
 });
+static RELEASES_PAGE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"/purescript/purescript/releases/tag/([^"<>/]+)"#)
+        .expect("purescript releases page tag regex")
+});
 static TAG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^v?(\d+\.\d+\.\d+)$").expect("purescript tag regex"));
 
@@ -248,6 +252,53 @@ fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Pur
     Ok(out)
 }
 
+fn fetch_rows_via_releases_pages(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<PurescriptInstallableRow>> {
+    let asset = purescript_asset_candidates().first().copied().unwrap_or("");
+    if asset.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let mut empty_pages = 0u8;
+    for page in 1..=20 {
+        let url = format!("https://github.com/purescript/purescript/releases?page={page}");
+        let text = match fetch_text(client, &url) {
+            Ok(t) => t,
+            Err(_) => break,
+        };
+        let mut found_on_page = 0usize;
+        for cap in RELEASES_PAGE_TAG_RE.captures_iter(&text) {
+            let tag = cap.get(1).map(|m| m.as_str()).unwrap_or("").trim();
+            let Some(version) = label_from_tag(tag) else {
+                continue;
+            };
+            if !seen.insert(version.clone()) {
+                continue;
+            }
+            found_on_page += 1;
+            out.push(PurescriptInstallableRow {
+                version,
+                url: format!(
+                    "https://github.com/purescript/purescript/releases/download/{tag}/{asset}"
+                ),
+            });
+        }
+        if found_on_page == 0 {
+            empty_pages += 1;
+            if empty_pages >= 2 {
+                break;
+            }
+        } else {
+            empty_pages = 0;
+        }
+    }
+    out.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
+    out.dedup_by(|a, b| a.version == b.version);
+    Ok(out)
+}
+
 pub fn fetch_purescript_installable_rows_with_fallback(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
@@ -258,7 +309,15 @@ pub fn fetch_purescript_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    fetch_rows_via_atom(client)
+    let mut rows = fetch_rows_via_atom(client)?;
+    // `releases.atom` often exposes only recent entries; supplement with paged HTML tags.
+    if rows.len() < 5 {
+        let mut page_rows = fetch_rows_via_releases_pages(client)?;
+        rows.append(&mut page_rows);
+        rows.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
+        rows.dedup_by(|a, b| a.version == b.version);
+    }
+    Ok(rows)
 }
 
 pub fn list_remote_versions(
@@ -313,6 +372,23 @@ pub fn resolve_purescript_version(rows: &[PurescriptInstallableRow], spec: &str)
     }
     if rows.iter().any(|r| r.version == t) {
         return Some(t.to_string());
+    }
+    // Accept line-like specs (e.g. 0.15) and resolve to latest patch in that line.
+    if t.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        let mut cands: Vec<&str> = rows
+            .iter()
+            .filter_map(|r| {
+                if r.version == t || r.version.starts_with(&format!("{t}.")) {
+                    Some(r.version.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        cands.sort_by(|a, b| cmp_release_labels(a, b));
+        if let Some(last) = cands.last() {
+            return Some((*last).to_string());
+        }
     }
     None
 }

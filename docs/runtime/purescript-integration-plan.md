@@ -40,7 +40,7 @@ Primary assets (host-specific):
 - Latest-per-major TTL: `ENVR_PURESCRIPT_REMOTE_CACHE_TTL_SECS` (default 86400)
 - API override: `ENVR_PURESCRIPT_GITHUB_RELEASES_URL`
 - Tokens: `GITHUB_TOKEN` / `GH_TOKEN` / `ENVR_GITHUB_TOKEN`
-- Fallback: when API fails, parse `releases.atom` tags and synthesize `.../releases/download/<tag>/<asset>`
+- Fallback: when API fails, parse `releases.atom` + paged GitHub Releases HTML tags and synthesize `.../releases/download/<tag>/<asset>`
 
 ## Install layout and validation
 
@@ -82,6 +82,7 @@ GUI:
 - CLI:
   - No integration regression in workspace tests.
   - Pending operator smoke in real shell: `remote/install/use/shim sync/purs --version/exec`.
+  - `use/install purescript 0.15` should resolve to latest known `0.15.x` (line spec convenience).
 - GUI:
   - No compile/runtime regression observed in GUI test suite.
   - Pending operator smoke in Env Center tab (install/use + PATH proxy toggle persistence).
