@@ -161,6 +161,7 @@ pub enum CoreCommand {
     Luac,
     Nim,
     Crystal,
+    Perl,
     R,
     Rscript,
 }
@@ -192,6 +193,7 @@ impl CoreCommand {
             CoreCommand::Lua | CoreCommand::Luac => "lua",
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
+            CoreCommand::Perl => "perl",
             CoreCommand::R | CoreCommand::Rscript => "r",
         }
     }
@@ -225,6 +227,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "lua" => vec![home.to_path_buf()],
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
+        "perl" => vec![home.join("bin"), home.to_path_buf()],
         "r" => vec![home.join("bin")],
         _ => vec![],
     }
@@ -290,6 +293,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         ],
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         "julia" => vec![("JULIA_HOME".into(), home_env)],
+        "perl" => vec![("PERL_HOME".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
         "scala" => vec![("SCALA_HOME".into(), home_env)],
         "clojure" => vec![("CLOJURE_HOME".into(), home_env)],
@@ -461,6 +465,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "luac" => Some(CoreCommand::Luac),
         "nim" => Some(CoreCommand::Nim),
         "crystal" => Some(CoreCommand::Crystal),
+        "perl" => Some(CoreCommand::Perl),
         "r" => Some(CoreCommand::R),
         "rscript" => Some(CoreCommand::Rscript),
         _ => None,
@@ -1220,6 +1225,15 @@ fn crystal_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn perl_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Perl => bin_tool_layout::resolve_perl_exe(home).ok_or_else(|| {
+            EnvrError::Runtime(format!("perl missing under {}", home.display()))
+        }),
+        _ => Err(EnvrError::Runtime("internal: not a perl tool".into())),
+    }
+}
+
 fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::R => bin_tool_layout::resolve_r_exe(home)
@@ -1259,6 +1273,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
+        CoreCommand::Perl => perl_tool_path(home, cmd),
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
     }
 }
@@ -1421,6 +1436,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Luac => "luac",
         CoreCommand::Nim => "nim",
         CoreCommand::Crystal => "crystal",
+        CoreCommand::Perl => "perl",
         CoreCommand::R => "r",
         CoreCommand::Rscript => "rscript",
     }
@@ -1508,6 +1524,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
+        CoreCommand::Perl => perl_tool_path(&home, cmd)?,
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
     };
 
@@ -1605,6 +1622,7 @@ mod tests {
         assert_eq!(parse_core_command("luac"), Some(CoreCommand::Luac));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
         assert_eq!(parse_core_command("crystal"), Some(CoreCommand::Crystal));
+        assert_eq!(parse_core_command("perl"), Some(CoreCommand::Perl));
         assert_eq!(parse_core_command("r"), Some(CoreCommand::R));
         assert_eq!(parse_core_command("rscript"), Some(CoreCommand::Rscript));
         assert_eq!(parse_core_command("unknown"), None);

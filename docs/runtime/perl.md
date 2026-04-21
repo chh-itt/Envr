@@ -1,0 +1,52 @@
+# Perl (managed)
+
+envr installs a **portable Perl** into:
+
+`runtimes/perl/versions/<label>` with a global `runtimes/perl/current` symlink or Windows pointer file.
+
+- **Windows x64:** [StrawberryPerl/Perl-Dist-Strawberry](https://github.com/StrawberryPerl/Perl-Dist-Strawberry) release assets `strawberry-perl-*-64bit-portable.zip`.
+- **Linux / macOS:** [skaji/relocatable-perl](https://github.com/skaji/relocatable-perl) archives `perl-linux-amd64.tar.xz` (and siblings), with `.tar.gz` fallback when an `.xz` asset is absent.
+
+Unsupported hosts (for example Windows ARM64 without a portable zip contract) return a validation error from the provider; see `docs/runtime/perl-integration-plan.md`.
+
+## Remote index and caching
+
+- Default GitHub Releases API URL is chosen by OS. Override with **`ENVR_PERL_GITHUB_RELEASES_URL`** if you mirror the API.
+- Index cache TTL: **`ENVR_PERL_RELEASES_CACHE_TTL_SECS`** or **`ENVR_PERL_INDEX_CACHE_TTL_SECS`** (default 3600 seconds).
+- Latest-per-major disk cache TTL: **`ENVR_PERL_REMOTE_CACHE_TTL_SECS`** (default 86400 seconds).
+- Optional GitHub token: **`GITHUB_TOKEN`**, **`GH_TOKEN`**, or **`ENVR_GITHUB_TOKEN`** (same as other GitHub-backed runtimes).
+
+## Commands
+
+```bash
+envr remote perl
+envr remote perl -u
+envr install perl 5.42.2.0
+envr use perl 5.42.2.0
+envr shim sync
+perl -v
+envr exec --lang perl -- perl -v
+```
+
+Major lines follow **`major.minor`** (for example `5.42`) via `version_line_key_for_kind`.
+
+## Settings
+
+```toml
+[runtime.perl]
+path_proxy_enabled = true
+```
+
+When `path_proxy_enabled = false`, the `perl` shim resolves to the next matching `perl` on **system PATH** outside envr shims (same model as Crystal / Nim).
+
+## Pins
+
+```toml
+[runtimes.perl]
+version = "5.42.2.0"
+```
+
+## Environment
+
+- Shims and `envr run` set **`PERL_HOME`** to the resolved install root when Perl is on the stack.
+- Template key **`ENVR_PERL_VERSION`** is set to the version directory label (same family as `ENVR_RUBY_VERSION`, `ENVR_CRYSTAL_VERSION`, etc.).

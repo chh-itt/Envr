@@ -250,6 +250,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "lua" => Some("ENVR_LUA_VERSION"),
         "nim" => Some("ENVR_NIM_VERSION"),
         "crystal" => Some("ENVR_CRYSTAL_VERSION"),
+        "perl" => Some("ENVR_PERL_VERSION"),
         "r" => Some("ENVR_R_VERSION"),
         "kotlin" => Some("ENVR_KOTLIN_VERSION"),
         "scala" => Some("ENVR_SCALA_VERSION"),

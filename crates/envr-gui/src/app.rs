@@ -2154,6 +2154,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.crystal.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetPerlPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Perl,
+            on,
+            |st, on| st.runtime.perl.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetRLangPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::RLang,

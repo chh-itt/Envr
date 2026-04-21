@@ -38,6 +38,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "lua",
     "nim",
     "crystal",
+    "perl",
     "r",
 ];
 

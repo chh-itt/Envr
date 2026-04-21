@@ -58,6 +58,19 @@ JVM-family matrix checklist (minimum for each new JVM-hosted runtime):
 - [ ] Shim/exec/run all share the same hosted-runtime branch (no per-runtime duplicated Java merge code).
 - [ ] GUI Env Center triggers Java-host compatibility check on enter + after install/use.
 
+### 2.2 Perl (Strawberry Windows vs skaji relocatable Unix)
+
+Perl is a **dual-upstream** managed runtime in envr:
+
+- **Windows x86_64** consumes **Strawberry Perl** portable zips (`StrawberryPerl/Perl-Dist-Strawberry`). Version labels are parsed from **`strawberry-perl-<ver>-64bit-portable.zip`** (four-part build numbers are normal).
+- **Linux / macOS** consumes **`skaji/relocatable-perl`** (`perl-linux-amd64.tar.xz` and siblings, with `.tar.gz` fallback).
+
+Friction to plan for up front:
+
+1. **Different GitHub repos and asset rules** per OS family; do not assume one release JSON schema beyond “normalize into `(version, url, sha?)` rows”.
+2. **Strawberry ZIP layout variance** (flat vs nested `perl/`). Promotion must **discover** a directory that contains `bin/perl(.exe)` rather than assuming a single top-level folder name.
+3. **GitHub REST failures:** keep the usual mitigations (token, optional API proxy stripping, pagination). For relocatable-perl, envr also supports an **atom + synthetic download URL** fallback similar to Crystal.
+
 Standalone single-binary runtime checklist (minimum):
 
 - [ ] Release discovery source is explicit (JSON API or HTML index) with cache + TTL knob.

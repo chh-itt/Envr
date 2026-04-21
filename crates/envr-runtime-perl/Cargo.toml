@@ -1,0 +1,16 @@
+[package]
+name = "envr-runtime-perl"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
+envr-error = { path = "../envr-error" }
+envr-platform = { path = "../envr-platform" }
+regex = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

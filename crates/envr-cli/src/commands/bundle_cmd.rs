@@ -148,6 +148,7 @@ fn create_inner(
             RuntimeKind::Lua,
             RuntimeKind::Nim,
             RuntimeKind::Crystal,
+            RuntimeKind::Perl,
             RuntimeKind::RLang,
         ] {
             if let Ok(Some(v)) = service.current(kind) {

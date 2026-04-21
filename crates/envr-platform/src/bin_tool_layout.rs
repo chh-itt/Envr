@@ -93,6 +93,16 @@ pub fn resolve_rscript_exe(home: &Path) -> Option<PathBuf> {
     resolve_bin_tool_exe(home, "Rscript")
 }
 
+// --- Perl (Strawberry / relocatable: `bin/perl`) -----------------------------------------------
+
+pub fn perl_installation_valid(home: &Path) -> bool {
+    resolve_perl_exe(home).is_some()
+}
+
+pub fn resolve_perl_exe(home: &Path) -> Option<PathBuf> {
+    resolve_bin_tool_exe(home, "perl")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +137,19 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn perl_valid_when_interpreter_exists_under_bin() {
+        let tmp = tempdir().unwrap();
+        let home = tmp.path();
+        std::fs::create_dir_all(home.join("bin")).unwrap();
+        #[cfg(windows)]
+        std::fs::write(home.join("bin").join("perl.exe"), []).unwrap();
+        #[cfg(not(windows))]
+        std::fs::write(home.join("bin").join("perl"), []).unwrap();
+        assert!(perl_installation_valid(home));
+        assert!(resolve_perl_exe(home).is_some());
+    }
+
     fn flutter_valid_when_launcher_exists_under_bin() {
         let tmp = tempdir().unwrap();
         let home = tmp.path();

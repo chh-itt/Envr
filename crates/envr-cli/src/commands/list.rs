@@ -70,6 +70,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
         | RuntimeKind::Flutter
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
+        | RuntimeKind::Perl
         | RuntimeKind::RLang => { version_line_key_for_kind(kind, t) }
             .unwrap_or_else(|| t.split(['.', '-', '+']).next().unwrap_or(t).to_string()),
         _ => t.split(['.', '-', '+']).next().unwrap_or(t).to_string(),

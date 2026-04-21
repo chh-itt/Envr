@@ -148,7 +148,7 @@ pub fn resolve_run_lang_home(
         "go" => resolve_go_home(ctx, cfg, None),
         "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "groovy" | "terraform"
         | "v" | "dart" | "flutter"
-        | "zig" | "julia" | "nim" | "crystal" | "r" | "elixir" | "erlang" => {
+        | "zig" | "julia" | "nim" | "crystal" | "perl" | "r" | "elixir" | "erlang" => {
             resolve_runtime_home_for_lang(ctx, lang, None)
         }
         _ => Err(EnvrError::Validation(format!(

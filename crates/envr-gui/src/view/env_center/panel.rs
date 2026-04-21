@@ -7,7 +7,7 @@ use envr_config::settings::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
     LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
-    NpmRegistryMode, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
+    NpmRegistryMode, PerlRuntimeSettings, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
     RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
     TerraformRuntimeSettings, VRuntimeSettings, ZigRuntimeSettings,
@@ -97,6 +97,7 @@ pub enum EnvCenterMsg {
     SetLuaPathProxy(bool),
     SetNimPathProxy(bool),
     SetCrystalPathProxy(bool),
+    SetPerlPathProxy(bool),
     SetRLangPathProxy(bool),
     SetRubyPathProxy(bool),
     SetElixirPathProxy(bool),
@@ -1957,6 +1958,47 @@ fn crystal_runtime_settings_section(
     .into()
 }
 
+fn perl_runtime_settings_section(
+    perl: &PerlRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.perl.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.perl.path_proxy.hint",
+            "开启时由 envr 接管 perl；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages perl; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(perl.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetPerlPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.perl.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn nim_runtime_settings_section(
     nim: &NimRuntimeSettings,
     tokens: ThemeTokens,
@@ -2141,6 +2183,7 @@ pub fn env_center_view(
     lua_runtime: Option<&LuaRuntimeSettings>,
     nim_runtime: Option<&NimRuntimeSettings>,
     crystal_runtime: Option<&CrystalRuntimeSettings>,
+    perl_runtime: Option<&PerlRuntimeSettings>,
     r_runtime: Option<&RlangRuntimeSettings>,
     runtime_settings: &RuntimeSettings,
     tokens: ThemeTokens,
@@ -2364,6 +2407,10 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Crystal {
         crystal_runtime
             .map(|c| crystal_runtime_settings_section(c, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Perl {
+        perl_runtime
+            .map(|p| perl_runtime_settings_section(p, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::RLang {
         r_runtime

@@ -27,6 +27,7 @@ pub struct PathProxyRuntimeSnapshot {
     pub lua: bool,
     pub nim: bool,
     pub crystal: bool,
+    pub perl: bool,
     pub r: bool,
     pub ruby: bool,
     pub elixir: bool,
@@ -57,6 +58,7 @@ impl Default for PathProxyRuntimeSnapshot {
             lua: true,
             nim: true,
             crystal: true,
+            perl: true,
             r: true,
             ruby: true,
             elixir: true,
@@ -89,6 +91,7 @@ impl From<&RuntimeSettings> for PathProxyRuntimeSnapshot {
             lua: r.lua.path_proxy_enabled,
             nim: r.nim.path_proxy_enabled,
             crystal: r.crystal.path_proxy_enabled,
+            perl: r.perl.path_proxy_enabled,
             r: r.r.path_proxy_enabled,
             ruby: r.ruby.path_proxy_enabled,
             elixir: r.elixir.path_proxy_enabled,
@@ -126,6 +129,7 @@ impl PathProxyRuntimeSnapshot {
             RuntimeKind::Lua => Some(self.lua),
             RuntimeKind::Nim => Some(self.nim),
             RuntimeKind::Crystal => Some(self.crystal),
+            RuntimeKind::Perl => Some(self.perl),
             RuntimeKind::RLang => Some(self.r),
         }
     }
@@ -168,6 +172,10 @@ mod tests {
         assert!(path_proxy_blocks_managed_use(RuntimeKind::Crystal, &s));
         s.crystal.path_proxy_enabled = true;
         assert!(!path_proxy_blocks_managed_use(RuntimeKind::Crystal, &s));
+        s.perl.path_proxy_enabled = false;
+        assert!(path_proxy_blocks_managed_use(RuntimeKind::Perl, &s));
+        s.perl.path_proxy_enabled = true;
+        assert!(!path_proxy_blocks_managed_use(RuntimeKind::Perl, &s));
         s.r.path_proxy_enabled = false;
         assert!(path_proxy_blocks_managed_use(RuntimeKind::RLang, &s));
         s.r.path_proxy_enabled = true;

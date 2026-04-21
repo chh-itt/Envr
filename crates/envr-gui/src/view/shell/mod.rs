@@ -181,6 +181,8 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .then_some(&state.settings.cache.snapshot().runtime.nim),
                 matches!(state.env_center.kind, RuntimeKind::Crystal)
                     .then_some(&state.settings.cache.snapshot().runtime.crystal),
+                matches!(state.env_center.kind, RuntimeKind::Perl)
+                    .then_some(&state.settings.cache.snapshot().runtime.perl),
                 matches!(state.env_center.kind, RuntimeKind::RLang)
                     .then_some(&state.settings.cache.snapshot().runtime.r),
                 &state.settings.cache.snapshot().runtime,
