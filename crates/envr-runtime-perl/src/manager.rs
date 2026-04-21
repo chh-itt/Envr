@@ -6,7 +6,7 @@ use crate::index::{
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::bin_tool_layout::{perl_installation_valid, resolve_perl_exe};
+use envr_platform::bin_tool_layout::perl_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};

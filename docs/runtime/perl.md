@@ -12,6 +12,7 @@ Unsupported hosts (for example Windows ARM64 without a portable zip contract) re
 ## Remote index and caching
 
 - Default GitHub Releases API URL is chosen by OS. Override with **`ENVR_PERL_GITHUB_RELEASES_URL`** if you mirror the API.
+- If the **REST API** returns **403** (or all API candidates fail), **Windows Strawberry** falls back to **`https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases.atom`** and builds portable zip URLs from stable `SP_xxxxx_64bit` release tags (same idea as Crystal / relocatable-perl atom fallback).
 - Index cache TTL: **`ENVR_PERL_RELEASES_CACHE_TTL_SECS`** or **`ENVR_PERL_INDEX_CACHE_TTL_SECS`** (default 3600 seconds).
 - Latest-per-major disk cache TTL: **`ENVR_PERL_REMOTE_CACHE_TTL_SECS`** (default 86400 seconds).
 - Optional GitHub token: **`GITHUB_TOKEN`**, **`GH_TOKEN`**, or **`ENVR_GITHUB_TOKEN`** (same as other GitHub-backed runtimes).

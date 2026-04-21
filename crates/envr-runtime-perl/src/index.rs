@@ -20,9 +20,24 @@ pub const DEFAULT_RELOCATABLE_RELEASES_URL: &str =
 const RELOCATABLE_RELEASES_ATOM_URL: &str =
     "https://github.com/skaji/relocatable-perl/releases.atom";
 
+const STRAWBERRY_RELEASES_ATOM_URL: &str =
+    "https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases.atom";
+
 static RELOCATABLE_ATOM_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"https://github\.com/skaji/relocatable-perl/releases/tag/([^"<>]+)"#)
         .expect("relocatable atom tag regex")
+});
+
+static STRAWBERRY_ATOM_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"https://github\.com/StrawberryPerl/Perl-Dist-Strawberry/releases/tag/([^"<>]+)"#,
+    )
+    .expect("strawberry atom tag regex")
+});
+
+/// Stable release tags like `SP_54221_64bit` / `SP_54021_64bit_UCRT` (five digits encode x.y.z.w).
+static STRAWBERRY_STABLE_SP_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^SP_(\d{5})_64bit(?:_UCRT)?$").expect("strawberry stable sp tag regex")
 });
 
 static STRAWBERRY_PORTABLE_ZIP_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -341,6 +356,90 @@ fn synthetic_skaji_download_url(tag: &str, stem: &str, prefer_xz: bool) -> Optio
     ))
 }
 
+/// Decode `SP_54221_64bit` style tags to `5.42.2.1` (five digits: major, minor two, patch, rev).
+fn version_from_strawberry_stable_tag(tag: &str) -> Option<String> {
+    let t = tag.trim();
+    if t.to_ascii_lowercase().contains("beta") {
+        return None;
+    }
+    if t.to_ascii_lowercase().starts_with("dev_") {
+        return None;
+    }
+    let cap = STRAWBERRY_STABLE_SP_TAG_RE.captures(t)?;
+    let digits = cap.get(1)?.as_str();
+    if digits.len() != 5 {
+        return None;
+    }
+    let major = digits[0..1].parse::<u64>().ok()?;
+    let minor = digits[1..3].parse::<u64>().ok()?;
+    let patch = digits[3..4].parse::<u64>().ok()?;
+    let rev = digits[4..5].parse::<u64>().ok()?;
+    Some(format!("{major}.{minor}.{patch}.{rev}"))
+}
+
+fn synthetic_strawberry_portable_zip_url(tag: &str, version_label: &str) -> String {
+    format!(
+        "https://github.com/StrawberryPerl/Perl-Dist-Strawberry/releases/download/{tag}/strawberry-perl-{version_label}-64bit-portable.zip"
+    )
+}
+
+fn fetch_strawberry_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<PerlReleaseRow>> {
+    let mut seen_tags = HashSet::new();
+    let mut tags_in_order = Vec::new();
+    for page in 1_u32..=50 {
+        let url = if page == 1 {
+            STRAWBERRY_RELEASES_ATOM_URL.to_string()
+        } else {
+            format!("{STRAWBERRY_RELEASES_ATOM_URL}?page={page}")
+        };
+        let body = fetch_text(client, &url)?;
+        let mut new_this_page = 0usize;
+        for cap in STRAWBERRY_ATOM_TAG_RE.captures_iter(&body) {
+            let Some(m) = cap.get(1) else {
+                continue;
+            };
+            let tag = m.as_str().trim().trim_end_matches('/');
+            if tag.is_empty() {
+                continue;
+            }
+            if seen_tags.insert(tag.to_string()) {
+                tags_in_order.push(tag.to_string());
+                new_this_page += 1;
+            }
+        }
+        if page == 1 && new_this_page == 0 && seen_tags.is_empty() {
+            return Err(EnvrError::Download(
+                "perl: Strawberry releases.atom contained no release links".into(),
+            ));
+        }
+        if page > 1 && new_this_page == 0 {
+            break;
+        }
+    }
+    let mut rows = Vec::new();
+    let mut seen_versions = HashSet::new();
+    for tag in tags_in_order {
+        let Some(version) = version_from_strawberry_stable_tag(&tag) else {
+            continue;
+        };
+        if !seen_versions.insert(version.clone()) {
+            continue;
+        }
+        rows.push(PerlReleaseRow {
+            version: version.clone(),
+            download_url: synthetic_strawberry_portable_zip_url(&tag, &version),
+            sha256_hex: None,
+        });
+    }
+    rows.sort_by(|a, b| cmp_semver_release_labels(&b.version, &a.version));
+    if rows.is_empty() {
+        return Err(EnvrError::Download(
+            "perl: Strawberry atom index produced no portable rows for this host".into(),
+        ));
+    }
+    Ok(rows)
+}
+
 fn fetch_relocatable_via_atom(
     client: &reqwest::blocking::Client,
     stem: &str,
@@ -409,15 +508,18 @@ pub fn fetch_all_perl_release_rows(
     match upstream {
         PerlUpstream::StrawberryWindows64 => {
             for base in candidate_api_bases(api_base_url, DEFAULT_STRAWBERRY_RELEASES_URL) {
-                let merged = fetch_release_pages(client, &base)?;
-                let rows = parse_strawberry_rows(&merged)?;
-                if !rows.is_empty() {
-                    return Ok(rows);
+                match fetch_release_pages(client, &base) {
+                    Ok(merged) => {
+                        if let Ok(rows) = parse_strawberry_rows(&merged) {
+                            if !rows.is_empty() {
+                                return Ok(rows);
+                            }
+                        }
+                    }
+                    Err(_) => continue,
                 }
             }
-            Err(EnvrError::Download(
-                "perl: no Strawberry portable zip rows parsed from GitHub releases".into(),
-            ))
+            fetch_strawberry_via_atom(client)
         }
         PerlUpstream::RelocatableUnix => {
             let stem = relocatable_archive_stem()?;
@@ -557,6 +659,24 @@ pub fn resolve_perl_version(rows: &[PerlReleaseRow], spec: &str) -> EnvrResult<S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strawberry_sp_tag_decodes_portable_version() {
+        assert_eq!(
+            version_from_strawberry_stable_tag("SP_54221_64bit").as_deref(),
+            Some("5.42.2.1")
+        );
+        assert_eq!(
+            version_from_strawberry_stable_tag("SP_54021_64bit_UCRT").as_deref(),
+            Some("5.40.2.1")
+        );
+        assert_eq!(
+            version_from_strawberry_stable_tag("SP_54022_64bit").as_deref(),
+            Some("5.40.2.2")
+        );
+        assert!(version_from_strawberry_stable_tag("SP_54221_64bit_beta1").is_none());
+        assert!(version_from_strawberry_stable_tag("dev_54201_beta1_20250709").is_none());
+    }
 
     #[test]
     fn strawberry_fixture_parses_portable_rows() {

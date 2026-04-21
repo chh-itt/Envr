@@ -26,7 +26,7 @@ Layout: `runtimes/perl/versions/<label>/` with `runtimes/perl/current`. Validati
 
 1. **Dual upstream:** Windows and Unix use different orgs, asset naming, and version label shapes (Strawberry four-part build vs relocatable tag). The provider picks upstream from host and keeps one normalized row type.
 2. **ZIP layout variance (Strawberry):** Portable trees may be flat, under `perl/`, or otherwise nested. Promotion scans **staging root + top-level dirs + one level of children** and picks the shallowest valid `bin/perl` home when multiple candidates exist.
-3. **403 / rate limits:** Same playbook as other GitHub-backed runtimes: token, proxy-stripped API URL, then atom fallback (relocatable only in this iteration).
+3. **403 / rate limits:** Same playbook as other GitHub-backed runtimes: token, proxy-stripped API URL, then **`releases.atom`** fallback. **Strawberry** uses `StrawberryPerl/Perl-Dist-Strawberry/releases.atom` and stable `SP_<5digits>_64bit` tags to synthesize `strawberry-perl-<ver>-64bit-portable.zip` download URLs (beta / `dev_` tags skipped).
 4. **GUI / CLI parity:** PATH proxy card mirrors Crystal/Nim; no JVM host card.
 
 ## Implementation checklist
