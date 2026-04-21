@@ -959,6 +959,7 @@ dependencies = [
  "envr-runtime-deno",
  "envr-runtime-dotnet",
  "envr-runtime-elixir",
+ "envr-runtime-elm",
  "envr-runtime-erlang",
  "envr-runtime-flutter",
  "envr-runtime-go",
@@ -1186,6 +1187,21 @@ dependencies = [
  "regex",
  "reqwest",
  "serde_json",
+]
+
+[[package]]
+name = "envr-runtime-elm"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-error",
+ "envr-platform",
+ "flate2",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

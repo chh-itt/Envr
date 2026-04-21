@@ -596,6 +596,21 @@ impl Default for PurescriptRuntimeSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ElmRuntimeSettings {
+    /// When false, elm shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::elm_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for ElmRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::elm_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DartRuntimeSettings {
     /// When false, dart shim resolves to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::dart_path_proxy_enabled")]
@@ -677,6 +692,8 @@ pub struct RuntimeSettings {
     pub odin: OdinRuntimeSettings,
     #[serde(default)]
     pub purescript: PurescriptRuntimeSettings,
+    #[serde(default)]
+    pub elm: ElmRuntimeSettings,
     #[serde(default)]
     pub dart: DartRuntimeSettings,
     #[serde(default)]
@@ -2062,6 +2079,9 @@ mod defaults {
     pub fn purescript_path_proxy_enabled() -> bool {
         true
     }
+    pub fn elm_path_proxy_enabled() -> bool {
+        true
+    }
 
     pub fn dart_path_proxy_enabled() -> bool {
         true
@@ -2205,6 +2225,7 @@ mod tests {
                 v: VRuntimeSettings::default(),
                 odin: OdinRuntimeSettings::default(),
                 purescript: PurescriptRuntimeSettings::default(),
+                elm: ElmRuntimeSettings::default(),
                 dart: DartRuntimeSettings::default(),
                 flutter: FlutterRuntimeSettings::default(),
                 go: GoRuntimeSettings {
