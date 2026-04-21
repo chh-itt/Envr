@@ -1997,6 +1997,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.v.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetOdinPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Odin,
+            on,
+            |st, on| st.runtime.odin.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetDartPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Dart,

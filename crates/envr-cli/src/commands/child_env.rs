@@ -258,6 +258,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "groovy" => Some("ENVR_GROOVY_VERSION"),
         "terraform" => Some("ENVR_TERRAFORM_VERSION"),
         "v" => Some("ENVR_V_VERSION"),
+        "odin" => Some("ENVR_ODIN_VERSION"),
         "dart" => Some("ENVR_DART_VERSION"),
         "flutter" => Some("ENVR_FLUTTER_VERSION"),
         _ => None,

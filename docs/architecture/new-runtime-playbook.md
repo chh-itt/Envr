@@ -530,6 +530,9 @@ V highlights two standalone-runtime guardrails:
   - Some bundles unpack as one top directory; others can be flatter.
   - Install flow should normalize either shape and only then validate expected executable presence.
 
+- **Archive extraction dispatches by filename extension**:
+  - If your extractor chooses `.zip` / `.tar.gz` / `.tar.xz` by extension, ensure the downloaded temp filename preserves an extension (e.g. derive name from the URL tail).
+
 ### 8.13 GitHub API resilience follow-up (403 fallback policy)
 
 Recent runtime bring-up/field validation reinforced this policy for GitHub-backed indexes:

@@ -10,7 +10,7 @@ use envr_config::settings::{
     NpmRegistryMode, PerlRuntimeSettings, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
     RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
-    TerraformRuntimeSettings, VRuntimeSettings, ZigRuntimeSettings,
+    TerraformRuntimeSettings, VRuntimeSettings, OdinRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -74,6 +74,7 @@ pub enum EnvCenterMsg {
     SetJvmPathProxy(RuntimeKind, bool),
     SetTerraformPathProxy(bool),
     SetVPathProxy(bool),
+    SetOdinPathProxy(bool),
     SetDartPathProxy(bool),
     SetFlutterPathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
@@ -1757,6 +1758,45 @@ fn v_runtime_settings_section(v: &VRuntimeSettings, tokens: ThemeTokens) -> Elem
     .into()
 }
 
+fn odin_runtime_settings_section(
+    odin: &OdinRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.odin.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.odin.path_proxy.hint",
+            "开启时由 envr 接管 odin；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages odin; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(odin.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|on| Message::EnvCenter(EnvCenterMsg::SetOdinPathProxy(on)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.odin.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn dart_runtime_settings_section(
     dart: &DartRuntimeSettings,
     tokens: ThemeTokens,
@@ -2343,6 +2383,8 @@ pub fn env_center_view(
         terraform_runtime_settings_section(&runtime_settings.terraform, tokens)
     } else if state.kind == RuntimeKind::V {
         v_runtime_settings_section(&runtime_settings.v, tokens)
+    } else if state.kind == RuntimeKind::Odin {
+        odin_runtime_settings_section(&runtime_settings.odin, tokens)
     } else if state.kind == RuntimeKind::Dart {
         dart_runtime_settings_section(&runtime_settings.dart, tokens)
     } else if state.kind == RuntimeKind::Flutter {

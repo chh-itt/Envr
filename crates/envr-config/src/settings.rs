@@ -566,6 +566,21 @@ impl Default for VRuntimeSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OdinRuntimeSettings {
+    /// When false, odin shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::odin_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for OdinRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::odin_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DartRuntimeSettings {
     /// When false, dart shim resolves to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::dart_path_proxy_enabled")]
@@ -643,6 +658,8 @@ pub struct RuntimeSettings {
     pub terraform: TerraformRuntimeSettings,
     #[serde(default)]
     pub v: VRuntimeSettings,
+    #[serde(default)]
+    pub odin: OdinRuntimeSettings,
     #[serde(default)]
     pub dart: DartRuntimeSettings,
     #[serde(default)]
@@ -2021,6 +2038,10 @@ mod defaults {
         true
     }
 
+    pub fn odin_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn dart_path_proxy_enabled() -> bool {
         true
     }
@@ -2161,6 +2182,7 @@ mod tests {
                 groovy: GroovyRuntimeSettings::default(),
                 terraform: TerraformRuntimeSettings::default(),
                 v: VRuntimeSettings::default(),
+                odin: OdinRuntimeSettings::default(),
                 dart: DartRuntimeSettings::default(),
                 flutter: FlutterRuntimeSettings::default(),
                 go: GoRuntimeSettings {
