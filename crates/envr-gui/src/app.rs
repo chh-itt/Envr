@@ -2003,6 +2003,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.odin.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetPurescriptPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Purescript,
+            on,
+            |st, on| st.runtime.purescript.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetDartPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Dart,

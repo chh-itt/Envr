@@ -58,6 +58,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Terraform => &[(CoreCommand::Terraform, "terraform")],
         RuntimeKind::V => &[(CoreCommand::V, "v")],
         RuntimeKind::Odin => &[(CoreCommand::Odin, "odin")],
+        RuntimeKind::Purescript => &[(CoreCommand::Purs, "purs")],
         RuntimeKind::Dart => &[(CoreCommand::Dart, "dart")],
         RuntimeKind::Flutter => &[(CoreCommand::Flutter, "flutter")],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],

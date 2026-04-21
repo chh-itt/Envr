@@ -137,6 +137,7 @@ pub enum CoreCommand {
     Terraform,
     V,
     Odin,
+    Purs,
     Dart,
     Flutter,
     Go,
@@ -180,6 +181,7 @@ impl CoreCommand {
             CoreCommand::Terraform => "terraform",
             CoreCommand::V => "v",
             CoreCommand::Odin => "odin",
+            CoreCommand::Purs => "purescript",
             CoreCommand::Dart => "dart",
             CoreCommand::Flutter => "flutter",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
@@ -214,6 +216,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "terraform" => vec![home.to_path_buf(), home.join("bin")],
         "v" => vec![home.to_path_buf(), home.join("bin")],
         "odin" => vec![home.to_path_buf(), home.join("bin")],
+        "purescript" => vec![home.to_path_buf(), home.join("bin")],
         "dart" => vec![home.join("bin"), home.to_path_buf()],
         "flutter" => vec![home.join("bin"), home.to_path_buf()],
         "go" => vec![home.join("bin")],
@@ -297,6 +300,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         "julia" => vec![("JULIA_HOME".into(), home_env)],
         "perl" => vec![("PERL_HOME".into(), home_env)],
+        "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "odin" => vec![("ODIN_ROOT".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
         "scala" => vec![("SCALA_HOME".into(), home_env)],
@@ -445,6 +449,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "terraform" => Some(CoreCommand::Terraform),
         "v" => Some(CoreCommand::V),
         "odin" => Some(CoreCommand::Odin),
+        "purs" => Some(CoreCommand::Purs),
         "dart" => Some(CoreCommand::Dart),
         "flutter" => Some(CoreCommand::Flutter),
         "go" => Some(CoreCommand::Go),
@@ -996,6 +1001,19 @@ fn odin_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn purs_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Purs => Ok(first_existing(&[
+            home.join("purs.exe"),
+            home.join("purs"),
+            home.join("bin").join("purs.exe"),
+            home.join("bin").join("purs"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("purs missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a purescript tool".into())),
+    }
+}
+
 fn dart_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Dart => bin_tool_layout::resolve_dart_exe(home)
@@ -1275,6 +1293,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Terraform => terraform_tool_path(home, cmd),
         CoreCommand::V => v_tool_path(home, cmd),
         CoreCommand::Odin => odin_tool_path(home, cmd),
+        CoreCommand::Purs => purs_tool_path(home, cmd),
         CoreCommand::Dart => dart_tool_path(home, cmd),
         CoreCommand::Flutter => flutter_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
@@ -1431,6 +1450,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Terraform => "terraform",
         CoreCommand::V => "v",
         CoreCommand::Odin => "odin",
+        CoreCommand::Purs => "purs",
         CoreCommand::Dart => "dart",
         CoreCommand::Flutter => "flutter",
         CoreCommand::Go => "go",
@@ -1520,6 +1540,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Terraform => terraform_tool_path(&home, cmd)?,
         CoreCommand::V => v_tool_path(&home, cmd)?,
         CoreCommand::Odin => odin_tool_path(&home, cmd)?,
+        CoreCommand::Purs => purs_tool_path(&home, cmd)?,
         CoreCommand::Dart => dart_tool_path(&home, cmd)?,
         CoreCommand::Flutter => flutter_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,

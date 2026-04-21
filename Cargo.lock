@@ -972,6 +972,7 @@ dependencies = [
  "envr-runtime-odin",
  "envr-runtime-perl",
  "envr-runtime-php",
+ "envr-runtime-purescript",
  "envr-runtime-python",
  "envr-runtime-rlang",
  "envr-runtime-ruby",
@@ -1376,6 +1377,21 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-purescript"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

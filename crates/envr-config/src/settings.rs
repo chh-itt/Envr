@@ -581,6 +581,21 @@ impl Default for OdinRuntimeSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PurescriptRuntimeSettings {
+    /// When false, purs shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::purescript_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for PurescriptRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::purescript_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DartRuntimeSettings {
     /// When false, dart shim resolves to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::dart_path_proxy_enabled")]
@@ -660,6 +675,8 @@ pub struct RuntimeSettings {
     pub v: VRuntimeSettings,
     #[serde(default)]
     pub odin: OdinRuntimeSettings,
+    #[serde(default)]
+    pub purescript: PurescriptRuntimeSettings,
     #[serde(default)]
     pub dart: DartRuntimeSettings,
     #[serde(default)]
@@ -2042,6 +2059,10 @@ mod defaults {
         true
     }
 
+    pub fn purescript_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn dart_path_proxy_enabled() -> bool {
         true
     }
@@ -2183,6 +2204,7 @@ mod tests {
                 terraform: TerraformRuntimeSettings::default(),
                 v: VRuntimeSettings::default(),
                 odin: OdinRuntimeSettings::default(),
+                purescript: PurescriptRuntimeSettings::default(),
                 dart: DartRuntimeSettings::default(),
                 flutter: FlutterRuntimeSettings::default(),
                 go: GoRuntimeSettings {

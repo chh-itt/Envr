@@ -15,6 +15,7 @@ pub enum RuntimeKind {
     Terraform,
     V,
     Odin,
+    Purescript,
     Dart,
     Flutter,
     Go,
@@ -47,7 +48,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 28] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 29] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -134,6 +135,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 28] = [
         key: "odin",
         label_en: "Odin",
         label_zh: "Odin",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Purescript,
+        key: "purescript",
+        label_en: "PureScript",
+        label_zh: "PureScript",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: None,
@@ -484,6 +494,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Terraform
         | RuntimeKind::V
         | RuntimeKind::Odin
+        | RuntimeKind::Purescript
         | RuntimeKind::Dart
         | RuntimeKind::Flutter
         | RuntimeKind::Nim
@@ -522,6 +533,10 @@ mod tests {
         );
         assert_eq!(parse_runtime_kind("PERL").expect("perl"), RuntimeKind::Perl);
         assert_eq!(parse_runtime_kind("ODIN").expect("odin"), RuntimeKind::Odin);
+        assert_eq!(
+            parse_runtime_kind("PURESCRIPT").expect("purescript"),
+            RuntimeKind::Purescript
+        );
         assert_eq!(parse_runtime_kind("lua").expect("lua"), RuntimeKind::Lua);
     }
 
@@ -534,7 +549,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 28);
+        assert_eq!(kinds.len(), 29);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -553,6 +568,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Terraform));
         assert!(kinds.contains(&RuntimeKind::V));
         assert!(kinds.contains(&RuntimeKind::Odin));
+        assert!(kinds.contains(&RuntimeKind::Purescript));
         assert!(kinds.contains(&RuntimeKind::Dart));
         assert!(kinds.contains(&RuntimeKind::Flutter));
     }
