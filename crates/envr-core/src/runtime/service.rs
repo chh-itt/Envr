@@ -84,6 +84,11 @@ fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeP
         )) as Box<dyn RuntimeProvider>,
         Box::new(attach_runtime_root(
             &runtime_root,
+            envr_runtime_gleam::GleamRuntimeProvider::new,
+            |p, r| p.with_runtime_root(r),
+        )) as Box<dyn RuntimeProvider>,
+        Box::new(attach_runtime_root(
+            &runtime_root,
             envr_runtime_racket::RacketRuntimeProvider::new,
             |p, r| p.with_runtime_root(r),
         )) as Box<dyn RuntimeProvider>,

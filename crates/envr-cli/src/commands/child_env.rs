@@ -261,6 +261,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "odin" => Some("ENVR_ODIN_VERSION"),
         "purescript" => Some("ENVR_PURESCRIPT_VERSION"),
         "elm" => Some("ENVR_ELM_VERSION"),
+        "gleam" => Some("ENVR_GLEAM_VERSION"),
         "racket" => Some("ENVR_RACKET_VERSION"),
         "dart" => Some("ENVR_DART_VERSION"),
         "flutter" => Some("ENVR_FLUTTER_VERSION"),

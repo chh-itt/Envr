@@ -60,6 +60,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Odin => &[(CoreCommand::Odin, "odin")],
         RuntimeKind::Purescript => &[(CoreCommand::Purs, "purs")],
         RuntimeKind::Elm => &[(CoreCommand::Elm, "elm")],
+        RuntimeKind::Gleam => &[(CoreCommand::Gleam, "gleam")],
         RuntimeKind::Racket => &[(CoreCommand::Racket, "racket"), (CoreCommand::Raco, "raco")],
         RuntimeKind::Dart => &[(CoreCommand::Dart, "dart")],
         RuntimeKind::Flutter => &[(CoreCommand::Flutter, "flutter")],
@@ -625,6 +626,7 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "groovyc"
             | "terraform"
             | "v"
+            | "gleam"
             | "dart"
             | "flutter"
             | "php"

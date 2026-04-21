@@ -631,3 +631,19 @@ Runtime installs that extract into a temp directory can hit this Windows failure
 
 - **Do not keep cross-drive handling runtime-specific**:
   - Put the fallback in shared install-layout primitives (`commit_staging_dir`, promotion helpers) so all archive-style runtimes benefit automatically.
+
+### 8.17 Host-runtime prerequisite policy (install-time fail-fast)
+
+Gleam follow-up reinforces a general rule for hosted runtimes (similar to Elixir on BEAM):
+
+- **Descriptor-level host relation is necessary but not sufficient**:
+  - Keep `RuntimeDescriptor.host_runtime` as a declarative graph (`gleam -> erlang`, `kotlin -> java`, etc.).
+  - Also perform provider-level prerequisite checks when the hosted toolchain must be runnable during install/use.
+
+- **Fail fast with explicit remediation**:
+  - Probe host command availability/runnability early (`erl`/`erl.exe` for Gleam/Elixir-style flows).
+  - Return actionable messages ("missing on PATH" vs "present but not runnable"), not generic install failures.
+
+- **Do not silently skip prerequisite checks**:
+  - Hosted-runtime installs should not continue to archive extraction if the required host runtime cannot execute.
+  - This prevents "install succeeded but compile/run unusable" false positives in GUI and CLI.

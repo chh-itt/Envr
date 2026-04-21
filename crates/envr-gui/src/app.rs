@@ -2015,6 +2015,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.elm.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetGleamPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Gleam,
+            on,
+            |st, on| st.runtime.gleam.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetRacketPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Racket,

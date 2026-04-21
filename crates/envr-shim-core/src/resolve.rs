@@ -139,6 +139,7 @@ pub enum CoreCommand {
     Odin,
     Purs,
     Elm,
+    Gleam,
     Racket,
     Raco,
     Dart,
@@ -186,6 +187,7 @@ impl CoreCommand {
             CoreCommand::Odin => "odin",
             CoreCommand::Purs => "purescript",
             CoreCommand::Elm => "elm",
+            CoreCommand::Gleam => "gleam",
             CoreCommand::Racket | CoreCommand::Raco => "racket",
             CoreCommand::Dart => "dart",
             CoreCommand::Flutter => "flutter",
@@ -223,6 +225,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "odin" => vec![home.to_path_buf(), home.join("bin")],
         "purescript" => vec![home.to_path_buf(), home.join("bin")],
         "elm" => vec![home.to_path_buf(), home.join("bin")],
+        "gleam" => vec![home.to_path_buf(), home.join("bin")],
         "racket" => vec![home.to_path_buf(), home.join("bin")],
         "dart" => vec![home.join("bin"), home.to_path_buf()],
         "flutter" => vec![home.join("bin"), home.to_path_buf()],
@@ -309,6 +312,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
+        "gleam" => vec![("GLEAM_HOME".into(), home_env)],
         "racket" => vec![("RACKET_HOME".into(), home_env)],
         "odin" => vec![("ODIN_ROOT".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
@@ -460,6 +464,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "odin" => Some(CoreCommand::Odin),
         "purs" => Some(CoreCommand::Purs),
         "elm" => Some(CoreCommand::Elm),
+        "gleam" => Some(CoreCommand::Gleam),
         "racket" => Some(CoreCommand::Racket),
         "raco" => Some(CoreCommand::Raco),
         "dart" => Some(CoreCommand::Dart),
@@ -1039,6 +1044,19 @@ fn elm_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn gleam_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Gleam => Ok(first_existing(&[
+            home.join("gleam.exe"),
+            home.join("gleam"),
+            home.join("bin").join("gleam.exe"),
+            home.join("bin").join("gleam"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("gleam missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a gleam tool".into())),
+    }
+}
+
 fn racket_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Racket => Ok(first_existing(&[
@@ -1340,6 +1358,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Odin => odin_tool_path(home, cmd),
         CoreCommand::Purs => purs_tool_path(home, cmd),
         CoreCommand::Elm => elm_tool_path(home, cmd),
+        CoreCommand::Gleam => gleam_tool_path(home, cmd),
         CoreCommand::Racket | CoreCommand::Raco => racket_tool_path(home, cmd),
         CoreCommand::Dart => dart_tool_path(home, cmd),
         CoreCommand::Flutter => flutter_tool_path(home, cmd),
@@ -1499,6 +1518,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Odin => "odin",
         CoreCommand::Purs => "purs",
         CoreCommand::Elm => "elm",
+        CoreCommand::Gleam => "gleam",
         CoreCommand::Racket => "racket",
         CoreCommand::Raco => "raco",
         CoreCommand::Dart => "dart",
@@ -1592,6 +1612,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Odin => odin_tool_path(&home, cmd)?,
         CoreCommand::Purs => purs_tool_path(&home, cmd)?,
         CoreCommand::Elm => elm_tool_path(&home, cmd)?,
+        CoreCommand::Gleam => gleam_tool_path(&home, cmd)?,
         CoreCommand::Racket | CoreCommand::Raco => racket_tool_path(&home, cmd)?,
         CoreCommand::Dart => dart_tool_path(&home, cmd)?,
         CoreCommand::Flutter => flutter_tool_path(&home, cmd)?,

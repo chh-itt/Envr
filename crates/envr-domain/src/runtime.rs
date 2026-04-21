@@ -17,6 +17,7 @@ pub enum RuntimeKind {
     Odin,
     Purescript,
     Elm,
+    Gleam,
     Racket,
     Dart,
     Flutter,
@@ -50,7 +51,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 31] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 32] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -158,6 +159,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 31] = [
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Gleam,
+        key: "gleam",
+        label_en: "Gleam",
+        label_zh: "Gleam",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: Some(RuntimeKind::Erlang),
     },
     RuntimeDescriptor {
         kind: RuntimeKind::Racket,
@@ -516,6 +526,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Odin
         | RuntimeKind::Purescript
         | RuntimeKind::Elm
+        | RuntimeKind::Gleam
         | RuntimeKind::Racket
         | RuntimeKind::Dart
         | RuntimeKind::Flutter
@@ -560,6 +571,7 @@ mod tests {
             RuntimeKind::Purescript
         );
         assert_eq!(parse_runtime_kind("ELM").expect("elm"), RuntimeKind::Elm);
+        assert_eq!(parse_runtime_kind("GLEAM").expect("gleam"), RuntimeKind::Gleam);
         assert_eq!(parse_runtime_kind("RACKET").expect("racket"), RuntimeKind::Racket);
         assert_eq!(parse_runtime_kind("lua").expect("lua"), RuntimeKind::Lua);
     }
@@ -573,7 +585,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 31);
+        assert_eq!(kinds.len(), 32);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -594,6 +606,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Odin));
         assert!(kinds.contains(&RuntimeKind::Purescript));
         assert!(kinds.contains(&RuntimeKind::Elm));
+        assert!(kinds.contains(&RuntimeKind::Gleam));
         assert!(kinds.contains(&RuntimeKind::Racket));
         assert!(kinds.contains(&RuntimeKind::Dart));
         assert!(kinds.contains(&RuntimeKind::Flutter));
@@ -617,7 +630,12 @@ mod tests {
             runtime_host_runtime(RuntimeKind::Groovy),
             Some(RuntimeKind::Java)
         );
+        assert_eq!(
+            runtime_host_runtime(RuntimeKind::Gleam),
+            Some(RuntimeKind::Erlang)
+        );
         assert_eq!(runtime_host_runtime(RuntimeKind::Java), None);
+        assert_eq!(runtime_host_runtime(RuntimeKind::Erlang), None);
         for d in RUNTIME_DESCRIPTORS {
             let Some(host) = d.host_runtime else {
                 continue;
@@ -748,6 +766,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Dart, "3.11.5").as_deref(),
             Some("3.11")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Gleam, "1.11.2").as_deref(),
+            Some("1.11")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Racket, "8.16.1").as_deref(),

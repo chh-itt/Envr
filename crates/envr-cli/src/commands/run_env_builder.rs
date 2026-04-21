@@ -25,6 +25,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "odin",
     "purescript",
     "elm",
+    "gleam",
     "racket",
     "dart",
     "flutter",
