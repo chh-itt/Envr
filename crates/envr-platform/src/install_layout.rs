@@ -6,6 +6,45 @@ use std::path::{Path, PathBuf};
 
 use envr_error::{EnvrError, EnvrResult};
 
+fn is_cross_device_rename_error(e: &std::io::Error) -> bool {
+    // Windows: ERROR_NOT_SAME_DEVICE (17)
+    if e.raw_os_error() == Some(17) {
+        return true;
+    }
+    // Unix: EXDEV (best-effort; std doesn't expose it consistently across toolchains).
+    false
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> EnvrResult<()> {
+    fs::create_dir_all(dst).map_err(EnvrError::from)?;
+    for e in fs::read_dir(src).map_err(EnvrError::from)? {
+        let e = e.map_err(EnvrError::from)?;
+        let from = e.path();
+        let to = dst.join(e.file_name());
+        let meta = fs::symlink_metadata(&from).map_err(EnvrError::from)?;
+        if meta.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+            continue;
+        }
+        // Treat symlinks as files by following the link (most runtime archives don't ship symlinks).
+        fs::copy(&from, &to).map_err(EnvrError::from)?;
+    }
+    Ok(())
+}
+
+/// Move a directory tree; cross-device safe (rename or copy+delete).
+pub fn move_dir(src: &Path, dst: &Path) -> EnvrResult<()> {
+    match fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(e) if is_cross_device_rename_error(&e) => {
+            copy_dir_recursive(src, dst)?;
+            fs::remove_dir_all(src).map_err(EnvrError::from)?;
+            Ok(())
+        }
+        Err(e) => Err(EnvrError::from(e)),
+    }
+}
+
 /// Ensure `final_dir`'s parent exists (required before `rename` on some platforms).
 pub fn ensure_final_parent(final_dir: &Path) -> EnvrResult<()> {
     let parent = final_dir
@@ -52,7 +91,12 @@ pub fn hoist_directory_children(src: &Path, dst: &Path) -> EnvrResult<()> {
         let e = e.map_err(EnvrError::from)?;
         let from = e.path();
         let to = dst.join(e.file_name());
-        fs::rename(&from, &to).map_err(EnvrError::from)?;
+        // Keep it robust in case src/dst are on different volumes.
+        if from.is_dir() {
+            move_dir(&from, &to)?;
+        } else {
+            fs::rename(&from, &to).map_err(EnvrError::from)?;
+        }
     }
     Ok(())
 }
@@ -60,9 +104,9 @@ pub fn hoist_directory_children(src: &Path, dst: &Path) -> EnvrResult<()> {
 /// Replace `final_dir` with the validated staging directory in one rename.
 pub fn commit_staging_dir(validated_staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     remove_if_exists(final_dir)?;
-    fs::rename(validated_staging, final_dir).map_err(|e| {
+    move_dir(validated_staging, final_dir).map_err(|e| {
         let _ = fs::remove_dir_all(validated_staging);
-        EnvrError::from(e)
+        e
     })?;
     Ok(())
 }

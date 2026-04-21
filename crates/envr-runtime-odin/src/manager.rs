@@ -180,7 +180,7 @@ fn promote_odin_extracted_tree(staging: &Path, final_dir: &Path) -> EnvrResult<(
 
     // 1) staging itself may be the runtime home.
     if odin_installation_valid(staging) {
-        fs::rename(staging, &staging_final).map_err(EnvrError::from)?;
+        install_layout::move_dir(staging, &staging_final)?;
         install_layout::commit_staging_dir(&staging_final, final_dir)?;
         return Ok(());
     }
@@ -192,7 +192,7 @@ fn promote_odin_extracted_tree(staging: &Path, final_dir: &Path) -> EnvrResult<(
     if let (Some(root), true) = (first, only_one) {
         let root_path = root.path();
         if root_path.is_dir() && odin_installation_valid(&root_path) {
-            fs::rename(&root_path, &staging_final).map_err(EnvrError::from)?;
+            install_layout::move_dir(&root_path, &staging_final)?;
             install_layout::commit_staging_dir(&staging_final, final_dir)?;
             return Ok(());
         }
@@ -206,7 +206,7 @@ fn promote_odin_extracted_tree(staging: &Path, final_dir: &Path) -> EnvrResult<(
         }
         let p = e.path();
         if odin_installation_valid(&p) {
-            fs::rename(&p, &staging_final).map_err(EnvrError::from)?;
+            install_layout::move_dir(&p, &staging_final)?;
             install_layout::commit_staging_dir(&staging_final, final_dir)?;
             return Ok(());
         }
