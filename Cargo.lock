@@ -975,6 +975,7 @@ dependencies = [
  "envr-runtime-php",
  "envr-runtime-purescript",
  "envr-runtime-python",
+ "envr-runtime-racket",
  "envr-runtime-rlang",
  "envr-runtime-ruby",
  "envr-runtime-rust",
@@ -1419,6 +1420,21 @@ name = "envr-runtime-python"
 version = "0.1.0"
 dependencies = [
  "envr-config",
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-racket"
+version = "0.1.0"
+dependencies = [
  "envr-domain",
  "envr-download",
  "envr-error",

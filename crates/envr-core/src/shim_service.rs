@@ -60,6 +60,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Odin => &[(CoreCommand::Odin, "odin")],
         RuntimeKind::Purescript => &[(CoreCommand::Purs, "purs")],
         RuntimeKind::Elm => &[(CoreCommand::Elm, "elm")],
+        RuntimeKind::Racket => &[(CoreCommand::Racket, "racket"), (CoreCommand::Raco, "raco")],
         RuntimeKind::Dart => &[(CoreCommand::Dart, "dart")],
         RuntimeKind::Flutter => &[(CoreCommand::Flutter, "flutter")],
         RuntimeKind::Go => &[(CoreCommand::Go, "go"), (CoreCommand::Gofmt, "gofmt")],

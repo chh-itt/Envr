@@ -10,7 +10,7 @@ use envr_config::settings::{
     NpmRegistryMode, PerlRuntimeSettings, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
     RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
-    TerraformRuntimeSettings, VRuntimeSettings, OdinRuntimeSettings, PurescriptRuntimeSettings, ElmRuntimeSettings, ZigRuntimeSettings,
+    TerraformRuntimeSettings, VRuntimeSettings, OdinRuntimeSettings, PurescriptRuntimeSettings, ElmRuntimeSettings, RacketRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -77,6 +77,7 @@ pub enum EnvCenterMsg {
     SetOdinPathProxy(bool),
     SetPurescriptPathProxy(bool),
     SetElmPathProxy(bool),
+    SetRacketPathProxy(bool),
     SetDartPathProxy(bool),
     SetFlutterPathProxy(bool),
     SetGoDownloadSource(GoDownloadSource),
@@ -1874,6 +1875,45 @@ fn elm_runtime_settings_section(elm: &ElmRuntimeSettings, tokens: ThemeTokens) -
     .into()
 }
 
+fn racket_runtime_settings_section(
+    racket: &RacketRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.racket.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.racket.path_proxy.hint",
+            "开启时由 envr 接管 racket/raco；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages racket/raco; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(racket.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|on| Message::EnvCenter(EnvCenterMsg::SetRacketPathProxy(on)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.racket.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn dart_runtime_settings_section(
     dart: &DartRuntimeSettings,
     tokens: ThemeTokens,
@@ -2466,6 +2506,8 @@ pub fn env_center_view(
         purescript_runtime_settings_section(&runtime_settings.purescript, tokens)
     } else if state.kind == RuntimeKind::Elm {
         elm_runtime_settings_section(&runtime_settings.elm, tokens)
+    } else if state.kind == RuntimeKind::Racket {
+        racket_runtime_settings_section(&runtime_settings.racket, tokens)
     } else if state.kind == RuntimeKind::Dart {
         dart_runtime_settings_section(&runtime_settings.dart, tokens)
     } else if state.kind == RuntimeKind::Flutter {

@@ -611,6 +611,21 @@ impl Default for ElmRuntimeSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RacketRuntimeSettings {
+    /// When false, racket/raco shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::racket_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for RacketRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::racket_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DartRuntimeSettings {
     /// When false, dart shim resolves to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::dart_path_proxy_enabled")]
@@ -694,6 +709,8 @@ pub struct RuntimeSettings {
     pub purescript: PurescriptRuntimeSettings,
     #[serde(default)]
     pub elm: ElmRuntimeSettings,
+    #[serde(default)]
+    pub racket: RacketRuntimeSettings,
     #[serde(default)]
     pub dart: DartRuntimeSettings,
     #[serde(default)]
@@ -2082,6 +2099,9 @@ mod defaults {
     pub fn elm_path_proxy_enabled() -> bool {
         true
     }
+    pub fn racket_path_proxy_enabled() -> bool {
+        true
+    }
 
     pub fn dart_path_proxy_enabled() -> bool {
         true
@@ -2226,6 +2246,7 @@ mod tests {
                 odin: OdinRuntimeSettings::default(),
                 purescript: PurescriptRuntimeSettings::default(),
                 elm: ElmRuntimeSettings::default(),
+                racket: RacketRuntimeSettings::default(),
                 dart: DartRuntimeSettings::default(),
                 flutter: FlutterRuntimeSettings::default(),
                 go: GoRuntimeSettings {

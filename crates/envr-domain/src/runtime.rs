@@ -17,6 +17,7 @@ pub enum RuntimeKind {
     Odin,
     Purescript,
     Elm,
+    Racket,
     Dart,
     Flutter,
     Go,
@@ -49,7 +50,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 30] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 31] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -154,6 +155,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 30] = [
         key: "elm",
         label_en: "Elm",
         label_zh: "Elm",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Racket,
+        key: "racket",
+        label_en: "Racket",
+        label_zh: "Racket",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: None,
@@ -506,6 +516,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Odin
         | RuntimeKind::Purescript
         | RuntimeKind::Elm
+        | RuntimeKind::Racket
         | RuntimeKind::Dart
         | RuntimeKind::Flutter
         | RuntimeKind::Nim
@@ -549,6 +560,7 @@ mod tests {
             RuntimeKind::Purescript
         );
         assert_eq!(parse_runtime_kind("ELM").expect("elm"), RuntimeKind::Elm);
+        assert_eq!(parse_runtime_kind("RACKET").expect("racket"), RuntimeKind::Racket);
         assert_eq!(parse_runtime_kind("lua").expect("lua"), RuntimeKind::Lua);
     }
 
@@ -561,7 +573,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 30);
+        assert_eq!(kinds.len(), 31);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -582,6 +594,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Odin));
         assert!(kinds.contains(&RuntimeKind::Purescript));
         assert!(kinds.contains(&RuntimeKind::Elm));
+        assert!(kinds.contains(&RuntimeKind::Racket));
         assert!(kinds.contains(&RuntimeKind::Dart));
         assert!(kinds.contains(&RuntimeKind::Flutter));
     }
@@ -735,6 +748,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Dart, "3.11.5").as_deref(),
             Some("3.11")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Racket, "8.16.1").as_deref(),
+            Some("8.16")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Flutter, "3.41.7").as_deref(),

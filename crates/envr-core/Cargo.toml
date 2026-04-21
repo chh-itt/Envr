@@ -25,6 +25,7 @@ envr-runtime-v = { path = "../envr-runtime-v" }
 envr-runtime-odin = { path = "../envr-runtime-odin" }
 envr-runtime-purescript = { path = "../envr-runtime-purescript" }
 envr-runtime-elm = { path = "../envr-runtime-elm" }
+envr-runtime-racket = { path = "../envr-runtime-racket" }
 envr-runtime-dart = { path = "../envr-runtime-dart" }
 envr-runtime-flutter = { path = "../envr-runtime-flutter" }
 envr-runtime-go = { path = "../envr-runtime-go" }

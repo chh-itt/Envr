@@ -139,6 +139,8 @@ pub enum CoreCommand {
     Odin,
     Purs,
     Elm,
+    Racket,
+    Raco,
     Dart,
     Flutter,
     Go,
@@ -184,6 +186,7 @@ impl CoreCommand {
             CoreCommand::Odin => "odin",
             CoreCommand::Purs => "purescript",
             CoreCommand::Elm => "elm",
+            CoreCommand::Racket | CoreCommand::Raco => "racket",
             CoreCommand::Dart => "dart",
             CoreCommand::Flutter => "flutter",
             CoreCommand::Go | CoreCommand::Gofmt => "go",
@@ -220,6 +223,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "odin" => vec![home.to_path_buf(), home.join("bin")],
         "purescript" => vec![home.to_path_buf(), home.join("bin")],
         "elm" => vec![home.to_path_buf(), home.join("bin")],
+        "racket" => vec![home.to_path_buf(), home.join("bin")],
         "dart" => vec![home.join("bin"), home.to_path_buf()],
         "flutter" => vec![home.join("bin"), home.to_path_buf()],
         "go" => vec![home.join("bin")],
@@ -305,6 +309,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
+        "racket" => vec![("RACKET_HOME".into(), home_env)],
         "odin" => vec![("ODIN_ROOT".into(), home_env)],
         "r" => vec![("R_HOME".into(), home_env)],
         "scala" => vec![("SCALA_HOME".into(), home_env)],
@@ -455,6 +460,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "odin" => Some(CoreCommand::Odin),
         "purs" => Some(CoreCommand::Purs),
         "elm" => Some(CoreCommand::Elm),
+        "racket" => Some(CoreCommand::Racket),
+        "raco" => Some(CoreCommand::Raco),
         "dart" => Some(CoreCommand::Dart),
         "flutter" => Some(CoreCommand::Flutter),
         "go" => Some(CoreCommand::Go),
@@ -1032,6 +1039,26 @@ fn elm_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn racket_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Racket => Ok(first_existing(&[
+            home.join("racket.exe"),
+            home.join("racket"),
+            home.join("bin").join("racket.exe"),
+            home.join("bin").join("racket"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("racket missing under {}", home.display())))?),
+        CoreCommand::Raco => Ok(first_existing(&[
+            home.join("raco.exe"),
+            home.join("raco"),
+            home.join("bin").join("raco.exe"),
+            home.join("bin").join("raco"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("raco missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a racket tool".into())),
+    }
+}
+
 fn dart_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Dart => bin_tool_layout::resolve_dart_exe(home)
@@ -1313,6 +1340,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Odin => odin_tool_path(home, cmd),
         CoreCommand::Purs => purs_tool_path(home, cmd),
         CoreCommand::Elm => elm_tool_path(home, cmd),
+        CoreCommand::Racket | CoreCommand::Raco => racket_tool_path(home, cmd),
         CoreCommand::Dart => dart_tool_path(home, cmd),
         CoreCommand::Flutter => flutter_tool_path(home, cmd),
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(home, cmd),
@@ -1471,6 +1499,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Odin => "odin",
         CoreCommand::Purs => "purs",
         CoreCommand::Elm => "elm",
+        CoreCommand::Racket => "racket",
+        CoreCommand::Raco => "raco",
         CoreCommand::Dart => "dart",
         CoreCommand::Flutter => "flutter",
         CoreCommand::Go => "go",
@@ -1562,6 +1592,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Odin => odin_tool_path(&home, cmd)?,
         CoreCommand::Purs => purs_tool_path(&home, cmd)?,
         CoreCommand::Elm => elm_tool_path(&home, cmd)?,
+        CoreCommand::Racket | CoreCommand::Raco => racket_tool_path(&home, cmd)?,
         CoreCommand::Dart => dart_tool_path(&home, cmd)?,
         CoreCommand::Flutter => flutter_tool_path(&home, cmd)?,
         CoreCommand::Go | CoreCommand::Gofmt => go_tool_path(&home, cmd)?,

@@ -551,6 +551,29 @@ Recent runtime bring-up/field validation reinforced this policy for GitHub-backe
   - Crystal (`envr-runtime-crystal`): atom + synthetic GitHub download URLs.
   - Perl (`envr-runtime-perl`): dual upstream; Strawberry **atom + `SP_` tag** decoding on Windows; relocatable-perl atom on Unix.
 
+### 8.14 Windows installer EXE vs portable archive (GUI/non-admin safety)
+
+Racket bring-up exposed a recurring Windows issue:
+
+- Installer-style `.exe` artifacts may require elevation in GUI/desktop contexts (`os error 740`) even when CLI tests pass under a different shell token.
+- If an upstream provides both installer and portable archive for the same host, prefer portable archive (`.zip` / `.tgz`) for managed runtime installs.
+- Keep installer `.exe` flow only when there is no portable option; then document elevation behavior explicitly.
+
+Practical rule:
+
+- **First choice:** archive extract + layout validation under `runtimes/<key>/versions/<label>` (no admin requirement).
+- **Fallback choice:** silent installer flags, only when portable assets are unavailable.
+
+### 8.15 Archive integrity guardrails (before extract)
+
+Another Racket lesson: network/proxy/CDN intermediaries can return non-archive bodies (HTML error page, transformed payload), which then fail as `invalid gzip header`.
+
+For archive providers:
+
+- Validate downloaded payload signatures before extraction (at minimum, magic bytes such as gzip `1F 8B`).
+- Keep multiple URL candidates (primary + mirror/alternate host) and retry on signature mismatch.
+- Include attempted URL + reason in final error text; avoid opaque messages like "failed to download archive".
+
 ### 8.14 Dart follow-up friction (GCS prefix index filtering)
 
 Dart stable version discovery uses GCS prefix listing, which has a different failure mode:
