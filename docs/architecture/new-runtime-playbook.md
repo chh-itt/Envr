@@ -593,3 +593,16 @@ When both Dart and Flutter are supported in the same product surface, treat this
   - `envr exec --lang dart -- dart --version`
   - `envr exec --lang flutter -- flutter --version`
 - [ ] Playbook and runtime docs are cross-linked so operators can start from either entry point without missing policy context.
+
+### 8.16 Cross-drive promotion follow-up (Windows os error 17)
+
+Runtime installs that extract into a temp directory can hit this Windows failure mode:
+
+- **`rename` may fail across drives** (`ERROR_NOT_SAME_DEVICE`, `os error 17`):
+  - Typical trigger: temp staging under `C:` while `ENVR_RUNTIME_ROOT` / versions live under `D:` or another volume.
+  - Install layout helpers should use a cross-drive-safe move primitive:
+    - first try `rename` (fast path),
+    - on cross-device failure, fallback to recursive copy + source cleanup.
+
+- **Do not keep cross-drive handling runtime-specific**:
+  - Put the fallback in shared install-layout primitives (`commit_staging_dir`, promotion helpers) so all archive-style runtimes benefit automatically.

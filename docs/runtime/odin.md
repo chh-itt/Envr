@@ -55,3 +55,5 @@ When `path_proxy_enabled = false`, the `odin` shim resolves to the next matching
 - Shims and `envr run` set **`ODIN_ROOT`** to the resolved install root when Odin is on the stack.
 - Template key **`ENVR_ODIN_VERSION`** is set to the version directory label.
 
+On Windows, `odin version` may print an executable path with a `\\?\` prefix. That is a normal canonical path form and does not indicate an install problem.
+

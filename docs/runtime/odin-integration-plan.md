@@ -113,9 +113,12 @@ GUI:
 ## CLI / GUI friction log (fill after smoke)
 
 - CLI:
-  - ...
+  - `remote/install/use/shim sync/exec` smoke passed on Windows (`2026.04`).
+  - First implementation hit Windows cross-drive promotion failure (`os error 17`, TEMP on `C:` vs runtime root on `D:`); fixed by cross-drive-safe directory move fallback (rename -> copy+delete).
+  - `odin version` prints absolute executable path with `\\?\` prefix on Windows; this is expected canonical path formatting, not a functional error.
 - GUI:
-  - ...
+  - Odin Env Center tab + PATH proxy toggle behavior aligned with other standalone runtimes.
+  - No regressions observed during install/use + current state refresh.
 
 ## Playbook corrections (if needed)
 
