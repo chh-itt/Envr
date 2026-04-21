@@ -40,7 +40,7 @@ Primary assets (host-specific):
 - Latest-per-major TTL: `ENVR_PURESCRIPT_REMOTE_CACHE_TTL_SECS` (default 86400)
 - API override: `ENVR_PURESCRIPT_GITHUB_RELEASES_URL`
 - Tokens: `GITHUB_TOKEN` / `GH_TOKEN` / `ENVR_GITHUB_TOKEN`
-- Fallback: when API fails, parse `releases.atom` + paged GitHub Releases HTML tags and synthesize `.../releases/download/<tag>/<asset>`
+- Fallback: when API fails, parse `releases.atom` tags and synthesize `.../releases/download/<tag>/<asset>`
 
 ## Install layout and validation
 
@@ -76,13 +76,13 @@ GUI:
 1. GitHub release assets for PureScript use short host names (`win64`, `macos`) unlike many runtimes; mapping must be table-driven.
 2. Cross-drive rename fallback stays in shared install layout, not runtime-specific.
 3. Pre-release filtering should remain explicit (`draft/prerelease` skip) to avoid unstable rows.
+4. `releases.atom` can be history-truncated for some repos; when full historical remote rows matter, add HTML releases pagination fallback before atom-only fallback.
 
 ## CLI / GUI friction log
 
 - CLI:
-  - No integration regression in workspace tests.
-  - Pending operator smoke in real shell: `remote/install/use/shim sync/purs --version/exec`.
-  - `use/install purescript 0.15` should resolve to latest known `0.15.x` (line spec convenience).
+  - Added support for shorthand major-minor spec (`use purescript 0.15` -> latest `0.15.x`).
+  - Added HTML pagination fallback for 403/API-failure paths so remote can discover more than recent atom entries.
 - GUI:
   - No compile/runtime regression observed in GUI test suite.
   - Pending operator smoke in Env Center tab (install/use + PATH proxy toggle persistence).

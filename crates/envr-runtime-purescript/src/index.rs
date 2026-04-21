@@ -18,9 +18,9 @@ static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"https://github\.com/purescript/purescript/releases/tag/([^"<>]+)"#)
         .expect("purescript atom release tag regex")
 });
-static RELEASES_PAGE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
+static HTML_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"/purescript/purescript/releases/tag/([^"<>/]+)"#)
-        .expect("purescript releases page tag regex")
+        .expect("purescript html release tag regex")
 });
 static TAG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^v?(\d+\.\d+\.\d+)$").expect("purescript tag regex"));
@@ -252,7 +252,7 @@ fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Pur
     Ok(out)
 }
 
-fn fetch_rows_via_releases_pages(
+fn fetch_rows_via_releases_html_paginated(
     client: &reqwest::blocking::Client,
 ) -> EnvrResult<Vec<PurescriptInstallableRow>> {
     let asset = purescript_asset_candidates().first().copied().unwrap_or("");
@@ -260,24 +260,25 @@ fn fetch_rows_via_releases_pages(
         return Ok(Vec::new());
     }
     let mut out = Vec::new();
-    let mut seen = HashSet::new();
-    let mut empty_pages = 0u8;
-    for page in 1..=20 {
+    let mut seen_versions = HashSet::new();
+    let mut empty_pages = 0usize;
+    let max_pages = 60usize;
+    for page in 1..=max_pages {
         let url = format!("https://github.com/purescript/purescript/releases?page={page}");
         let text = match fetch_text(client, &url) {
             Ok(t) => t,
             Err(_) => break,
         };
         let mut found_on_page = 0usize;
-        for cap in RELEASES_PAGE_TAG_RE.captures_iter(&text) {
+        for cap in HTML_RELEASE_TAG_RE.captures_iter(&text) {
             let tag = cap.get(1).map(|m| m.as_str()).unwrap_or("").trim();
             let Some(version) = label_from_tag(tag) else {
                 continue;
             };
-            if !seen.insert(version.clone()) {
+            found_on_page += 1;
+            if !seen_versions.insert(version.clone()) {
                 continue;
             }
-            found_on_page += 1;
             out.push(PurescriptInstallableRow {
                 version,
                 url: format!(
@@ -309,15 +310,12 @@ pub fn fetch_purescript_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    let mut rows = fetch_rows_via_atom(client)?;
-    // `releases.atom` often exposes only recent entries; supplement with paged HTML tags.
-    if rows.len() < 5 {
-        let mut page_rows = fetch_rows_via_releases_pages(client)?;
-        rows.append(&mut page_rows);
-        rows.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
-        rows.dedup_by(|a, b| a.version == b.version);
+    if let Ok(rows) = fetch_rows_via_releases_html_paginated(client)
+        && !rows.is_empty()
+    {
+        return Ok(rows);
     }
-    Ok(rows)
+    fetch_rows_via_atom(client)
 }
 
 pub fn list_remote_versions(
@@ -373,21 +371,16 @@ pub fn resolve_purescript_version(rows: &[PurescriptInstallableRow], spec: &str)
     if rows.iter().any(|r| r.version == t) {
         return Some(t.to_string());
     }
-    // Accept line-like specs (e.g. 0.15) and resolve to latest patch in that line.
     if t.chars().all(|c| c.is_ascii_digit() || c == '.') {
-        let mut cands: Vec<&str> = rows
+        let prefix = format!("{t}.");
+        let mut matches: Vec<&str> = rows
             .iter()
-            .filter_map(|r| {
-                if r.version == t || r.version.starts_with(&format!("{t}.")) {
-                    Some(r.version.as_str())
-                } else {
-                    None
-                }
-            })
+            .map(|r| r.version.as_str())
+            .filter(|v| *v == t || v.starts_with(&prefix))
             .collect();
-        cands.sort_by(|a, b| cmp_release_labels(a, b));
-        if let Some(last) = cands.last() {
-            return Some((*last).to_string());
+        matches.sort_by(|a, b| cmp_release_labels(a, b));
+        if let Some(best) = matches.last() {
+            return Some((*best).to_string());
         }
     }
     None

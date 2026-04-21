@@ -545,6 +545,7 @@ Recent runtime bring-up/field validation reinforced this policy for GitHub-backe
   - Prefer `releases.atom` tag extraction + synthetic asset URL construction when API calls fail (e.g. 403/rate-limit/proxy blocks).
   - Guard fallback with host-asset candidate tables and explicit “no installable rows for this host” errors.
   - Treat GitHub **403** as a normal operational case (rate-limit/proxy/geofence), not an exceptional edge case: provider flow should continue to fallback automatically instead of returning API errors directly.
+  - For repos where `releases.atom` is not a complete history, include paginated HTML releases tag extraction (`/releases?page=N`) before/alongside atom fallback to avoid returning only a tiny recent subset.
 
 - **Reference implementations in-tree** (copy the pattern, not necessarily the code):
   - Crystal (`envr-runtime-crystal`): atom + synthetic GitHub download URLs.
