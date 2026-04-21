@@ -41,4 +41,5 @@ Layout: `runtimes/perl/versions/<label>/` with `runtimes/perl/current`. Validati
 ## CLI / GUI smoke
 
 - `envr remote perl` / `envr install perl <label>` / `envr use perl <label>` / `envr shim sync` / `perl -v`
+- PATH: bare **`perl`** resolves via **`{ENVR_RUNTIME_ROOT}/shims`** on PATH; **`.\perl`** from a random cwd is not the shim. Use **`envr exec --lang perl -- perl -v`** when verifying the managed runtime regardless of cwd or PATH ordering.
 - GUI: Perl tab, toggle PATH proxy, persist `settings.toml`.

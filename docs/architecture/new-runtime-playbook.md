@@ -69,7 +69,9 @@ Friction to plan for up front:
 
 1. **Different GitHub repos and asset rules** per OS family; do not assume one release JSON schema beyond “normalize into `(version, url, sha?)` rows”.
 2. **Strawberry ZIP layout variance** (flat vs nested `perl/`). Promotion must **discover** a directory that contains `bin/perl(.exe)` rather than assuming a single top-level folder name.
-3. **GitHub REST failures:** keep the usual mitigations (token, optional API proxy stripping, pagination). For relocatable-perl, envr also supports an **atom + synthetic download URL** fallback similar to Crystal.
+3. **GitHub REST failures:** keep the usual mitigations (token, optional API proxy stripping, pagination). When the Releases API fails (for example **403** / rate limits), provide a **non-API fallback** where possible:
+   - **Strawberry (Windows):** paginate **`releases.atom`**, decode stable **`SP_xxxxx_64bit`** / **`_UCRT`** tags into semver-ish labels, and construct synthetic **`.../releases/download/<tag>/strawberry-perl-<ver>-64bit-portable.zip`** URLs (skip `beta` / `dev_` tags).
+   - **relocatable-perl (Unix):** **`releases.atom`** + synthetic tarball URLs (same family as Crystal’s atom fallback).
 
 Standalone single-binary runtime checklist (minimum):
 
@@ -539,6 +541,10 @@ Recent runtime bring-up/field validation reinforced this policy for GitHub-backe
 - **Always provide a non-API fallback for release discovery where possible**:
   - Prefer `releases.atom` tag extraction + synthetic asset URL construction when API calls fail (e.g. 403/rate-limit/proxy blocks).
   - Guard fallback with host-asset candidate tables and explicit “no installable rows for this host” errors.
+
+- **Reference implementations in-tree** (copy the pattern, not necessarily the code):
+  - Crystal (`envr-runtime-crystal`): atom + synthetic GitHub download URLs.
+  - Perl (`envr-runtime-perl`): dual upstream; Strawberry **atom + `SP_` tag** decoding on Windows; relocatable-perl atom on Unix.
 
 ### 8.14 Dart follow-up friction (GCS prefix index filtering)
 

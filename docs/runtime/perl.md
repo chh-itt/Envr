@@ -29,6 +29,13 @@ perl -v
 envr exec --lang perl -- perl -v
 ```
 
+## PATH and shims
+
+The `perl` shim lives under **`{ENVR_RUNTIME_ROOT}/shims`** (after `envr shim sync`). Your shell **PATH** must include that directory so a bare **`perl`** resolves to envr’s shim—not a system Strawberry/ActivePerl elsewhere on PATH.
+
+- **`perl -v`** (no path prefix) uses PATH; ensure the shims directory is **before** other Perl installs if you need the managed version by default.
+- **`.\perl`** from an arbitrary working directory (for example a build output folder) is **not** the shim; use **`perl`** on PATH or **`envr exec --lang perl -- …`** when you want the resolved managed runtime regardless of cwd.
+
 Major lines follow **`major.minor`** (for example `5.42`) via `version_line_key_for_kind`.
 
 ## Settings
