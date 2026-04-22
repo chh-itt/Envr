@@ -148,6 +148,11 @@ Typical target:
 
 - [ ] Add runtime-home resolution for `run` / `exec`
 - [ ] Add missing-pin planning order if the runtime participates
+- [ ] Keep these **in sync** (same keys, same intent):
+  - `crates/envr-cli/src/commands/run_env_builder.rs` `RUN_STACK_LANG_ORDER`
+  - `crates/envr-resolver/src/run_home.rs` `resolve_run_lang_home`
+  - `crates/envr-resolver/src/missing_pins.rs` `RUNTIME_PLAN_ORDER`
+  - `crates/envr-cli/src/commands/child_env.rs` template key mapping (`ENVR_<LANG>_VERSION`)
 - [ ] Ensure run/exec env path construction can include the runtime
 - [ ] If runtime requires home-specific env vars, wire them through the shared Phase 4 helpers
 - [ ] If runtime needs extra registry/proxy env, extend settings-derived tooling env rules
@@ -164,6 +169,9 @@ Typical targets:
 
 - [ ] Decide whether the runtime has only one core command or several
 - [ ] Extend `CoreCommand` if the runtime participates in envr shims
+- [ ] If a runtime has **optional** tools (e.g. `jpm` may not ship in every artifact), decide and document:
+  - whether the shim is still created unconditionally
+  - whether missing optional tools should be a hard error, a friendly validation error, or a PATH-bypass fallback
 - [ ] Add command parsing
 - [ ] Add tool executable resolution under runtime home
 - [ ] Add path-proxy bypass routing if supported

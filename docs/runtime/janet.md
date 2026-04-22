@@ -28,7 +28,8 @@ janet --version
 
 - Runtime home env: `JANET_HOME`
 - Template key: `ENVR_JANET_VERSION`
-- Core shims: `janet`, `jpm` (if the installed tree contains `jpm`)
+- Core shims: `janet`, `jpm`
+  - `jpm` is **optional** upstream; if the installed artifact does not include `jpm`, invoking `jpm` will error with “missing under managed layout”.
 
 ## Windows notes
 
