@@ -164,7 +164,7 @@ mod tests {
             keys.iter().position(|k| k == "python").unwrap()
                 < keys.iter().position(|k| k == "node").unwrap()
         );
-        assert_eq!(keys.len(), 35);
+        assert_eq!(keys.len(), 36);
     }
 
     #[test]

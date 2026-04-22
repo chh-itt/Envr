@@ -148,6 +148,7 @@ fn create_inner(
             RuntimeKind::Janet,
             RuntimeKind::C3,
             RuntimeKind::Babashka,
+            RuntimeKind::Sbcl,
             RuntimeKind::Lua,
             RuntimeKind::Nim,
             RuntimeKind::Crystal,

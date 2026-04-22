@@ -167,6 +167,7 @@ pub enum CoreCommand {
     Jpm,
     C3c,
     Bb,
+    Sbcl,
     Lua,
     Luac,
     Nim,
@@ -208,6 +209,7 @@ impl CoreCommand {
             CoreCommand::Janet | CoreCommand::Jpm => "janet",
             CoreCommand::C3c => "c3",
             CoreCommand::Bb => "babashka",
+            CoreCommand::Sbcl => "sbcl",
             CoreCommand::Lua | CoreCommand::Luac => "lua",
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
@@ -250,6 +252,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "janet" => vec![home.join("bin"), home.to_path_buf()],
         "c3" => vec![home.join("bin"), home.to_path_buf()],
         "babashka" => vec![home.join("bin"), home.to_path_buf()],
+        "sbcl" => vec![home.join("bin"), home.to_path_buf()],
         "lua" => vec![home.to_path_buf()],
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
@@ -322,6 +325,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "janet" => vec![("JANET_HOME".into(), home_env)],
         "c3" => vec![("C3_HOME".into(), home_env)],
         "babashka" => vec![("BABASHKA_HOME".into(), home_env)],
+        "sbcl" => vec![("SBCL_HOME".into(), home_env)],
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
@@ -505,6 +509,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "jpm" => Some(CoreCommand::Jpm),
         "c3c" => Some(CoreCommand::C3c),
         "bb" => Some(CoreCommand::Bb),
+        "sbcl" => Some(CoreCommand::Sbcl),
         "lua" => Some(CoreCommand::Lua),
         "luac" => Some(CoreCommand::Luac),
         "nim" => Some(CoreCommand::Nim),
@@ -1357,6 +1362,19 @@ fn babashka_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn sbcl_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Sbcl => Ok(first_existing(&[
+            home.join("sbcl.exe"),
+            home.join("sbcl"),
+            home.join("bin").join("sbcl.exe"),
+            home.join("bin").join("sbcl"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("sbcl missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not an sbcl tool".into())),
+    }
+}
+
 fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home)
@@ -1440,6 +1458,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Janet | CoreCommand::Jpm => janet_tool_path(home, cmd),
         CoreCommand::C3c => c3_tool_path(home, cmd),
         CoreCommand::Bb => babashka_tool_path(home, cmd),
+        CoreCommand::Sbcl => sbcl_tool_path(home, cmd),
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
@@ -1612,6 +1631,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Jpm => "jpm",
         CoreCommand::C3c => "c3c",
         CoreCommand::Bb => "bb",
+        CoreCommand::Sbcl => "sbcl",
         CoreCommand::Lua => "lua",
         CoreCommand::Luac => "luac",
         CoreCommand::Nim => "nim",
@@ -1740,6 +1760,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Janet | CoreCommand::Jpm => janet_tool_path(&home, cmd)?,
         CoreCommand::C3c => c3_tool_path(&home, cmd)?,
         CoreCommand::Bb => babashka_tool_path(&home, cmd)?,
+        CoreCommand::Sbcl => sbcl_tool_path(&home, cmd)?,
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
@@ -1841,6 +1862,7 @@ mod tests {
         assert_eq!(parse_core_command("jpm"), Some(CoreCommand::Jpm));
         assert_eq!(parse_core_command("c3c"), Some(CoreCommand::C3c));
         assert_eq!(parse_core_command("bb"), Some(CoreCommand::Bb));
+        assert_eq!(parse_core_command("sbcl"), Some(CoreCommand::Sbcl));
         assert_eq!(parse_core_command("lua"), Some(CoreCommand::Lua));
         assert_eq!(parse_core_command("luac"), Some(CoreCommand::Luac));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));

@@ -345,6 +345,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
+name = "bzip2"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a53fac24f34a81bc9954b5d6cfce0c21e18ec6959f44f56e8e90e4bb7c346c"
+dependencies = [
+ "libbz2-rs-sys",
+]
+
+[[package]]
 name = "calloop"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -983,6 +992,7 @@ dependencies = [
  "envr-runtime-rlang",
  "envr-runtime-ruby",
  "envr-runtime-rust",
+ "envr-runtime-sbcl",
  "envr-runtime-scala",
  "envr-runtime-terraform",
  "envr-runtime-v",
@@ -1007,6 +1017,7 @@ dependencies = [
 name = "envr-download"
 version = "0.1.0"
 dependencies = [
+ "bzip2",
  "envr-error",
  "flate2",
  "futures",
@@ -1547,6 +1558,21 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "reqwest",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-sbcl"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 
@@ -2837,6 +2863,12 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "libbz2-rs-sys"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3a6a8c165077efc8f3a971534c50ea6a1a18b329ef4a66e897a7e3a1494565f"
 
 [[package]]
 name = "libc"

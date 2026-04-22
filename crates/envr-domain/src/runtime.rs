@@ -35,6 +35,7 @@ pub enum RuntimeKind {
     Janet,
     C3,
     Babashka,
+    Sbcl,
     Lua,
     Nim,
     Crystal,
@@ -54,7 +55,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 35] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 36] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -326,6 +327,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 35] = [
         host_runtime: None,
     },
     RuntimeDescriptor {
+        kind: RuntimeKind::Sbcl,
+        key: "sbcl",
+        label_en: "SBCL",
+        label_zh: "SBCL",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
         kind: RuntimeKind::Lua,
         key: "lua",
         label_en: "Lua",
@@ -553,6 +563,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Janet
         | RuntimeKind::C3
         | RuntimeKind::Babashka
+        | RuntimeKind::Sbcl
         | RuntimeKind::Lua
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
@@ -617,6 +628,7 @@ mod tests {
             parse_runtime_kind("BABASHKA").expect("babashka"),
             RuntimeKind::Babashka
         );
+        assert_eq!(parse_runtime_kind("SBCL").expect("sbcl"), RuntimeKind::Sbcl);
     }
 
     #[test]
@@ -628,7 +640,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 35);
+        assert_eq!(kinds.len(), 36);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -638,6 +650,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Janet));
         assert!(kinds.contains(&RuntimeKind::C3));
         assert!(kinds.contains(&RuntimeKind::Babashka));
+        assert!(kinds.contains(&RuntimeKind::Sbcl));
         assert!(kinds.contains(&RuntimeKind::Nim));
         assert!(kinds.contains(&RuntimeKind::Crystal));
         assert!(kinds.contains(&RuntimeKind::Perl));
@@ -776,6 +789,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Babashka, "1.12.218").as_deref(),
             Some("1.12")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Sbcl, "2.6.3").as_deref(),
+            Some("2.6")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Nim, "2.0.14").as_deref(),

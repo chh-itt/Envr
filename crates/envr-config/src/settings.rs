@@ -767,6 +767,9 @@ pub struct RuntimeSettings {
     pub babashka: BabashkaRuntimeSettings,
 
     #[serde(default)]
+    pub sbcl: SbclRuntimeSettings,
+
+    #[serde(default)]
     pub lua: LuaRuntimeSettings,
 
     #[serde(default)]
@@ -1032,6 +1035,21 @@ impl Default for BabashkaRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::babashka_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SbclRuntimeSettings {
+    /// When false, sbcl shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::sbcl_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for SbclRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::sbcl_path_proxy_enabled(),
         }
     }
 }
@@ -2225,6 +2243,10 @@ mod defaults {
         true
     }
 
+    pub fn sbcl_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn lua_path_proxy_enabled() -> bool {
         true
     }
@@ -2352,6 +2374,7 @@ mod tests {
                 janet: JanetRuntimeSettings::default(),
                 c3: C3RuntimeSettings::default(),
                 babashka: BabashkaRuntimeSettings::default(),
+                sbcl: SbclRuntimeSettings::default(),
                 lua: LuaRuntimeSettings::default(),
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),

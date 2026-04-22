@@ -250,6 +250,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "janet" => Some("ENVR_JANET_VERSION"),
         "c3" => Some("ENVR_C3_VERSION"),
         "babashka" => Some("ENVR_BABASHKA_VERSION"),
+        "sbcl" => Some("ENVR_SBCL_VERSION"),
         "lua" => Some("ENVR_LUA_VERSION"),
         "nim" => Some("ENVR_NIM_VERSION"),
         "crystal" => Some("ENVR_CRYSTAL_VERSION"),

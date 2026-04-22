@@ -1,4 +1,5 @@
 use envr_error::{EnvrError, EnvrResult};
+use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
 use std::{
     fs, io,
@@ -13,6 +14,7 @@ pub enum ArchiveKind {
     Zip,
     Tar,
     TarGz,
+    TarBz2,
     TarXz,
 }
 
@@ -28,6 +30,8 @@ pub fn detect_archive_kind(path: impl AsRef<Path>) -> EnvrResult<ArchiveKind> {
         Ok(ArchiveKind::Zip)
     } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
         Ok(ArchiveKind::TarGz)
+    } else if name.ends_with(".tar.bz2") || name.ends_with(".tbz2") {
+        Ok(ArchiveKind::TarBz2)
     } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
         Ok(ArchiveKind::TarXz)
     } else if name.ends_with(".tar") {
@@ -51,6 +55,7 @@ pub fn extract_archive(
         ArchiveKind::Zip => extract_zip(archive_path, dest_dir),
         ArchiveKind::Tar => extract_tar(archive_path, dest_dir),
         ArchiveKind::TarGz => extract_tar_gz(archive_path, dest_dir),
+        ArchiveKind::TarBz2 => extract_tar_bz2(archive_path, dest_dir),
         ArchiveKind::TarXz => extract_tar_xz(archive_path, dest_dir),
     }
 }
@@ -120,6 +125,13 @@ fn extract_tar_gz(path: &Path, dest: &Path) -> EnvrResult<()> {
     let f = fs::File::open(path).map_err(EnvrError::from)?;
     let gz = GzDecoder::new(f);
     let mut ar = TarArchive::new(gz);
+    unpack_tar(&mut ar, dest)
+}
+
+fn extract_tar_bz2(path: &Path, dest: &Path) -> EnvrResult<()> {
+    let f = fs::File::open(path).map_err(EnvrError::from)?;
+    let bz = BzDecoder::new(f);
+    let mut ar = TarArchive::new(bz);
     unpack_tar(&mut ar, dest)
 }
 

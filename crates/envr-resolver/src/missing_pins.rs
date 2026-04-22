@@ -37,6 +37,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "janet",
     "c3",
     "babashka",
+    "sbcl",
     "lua",
     "nim",
     "crystal",
