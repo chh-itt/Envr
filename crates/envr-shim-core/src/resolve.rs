@@ -1583,6 +1583,37 @@ pub fn resolve_core_shim_command_with_settings(
     let home = runtime_home_for_key(ctx, key, cfg.as_ref(), None, settings)?;
 
     let mut extra_env = runtime_home_env_for_key(&home, key);
+    if key == "elixir"
+        && let Ok(erlang_home) = runtime_home_for_key(ctx, "erlang", cfg.as_ref(), None, settings)
+    {
+        let mut erlang_home_env = erlang_home.display().to_string();
+        #[cfg(windows)]
+        {
+            if let Some(stripped) = erlang_home_env.strip_prefix(r"\\?\") {
+                erlang_home_env = stripped.to_string();
+            }
+        }
+        let mut erts = erlang_home.join("bin").display().to_string();
+        #[cfg(windows)]
+        {
+            if let Some(stripped) = erts.strip_prefix(r"\\?\") {
+                erts = stripped.to_string();
+            }
+            if !erts.ends_with('\\') {
+                erts.push('\\');
+            }
+        }
+        if let Some((_, v)) = extra_env.iter_mut().find(|(k, _)| k == "ERTS_BIN") {
+            *v = erts;
+        } else {
+            extra_env.push(("ERTS_BIN".into(), erts));
+        }
+        if let Some((_, v)) = extra_env.iter_mut().find(|(k, _)| k == "ERLANG_HOME") {
+            *v = erlang_home_env;
+        } else {
+            extra_env.push(("ERLANG_HOME".into(), erlang_home_env));
+        }
+    }
     if envr_domain::jvm_hosted::is_jvm_hosted_runtime(key) {
         let java_home = runtime_home_for_key(ctx, "java", cfg.as_ref(), None, settings)?;
         let runtime_label = home.file_name().and_then(|n| n.to_str()).unwrap_or("");

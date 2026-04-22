@@ -158,8 +158,8 @@ fn remove_path_if_exists(path: &Path) {
 fn ensure_erlang_runtime_available() -> EnvrResult<()> {
     #[cfg(windows)]
     let mut cmd = {
-        let mut c = Command::new("erl.exe");
-        c.arg("-noshell").arg("-eval").arg("halt().");
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg("erl -noshell -eval halt().");
         c
     };
     #[cfg(not(windows))]
@@ -180,15 +180,55 @@ fn ensure_erlang_runtime_available() -> EnvrResult<()> {
     }
 }
 
-fn validate_elixir_installation(home: &Path) -> EnvrResult<()> {
+/// Resolve envr-managed Erlang home from `runtimes/erlang/current` (symlink or pointer file).
+fn resolve_erlang_home(runtime_root: &Path) -> Option<PathBuf> {
+    let cur = runtime_root.join("runtimes").join("erlang").join("current");
+    if !cur.exists() {
+        return None;
+    }
+    let resolved = if let Ok(target) = fs::read_link(&cur) {
+        if target.is_relative() {
+            cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+        } else {
+            target
+        }
+    } else {
+        let s = fs::read_to_string(&cur).ok()?;
+        let t = s.trim();
+        if t.is_empty() {
+            return None;
+        }
+        PathBuf::from(t)
+    };
+    fs::canonicalize(&resolved).ok().or(Some(resolved))
+}
+
+fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<()> {
     if !elixir_installation_valid(home) {
         return Err(EnvrError::Validation(
             "elixir install did not produce a valid runtime layout".into(),
         ));
     }
     let exe = elixir_executable(home);
-    let out = Command::new(&exe)
-        .arg("--version")
+    let mut cmd = Command::new(&exe);
+    cmd.arg("--version");
+    #[cfg(windows)]
+    if let Some(erlang_home) = resolve_erlang_home(runtime_root) {
+        let mut eh = erlang_home.display().to_string();
+        if let Some(stripped) = eh.strip_prefix(r"\\?\") {
+            eh = stripped.to_string();
+        }
+        let mut erts = erlang_home.join("bin").display().to_string();
+        if let Some(stripped) = erts.strip_prefix(r"\\?\") {
+            erts = stripped.to_string();
+        }
+        if !erts.ends_with('\\') {
+            erts.push('\\');
+        }
+        cmd.env("ERLANG_HOME", &eh);
+        cmd.env("ERTS_BIN", &erts);
+    }
+    let out = cmd
         .output()
         .map_err(|e| EnvrError::Runtime(format!("elixir --version failed to start: {e}")))?;
     if !out.status.success() {
@@ -197,6 +237,32 @@ fn validate_elixir_installation(home: &Path) -> EnvrResult<()> {
             String::from_utf8_lossy(&out.stderr)
         )));
     }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn patch_windows_elixir_batch(home: &Path) -> EnvrResult<()> {
+    let bat = home.join("bin").join("elixir.bat");
+    if !bat.is_file() {
+        return Ok(());
+    }
+    let src = fs::read_to_string(&bat).map_err(EnvrError::from)?;
+    let needle_crlf = "set ERTS_BIN=\r\nset ERTS_BIN=!ERTS_BIN!";
+    let needle_lf = "set ERTS_BIN=\nset ERTS_BIN=!ERTS_BIN!";
+    let repl_crlf = "if not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\r\nif not defined ERTS_BIN set ERTS_BIN=\r\nset ERTS_BIN=!ERTS_BIN!";
+    let repl_lf = "if not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\nif not defined ERTS_BIN set ERTS_BIN=\nset ERTS_BIN=!ERTS_BIN!";
+    let patched = if src.contains(needle_crlf) {
+        src.replace(needle_crlf, repl_crlf)
+    } else if src.contains(needle_lf) {
+        src.replace(needle_lf, repl_lf)
+    } else {
+        return Ok(());
+    };
+    fs::write(&bat, patched).map_err(EnvrError::from)
+}
+
+#[cfg(not(windows))]
+fn patch_windows_elixir_batch(_home: &Path) -> EnvrResult<()> {
     Ok(())
 }
 
@@ -280,8 +346,11 @@ impl ElixirManager {
         install_layout::remove_if_exists(&staging_final)?;
         fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
         extract::extract_archive(&cache_file, &staging_final)?;
+        patch_windows_elixir_batch(&staging_final)?;
 
-        if let Err(e) = validate_elixir_installation(&staging_final) {
+        if let Err(e) =
+            validate_elixir_installation(&staging_final, &self.paths.runtime_root)
+        {
             let _ = fs::remove_dir_all(&staging_final);
             return Err(e);
         }

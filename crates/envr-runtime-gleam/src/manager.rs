@@ -62,8 +62,8 @@ pub fn gleam_installation_valid(home: &Path) -> bool {
 fn ensure_erlang_runtime_available() -> EnvrResult<()> {
     #[cfg(windows)]
     let mut cmd = {
-        let mut c = Command::new("erl.exe");
-        c.arg("-noshell").arg("-eval").arg("halt().");
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg("erl -noshell -eval halt().");
         c
     };
     #[cfg(not(windows))]
