@@ -137,6 +137,73 @@ fn is_global_skip_stem(stem: &str) -> bool {
     )
 }
 
+fn pnpm_global_mutation(args: &[OsString]) -> bool {
+    let mut saw_sub = false;
+    let mut saw_global = false;
+    for a in args {
+        let s = a.to_string_lossy();
+        let t = s.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if !saw_sub {
+            saw_sub = matches!(
+                t,
+                "add" | "install" | "i" | "remove" | "rm" | "uninstall" | "update" | "up"
+            );
+            continue;
+        }
+        if t == "--" {
+            break;
+        }
+        if t == "-g" || t == "--global" {
+            saw_global = true;
+        }
+    }
+    saw_sub && saw_global
+}
+
+fn yarn_global_mutation(args: &[OsString]) -> bool {
+    let ts: Vec<String> = args
+        .iter()
+        .map(|s| s.to_string_lossy().trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if ts.len() >= 2
+        && ts[0] == "global"
+        && matches!(ts[1].as_str(), "add" | "remove" | "upgrade" | "up")
+    {
+        return true;
+    }
+    // Some wrappers still accept `-g/--global`.
+    let mut saw_pkg_sub = false;
+    let mut saw_global = false;
+    for t in &ts {
+        if !saw_pkg_sub {
+            saw_pkg_sub = matches!(t.as_str(), "add" | "remove" | "upgrade" | "up");
+            continue;
+        }
+        if t == "--" {
+            break;
+        }
+        if t == "-g" || t == "--global" {
+            saw_global = true;
+        }
+    }
+    saw_pkg_sub && saw_global
+}
+
+fn should_sync_node_globals_for_forward(stem: &str, args: &[OsString], status_ok: bool) -> bool {
+    if !status_ok {
+        return false;
+    }
+    match stem {
+        "pnpm" => pnpm_global_mutation(args),
+        "yarn" | "yarnpkg" => yarn_global_mutation(args),
+        _ => false,
+    }
+}
+
 fn npm_global_mutation_succeeded(cmd: CoreCommand, args: &[OsString], status_ok: bool) -> bool {
     if !status_ok || !matches!(cmd, CoreCommand::Npm) {
         return false;
@@ -244,6 +311,23 @@ fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path
         return;
     }
     let bin_dir = std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim().to_string());
+    sync_node_global_shims_from_bin_dir_best_effort(runtime_root, &bin_dir);
+}
+
+fn sync_node_global_shims_from_bin_dir_best_effort(runtime_root: &Path, bin_dir: &Path) {
+    let warn = |msg: String| {
+        eprintln!("envr-shim: warning: {msg}");
+    };
+    let shims_dir = runtime_root.join("shims");
+    if let Err(err) = fs::create_dir_all(&shims_dir) {
+        warn(format!(
+            "failed to create shims directory {}: {}",
+            shims_dir.display(),
+            err
+        ));
+        return;
+    }
+
     if !bin_dir.is_dir() {
         warn(format!("npm global bin directory not found at {}", bin_dir.display()));
         return;
@@ -311,6 +395,42 @@ fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path
             }
         }
     }
+}
+
+#[cfg(windows)]
+fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
+    // Usage: envr-shim __forward-node-global <target> <stem> [user args...]
+    if args.get(1).and_then(|s| s.to_str()) != Some("__forward-node-global") {
+        return None;
+    }
+    let Some(target) = args.get(2).and_then(|s| s.to_str()) else {
+        eprintln!("envr-shim: invalid __forward-node-global args: missing target");
+        return Some(2);
+    };
+    let Some(stem) = args.get(3).and_then(|s| s.to_str()) else {
+        eprintln!("envr-shim: invalid __forward-node-global args: missing stem");
+        return Some(2);
+    };
+    let forward: Vec<OsString> = args.iter().skip(4).cloned().collect();
+    let status = match Command::new(target).args(&forward).status() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("envr-shim: failed to spawn forwarded tool `{target}`: {e}");
+            return Some(1);
+        }
+    };
+    let code = status.code().unwrap_or(0xFF);
+    if should_sync_node_globals_for_forward(stem, &forward, status.success())
+        && let Ok(ctx) = ShimContext::from_process_env()
+    {
+        let bin_dir = std::path::Path::new(target)
+            .parent()
+            .map(std::path::Path::to_path_buf);
+        if let Some(bin_dir) = bin_dir {
+            sync_node_global_shims_from_bin_dir_best_effort(&ctx.runtime_root, &bin_dir);
+        }
+    }
+    Some(code)
 }
 
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
@@ -428,6 +548,9 @@ fn main() {
 #[cfg(windows)]
 fn main() {
     let args: Vec<OsString> = std::env::args_os().collect();
+    if let Some(code) = maybe_run_windows_node_forward_helper(&args) {
+        std::process::exit(code);
+    }
     let (core_cmd, ctx, _settings, resolved, forward, mut timings) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
@@ -518,5 +641,18 @@ mod tests {
             &os_args(&["install", "@anthropic-ai/claude-code"]),
             true
         ));
+    }
+
+    #[test]
+    fn pnpm_global_mutation_detected() {
+        assert!(pnpm_global_mutation(&os_args(&["add", "-g", "tsx"])));
+        assert!(!pnpm_global_mutation(&os_args(&["add", "tsx"])));
+    }
+
+    #[test]
+    fn yarn_global_mutation_detected() {
+        assert!(yarn_global_mutation(&os_args(&["global", "add", "tsx"])));
+        assert!(yarn_global_mutation(&os_args(&["add", "-g", "tsx"])));
+        assert!(!yarn_global_mutation(&os_args(&["add", "tsx"])));
     }
 }

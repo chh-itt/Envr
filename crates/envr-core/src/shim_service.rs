@@ -28,6 +28,11 @@ fn normalize_windows_path_for_cmd(p: &Path) -> String {
     }
 }
 
+#[cfg(windows)]
+fn needs_node_global_forward_helper(stem: &str) -> bool {
+    matches!(stem, "pnpm" | "yarn" | "yarnpkg")
+}
+
 fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)] {
     match kind {
         RuntimeKind::Node => &[
@@ -539,6 +544,14 @@ impl ShimService {
         #[cfg(windows)]
         {
             let body = match (node_exe, target.extension().and_then(|e| e.to_str())) {
+                (Some(_), _) if needs_node_global_forward_helper(stem) => {
+                    let shim_s = normalize_windows_path_for_cmd(&self.shim_exe);
+                    let target_s = normalize_windows_path_for_cmd(target);
+                    format!(
+                        "@echo off\r\n\"{}\" __forward-node-global \"{}\" \"{}\" %*\r\n",
+                        shim_s, target_s, stem
+                    )
+                }
                 (Some(node_exe), Some(ext)) if JS_BIN_EXTS.contains(&ext) => {
                     let node_s = normalize_windows_path_for_cmd(node_exe);
                     let target_s = normalize_windows_path_for_cmd(target);
