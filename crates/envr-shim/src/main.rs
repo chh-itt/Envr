@@ -102,6 +102,49 @@ fn is_python_core_stem(stem: &str) -> bool {
     matches!(stem, "python" | "python3" | "pip" | "pip3")
 }
 
+fn npm_install_is_local_without_global(args: &[OsString]) -> bool {
+    let mut saw_install_subcommand = false;
+    let mut saw_global_flag = false;
+    let mut saw_pkg_operand = false;
+    for a in args {
+        let s = a.to_string_lossy();
+        let t = s.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if !saw_install_subcommand {
+            saw_install_subcommand = matches!(t, "install" | "i" | "add");
+            continue;
+        }
+        if t == "--" {
+            break;
+        }
+        if t == "-g" || t == "--global" {
+            saw_global_flag = true;
+            continue;
+        }
+        if t.starts_with('-') {
+            continue;
+        }
+        saw_pkg_operand = true;
+    }
+    saw_install_subcommand && saw_pkg_operand && !saw_global_flag
+}
+
+fn maybe_print_npm_local_install_hint(core_cmd: CoreCommand, forward: &[OsString], status_ok: bool) {
+    if !status_ok || !matches!(core_cmd, CoreCommand::Npm) {
+        return;
+    }
+    if !npm_install_is_local_without_global(forward) {
+        return;
+    }
+    eprintln!(
+        "envr-shim: npm install ran in local mode (no -g/--global); \
+new CLIs are not exposed on PATH. Use `npm install -g <pkg>` then `envr shim sync --globals`, \
+or run via `npx <cmd>` from this project."
+    );
+}
+
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
     let warn = |msg: String| {
         eprintln!("envr-shim: warning: {msg}");
@@ -248,6 +291,42 @@ fn main() {
         sync_python_script_shims_best_effort(&ctx.runtime_root, &resolved.executable);
         timings.pip_sync = pip_sync_started.elapsed();
     }
+    maybe_print_npm_local_install_hint(core_cmd, &forward, status.success());
     emit_timing_report(core_cmd, &timings);
     std::process::exit(status.code().unwrap_or(0xFF));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn os_args(xs: &[&str]) -> Vec<OsString> {
+        xs.iter().map(|s| OsString::from(*s)).collect()
+    }
+
+    #[test]
+    fn npm_install_without_global_is_detected() {
+        assert!(npm_install_is_local_without_global(&os_args(&[
+            "install",
+            "@anthropic-ai/claude-code@2.1.110",
+        ])));
+        assert!(npm_install_is_local_without_global(&os_args(&[
+            "i",
+            "typescript",
+        ])));
+    }
+
+    #[test]
+    fn npm_global_install_is_not_reported_local() {
+        assert!(!npm_install_is_local_without_global(&os_args(&[
+            "install",
+            "-g",
+            "@anthropic-ai/claude-code@2.1.110",
+        ])));
+        assert!(!npm_install_is_local_without_global(&os_args(&[
+            "add",
+            "--global",
+            "pnpm",
+        ])));
+    }
 }
