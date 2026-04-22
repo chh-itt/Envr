@@ -329,6 +329,7 @@ fn validate_inner(
                 kind,
                 &RemoteFilter {
                     prefix: Some(prefix),
+                    ..Default::default()
                 },
             ) {
                 Ok(vers) if vers.is_empty() => {

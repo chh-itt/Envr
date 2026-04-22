@@ -337,6 +337,7 @@ mod tests {
             "x86_64-windows",
             &RemoteFilter {
                 prefix: Some("0.14.".into()),
+                ..Default::default()
             },
         )
         .expect("list");

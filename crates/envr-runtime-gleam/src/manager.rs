@@ -264,7 +264,10 @@ impl GleamManager {
         Ok(rows)
     }
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(list_remote_versions(&self.fetch_rows(false)?, filter))
+        Ok(list_remote_versions(
+            &self.fetch_rows(filter.force_index_refresh)?,
+            filter,
+        ))
     }
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let rows = self.fetch_rows(false)?;

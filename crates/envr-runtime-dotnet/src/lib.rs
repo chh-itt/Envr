@@ -94,7 +94,7 @@ impl RuntimeProvider for DotnetRuntimeProvider {
 
     fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
         let mut majors = Vec::<String>::new();
-        for v in self.list_remote(&RemoteFilter { prefix: None })? {
+        for v in self.list_remote(&RemoteFilter::default())? {
             if let Some(m) = v.0.split('.').next()
                 && !m.is_empty()
             {
@@ -107,7 +107,7 @@ impl RuntimeProvider for DotnetRuntimeProvider {
     }
 
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        let all = self.list_remote(&RemoteFilter { prefix: None })?;
+        let all = self.list_remote(&RemoteFilter::default())?;
         let mut by_major = BTreeMap::<String, RuntimeVersion>::new();
         for v in all {
             let Some(major) = v.0.split('.').next() else {

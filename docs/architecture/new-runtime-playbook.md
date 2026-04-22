@@ -657,3 +657,8 @@ If a runtime keeps a **disk cache of full installable rows** (e.g. GitHub API ro
   - On **any** refresh of the installable index, **delete** the derived “latest line” cache (or recompute it immediately).
   - When serving the “latest line” cache, **validate** its label set against the current installable rows (same multiset); otherwise recompute.
   - On **resolve** / install, if the label is missing, **force-refresh** the index once before surfacing “unknown spec”.
+  - **`envr remote -u` contract**: propagate `RemoteFilter.force_index_refresh` so disk-backed providers do not return a **stale** installable list while the operator believes they forced an update (Gleam previously skipped `fetch_rows(true)` on `-u`).
+
+### 8.19 Erlang `erl` shim vs PATH proxy bypass
+
+When **`[runtime.erlang] path_proxy_enabled = false`**, the `erl` / `erlc` / `escript` core shims use **host PATH resolution outside envr shims** (so mixed stacks can call a system OTP install). If there is **no** OTP install on PATH except envr-managed shims, `erl` fails with “could not find `erl` on PATH outside envr shims”. That is expected: enable PATH proxy for Erlang, install a system OTP before shims on PATH, or use `envr exec --lang erlang -- erl …`. Elixir / Gleam can still resolve a **managed** OTP for their own launch when their PATH proxy is on, which is why `elixir` / `gleam` may work while bare `erl` does not under those settings.

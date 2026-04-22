@@ -175,7 +175,10 @@ pub(crate) fn run_inner(
     prefix: Option<String>,
     update: bool,
 ) -> EnvrResult<CliExit> {
-    let filter = RemoteFilter { prefix };
+    let filter = RemoteFilter {
+        prefix,
+        force_index_refresh: update,
+    };
     let single_runtime = runtime.is_some();
     let kinds: Vec<RuntimeKind> = match runtime {
         None => runtime_kinds_all()
@@ -217,7 +220,7 @@ pub(crate) fn run_inner(
             continue;
         }
         if filter.prefix.is_none() {
-            let cached = filtered_cached_snapshot(service, kind, &RemoteFilter { prefix: None });
+            let cached = filtered_cached_snapshot(service, kind, &RemoteFilter::default());
             if !cached.is_empty() {
                 used_cached_snapshot = true;
                 rows.push((kind, RemoteRow::Plain(cached)));
@@ -226,7 +229,7 @@ pub(crate) fn run_inner(
             // Single-runtime cold start: an empty on-disk snapshot should not print "(无)" —
             // block once on the same `list_remote` path as `-u` / update so the first run is useful.
             if single_runtime {
-                let full = service.list_remote(kind, &RemoteFilter { prefix: None })?;
+                let full = service.list_remote(kind, &RemoteFilter::default())?;
                 let _ = service.persist_full_remote_installable_snapshot(kind, &full);
                 let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
                 let _ = service.list_remote_latest_per_major(kind);

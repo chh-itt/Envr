@@ -522,7 +522,7 @@ mod tests {
                 }],
             )]),
         };
-        let list = list_remote_versions(&index, "linux", "x86_64", &RemoteFilter { prefix: None })
+        let list = list_remote_versions(&index, "linux", "x86_64", &RemoteFilter::default())
             .expect("list");
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].0, "3.12.1");

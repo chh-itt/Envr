@@ -441,7 +441,7 @@ impl RuntimeService {
         {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
-        let all = self.list_remote(kind, &RemoteFilter { prefix: None })?;
+        let all = self.list_remote(kind, &RemoteFilter::default())?;
         self.write_full_remote_installable(kind, &all)?;
         Ok(all)
     }

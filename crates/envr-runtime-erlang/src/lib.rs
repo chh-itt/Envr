@@ -99,7 +99,7 @@ impl RuntimeProvider for ErlangRuntimeProvider {
 
     fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
         let mut majors = BTreeSet::<String>::new();
-        for v in self.list_remote(&RemoteFilter { prefix: None })? {
+        for v in self.list_remote(&RemoteFilter::default())? {
             if let Some(m) = v.0.split('.').next()
                 && !m.is_empty()
             {

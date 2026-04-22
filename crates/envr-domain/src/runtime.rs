@@ -394,9 +394,13 @@ pub struct InstallRequest {
     pub cancel: Option<Arc<AtomicBool>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Filters and hints for remote version listing (`envr remote`, GUI, validation).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RemoteFilter {
     pub prefix: Option<String>,
+    /// When true, providers that cache a remote installable index on disk should bypass TTL /
+    /// stale snapshots and re-fetch from the network (wired from `envr remote -u`).
+    pub force_index_refresh: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -509,9 +509,9 @@ mod tests {
     #[test]
     fn list_node_remote_rows_matches_list_remote_versions() {
         let rel = parsed();
-        let plain = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter { prefix: None })
+        let plain = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter::default())
             .expect("list_remote_versions");
-        let rows = list_node_remote_rows(&rel, "linux", "x86_64", &RemoteFilter { prefix: None })
+        let rows = list_node_remote_rows(&rel, "linux", "x86_64", &RemoteFilter::default())
             .expect("rows");
         assert_eq!(plain.len(), rows.len());
         for (p, r) in plain.iter().zip(rows.iter()) {
@@ -548,7 +548,7 @@ mod tests {
     #[test]
     fn list_remote_orders_newest_first_and_prefix() {
         let rel = parsed();
-        let all = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter { prefix: None })
+        let all = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter::default())
             .expect("list");
         assert_eq!(all[0].0, "30.0.0");
         assert_eq!(all.last().unwrap().0, "22.8.0");
@@ -559,6 +559,7 @@ mod tests {
             "x86_64",
             &RemoteFilter {
                 prefix: Some("22".into()),
+                ..Default::default()
             },
         )
         .expect("list");

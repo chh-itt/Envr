@@ -689,6 +689,7 @@ mod tests {
             &idx,
             &RemoteFilter {
                 prefix: Some("21".into()),
+                ..Default::default()
             },
         )
         .expect("list");
