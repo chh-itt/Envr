@@ -147,6 +147,40 @@ fn strip_windows_verbatim_prefix(p: &Path) -> std::path::PathBuf {
     }
 }
 
+#[cfg(windows)]
+fn is_windows_cmd_script(p: &Path) -> bool {
+    matches!(
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("cmd" | "bat" | "com")
+    )
+}
+
+#[cfg(windows)]
+fn is_js_entry_script(p: &Path) -> bool {
+    matches!(
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("js" | "cjs" | "mjs")
+    )
+}
+
+#[cfg(windows)]
+fn find_node_exe_for_script(script: &Path) -> Option<std::path::PathBuf> {
+    let mut cur = script.parent()?;
+    loop {
+        let cand = cur.join("node.exe");
+        if cand.is_file() {
+            return Some(cand);
+        }
+        cur = cur.parent()?;
+    }
+}
+
 fn pnpm_global_mutation(args: &[OsString]) -> bool {
     let mut saw_sub = false;
     let mut saw_global = false;
@@ -306,7 +340,15 @@ fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path
     #[cfg(not(windows))]
     let npm_executable = npm_executable.to_path_buf();
 
-    let out = match Command::new(&npm_executable).args(["bin", "-g"]).output() {
+    let out = match if is_windows_cmd_script(&npm_executable) {
+        Command::new("cmd")
+            .args(["/d", "/c"])
+            .arg(&npm_executable)
+            .args(["bin", "-g"])
+            .output()
+    } else {
+        Command::new(&npm_executable).args(["bin", "-g"]).output()
+    } {
         Ok(o) => o,
         Err(err) => {
             warn(format!(
@@ -428,7 +470,24 @@ fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
     };
     let forward: Vec<OsString> = args.iter().skip(4).cloned().collect();
     let target = strip_windows_verbatim_prefix(std::path::Path::new(target));
-    let status = match Command::new(&target).args(&forward).status() {
+    let status = match if is_js_entry_script(&target) {
+        let Some(node_exe) = find_node_exe_for_script(&target) else {
+            eprintln!(
+                "envr-shim: cannot locate node.exe for forwarded script `{}`",
+                target.display()
+            );
+            return Some(1);
+        };
+        Command::new(node_exe).arg(&target).args(&forward).status()
+    } else if is_windows_cmd_script(&target) {
+        Command::new("cmd")
+            .args(["/d", "/c"])
+            .arg(&target)
+            .args(&forward)
+            .status()
+    } else {
+        Command::new(&target).args(&forward).status()
+    } {
         Ok(s) => s,
         Err(e) => {
             eprintln!(
