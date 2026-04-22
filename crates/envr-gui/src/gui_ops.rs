@@ -874,8 +874,14 @@ fn path_shim_roots() -> Vec<std::path::PathBuf> {
 
         let lower = seg.to_ascii_lowercase();
         if lower.contains("envr") && lower.ends_with(r"\shims") {
-            let p = std::path::Path::new(seg);
-            if let Some(root) = p.parent() {
+            let shims_dir = std::path::Path::new(seg);
+            // Only mirror into already-existing shim dirs discovered on PATH.
+            // If a stale PATH segment points to a deleted legacy location
+            // (e.g. `%USERPROFILE%\\.envr\\shims`), don't recreate it.
+            if !shims_dir.is_dir() {
+                continue;
+            }
+            if let Some(root) = shims_dir.parent() {
                 out.push(root.to_path_buf());
             }
         }
