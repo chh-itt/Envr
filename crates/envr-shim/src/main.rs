@@ -137,6 +137,16 @@ fn is_global_skip_stem(stem: &str) -> bool {
     )
 }
 
+#[cfg(windows)]
+fn strip_windows_verbatim_prefix(p: &Path) -> std::path::PathBuf {
+    let s = p.as_os_str().to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(stripped)
+    } else {
+        p.to_path_buf()
+    }
+}
+
 fn pnpm_global_mutation(args: &[OsString]) -> bool {
     let mut saw_sub = false;
     let mut saw_global = false;
@@ -291,7 +301,12 @@ fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path
         return;
     }
 
-    let out = match Command::new(npm_executable).args(["bin", "-g"]).output() {
+    #[cfg(windows)]
+    let npm_executable = strip_windows_verbatim_prefix(npm_executable);
+    #[cfg(not(windows))]
+    let npm_executable = npm_executable.to_path_buf();
+
+    let out = match Command::new(&npm_executable).args(["bin", "-g"]).output() {
         Ok(o) => o,
         Err(err) => {
             warn(format!(
@@ -412,10 +427,14 @@ fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
         return Some(2);
     };
     let forward: Vec<OsString> = args.iter().skip(4).cloned().collect();
-    let status = match Command::new(target).args(&forward).status() {
+    let target = strip_windows_verbatim_prefix(std::path::Path::new(target));
+    let status = match Command::new(&target).args(&forward).status() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("envr-shim: failed to spawn forwarded tool `{target}`: {e}");
+            eprintln!(
+                "envr-shim: failed to spawn forwarded tool `{}`: {e}",
+                target.display()
+            );
             return Some(1);
         }
     };
@@ -423,9 +442,7 @@ fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
     if should_sync_node_globals_for_forward(stem, &forward, status.success())
         && let Ok(ctx) = ShimContext::from_process_env()
     {
-        let bin_dir = std::path::Path::new(target)
-            .parent()
-            .map(std::path::Path::to_path_buf);
+        let bin_dir = target.parent().map(std::path::Path::to_path_buf);
         if let Some(bin_dir) = bin_dir {
             sync_node_global_shims_from_bin_dir_best_effort(&ctx.runtime_root, &bin_dir);
         }
@@ -654,5 +671,15 @@ mod tests {
         assert!(yarn_global_mutation(&os_args(&["global", "add", "tsx"])));
         assert!(yarn_global_mutation(&os_args(&["add", "-g", "tsx"])));
         assert!(!yarn_global_mutation(&os_args(&["add", "tsx"])));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strip_windows_verbatim_prefix_handles_path() {
+        let p = std::path::Path::new(r"\\?\D:\runtime\node\npm.cmd");
+        assert_eq!(
+            strip_windows_verbatim_prefix(p),
+            std::path::PathBuf::from(r"D:\runtime\node\npm.cmd")
+        );
     }
 }
