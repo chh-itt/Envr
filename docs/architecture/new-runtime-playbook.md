@@ -647,3 +647,13 @@ Gleam follow-up reinforces a general rule for hosted runtimes (similar to Elixir
 - **Do not silently skip prerequisite checks**:
   - Hosted-runtime installs should not continue to archive extraction if the required host runtime cannot execute.
   - This prevents "install succeeded but compile/run unusable" false positives in GUI and CLI.
+
+### 8.18 Remote “latest line” cache vs installable index (Gleam)
+
+If a runtime keeps a **disk cache of full installable rows** (e.g. GitHub API rows filtered by host asset presence) **and** a **separate cache of “latest per version line” labels** for the GUI, those files can drift when they use **different TTLs** or when one is refreshed without the other.
+
+- Symptom: GUI / `remote` suggests `1.14.0` but `install` / `use` fails with `unknown … version spec: 1.14.0` because that label is **not** in the current installable index.
+- Mitigations:
+  - On **any** refresh of the installable index, **delete** the derived “latest line” cache (or recompute it immediately).
+  - When serving the “latest line” cache, **validate** its label set against the current installable rows (same multiset); otherwise recompute.
+  - On **resolve** / install, if the label is missing, **force-refresh** the index once before surfacing “unknown spec”.

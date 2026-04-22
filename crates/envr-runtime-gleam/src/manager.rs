@@ -6,6 +6,7 @@ use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -248,6 +249,9 @@ impl GleamManager {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let text = serde_json::to_string_pretty(rows).map_err(|e| EnvrError::Download(e.to_string()))?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
+        // `latest_per_major` must always agree with the installable index; never reuse it across
+        // a refreshed releases cache (different TTLs caused GUI to offer labels not in `rows`).
+        let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
     }
     fn fetch_rows(&self, force_refresh: bool) -> EnvrResult<Vec<GleamInstallableRow>> {
@@ -263,25 +267,38 @@ impl GleamManager {
         Ok(list_remote_versions(&self.fetch_rows(false)?, filter))
     }
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let rows = self.fetch_rows(false)?;
+        let fresh = list_remote_latest_per_major_lines(&rows);
+        let fresh_set: BTreeSet<String> = fresh.iter().map(|v| v.0.clone()).collect();
+
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
             && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
-            && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
+            && let Ok(cached) = serde_json::from_str::<Vec<String>>(&text)
         {
-            return Ok(v.into_iter().map(RuntimeVersion).collect());
+            let cached_set: BTreeSet<String> = cached.iter().cloned().collect();
+            if cached_set == fresh_set {
+                return Ok(cached.into_iter().map(RuntimeVersion).collect());
+            }
         }
-        let latest = list_remote_latest_per_major_lines(&self.fetch_rows(false)?);
+
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
+        let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
         let text = serde_json::to_string_pretty(&labels).map_err(|e| EnvrError::Download(e.to_string()))?;
         fs::write(&path, text).map_err(EnvrError::from)?;
-        Ok(latest)
+        Ok(fresh)
     }
     pub fn resolve_label(&self, spec: &str) -> EnvrResult<String> {
-        resolve_gleam_version(&self.fetch_rows(false)?, spec)
-            .ok_or_else(|| EnvrError::Validation(format!("unknown gleam version spec: {spec}")))
+        let rows = self.fetch_rows(false)?;
+        if let Some(v) = resolve_gleam_version(&rows, spec) {
+            return Ok(v);
+        }
+        let rows = self.fetch_rows(true)?;
+        resolve_gleam_version(&rows, spec).ok_or_else(|| {
+            EnvrError::Validation(format!("unknown gleam version spec: {spec}"))
+        })
     }
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);

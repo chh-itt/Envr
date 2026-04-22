@@ -47,3 +47,7 @@ path_proxy_enabled = true
 
 When `path_proxy_enabled = false`, `gleam` shim bypasses managed runtime resolution and defers to system PATH.
 
+## Troubleshooting
+
+If the GUI suggests a version (e.g. `1.14.0`) but install reports **unknown gleam version spec**, the remote index cache was likely out of sync with the “latest per line” cache. Run `.\envr remote gleam -u` and retry; newer envr builds invalidate the line cache whenever the installable index is refreshed.
+
