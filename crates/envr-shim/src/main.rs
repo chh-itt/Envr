@@ -102,6 +102,70 @@ fn is_python_core_stem(stem: &str) -> bool {
     matches!(stem, "python" | "python3" | "pip" | "pip3")
 }
 
+fn is_global_skip_stem(stem: &str) -> bool {
+    matches!(
+        stem,
+        "node"
+            | "npm"
+            | "npx"
+            | "corepack"
+            | "yarn"
+            | "python"
+            | "python3"
+            | "pip"
+            | "pip3"
+            | "java"
+            | "javac"
+            | "clojure"
+            | "clj"
+            | "groovy"
+            | "groovyc"
+            | "terraform"
+            | "v"
+            | "gleam"
+            | "janet"
+            | "jpm"
+            | "dart"
+            | "flutter"
+            | "php"
+            | "bun"
+            | "bunx"
+            | "dotnet"
+            | "erl"
+            | "erlc"
+            | "escript"
+    )
+}
+
+fn npm_global_mutation_succeeded(cmd: CoreCommand, args: &[OsString], status_ok: bool) -> bool {
+    if !status_ok || !matches!(cmd, CoreCommand::Npm) {
+        return false;
+    }
+    let mut saw_sub = false;
+    let mut saw_global = false;
+    for a in args {
+        let s = a.to_string_lossy();
+        let t = s.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if !saw_sub {
+            saw_sub = matches!(
+                t,
+                "install" | "i" | "add" | "update" | "up" | "upgrade" | "uninstall" | "remove" | "rm"
+            );
+            continue;
+        }
+        if t == "--" {
+            break;
+        }
+        if t == "-g" || t == "--global" {
+            saw_global = true;
+        }
+    }
+    saw_sub && saw_global
+}
+
 fn npm_install_is_local_without_global(args: &[OsString]) -> bool {
     let mut saw_install_subcommand = false;
     let mut saw_global_flag = false;
@@ -143,6 +207,110 @@ fn maybe_print_npm_local_install_hint(core_cmd: CoreCommand, forward: &[OsString
 new CLIs are not exposed on PATH. Use `npm install -g <pkg>` then `envr shim sync --globals`, \
 or run via `npx <cmd>` from this project."
     );
+}
+
+fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path) {
+    let warn = |msg: String| {
+        eprintln!("envr-shim: warning: {msg}");
+    };
+
+    let shims_dir = runtime_root.join("shims");
+    if let Err(err) = fs::create_dir_all(&shims_dir) {
+        warn(format!(
+            "failed to create shims directory {}: {}",
+            shims_dir.display(),
+            err
+        ));
+        return;
+    }
+
+    let out = match Command::new(npm_executable).args(["bin", "-g"]).output() {
+        Ok(o) => o,
+        Err(err) => {
+            warn(format!(
+                "failed to run `{} bin -g`: {}",
+                npm_executable.display(),
+                err
+            ));
+            return;
+        }
+    };
+    if !out.status.success() {
+        warn(format!(
+            "`{} bin -g` failed: {}",
+            npm_executable.display(),
+            String::from_utf8_lossy(&out.stderr)
+        ));
+        return;
+    }
+    let bin_dir = std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim().to_string());
+    if !bin_dir.is_dir() {
+        warn(format!("npm global bin directory not found at {}", bin_dir.display()));
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir(&bin_dir) else {
+        warn(format!("failed to read npm global bin directory {}", bin_dir.display()));
+        return;
+    };
+
+    for e in entries.flatten() {
+        let path = e.path();
+        if !path.is_file() {
+            continue;
+        }
+        #[cfg(windows)]
+        {
+            let ext = path
+                .extension()
+                .and_then(|x| x.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !matches!(ext.as_str(), "cmd" | "exe" | "bat" | "com") {
+                continue;
+            }
+        }
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if stem.is_empty() || is_global_skip_stem(&stem) {
+            continue;
+        }
+        #[cfg(windows)]
+        {
+            let dst = shims_dir.join(format!("{stem}.cmd"));
+            let body = format!("@echo off\r\ncall \"{}\" %*\r\n", path.display());
+            if let Err(err) = fs::write(&dst, body) {
+                warn(format!(
+                    "failed to write node global shim {}: {}",
+                    dst.display(),
+                    err
+                ));
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let dst = shims_dir.join(&stem);
+            if dst.exists() && let Err(err) = fs::remove_file(&dst) {
+                warn(format!(
+                    "failed to replace node global shim {}: {}",
+                    dst.display(),
+                    err
+                ));
+                continue;
+            }
+            if let Err(err) = std::os::unix::fs::symlink(&path, &dst) {
+                warn(format!(
+                    "failed to link node global shim {} -> {}: {}",
+                    dst.display(),
+                    path.display(),
+                    err
+                ));
+            }
+        }
+    }
 }
 
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
@@ -291,6 +459,9 @@ fn main() {
         sync_python_script_shims_best_effort(&ctx.runtime_root, &resolved.executable);
         timings.pip_sync = pip_sync_started.elapsed();
     }
+    if npm_global_mutation_succeeded(core_cmd, &forward, status.success()) {
+        sync_node_global_shims_best_effort(&ctx.runtime_root, &resolved.executable);
+    }
     maybe_print_npm_local_install_hint(core_cmd, &forward, status.success());
     emit_timing_report(core_cmd, &timings);
     std::process::exit(status.code().unwrap_or(0xFF));
@@ -328,5 +499,24 @@ mod tests {
             "--global",
             "pnpm",
         ])));
+    }
+
+    #[test]
+    fn npm_global_mutation_detected() {
+        assert!(npm_global_mutation_succeeded(
+            CoreCommand::Npm,
+            &os_args(&["install", "-g", "pnpm"]),
+            true
+        ));
+        assert!(npm_global_mutation_succeeded(
+            CoreCommand::Npm,
+            &os_args(&["remove", "--global", "@anthropic-ai/claude-code"]),
+            true
+        ));
+        assert!(!npm_global_mutation_succeeded(
+            CoreCommand::Npm,
+            &os_args(&["install", "@anthropic-ai/claude-code"]),
+            true
+        ));
     }
 }
