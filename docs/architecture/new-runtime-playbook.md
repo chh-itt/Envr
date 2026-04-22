@@ -178,6 +178,10 @@ Typical targets:
 - [ ] Add runtime-home env injection through shared helper
 - [ ] Add absolute executable fallback for CLI `exec` if Windows lookup ordering can bite
 - [ ] Ensure core shim generation includes all expected command stems
+- [ ] For runtimes with **global package command forwards** (Node-family), define post-command refresh behavior:
+  - `npm` global mutations (`install` / `update` / `remove` with `-g/--global`) should refresh global forwards automatically.
+  - If `pnpm` / `yarn` / `yarnpkg` are forwarded via shim stubs, ensure those stubs can trigger the same refresh path after successful global mutations.
+  - Keep local-install UX explicit: non-global installs should not silently imply PATH availability; emit a hint or document `npx`/project-local usage.
 
 Typical targets:
 
@@ -302,6 +306,12 @@ Remote/cache regression tests:
 - [ ] Prefix test: `remote --prefix` falls back to local snapshot only when live fetch fails/times out.
 - [ ] Force-refresh test: `remote -u/--update` disables stale/fallback hints and returns live path semantics.
 - [ ] Cache-source parity test: CLI `remote` and GUI unified list overlap on top installable versions for the same runtime.
+
+Node global-forward regression tests:
+
+- [ ] After `npm install -g <pkg-with-bin>`, command shim is available without manual `envr shim sync --globals`.
+- [ ] After `pnpm add -g <pkg-with-bin>` and `yarn global add <pkg-with-bin>` (or equivalent supported forms), command shim is available without manual sync.
+- [ ] After non-global installs (`npm install <pkg>`), verify user-facing hint/docs make it clear the command is project-local (not PATH-global).
 
 Minimum smoke matrix:
 

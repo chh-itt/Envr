@@ -45,6 +45,9 @@
 - [ ] **`envr current node`** 与 **`envr list node`** 一致
 - [ ] **`envr which node`**（或文档约定的 shim 名）解析到预期可执行文件
 - [ ] **`envr uninstall node <version>`** 在测试版本上可执行（或 `prune` 干跑 `--execute` 前确认计划）
+- [ ] **npm 全局命令转发自动刷新**：执行 `npm install -g <pkg-with-bin>` 后，无需手动 `envr shim sync --globals`，直接可运行对应命令（例：`claude --version`）
+- [ ] **pnpm/yarn 全局命令转发自动刷新**：执行 `pnpm add -g <pkg-with-bin>`、`yarn global add <pkg-with-bin>` 后，无需手动 sync，命令可直接运行
+- [ ] **本地安装提示路径**：执行 `npm install <pkg-with-bin>`（不带 `-g`）后，确认有“本地安装不进全局 PATH”的提示或文档引导（如 `npx`）
 
 #### Python
 
