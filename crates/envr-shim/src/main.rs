@@ -10,7 +10,6 @@ use envr_shim_core::{
     resolve_core_shim_command_with_settings, runtime_version_label_from_executable,
 };
 use std::ffi::OsString;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -134,8 +133,7 @@ fn npm_install_is_local_without_global(args: &[OsString]) -> bool {
     saw_install_subcommand && saw_pkg_operand && !saw_global_flag
 }
 
-fn npm_is_global_mutation(args: &[OsString]) -> bool {
-    let mut saw_global = false;
+fn npm_is_package_mutation(args: &[OsString]) -> bool {
     let mut saw_mutating_subcommand = false;
     for a in args {
         let s = a.to_string_lossy();
@@ -145,10 +143,6 @@ fn npm_is_global_mutation(args: &[OsString]) -> bool {
         }
         if t == "--" {
             break;
-        }
-        if t == "-g" || t == "--global" {
-            saw_global = true;
-            continue;
         }
         if t.starts_with('-') {
             continue;
@@ -168,7 +162,7 @@ fn npm_is_global_mutation(args: &[OsString]) -> bool {
             saw_mutating_subcommand = true;
         }
     }
-    saw_global && saw_mutating_subcommand
+    saw_mutating_subcommand
 }
 
 fn maybe_print_npm_local_install_hint(core_cmd: CoreCommand, forward: &[OsString], status_ok: bool) {
@@ -180,21 +174,39 @@ fn maybe_print_npm_local_install_hint(core_cmd: CoreCommand, forward: &[OsString
     }
     eprintln!(
         "envr-shim: npm install ran in local mode (no -g/--global); \
-new CLIs are not exposed on PATH. Use `npm install -g <pkg>` then `envr shim sync --globals`, \
+new CLIs are not exposed on PATH. Use `npm install -g <pkg>`, \
 or run via `npx <cmd>` from this project."
     );
 }
 
-#[cfg(windows)]
-fn normalize_windows_path_for_cmd(raw: &Path) -> String {
-    let s = raw.display().to_string();
-    if let Some(rest) = s.strip_prefix(r"\\?\") {
-        return rest.to_string();
+fn sync_globals_via_envr_cli_best_effort(runtime_root: &Path) {
+    let warn = |msg: String| eprintln!("envr-shim: warning: {msg}");
+    let Ok(cur) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = cur.parent() else {
+        return;
+    };
+    #[cfg(windows)]
+    let candidates = [dir.join("er.exe"), dir.join("envr.exe"), dir.join("er.cmd")];
+    #[cfg(not(windows))]
+    let candidates = [dir.join("er"), dir.join("envr"), dir.join("er.cmd")];
+
+    let Some(cli_exe) = candidates.iter().find(|p| p.is_file()) else {
+        warn("skip auto global shim refresh: envr CLI executable not found beside envr-shim".into());
+        return;
+    };
+    let status = Command::new(cli_exe)
+        .args(["shim", "sync", "--globals"])
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .status();
+    if let Ok(s) = status {
+        if !s.success() {
+            warn(format!("auto global shim refresh failed with status {s}"));
+        }
+    } else if let Err(err) = status {
+        warn(format!("failed to run auto global shim refresh: {err}"));
     }
-    if let Some(rest) = s.strip_prefix("//?/") {
-        return rest.replace('/', "\\");
-    }
-    s
 }
 
 #[cfg(windows)]
@@ -283,184 +295,6 @@ fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
         }
     };
     Some(code)
-}
-
-#[cfg(windows)]
-fn is_windows_system_command_stem(stem: &str) -> bool {
-    let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
-    let system32 = std::path::PathBuf::from(windir).join("System32");
-    for ext in ["exe", "cmd", "bat", "com"] {
-        if system32.join(format!("{stem}.{ext}")).is_file() {
-            return true;
-        }
-    }
-    false
-}
-
-fn is_node_global_skip_stem(stem: &str) -> bool {
-    matches!(
-        stem,
-        "node"
-            | "npm"
-            | "npx"
-            | "corepack"
-            | "yarn"
-            | "python"
-            | "python3"
-            | "pip"
-            | "pip3"
-            | "java"
-            | "javac"
-            | "clojure"
-            | "clj"
-            | "groovy"
-            | "groovyc"
-            | "terraform"
-            | "v"
-            | "gleam"
-            | "janet"
-            | "jpm"
-            | "dart"
-            | "flutter"
-            | "php"
-            | "bun"
-            | "bunx"
-            | "dotnet"
-            | "erl"
-            | "erlc"
-            | "escript"
-    )
-}
-
-#[cfg(windows)]
-fn windows_global_bin_target_priority(ext: Option<&str>) -> i32 {
-    match ext.unwrap_or("").to_ascii_lowercase().as_str() {
-        "cmd" => 100,
-        "exe" => 90,
-        "bat" => 80,
-        "com" => 70,
-        "ps1" => 10,
-        _ => 0,
-    }
-}
-
-#[cfg(windows)]
-fn sync_node_global_shims_best_effort(runtime_root: &Path, npm_executable: &Path, extra_env: &[(String, String)]) {
-    let warn = |msg: String| eprintln!("envr-shim: warning: {msg}");
-    let resolve_global_bin = || -> Option<std::path::PathBuf> {
-        let mut bin_cmd = Command::new(npm_executable);
-        bin_cmd.args(["bin", "-g"]);
-        for (k, v) in extra_env {
-            bin_cmd.env(k, v);
-        }
-        if let Ok(out) = bin_cmd.output()
-            && out.status.success()
-        {
-            let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !p.is_empty() {
-                return Some(std::path::PathBuf::from(p));
-            }
-        }
-
-        // npm v10+ can remove/deprecate `npm bin`; fall back to prefix-derived bin dir.
-        let mut prefix_cmd = Command::new(npm_executable);
-        prefix_cmd.args(["prefix", "-g"]);
-        for (k, v) in extra_env {
-            prefix_cmd.env(k, v);
-        }
-        let out = match prefix_cmd.output() {
-            Ok(x) => x,
-            Err(err) => {
-                warn(format!("npm prefix -g failed to spawn: {err}"));
-                return None;
-            }
-        };
-        if !out.status.success() {
-            warn(format!(
-                "npm prefix -g failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-            return None;
-        }
-        let prefix = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if prefix.is_empty() {
-            return None;
-        }
-        #[cfg(windows)]
-        {
-            Some(std::path::PathBuf::from(prefix))
-        }
-        #[cfg(not(windows))]
-        {
-            Some(std::path::PathBuf::from(prefix).join("bin"))
-        }
-    };
-
-    let Some(global_bin) = resolve_global_bin() else {
-        return;
-    };
-    if !global_bin.is_dir() {
-        return;
-    }
-    let shims_dir = runtime_root.join("shims");
-    if let Err(err) = fs::create_dir_all(&shims_dir) {
-        warn(format!(
-            "failed to create shims directory {}: {}",
-            shims_dir.display(),
-            err
-        ));
-        return;
-    }
-
-    let entries = match fs::read_dir(&global_bin) {
-        Ok(x) => x,
-        Err(_) => return,
-    };
-    let mut best: HashMap<String, (i32, std::path::PathBuf)> = HashMap::new();
-    for e in entries.flatten() {
-        let p = e.path();
-        if !p.is_file() {
-            continue;
-        }
-        let stem = p
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if stem.is_empty() || is_node_global_skip_stem(&stem) {
-            continue;
-        }
-        if is_windows_system_command_stem(&stem) {
-            continue;
-        }
-        let prio = windows_global_bin_target_priority(p.extension().and_then(|x| x.to_str()));
-        match best.get(&stem) {
-            None => {
-                best.insert(stem, (prio, p));
-            }
-            Some((old_prio, _)) if prio > *old_prio => {
-                best.insert(stem, (prio, p));
-            }
-            _ => {}
-        }
-    }
-
-    for (stem, (_, target)) in best {
-        let dst = shims_dir.join(format!("{stem}.cmd"));
-        let target_s = normalize_windows_path_for_cmd(&target);
-        let body = format!("@echo off\r\ncall \"{}\" %*\r\n", target_s);
-        if let Err(err) = fs::write(&dst, body) {
-            warn(format!("failed to write node global shim {}: {}", dst.display(), err));
-        }
-    }
-}
-
-#[cfg(not(windows))]
-fn sync_node_global_shims_best_effort(
-    _runtime_root: &Path,
-    _npm_executable: &Path,
-    _extra_env: &[(String, String)],
-) {
 }
 
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
@@ -612,9 +446,9 @@ fn main() {
         sync_python_script_shims_best_effort(&ctx.runtime_root, &resolved.executable);
         timings.pip_sync = pip_sync_started.elapsed();
     }
-    if status.success() && matches!(core_cmd, CoreCommand::Npm) && npm_is_global_mutation(&forward) {
+    if status.success() && matches!(core_cmd, CoreCommand::Npm) && npm_is_package_mutation(&forward) {
         let npm_sync_started = Instant::now();
-        sync_node_global_shims_best_effort(&ctx.runtime_root, &resolved.executable, &resolved.extra_env);
+        sync_globals_via_envr_cli_best_effort(&ctx.runtime_root);
         timings.npm_sync = npm_sync_started.elapsed();
     }
     maybe_print_npm_local_install_hint(core_cmd, &forward, status.success());
@@ -657,11 +491,11 @@ mod tests {
     }
 
     #[test]
-    fn npm_global_mutation_detection() {
-        assert!(npm_is_global_mutation(&os_args(&["install", "-g", "pnpm"])));
-        assert!(npm_is_global_mutation(&os_args(&["--global", "i", "typescript"])));
-        assert!(!npm_is_global_mutation(&os_args(&["install", "pnpm"])));
-        assert!(!npm_is_global_mutation(&os_args(&["--global", "config", "get", "prefix"])));
+    fn npm_package_mutation_detection() {
+        assert!(npm_is_package_mutation(&os_args(&["install", "-g", "pnpm"])));
+        assert!(npm_is_package_mutation(&os_args(&["install", "pnpm"])));
+        assert!(npm_is_package_mutation(&os_args(&["remove", "--global", "pnpm"])));
+        assert!(!npm_is_package_mutation(&os_args(&["--global", "config", "get", "prefix"])));
     }
 
     #[cfg(windows)]
