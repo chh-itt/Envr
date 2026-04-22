@@ -101,24 +101,26 @@ fn label_from_tag(tag: &str) -> Option<String> {
 }
 
 fn asset_priority(name: &str, version: &str) -> Option<u8> {
-    // We prefer `.tar.bz2` everywhere because envr can extract it (TarBz2).
-    // For Windows we avoid `.msi` by preferring the tarball when available.
+    // Prefer assets that contain a usable SBCL executable for the current OS/arch.
+    //
+    // NOTE: On Windows, `sbcl_bin`'s `*-windows-binary.tar.bz2` does not necessarily ship `sbcl.exe`
+    // (it may be a build tree). The `*.msi` is the reliable install surface, so prefer MSI.
     use std::env::consts::{ARCH, OS};
     let v = version;
     match (OS, ARCH) {
         ("windows", "x86_64") => {
-            if name == format!("sbcl-{v}-x86-64-windows-binary.tar.bz2") {
+            if name == format!("sbcl-{v}-x86-64-windows-binary.msi") {
                 Some(0)
-            } else if name == format!("sbcl-{v}-x86-64-windows-binary.msi") {
+            } else if name == format!("sbcl-{v}-x86-64-windows-binary.tar.bz2") {
                 Some(10)
             } else {
                 None
             }
         }
         ("windows", "aarch64") => {
-            if name == format!("sbcl-{v}-arm64-windows-binary.tar.bz2") {
+            if name == format!("sbcl-{v}-arm64-windows-binary.msi") {
                 Some(0)
-            } else if name == format!("sbcl-{v}-arm64-windows-binary.msi") {
+            } else if name == format!("sbcl-{v}-arm64-windows-binary.tar.bz2") {
                 Some(10)
             } else {
                 None
@@ -222,8 +224,8 @@ fn make_synthetic_url(tag: &str, version: &str) -> Option<String> {
     use std::env::consts::{ARCH, OS};
     let v = version;
     let file = match (OS, ARCH) {
-        ("windows", "x86_64") => format!("sbcl-{v}-x86-64-windows-binary.tar.bz2"),
-        ("windows", "aarch64") => format!("sbcl-{v}-arm64-windows-binary.tar.bz2"),
+        ("windows", "x86_64") => format!("sbcl-{v}-x86-64-windows-binary.msi"),
+        ("windows", "aarch64") => format!("sbcl-{v}-arm64-windows-binary.msi"),
         ("linux", "x86_64") => format!("sbcl-{v}-x86-64-linux-binary.tar.bz2"),
         ("linux", "aarch64") => format!("sbcl-{v}-arm64-linux-binary.tar.bz2"),
         ("macos", "x86_64") => format!("sbcl-{v}-x86-64-darwin-binary.tar.bz2"),

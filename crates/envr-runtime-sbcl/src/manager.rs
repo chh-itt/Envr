@@ -10,6 +10,8 @@ use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::SystemTime;
@@ -50,6 +52,30 @@ fn first_existing(cands: &[PathBuf]) -> Option<PathBuf> {
     cands.iter().find(|p| p.is_file()).cloned()
 }
 
+#[cfg(windows)]
+fn find_named_executable_recursive(root: &Path, base: &str) -> Option<PathBuf> {
+    let with_ext = format!("{base}.exe");
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_file() {
+                if p.file_name().and_then(|n| n.to_str()) == Some(base)
+                    || p.file_name().and_then(|n| n.to_str()) == Some(with_ext.as_str())
+                {
+                    return Some(p);
+                }
+            } else if p.is_dir() {
+                stack.push(p);
+            }
+        }
+    }
+    None
+}
+
 pub fn sbcl_tool_candidate(home: &Path) -> Option<PathBuf> {
     // Common layouts:
     // - <root>/bin/sbcl(.exe)
@@ -65,6 +91,60 @@ pub fn sbcl_tool_candidate(home: &Path) -> Option<PathBuf> {
 
 pub fn sbcl_installation_valid(home: &Path) -> bool {
     sbcl_tool_candidate(home).is_some()
+}
+
+#[cfg(windows)]
+fn install_from_msi_admin_unpack(msi: &Path, final_dir: &Path) -> EnvrResult<()> {
+    let staging_parent = msi
+        .parent()
+        .map(|p| p.join("msi_admin_unpack"))
+        .unwrap_or_else(|| PathBuf::from("msi_admin_unpack"));
+    fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+    let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+    let target = staging.path();
+
+    let status = Command::new("msiexec")
+        .args([
+            "/a",
+            &msi.display().to_string(),
+            "/qn",
+            &format!("TARGETDIR={}", target.display()),
+        ])
+        .status()
+        .map_err(|e| {
+            EnvrError::Runtime(format!(
+                "failed to spawn msiexec for SBCL MSI (is msiexec on PATH?): {e}"
+            ))
+        })?;
+    if !status.success() {
+        return Err(EnvrError::Runtime(format!(
+            "msiexec administrative unpack failed with status {status} for {}",
+            msi.display()
+        )));
+    }
+
+    let sbcl_exe = find_named_executable_recursive(target, "sbcl").ok_or_else(|| {
+        EnvrError::Validation(format!(
+            "MSI unpack did not contain sbcl.exe under {}",
+            target.display()
+        ))
+    })?;
+    let src_dir = sbcl_exe.parent().ok_or_else(|| {
+        EnvrError::Validation("sbcl.exe from MSI has no parent directory".into())
+    })?;
+
+    install_layout::ensure_final_parent(final_dir)?;
+    let staging_final = install_layout::sibling_staging_path(final_dir)?;
+    install_layout::remove_if_exists(&staging_final)?;
+    install_layout::move_dir(src_dir, &staging_final)?;
+    install_layout::commit_staging_dir(&staging_final, final_dir)?;
+
+    if !sbcl_installation_valid(final_dir) {
+        return Err(EnvrError::Validation(
+            "sbcl MSI install produced no sbcl.exe under managed layout".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub fn list_installed_versions(paths: &SbclPaths) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -284,7 +364,13 @@ impl SbclManager {
 
     pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
-        let rows = self.fetch_rows(false)?;
+        let rows = if cfg!(windows) {
+            // Windows asset selection changed over time (MSI is the reliable binary surface).
+            // Force refresh to avoid stale cached URLs (e.g. old tarball rows).
+            self.fetch_rows(true)?
+        } else {
+            self.fetch_rows(false)?
+        };
         let row = rows
             .iter()
             .find(|r| r.version == label)
@@ -297,17 +383,44 @@ impl SbclManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
+        // Defensive rewrite: on Windows, some older cached rows used the `.tar.bz2` URL which may
+        // not contain `sbcl.exe`. Prefer `.msi` when possible.
+        let effective_url = if cfg!(windows) && row.url.to_ascii_lowercase().ends_with(".tar.bz2")
+        {
+            row.url
+                .trim_end_matches(".tar.bz2")
+                .to_string()
+                + ".msi"
+        } else {
+            row.url.clone()
+        };
+
         let cache_file = self.paths.cache_dir().join(
-            row.url.split('/').next_back().unwrap_or("sbcl-archive"),
+            effective_url
+                .split('/')
+                .next_back()
+                .unwrap_or("sbcl-archive"),
         );
         envr_download::blocking::download_url_to_path_resumable(
             &client,
-            &row.url,
+            &effective_url,
             &cache_file,
             request.progress_downloaded.as_ref() as Option<&Arc<AtomicU64>>,
             request.progress_total.as_ref() as Option<&Arc<AtomicU64>>,
             request.cancel.as_ref() as Option<&Arc<AtomicBool>>,
         )?;
+
+        let is_msi = effective_url.to_ascii_lowercase().contains(".msi");
+        #[cfg(windows)]
+        if is_msi {
+            install_from_msi_admin_unpack(&cache_file, &final_dir)?;
+            return Ok(RuntimeVersion(label));
+        }
+        if is_msi {
+            return Err(EnvrError::Validation(
+                "sbcl MSI installs are only supported on Windows".into(),
+            ));
+        }
 
         let staging_parent = self.paths.cache_dir().join("extract_staging");
         fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
