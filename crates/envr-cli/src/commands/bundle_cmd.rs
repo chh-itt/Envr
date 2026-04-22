@@ -146,6 +146,7 @@ fn create_inner(
             RuntimeKind::Zig,
             RuntimeKind::Julia,
             RuntimeKind::Janet,
+            RuntimeKind::C3,
             RuntimeKind::Lua,
             RuntimeKind::Nim,
             RuntimeKind::Crystal,

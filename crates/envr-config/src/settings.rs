@@ -761,6 +761,9 @@ pub struct RuntimeSettings {
     pub janet: JanetRuntimeSettings,
 
     #[serde(default)]
+    pub c3: C3RuntimeSettings,
+
+    #[serde(default)]
     pub lua: LuaRuntimeSettings,
 
     #[serde(default)]
@@ -996,6 +999,21 @@ impl Default for JanetRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::janet_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct C3RuntimeSettings {
+    /// When false, c3c shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::c3_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for C3RuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::c3_path_proxy_enabled(),
         }
     }
 }
@@ -2178,6 +2196,10 @@ mod defaults {
     }
 
     pub fn janet_path_proxy_enabled() -> bool {
+        true
+    }
+
+    pub fn c3_path_proxy_enabled() -> bool {
         true
     }
 

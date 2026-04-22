@@ -953,6 +953,7 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "envr-runtime-bun",
+ "envr-runtime-c3",
  "envr-runtime-clojure",
  "envr-runtime-crystal",
  "envr-runtime-dart",
@@ -1099,6 +1100,21 @@ dependencies = [
  "envr-error",
  "envr-mirror",
  "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-c3"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

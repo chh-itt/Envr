@@ -33,6 +33,7 @@ pub enum RuntimeKind {
     Zig,
     Julia,
     Janet,
+    C3,
     Lua,
     Nim,
     Crystal,
@@ -52,7 +53,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 33] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 34] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -306,6 +307,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 33] = [
         host_runtime: None,
     },
     RuntimeDescriptor {
+        kind: RuntimeKind::C3,
+        key: "c3",
+        label_en: "C3",
+        label_zh: "C3",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
         kind: RuntimeKind::Lua,
         key: "lua",
         label_en: "Lua",
@@ -531,6 +541,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Zig
         | RuntimeKind::Julia
         | RuntimeKind::Janet
+        | RuntimeKind::C3
         | RuntimeKind::Lua
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
@@ -590,6 +601,7 @@ mod tests {
         assert_eq!(parse_runtime_kind("RACKET").expect("racket"), RuntimeKind::Racket);
         assert_eq!(parse_runtime_kind("lua").expect("lua"), RuntimeKind::Lua);
         assert_eq!(parse_runtime_kind("JANET").expect("janet"), RuntimeKind::Janet);
+        assert_eq!(parse_runtime_kind("C3").expect("c3"), RuntimeKind::C3);
     }
 
     #[test]
@@ -601,7 +613,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 33);
+        assert_eq!(kinds.len(), 34);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -609,6 +621,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Zig));
         assert!(kinds.contains(&RuntimeKind::Julia));
         assert!(kinds.contains(&RuntimeKind::Janet));
+        assert!(kinds.contains(&RuntimeKind::C3));
         assert!(kinds.contains(&RuntimeKind::Nim));
         assert!(kinds.contains(&RuntimeKind::Crystal));
         assert!(kinds.contains(&RuntimeKind::Perl));
@@ -739,6 +752,10 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Janet, "1.41.0").as_deref(),
             Some("1.41")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::C3, "0.7.11").as_deref(),
+            Some("0.7")
         );
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Nim, "2.0.14").as_deref(),
