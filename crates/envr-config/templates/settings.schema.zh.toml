@@ -172,6 +172,10 @@ path_proxy_enabled = true
 # 当为 false 时，julia shim 将透传到系统 PATH 中的 julia 可执行文件
 path_proxy_enabled = true
 
+[runtime.janet]
+# 当为 false 时，janet / jpm shim 将透传到系统 PATH 中的同名可执行文件
+path_proxy_enabled = true
+
 [runtime.lua]
 # 当为 false 时，lua / luac shim 将透传到系统 PATH 中的同名可执行文件
 path_proxy_enabled = true

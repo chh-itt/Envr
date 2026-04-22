@@ -88,6 +88,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Dotnet => &[(CoreCommand::Dotnet, "dotnet")],
         RuntimeKind::Zig => &[(CoreCommand::Zig, "zig")],
         RuntimeKind::Julia => &[(CoreCommand::Julia, "julia")],
+        RuntimeKind::Janet => &[(CoreCommand::Janet, "janet"), (CoreCommand::Jpm, "jpm")],
         RuntimeKind::Lua => &[(CoreCommand::Lua, "lua"), (CoreCommand::Luac, "luac")],
         RuntimeKind::Nim => &[(CoreCommand::Nim, "nim")],
         RuntimeKind::Crystal => &[(CoreCommand::Crystal, "crystal")],
@@ -627,6 +628,8 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "terraform"
             | "v"
             | "gleam"
+            | "janet"
+            | "jpm"
             | "dart"
             | "flutter"
             | "php"

@@ -163,6 +163,8 @@ pub enum CoreCommand {
     Escript,
     Zig,
     Julia,
+    Janet,
+    Jpm,
     Lua,
     Luac,
     Nim,
@@ -201,6 +203,7 @@ impl CoreCommand {
             CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => "erlang",
             CoreCommand::Zig => "zig",
             CoreCommand::Julia => "julia",
+            CoreCommand::Janet | CoreCommand::Jpm => "janet",
             CoreCommand::Lua | CoreCommand::Luac => "lua",
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
@@ -240,6 +243,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "dotnet" => vec![home.to_path_buf(), home.join("bin")],
         "zig" => vec![home.to_path_buf(), home.join("bin")],
         "julia" => vec![home.join("bin")],
+        "janet" => vec![home.join("bin"), home.to_path_buf()],
         "lua" => vec![home.to_path_buf()],
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
@@ -309,6 +313,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         ],
         "erlang" => vec![("ERLANG_HOME".into(), home_env.clone())],
         "julia" => vec![("JULIA_HOME".into(), home_env)],
+        "janet" => vec![("JANET_HOME".into(), home_env)],
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
@@ -488,6 +493,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "escript" => Some(CoreCommand::Escript),
         "zig" => Some(CoreCommand::Zig),
         "julia" => Some(CoreCommand::Julia),
+        "janet" => Some(CoreCommand::Janet),
+        "jpm" => Some(CoreCommand::Jpm),
         "lua" => Some(CoreCommand::Lua),
         "luac" => Some(CoreCommand::Luac),
         "nim" => Some(CoreCommand::Nim),
@@ -1294,6 +1301,26 @@ fn julia_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn janet_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Janet => Ok(first_existing(&[
+            home.join("janet.exe"),
+            home.join("janet"),
+            home.join("bin").join("janet.exe"),
+            home.join("bin").join("janet"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("janet missing under {}", home.display())))?),
+        CoreCommand::Jpm => Ok(first_existing(&[
+            home.join("jpm.exe"),
+            home.join("jpm"),
+            home.join("bin").join("jpm.exe"),
+            home.join("bin").join("jpm"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("jpm missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a janet tool".into())),
+    }
+}
+
 fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home)
@@ -1374,6 +1401,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Erl | CoreCommand::Erlc | CoreCommand::Escript => erlang_tool_path(home, cmd),
         CoreCommand::Zig => zig_tool_path(home, cmd),
         CoreCommand::Julia => julia_tool_path(home, cmd),
+        CoreCommand::Janet | CoreCommand::Jpm => janet_tool_path(home, cmd),
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
@@ -1542,6 +1570,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Escript => "escript",
         CoreCommand::Zig => "zig",
         CoreCommand::Julia => "julia",
+        CoreCommand::Janet => "janet",
+        CoreCommand::Jpm => "jpm",
         CoreCommand::Lua => "lua",
         CoreCommand::Luac => "luac",
         CoreCommand::Nim => "nim",
@@ -1667,6 +1697,7 @@ pub fn resolve_core_shim_command_with_settings(
         }
         CoreCommand::Zig => zig_tool_path(&home, cmd)?,
         CoreCommand::Julia => julia_tool_path(&home, cmd)?,
+        CoreCommand::Janet | CoreCommand::Jpm => janet_tool_path(&home, cmd)?,
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
@@ -1764,6 +1795,8 @@ mod tests {
         assert_eq!(parse_core_command("escript"), Some(CoreCommand::Escript));
         assert_eq!(parse_core_command("zig"), Some(CoreCommand::Zig));
         assert_eq!(parse_core_command("julia"), Some(CoreCommand::Julia));
+        assert_eq!(parse_core_command("janet"), Some(CoreCommand::Janet));
+        assert_eq!(parse_core_command("jpm"), Some(CoreCommand::Jpm));
         assert_eq!(parse_core_command("lua"), Some(CoreCommand::Lua));
         assert_eq!(parse_core_command("luac"), Some(CoreCommand::Luac));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));

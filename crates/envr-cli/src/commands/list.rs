@@ -59,6 +59,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
         }
         RuntimeKind::Zig
         | RuntimeKind::Julia
+        | RuntimeKind::Janet
         | RuntimeKind::Lua
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala

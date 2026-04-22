@@ -2166,6 +2166,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.julia.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetJanetPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Janet,
+            on,
+            |st, on| st.runtime.janet.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetLuaPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Lua,

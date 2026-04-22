@@ -758,6 +758,9 @@ pub struct RuntimeSettings {
     pub julia: JuliaRuntimeSettings,
 
     #[serde(default)]
+    pub janet: JanetRuntimeSettings,
+
+    #[serde(default)]
     pub lua: LuaRuntimeSettings,
 
     #[serde(default)]
@@ -978,6 +981,21 @@ impl Default for JuliaRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::julia_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JanetRuntimeSettings {
+    /// When false, janet/jpm shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::janet_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for JanetRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::janet_path_proxy_enabled(),
         }
     }
 }
@@ -2159,6 +2177,10 @@ mod defaults {
         true
     }
 
+    pub fn janet_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn lua_path_proxy_enabled() -> bool {
         true
     }
@@ -2283,6 +2305,7 @@ mod tests {
                 dotnet: DotnetRuntimeSettings::default(),
                 zig: ZigRuntimeSettings::default(),
                 julia: JuliaRuntimeSettings::default(),
+                janet: JanetRuntimeSettings::default(),
                 lua: LuaRuntimeSettings::default(),
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),
