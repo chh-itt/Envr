@@ -173,6 +173,7 @@ Typical targets:
   - whether the shim is still created unconditionally
   - whether missing optional tools should be a hard error, a friendly validation error, or a PATH-bypass fallback
 - [ ] Add command parsing
+- [ ] If runtime key and executable stem differ (for example key `babashka` with command `bb`), verify mappings stay consistent across descriptor key, shim command parse, CLI/GUI `--lang` key, and template env keys.
 - [ ] Add tool executable resolution under runtime home
 - [ ] Add path-proxy bypass routing if supported
 - [ ] Add runtime-home env injection through shared helper

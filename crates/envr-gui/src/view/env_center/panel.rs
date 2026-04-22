@@ -6,7 +6,7 @@ use envr_config::settings::{
     FlutterRuntimeSettings,
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JanetRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
-    C3RuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    C3RuntimeSettings, BabashkaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PerlRuntimeSettings, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
     PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
     RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
@@ -101,6 +101,7 @@ pub enum EnvCenterMsg {
     SetJuliaPathProxy(bool),
     SetJanetPathProxy(bool),
     SetC3PathProxy(bool),
+    SetBabashkaPathProxy(bool),
     SetLuaPathProxy(bool),
     SetNimPathProxy(bool),
     SetCrystalPathProxy(bool),
@@ -2113,6 +2114,47 @@ fn c3_runtime_settings_section(c3: &C3RuntimeSettings, tokens: ThemeTokens) -> E
     .into()
 }
 
+fn babashka_runtime_settings_section(
+    bb: &BabashkaRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
+    let ty = tokens.typography();
+    let sp = tokens.space();
+    let muted = gui_theme::to_color(tokens.colors.text_muted);
+
+    let proxy_toggle = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.babashka.path_proxy", "PATH 代理", "PATH proxy"),
+        Some(envr_core::i18n::tr_key(
+            "gui.runtime.babashka.path_proxy.hint",
+            "开启时由 envr 接管 bb；关闭时 shim 透传到系统 PATH。",
+            "When on, envr manages bb; when off, shim passthrough goes to system PATH.",
+        )),
+        toggler(bb.path_proxy_enabled)
+            .label("")
+            .size(20.0)
+            .spacing(0.0)
+            .on_toggle(|v| Message::EnvCenter(EnvCenterMsg::SetBabashkaPathProxy(v)))
+            .into(),
+    );
+    let proxy_note = text(envr_core::i18n::tr_key(
+        "gui.runtime.babashka.path_proxy.note",
+        "关闭时无法使用「切换」「安装并切换」。",
+        "When off, Use / Install & Use are disabled.",
+    ))
+    .size(ty.micro)
+    .color(muted);
+
+    container(
+        column![proxy_toggle, proxy_note]
+            .spacing(sp.sm as f32)
+            .width(Length::Fill),
+    )
+    .padding(Padding::from([sp.md as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1))
+    .into()
+}
+
 fn lua_runtime_settings_section(
     lua: &LuaRuntimeSettings,
     tokens: ThemeTokens,
@@ -2688,6 +2730,8 @@ pub fn env_center_view(
         janet_runtime_settings_section(&runtime_settings.janet, tokens)
     } else if state.kind == RuntimeKind::C3 {
         c3_runtime_settings_section(&runtime_settings.c3, tokens)
+    } else if state.kind == RuntimeKind::Babashka {
+        babashka_runtime_settings_section(&runtime_settings.babashka, tokens)
     } else if state.kind == RuntimeKind::Lua {
         lua_runtime
             .map(|l| lua_runtime_settings_section(l, tokens))

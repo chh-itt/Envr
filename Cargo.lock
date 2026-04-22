@@ -952,6 +952,7 @@ dependencies = [
  "envr-domain",
  "envr-error",
  "envr-platform",
+ "envr-runtime-babashka",
  "envr-runtime-bun",
  "envr-runtime-c3",
  "envr-runtime-clojure",
@@ -1088,6 +1089,21 @@ dependencies = [
  "envr-domain",
  "envr-error",
  "envr-shim-core",
+]
+
+[[package]]
+name = "envr-runtime-babashka"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

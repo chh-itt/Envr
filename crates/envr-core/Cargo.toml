@@ -42,6 +42,7 @@ envr-runtime-zig = { path = "../envr-runtime-zig" }
 envr-runtime-julia = { path = "../envr-runtime-julia" }
 envr-runtime-janet = { path = "../envr-runtime-janet" }
 envr-runtime-c3 = { path = "../envr-runtime-c3" }
+envr-runtime-babashka = { path = "../envr-runtime-babashka" }
 envr-runtime-lua = { path = "../envr-runtime-lua" }
 envr-runtime-nim = { path = "../envr-runtime-nim" }
 envr-runtime-crystal = { path = "../envr-runtime-crystal" }
