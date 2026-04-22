@@ -198,6 +198,94 @@ fn normalize_windows_path_for_cmd(raw: &Path) -> String {
 }
 
 #[cfg(windows)]
+fn strip_windows_verbatim_prefix(p: &Path) -> std::path::PathBuf {
+    let s = p.as_os_str().to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        return std::path::PathBuf::from(rest);
+    }
+    if let Some(rest) = s.strip_prefix("//?/") {
+        return std::path::PathBuf::from(rest.replace('/', "\\"));
+    }
+    p.to_path_buf()
+}
+
+#[cfg(windows)]
+fn is_windows_cmd_script(p: &Path) -> bool {
+    matches!(
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("cmd" | "bat" | "com")
+    )
+}
+
+#[cfg(windows)]
+fn is_js_entry_script(p: &Path) -> bool {
+    matches!(
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("js" | "cjs" | "mjs")
+    )
+}
+
+#[cfg(windows)]
+fn find_node_exe_for_script(script: &Path) -> Option<std::path::PathBuf> {
+    let mut cur = script.parent()?;
+    loop {
+        let cand = cur.join("node.exe");
+        if cand.is_file() {
+            return Some(cand);
+        }
+        cur = cur.parent()?;
+    }
+}
+
+#[cfg(windows)]
+fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
+    // Backward compatibility for old generated stubs:
+    // envr-shim __forward-node-global <target> <stem> [user args...]
+    if args.get(1).and_then(|s| s.to_str()) != Some("__forward-node-global") {
+        return None;
+    }
+    let Some(target) = args.get(2).and_then(|s| s.to_str()) else {
+        eprintln!("envr-shim: invalid __forward-node-global args: missing target");
+        return Some(2);
+    };
+    let target = strip_windows_verbatim_prefix(std::path::Path::new(target));
+    let forward: Vec<OsString> = args.iter().skip(4).cloned().collect();
+    let status = if is_js_entry_script(&target) {
+        if let Some(node_exe) = find_node_exe_for_script(&target) {
+            Command::new(node_exe).arg(&target).args(&forward).status()
+        } else {
+            // Fallback: resolve node from PATH.
+            Command::new("node").arg(&target).args(&forward).status()
+        }
+    } else if is_windows_cmd_script(&target) {
+        Command::new("cmd")
+            .args(["/d", "/c"])
+            .arg(&target)
+            .args(&forward)
+            .status()
+    } else {
+        Command::new(&target).args(&forward).status()
+    };
+    let code = match status {
+        Ok(s) => s.code().unwrap_or(0xFF),
+        Err(e) => {
+            eprintln!(
+                "envr-shim: failed to spawn forwarded tool `{}`: {e}",
+                target.display()
+            );
+            1
+        }
+    };
+    Some(code)
+}
+
+#[cfg(windows)]
 fn is_windows_system_command_stem(stem: &str) -> bool {
     let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
     let system32 = std::path::PathBuf::from(windir).join("System32");
@@ -490,6 +578,9 @@ fn main() {
 #[cfg(windows)]
 fn main() {
     let args: Vec<OsString> = std::env::args_os().collect();
+    if let Some(code) = maybe_run_windows_node_forward_helper(&args) {
+        std::process::exit(code);
+    }
     let (core_cmd, ctx, _settings, resolved, forward, mut timings) = match prepare(&args) {
         Ok(x) => x,
         Err(e) => {
@@ -571,5 +662,20 @@ mod tests {
         assert!(npm_is_global_mutation(&os_args(&["--global", "i", "typescript"])));
         assert!(!npm_is_global_mutation(&os_args(&["install", "pnpm"])));
         assert!(!npm_is_global_mutation(&os_args(&["--global", "config", "get", "prefix"])));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strip_windows_verbatim_prefix_handles_both_forms() {
+        let p1 = std::path::Path::new(r"\\?\D:\runtime\node\npm.cmd");
+        assert_eq!(
+            strip_windows_verbatim_prefix(p1),
+            std::path::PathBuf::from(r"D:\runtime\node\npm.cmd")
+        );
+        let p2 = std::path::Path::new("//?/D:/runtime/node/npm.cmd");
+        assert_eq!(
+            strip_windows_verbatim_prefix(p2),
+            std::path::PathBuf::from(r"D:\runtime\node\npm.cmd")
+        );
     }
 }
