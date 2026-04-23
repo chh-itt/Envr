@@ -1583,6 +1583,59 @@ fn runtime_install_task_label(
     }
 }
 
+fn duplicate_runtime_install_blocked(
+    state: &mut AppState,
+    kind: envr_domain::runtime::RuntimeKind,
+    spec: &str,
+) -> bool {
+    let spec_trimmed = spec.trim();
+    if spec_trimmed.is_empty() {
+        return false;
+    }
+    if state
+        .env_center
+        .installed
+        .iter()
+        .any(|v| v.0.trim() == spec_trimmed)
+    {
+        state.error = Some(format!(
+            "{}: {}",
+            envr_core::i18n::tr_key(
+                "gui.runtime.install.duplicate_installed",
+                "该版本已安装",
+                "Version is already installed",
+            ),
+            spec_trimmed
+        ));
+        return true;
+    }
+
+    let inflight = state.downloads.jobs.iter().any(|j| {
+        if !matches!(j.state, JobState::Queued | JobState::Running) {
+            return false;
+        }
+        match j.payload.as_ref() {
+            Some(crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                kind: k, spec: s, ..
+            }) => *k == kind && s.trim() == spec_trimmed,
+            _ => false,
+        }
+    });
+    if inflight {
+        state.error = Some(format!(
+            "{}: {}",
+            envr_core::i18n::tr_key(
+                "gui.runtime.install.duplicate_inflight",
+                "该版本已在安装队列或进行中",
+                "Version is already queued or installing",
+            ),
+            spec_trimmed
+        ));
+        return true;
+    }
+    false
+}
+
 fn rust_runtime_task_label(action: &str, detail: &str) -> String {
     match action {
         "channel" => format!("Rust 正在安装/切换工具链 {detail}"),
@@ -1878,6 +1931,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
                 return Task::none();
             }
+            if duplicate_runtime_install_blocked(state, state.env_center.kind, &spec) {
+                return Task::none();
+            }
             if bun_direct_spec_blocked_on_windows(state.env_center.kind, &spec) {
                 state.error = Some(envr_core::i18n::tr_key(
                     "gui.runtime.bun.win_0x_blocked",
@@ -1917,6 +1973,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
                 return Task::none();
             }
+            if duplicate_runtime_install_blocked(state, state.env_center.kind, &spec) {
+                return Task::none();
+            }
             if bun_direct_spec_blocked_on_windows(state.env_center.kind, &spec) {
                 state.error = Some(envr_core::i18n::tr_key(
                     "gui.runtime.bun.win_0x_blocked",
@@ -1952,6 +2011,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             if spec.trim().is_empty() {
                 return Task::none();
             }
+            if duplicate_runtime_install_blocked(state, state.env_center.kind, &spec) {
+                return Task::none();
+            }
             state.error = None;
             let (id, _downloaded, _total, _cancel) = enqueue_runtime_install_job(
                 state,
@@ -1972,6 +2034,9 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             if spec.trim().is_empty() {
+                return Task::none();
+            }
+            if duplicate_runtime_install_blocked(state, state.env_center.kind, &spec) {
                 return Task::none();
             }
             state.error = None;
