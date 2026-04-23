@@ -1,6 +1,5 @@
 use envr_config::settings::{
-    FontMode, GoDownloadSource, GoProxyMode, LocaleMode, MirrorMode, NodeDownloadSource,
-    NpmRegistryMode, PipRegistryMode, PythonDownloadSource, ThemeMode,
+    FontMode, GoProxyMode, LocaleMode, MirrorMode, NpmRegistryMode, PipRegistryMode, ThemeMode,
 };
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
@@ -36,11 +35,8 @@ pub enum SettingsMsg {
     SetThemeMode(ThemeMode),
     AccentColorEdit(String),
     SetLocaleMode(LocaleMode),
-    SetNodeDownloadSource(NodeDownloadSource),
     SetNpmRegistryMode(NpmRegistryMode),
-    SetPythonDownloadSource(PythonDownloadSource),
     SetPipRegistryMode(PipRegistryMode),
-    SetGoDownloadSource(GoDownloadSource),
     SetGoProxyMode(GoProxyMode),
     GoProxyCustomEdit(String),
     GoPrivatePatternsEdit(String),
