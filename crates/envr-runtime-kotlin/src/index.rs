@@ -1,7 +1,8 @@
 //! Kotlin compiler bundles from JetBrains GitHub releases (`kotlin-compiler-<ver>.zip`).
 
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -27,18 +28,17 @@ pub struct GhRelease {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-kotlin/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-kotlin/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 pub fn fetch_releases_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -47,7 +47,7 @@ pub fn fetch_releases_json(client: &reqwest::blocking::Client, url: &str) -> Env
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 fn cmp_semver_release_labels(a: &str, b: &str) -> Ordering {

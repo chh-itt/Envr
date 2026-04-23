@@ -2,7 +2,8 @@
 
 use crate::releases_url::DEFAULT_CLOJURE_RELEASES_API_URL;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -34,15 +35,14 @@ pub struct GhRelease {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!(
+    build_blocking_http_client(
+        concat!(
             "envr-runtime-clojure/",
             env!("CARGO_PKG_VERSION"),
             " (https://clojure.org; envr)"
-        ))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        ),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 fn github_api_auth_token() -> Option<String> {
@@ -73,7 +73,9 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req
+        .send()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -82,7 +84,7 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn fetch_releases_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
@@ -295,7 +297,9 @@ fn fetch_clojure_releases_via_github_api(
             }
         };
         let page_releases: Vec<GhRelease> =
-            serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
+            serde_json::from_str(&body).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+            })?;
         let page_len = page_releases.len();
         if page_len == 0 {
             break;

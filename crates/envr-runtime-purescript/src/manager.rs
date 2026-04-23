@@ -4,7 +4,7 @@ use crate::index::{
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
@@ -139,7 +139,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -160,7 +160,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -251,7 +253,8 @@ impl PurescriptManager {
     }
     fn save_cached_rows(&self, rows: &[PurescriptInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows).map_err(|e| EnvrError::Download(e.to_string()))?;
+        let text = serde_json::to_string_pretty(rows)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize purescript rows cache", e))?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -283,7 +286,9 @@ impl PurescriptManager {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
         let text =
-            serde_json::to_string_pretty(&labels).map_err(|e| EnvrError::Download(e.to_string()))?;
+            serde_json::to_string_pretty(&labels).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, "serialize purescript latest cache", e)
+            })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }

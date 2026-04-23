@@ -1,6 +1,6 @@
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use reqwest::blocking::Client;
 use std::io::Read;
@@ -169,7 +169,7 @@ impl GoManager {
             .client
             .get(url)
             .send()
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
         if !response.status().is_success() {
             return Err(EnvrError::Download(format!(
                 "GET {} -> {}",
@@ -194,7 +194,13 @@ impl GoManager {
             }
             let n = response
                 .read(&mut buf)
-                .map_err(|e| EnvrError::Download(e.to_string()))?;
+                .map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Download,
+                        format!("read response body failed for {url}"),
+                        e,
+                    )
+                })?;
             if n == 0 {
                 break;
             }

@@ -1,6 +1,6 @@
 use crate::task::CancelToken;
 use crate::{GlobalRateLimiter, global_download_limiter};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use futures::StreamExt;
 use reqwest::{Client, StatusCode, Url, header};
 use std::{
@@ -74,7 +74,13 @@ impl DownloadEngine {
             .user_agent("envr/0.1")
             .connect_timeout(http_connect_timeout_from_env())
             .build()
-            .map_err(|e| EnvrError::Download(format!("reqwest client build failed: {e}")))
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Download,
+                    "reqwest client build failed",
+                    e,
+                )
+            })
     }
 
     /// Optional `progress_downloaded` / `progress_total` are updated for GUI observability.
@@ -109,7 +115,13 @@ impl DownloadEngine {
             let response = request
                 .send()
                 .await
-                .map_err(|e| EnvrError::Download(format!("request failed: {e}")))?;
+                .map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Download,
+                        format!("request failed for {url}"),
+                        e,
+                    )
+                })?;
 
             let status = response.status();
             let (append, effective_resumed_from) = match status {
@@ -192,7 +204,13 @@ impl DownloadEngine {
                     return Err(EnvrError::Download("download cancelled".to_string()));
                 }
                 let chunk =
-                    chunk.map_err(|e| EnvrError::Download(format!("read chunk failed: {e}")))?;
+                    chunk.map_err(|e| {
+                        EnvrError::with_source(
+                            ErrorCode::Download,
+                            format!("read chunk failed for {url}"),
+                            e,
+                        )
+                    })?;
 
                 if let Some(gl) = global_limiter.as_ref() {
                     gl.throttle_async(chunk.len() as u64).await?;

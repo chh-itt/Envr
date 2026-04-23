@@ -1224,6 +1224,7 @@ dependencies = [
  "envr-domain",
  "envr-download",
  "envr-error",
+ "envr-mirror",
  "envr-platform",
  "reqwest",
  "serde",
@@ -1263,6 +1264,7 @@ name = "envr-runtime-elm"
 version = "0.1.0"
 dependencies = [
  "envr-domain",
+ "envr-download",
  "envr-error",
  "envr-platform",
  "flate2",

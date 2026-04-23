@@ -114,6 +114,7 @@ pub fn envr_error_line_message(err: &EnvrError) -> String {
         | EnvrError::Download(s)
         | EnvrError::Mirror(s)
         | EnvrError::Unknown(s) => s.clone(),
+        EnvrError::Context { message, .. } => message.clone(),
     }
 }
 

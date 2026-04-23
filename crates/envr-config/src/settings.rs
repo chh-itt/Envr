@@ -1,4 +1,4 @@
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::EnvrPaths;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1442,7 +1442,7 @@ impl Settings {
 
         let path = path.as_ref();
         let content = toml::to_string_pretty(self)
-            .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode settings", e))?;
         envr_platform::fs_atomic::write_atomic_with_backup(path, content.as_bytes(), "bak")
             .map_err(EnvrError::from)?;
         let pb = path.to_path_buf();
@@ -2267,7 +2267,7 @@ fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
 fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
     let ts = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| EnvrError::Runtime(format!("time error: {e}")))?
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "time error", e))?
         .as_secs();
     let bad = path.with_extension(format!("toml.bad.{ts}"));
     let _ = fs::rename(path, bad);

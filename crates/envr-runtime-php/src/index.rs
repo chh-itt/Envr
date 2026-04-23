@@ -1,5 +1,6 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -29,11 +30,10 @@ pub struct ReleaseLine {
 pub type PhpReleasesIndex = HashMap<String, ReleaseLine>;
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(45))
-        .user_agent(concat!("envr-runtime-php/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-php/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(45)),
+    )
 }
 
 pub fn fetch_php_windows_releases_json(
@@ -43,7 +43,7 @@ pub fn fetch_php_windows_releases_json(
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -53,11 +53,12 @@ pub fn fetch_php_windows_releases_json(
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn parse_php_windows_index(json: &str) -> EnvrResult<PhpReleasesIndex> {
-    serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))
+    serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid php windows index json", e))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -212,7 +213,9 @@ pub fn pick_windows_zip(
                 .cloned()
                 .unwrap_or(serde_json::Value::Null);
             let entry: BuildEntry =
-                serde_json::from_value(v).map_err(|e| EnvrError::Validation(e.to_string()))?;
+                serde_json::from_value(v).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "invalid php build entry json", e)
+                })?;
             if let Some(z) = entry.zip
                 && !z.path.is_empty()
             {

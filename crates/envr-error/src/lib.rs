@@ -40,6 +40,13 @@ pub enum EnvrError {
     Download(String),
     #[error("mirror error: {0}")]
     Mirror(String),
+    #[error("{message}")]
+    Context {
+        code: ErrorCode,
+        message: String,
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
     #[error("unknown error: {0}")]
     Unknown(String),
 }
@@ -54,7 +61,31 @@ impl EnvrError {
             Self::Platform(_) => ErrorCode::Platform,
             Self::Download(_) => ErrorCode::Download,
             Self::Mirror(_) => ErrorCode::Mirror,
+            Self::Context { code, .. } => *code,
             Self::Unknown(_) => ErrorCode::Unknown,
+        }
+    }
+
+    /// Attach context while preserving the original error as `source`.
+    pub fn context(self, message: impl Into<String>) -> Self {
+        let code = self.code();
+        Self::Context {
+            code,
+            message: message.into(),
+            source: Box::new(self),
+        }
+    }
+
+    /// Create an error with explicit `code` and external source chain.
+    pub fn with_source(
+        code: ErrorCode,
+        message: impl Into<String>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::Context {
+            code,
+            message: message.into(),
+            source: Box::new(source),
         }
     }
 
@@ -144,11 +175,24 @@ mod tests {
                 EnvrError::Platform(_) => "platform error",
                 EnvrError::Download(_) => "download error",
                 EnvrError::Mirror(_) => "mirror error",
+                EnvrError::Context { .. } => "context",
                 EnvrError::Unknown(_) => "unknown error",
                 EnvrError::Io(_) => "i/o error",
             };
-            assert!(payload.message.contains(needle));
-            assert!(payload.chain.is_empty());
+            if !matches!(err, EnvrError::Context { .. }) {
+                assert!(payload.message.contains(needle));
+                assert!(payload.chain.is_empty());
+            }
         }
+    }
+
+    #[test]
+    fn context_preserves_error_chain() {
+        let base = EnvrError::Download("request failed".into());
+        let err = base.context("downloading runtime archive");
+        let payload = err.to_payload();
+        assert_eq!(payload.code, ErrorCode::Download);
+        assert!(payload.message.contains("downloading runtime archive"));
+        assert!(payload.chain.iter().any(|x| x.contains("download error")));
     }
 }

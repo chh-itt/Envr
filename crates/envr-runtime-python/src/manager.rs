@@ -11,7 +11,7 @@ use envr_config::settings::{
 };
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use std::{
     ffi::OsStr,
@@ -68,7 +68,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -94,7 +94,13 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Download,
+                    format!("read response body failed for {url}"),
+                    e,
+                )
+            })?;
         if n == 0 {
             break;
         }
@@ -542,9 +548,11 @@ fn build_cpython_unix(src_root: &Path, install_prefix: &Path) -> EnvrResult<()> 
         .arg("--with-ensurepip=install")
         .status()
         .map_err(|e| {
-            EnvrError::Runtime(format!(
-                "failed to run ./configure (install build tools / dev packages): {e}"
-            ))
+            EnvrError::with_source(
+                ErrorCode::Runtime,
+                "failed to run ./configure (install build tools / dev packages)",
+                e,
+            )
         })?;
     if !cfg.success() {
         return Err(EnvrError::Runtime(
@@ -562,7 +570,7 @@ fn build_cpython_unix(src_root: &Path, install_prefix: &Path) -> EnvrResult<()> 
         .current_dir(src_root)
         .arg(format!("-j{jobs}"))
         .status()
-        .map_err(|e| EnvrError::Runtime(format!("make failed to start: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "make failed to start", e))?;
     if !mk.success() {
         return Err(EnvrError::Runtime("make failed".into()));
     }
@@ -571,7 +579,9 @@ fn build_cpython_unix(src_root: &Path, install_prefix: &Path) -> EnvrResult<()> 
         .current_dir(src_root)
         .arg("install")
         .status()
-        .map_err(|e| EnvrError::Runtime(format!("make install failed to start: {e}")))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, "make install failed to start", e)
+        })?;
     if !ins.success() {
         return Err(EnvrError::Runtime("make install failed".into()));
     }

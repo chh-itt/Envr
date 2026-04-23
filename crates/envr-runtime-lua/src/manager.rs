@@ -1,7 +1,8 @@
 use crate::index::{lua_host_kind, sourceforge_tools_download_url, tools_executable_filename};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::install_layout;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use envr_platform::lua_binaries::lua_installation_valid;
@@ -177,7 +178,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -201,7 +202,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -261,7 +264,7 @@ impl LuaManager {
     pub fn load_version_list(&self) -> EnvrResult<Vec<String>> {
         let cache_path = self.index_cache_path();
         let ttl = Self::index_ttl_secs();
-        let settings = crate::mirror::load_settings()?;
+        let settings = load_settings_cached()?;
         let offline = settings.mirror.mode == envr_config::settings::MirrorMode::Offline;
 
         if (offline || Self::file_is_within_ttl(&cache_path, ttl))
@@ -281,7 +284,7 @@ impl LuaManager {
             )));
         }
 
-        let url = crate::mirror::maybe_mirror_url(&settings, &self.download_page_url)?;
+        let url = maybe_mirror_url(&settings, &self.download_page_url)?;
         let body = crate::index::fetch_download_page(&self.client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
@@ -343,7 +346,7 @@ impl LuaManager {
         let path = self.remote_latest_per_major_cache_path();
         let labels: Vec<&str> = list.iter().map(|v| v.0.as_str()).collect();
         let s = serde_json::to_string(&labels)
-            .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode lua latest labels", e))?;
         envr_platform::fs_atomic::write_atomic(&path, s.as_bytes())?;
         Ok(())
     }
@@ -379,8 +382,8 @@ impl LuaManager {
             return Err(EnvrError::Download("download cancelled".into()));
         }
         let host = lua_host_kind()?;
-        let settings = crate::mirror::load_settings()?;
-        let url = crate::mirror::maybe_mirror_url(
+        let settings = load_settings_cached()?;
+        let url = maybe_mirror_url(
             &settings,
             &sourceforge_tools_download_url(version_label, host)?,
         )?;

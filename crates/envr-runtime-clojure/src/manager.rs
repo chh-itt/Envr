@@ -5,7 +5,7 @@ use crate::index::{
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::install_layout;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use envr_shim_core::{ShimContext, resolve_runtime_home_for_lang};
@@ -246,7 +246,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -266,7 +266,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -359,8 +361,9 @@ impl ClojureManager {
             }
         }
         let releases = fetch_clojure_github_releases_index(&self.client, &self.releases_api_url)?;
-        let body = serde_json::to_string(&releases)
-            .map_err(|e| EnvrError::Validation(format!("clojure releases json: {e}")))?;
+        let body = serde_json::to_string(&releases).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "clojure releases json", e)
+        })?;
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
             envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())?;
@@ -399,7 +402,8 @@ impl ClojureManager {
         fs::create_dir_all(self.paths.cache_dir())?;
         let path = self.paths.cache_dir().join("remote_latest_per_major.json");
         let labels: Vec<&str> = list.iter().map(|v| v.0.as_str()).collect();
-        let s = serde_json::to_string(&labels).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let s = serde_json::to_string(&labels)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode clojure latest labels", e))?;
         envr_platform::fs_atomic::write_atomic(&path, s.as_bytes())?;
         Ok(())
     }

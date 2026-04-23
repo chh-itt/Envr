@@ -1,7 +1,8 @@
 //! Parse `https://ziglang.org/download/index.json` and map host → Zig JSON platform keys.
 
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::{Map, Value};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -10,18 +11,17 @@ use std::time::Duration;
 pub const DEFAULT_ZIG_INDEX_URL: &str = "https://ziglang.org/download/index.json";
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(60))
-        .user_agent(concat!("envr-runtime-zig/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-zig/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(60)),
+    )
 }
 
 pub fn fetch_index_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -30,11 +30,12 @@ pub fn fetch_index_json(client: &reqwest::blocking::Client, url: &str) -> EnvrRe
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn parse_index_root(json: &str) -> EnvrResult<Map<String, Value>> {
-    let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let v: Value = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid zig index json", e))?;
     match v {
         Value::Object(m) => Ok(m),
         _ => Err(EnvrError::Validation(

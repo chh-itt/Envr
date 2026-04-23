@@ -17,7 +17,7 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -261,7 +261,7 @@ impl RuntimeProvider for NodeRuntimeProvider {
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(paths.cache_dir())?;
             let s = serde_json::to_string(&majors)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode node major list", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -306,7 +306,7 @@ impl RuntimeProvider for NodeRuntimeProvider {
             std::fs::create_dir_all(paths.cache_dir())?;
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
             let s = serde_json::to_string(&strings)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode node latest list", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

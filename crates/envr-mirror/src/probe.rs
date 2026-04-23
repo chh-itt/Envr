@@ -1,7 +1,7 @@
 use crate::registry::{Mirror, MirrorId, MirrorRegistry};
 use crate::strategy::{ResolvedMirror, mirror_base_url};
 use envr_config::settings::{MirrorMode, Settings};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::current_platform_paths;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -165,7 +165,7 @@ fn load_cache_if_fresh(path: &PathBuf, ttl_ms: u64) -> EnvrResult<ProbeCache> {
     }
     let content = std::fs::read_to_string(path).map_err(EnvrError::from)?;
     serde_json::from_str(&content)
-        .map_err(|e| EnvrError::Config(format!("invalid probe cache json: {e}")))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Config, "invalid probe cache json", e))
 }
 
 fn save_cache(path: &PathBuf, cache: &ProbeCache) -> EnvrResult<()> {
@@ -173,7 +173,7 @@ fn save_cache(path: &PathBuf, cache: &ProbeCache) -> EnvrResult<()> {
         std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
     let content = serde_json::to_string_pretty(cache)
-        .map_err(|e| EnvrError::Runtime(format!("serialize probe cache: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "serialize probe cache", e))?;
     std::fs::write(path, content).map_err(EnvrError::from)?;
     Ok(())
 }

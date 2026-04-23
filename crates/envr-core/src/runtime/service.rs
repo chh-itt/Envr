@@ -3,7 +3,7 @@ use envr_domain::runtime::{
     RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec, major_line_remote_install_blocked,
     runtime_descriptor, version_line_key_for_kind,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::cache_recovery;
 use std::collections::HashMap;
 use std::fs;
@@ -517,7 +517,8 @@ impl RuntimeService {
             fs::create_dir_all(parent).map_err(EnvrError::from)?;
         }
         let data: Vec<String> = children.iter().map(|v| v.0.clone()).collect();
-        let s = serde_json::to_string(&data).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let s = serde_json::to_string(&data)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode", e))?;
         envr_platform::fs_atomic::write_atomic(&path, s.as_bytes())?;
         Ok(())
     }
@@ -629,7 +630,8 @@ impl RuntimeService {
             .iter()
             .filter_map(|r| r.latest_installable.as_ref().map(|v| v.0.clone()))
             .collect();
-        let s = serde_json::to_string(&data).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let s = serde_json::to_string(&data)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode", e))?;
         envr_platform::fs_atomic::write_atomic(&path, s.as_bytes())?;
         Ok(())
     }
@@ -663,7 +665,8 @@ impl RuntimeService {
             fs::create_dir_all(parent).map_err(EnvrError::from)?;
         }
         let data: Vec<String> = children.iter().map(|v| v.0.clone()).collect();
-        let s = serde_json::to_string(&data).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let s = serde_json::to_string(&data)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode", e))?;
         envr_platform::fs_atomic::write_atomic(&path, s.as_bytes())?;
         Ok(())
     }

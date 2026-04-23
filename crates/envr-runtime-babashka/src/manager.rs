@@ -4,7 +4,7 @@ use crate::index::{
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::install_layout;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::collections::BTreeSet;
@@ -215,7 +215,8 @@ impl BabashkaManager {
     fn save_cached_rows(&self, rows: &[BabashkaInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let text =
-            serde_json::to_string_pretty(rows).map_err(|e| EnvrError::Download(e.to_string()))?;
+            serde_json::to_string_pretty(rows)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize babashka rows cache", e))?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -260,7 +261,8 @@ impl BabashkaManager {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
         let text =
-            serde_json::to_string_pretty(&labels).map_err(|e| EnvrError::Download(e.to_string()))?;
+            serde_json::to_string_pretty(&labels)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize babashka latest cache", e))?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }

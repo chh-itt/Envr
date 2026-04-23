@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 flate2 = { workspace = true }

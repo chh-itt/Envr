@@ -1,7 +1,8 @@
 //! R (CRAN Windows) version list via rversions JSON + CRAN installer URL rules.
 
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::Value;
 use std::cmp::Ordering;
 use std::time::Duration;
@@ -10,18 +11,17 @@ pub const DEFAULT_RVERSIONS_JSON_URL: &str = "https://rversions.r-pkg.org/r-vers
 pub const DEFAULT_RVERSIONS_RELEASE_WIN_URL: &str = "https://rversions.r-pkg.org/r-release-win";
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-rlang/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-rlang/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -30,7 +30,7 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 fn cmp_semver_release_labels(a: &str, b: &str) -> Ordering {
@@ -50,7 +50,8 @@ fn is_stable_three_part(version: &str) -> bool {
 
 /// Parse `r-versions` JSON array; returns newest-first semver labels (e.g. `4.4.2`).
 pub fn parse_r_versions_list(json: &str) -> EnvrResult<Vec<String>> {
-    let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let v: Value = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid r-versions json", e))?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("r-versions JSON must be an array".into()))?;
@@ -70,7 +71,8 @@ pub fn parse_r_versions_list(json: &str) -> EnvrResult<Vec<String>> {
 
 /// Latest Windows release version string from `r-release-win` (first array element).
 pub fn parse_latest_win_release_version(json: &str) -> EnvrResult<String> {
-    let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let v: Value = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid r-release-win json", e))?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("r-release-win JSON must be an array".into()))?;

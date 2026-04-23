@@ -4,7 +4,7 @@ use crate::index::{
 };
 use envr_download::extract;
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::Write;
@@ -68,7 +68,7 @@ fn download_file_atomic(client: &reqwest::blocking::Client, url: &str, dst: &Pat
         // Keep archive bytes as-is; do not let HTTP layer transparently decompress.
         .header(reqwest::header::ACCEPT_ENCODING, "identity")
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
     }
@@ -278,7 +278,8 @@ impl RacketManager {
     }
     fn save_cached_rows(&self, rows: &[RacketInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows).map_err(|e| EnvrError::Download(e.to_string()))?;
+        let text = serde_json::to_string_pretty(rows)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize racket rows cache", e))?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -307,7 +308,8 @@ impl RacketManager {
         let latest = list_remote_latest_per_major_lines(&self.fetch_rows(false)?);
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
-        let text = serde_json::to_string_pretty(&labels).map_err(|e| EnvrError::Download(e.to_string()))?;
+        let text = serde_json::to_string_pretty(&labels)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize racket latest cache", e))?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }

@@ -1,5 +1,6 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -50,18 +51,17 @@ pub fn normalize_go_version(version: &str) -> String {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(45))
-        .user_agent(concat!("envr-runtime-go/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-go/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(45)),
+    )
 }
 
 pub fn fetch_go_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -71,11 +71,12 @@ pub fn fetch_go_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResu
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn parse_go_index(json: &str) -> EnvrResult<Vec<GoRelease>> {
-    serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))
+    serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid go releases json", e))
 }
 
 /// Map Rust `std::env::consts::OS` to Go download JSON `os` field (`macos` → `darwin`).

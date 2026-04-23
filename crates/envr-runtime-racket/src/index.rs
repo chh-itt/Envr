@@ -1,7 +1,8 @@
 use envr_domain::runtime::{
     RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -19,11 +20,10 @@ pub struct RacketInstallableRow {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-racket/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-racket/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -50,9 +50,21 @@ pub fn fetch_racket_installable_rows(
     let text = client
         .get(all_versions_url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("request failed for {all_versions_url}"),
+                e,
+            )
+        })?
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read body failed for {all_versions_url}"),
+                e,
+            )
+        })?;
     let mut out = Vec::new();
     for cap in VERSION_RE.captures_iter(&text) {
         let version = cap.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();

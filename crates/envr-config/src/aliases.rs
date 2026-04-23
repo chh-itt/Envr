@@ -1,6 +1,6 @@
 //! User-defined command aliases stored beside `settings.toml` (`config/aliases.toml`).
 
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::EnvrPaths;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -32,8 +32,9 @@ impl AliasesFile {
 
     pub fn save_to(&self, path: impl AsRef<Path>) -> EnvrResult<()> {
         let path = path.as_ref();
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+        let content = toml::to_string_pretty(self).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, "toml encode aliases", e)
+        })?;
         envr_platform::fs_atomic::write_atomic(path, content.as_bytes())
             .map_err(EnvrError::from)?;
         Ok(())

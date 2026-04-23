@@ -1,4 +1,4 @@
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -72,7 +72,7 @@ impl MirrorRegistry {
 
 pub fn validate_mirror_url(url: &str) -> EnvrResult<()> {
     let parsed = reqwest::Url::parse(url)
-        .map_err(|e| EnvrError::Validation(format!("invalid mirror url: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid mirror url", e))?;
 
     match parsed.scheme() {
         "https" | "http" => {}

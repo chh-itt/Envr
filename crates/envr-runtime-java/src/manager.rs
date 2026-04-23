@@ -8,7 +8,7 @@ use crate::vendor::JavaVendor;
 use envr_config::settings::JavaDownloadSource;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use serde::Deserialize;
 use std::{
@@ -135,12 +135,15 @@ fn zulu_fetch_packages_json(
     let r = client
         .get(&url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    let body = r.text().map_err(|e| EnvrError::Download(e.to_string()))?;
-    serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))
+    let body = r
+        .text()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
+    serde_json::from_str(&body)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid zulu packages json", e))
 }
 
 fn zulu_preferred_download_url(
@@ -236,16 +239,19 @@ fn dragonwell_latest_download_url(
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {api_url}"), e))?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {api_url} -> {}",
             r.status()
         )));
     }
-    let body = r.text().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let body = r
+        .text()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {api_url}"), e))?;
     let parsed: GhRelease =
-        serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        serde_json::from_str(&body)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid dragonwell latest release json", e))?;
 
     let mut candidates: Vec<&GhAsset> = parsed
         .assets
@@ -498,12 +504,15 @@ fn fetch_json<T: serde::de::DeserializeOwned>(
     let r = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    let body = r.text().map_err(|e| EnvrError::Download(e.to_string()))?;
-    serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))
+    let body = r
+        .text()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
+    serde_json::from_str(&body)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid json response", e))
 }
 
 fn pick_release<'a>(
@@ -569,7 +578,9 @@ fn download_to_path(
     if let Some(r) = referer {
         req = req.header("Referer", r);
     }
-    let mut response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let mut response = req
+        .send()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -596,7 +607,13 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Download,
+                    format!("read response body failed for {url}"),
+                    e,
+                )
+            })?;
         if n == 0 {
             break;
         }

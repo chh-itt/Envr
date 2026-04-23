@@ -1,7 +1,7 @@
 //! Resolve `extends = [...]` in `.envr.toml` by fetching remote layers (HTTPS) and merging.
 
 use crate::project_config::ProjectConfig;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
@@ -120,9 +120,21 @@ pub fn fetch_extend_body(url: &str) -> EnvrResult<String> {
     let body = ureq::get(url)
         .timeout(FETCH_TIMEOUT)
         .call()
-        .map_err(|e| EnvrError::Config(format!("extends fetch failed for {url}: {e}")))?
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Config,
+                format!("extends fetch failed for {url}"),
+                e,
+            )
+        })?
         .into_string()
-        .map_err(|e| EnvrError::Config(format!("extends read body for {url}: {e}")))?;
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Config,
+                format!("extends read body failed for {url}"),
+                e,
+            )
+        })?;
 
     if let Ok(cache_path) = url_cache_path(url) {
         let _ = write_cache_atomic(&cache_path, &body);
@@ -163,9 +175,14 @@ fn resolve_extends_inner(
             )));
         }
         let body = fetch_extend_body(&norm)?;
-        let mut remote = crate::project_config::parse_project_config_str(&body).map_err(|e| {
-            EnvrError::Config(format!("failed to parse extended config {norm}: {e}"))
-        })?;
+        let mut remote =
+            crate::project_config::parse_project_config_str(&body).map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Config,
+                    format!("failed to parse extended config {norm}"),
+                    e,
+                )
+            })?;
         remote = resolve_extends_inner(remote, depth + 1, visited)?;
         visited.remove(&norm);
         acc = remote.merge_over(acc);
@@ -212,9 +229,14 @@ where
             )));
         }
         let body = fetch(&norm)?;
-        let mut remote = crate::project_config::parse_project_config_str(&body).map_err(|e| {
-            EnvrError::Config(format!("failed to parse extended config {norm}: {e}"))
-        })?;
+        let mut remote =
+            crate::project_config::parse_project_config_str(&body).map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Config,
+                    format!("failed to parse extended config {norm}"),
+                    e,
+                )
+            })?;
         remote = resolve_extends_inner_with_fetch(remote, depth + 1, visited, fetch)?;
         visited.remove(&norm);
         acc = remote.merge_over(acc);

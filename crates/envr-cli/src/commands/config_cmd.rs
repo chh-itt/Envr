@@ -7,7 +7,7 @@ use crate::output;
 
 use envr_config::settings::{Settings, validate_settings_file};
 use envr_config::settings_toml_schema_template_zh;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
@@ -112,7 +112,13 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
             match Settings::load_or_default_from(&settings_path) {
                 Ok(st) => {
                     let v = serde_json::to_value(&st)
-                        .map_err(|e| EnvrError::Runtime(format!("json encode settings: {e}")))?;
+                        .map_err(|e| {
+                            EnvrError::with_source(
+                                ErrorCode::Runtime,
+                                "json encode settings",
+                                e,
+                            )
+                        })?;
                     let got = get_json_dotted(&v, &key);
                     let data = serde_json::json!({
                         "path": settings_path.to_string_lossy(),
@@ -145,7 +151,9 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
         } => {
             let mut st = Settings::load_or_default_from(&settings_path)?;
             let mut as_json = serde_json::to_value(&st)
-                .map_err(|e| EnvrError::Runtime(format!("json encode settings: {e}")))?;
+                .map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Runtime, "json encode settings", e)
+                })?;
             if get_json_dotted(&as_json, &key).is_none() {
                 let hint = suggest_key_hint(&key);
                 let msg = if let Some(h) = hint {
@@ -158,7 +166,13 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
             let parsed = parse_user_value(&value, value_type)?;
             set_json_dotted(&mut as_json, &key, parsed.clone()).map_err(EnvrError::Validation)?;
             st = serde_json::from_value(as_json)
-                .map_err(|e| EnvrError::Validation(format!("invalid value for `{key}`: {e}")))?;
+                .map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Validation,
+                        format!("invalid value for `{key}`"),
+                        e,
+                    )
+                })?;
             st.validate()?;
             st.save_to(&settings_path)?;
             let data = serde_json::json!({
@@ -179,7 +193,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
         crate::cli::ConfigCmd::Show => {
             let st = Settings::load_or_default_from(&settings_path)?;
             let pretty = toml::to_string_pretty(&st)
-                .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode", e))?;
             let data = serde_json::json!({
                 "path": settings_path.to_string_lossy(),
                 "settings": serde_json::to_value(&st).unwrap_or(serde_json::Value::Null),
@@ -412,7 +426,7 @@ fn ensure_migrated_settings_file(path: &Path) -> Result<bool, EnvrError> {
     let backup = backup_path(path);
     fs::copy(path, &backup).map_err(EnvrError::from)?;
     let text = toml::to_string_pretty(&doc)
-        .map_err(|e| EnvrError::Runtime(format!("toml encode: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode", e))?;
     fs::write(path, text).map_err(EnvrError::from)?;
     Ok(true)
 }

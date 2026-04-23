@@ -1,4 +1,4 @@
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::{env, error::Error, fs, path::PathBuf};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::Layer;
@@ -113,7 +113,9 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
             .with(file_layer)
             .with(metrics_layer)
             .try_init()
-            .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+            .map_err(|err| {
+                EnvrError::with_source(ErrorCode::Runtime, "failed to initialize logging", err)
+            })?;
         Ok(LoggingGuard {
             _file_guard: file_guard,
             _metrics_guard: metrics_guard,
@@ -161,7 +163,9 @@ pub fn init_logging_with(app_name: &str, opts: LoggingInitOptions) -> EnvrResult
             .with(file_layer)
             .with(metrics_layer)
             .try_init()
-            .map_err(|err| EnvrError::Runtime(format!("failed to initialize logging: {err}")))?;
+            .map_err(|err| {
+                EnvrError::with_source(ErrorCode::Runtime, "failed to initialize logging", err)
+            })?;
         Ok(LoggingGuard {
             _file_guard: file_guard,
             _metrics_guard: metrics_guard,

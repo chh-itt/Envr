@@ -8,7 +8,7 @@ use crate::output;
 
 use envr_core::logging::resolve_log_dir;
 use envr_core::runtime::service::RuntimeService;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::json;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -53,7 +53,7 @@ pub(crate) fn export_zip_inner(
         Err(e) => {
             return Ok(emit_export_error(
                 g,
-                EnvrError::Runtime(format!("serialize doctor: {e}")),
+                EnvrError::with_source(ErrorCode::Runtime, "serialize doctor", e),
                 zip_path.as_path(),
             ));
         }
@@ -168,24 +168,24 @@ fn write_diagnostic_zip(
     let opts: FileOptions<'_, ()> = FileOptions::default();
 
     zip.start_file("doctor.json", opts)
-        .map_err(|e| EnvrError::Runtime(format!("zip doctor.json: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip doctor.json", e))?;
     zip.write_all(doctor_json.as_bytes())
         .map_err(EnvrError::from)?;
 
     zip.start_file("system.txt", opts)
-        .map_err(|e| EnvrError::Runtime(format!("zip system.txt: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip system.txt", e))?;
     zip.write_all(system_txt.as_bytes())
         .map_err(EnvrError::from)?;
 
     zip.start_file("environment.txt", opts)
-        .map_err(|e| EnvrError::Runtime(format!("zip environment.txt: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip environment.txt", e))?;
     zip.write_all(environment_txt.as_bytes())
         .map_err(EnvrError::from)?;
 
     append_recent_logs(&mut zip, opts)?;
 
     zip.finish()
-        .map_err(|e| EnvrError::Runtime(format!("zip finish: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip finish", e))?;
     Ok(())
 }
 
@@ -239,7 +239,9 @@ fn append_recent_logs(
         limited.read_to_end(&mut body).map_err(EnvrError::from)?;
 
         zip.start_file(zip_name, opts)
-            .map_err(|e| EnvrError::Runtime(format!("zip log {name}: {e}")))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Runtime, format!("zip log {name}"), e)
+            })?;
         zip.write_all(&body).map_err(EnvrError::from)?;
     }
 

@@ -1,7 +1,8 @@
 use envr_domain::runtime::{
     RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -44,11 +45,10 @@ pub struct ElmInstallableRow {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-elm/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-elm/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 fn github_api_auth_token() -> Option<String> {
     ["GITHUB_TOKEN", "GH_TOKEN", "ENVR_GITHUB_TOKEN"]
@@ -74,11 +74,15 @@ fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<Strin
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req
+        .send()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
     }
-    response.text().map_err(|e| EnvrError::Download(e.to_string()))
+    response
+        .text()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
     let u = url.trim();
@@ -168,7 +172,9 @@ pub fn fetch_elm_github_releases_index(
                     break;
                 }
             };
-            let v: Value = serde_json::from_str(&text).map_err(|e| EnvrError::Download(e.to_string()))?;
+            let v: Value = serde_json::from_str(&text).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+            })?;
             let Some(arr) = v.as_array() else {
                 ok = false;
                 break;
@@ -178,7 +184,9 @@ pub fn fetch_elm_github_releases_index(
             }
             for item in arr {
                 let r: GhRelease =
-                    serde_json::from_value(item.clone()).map_err(|e| EnvrError::Download(e.to_string()))?;
+                    serde_json::from_value(item.clone()).map_err(|e| {
+                        EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+                    })?;
                 acc.push(r);
             }
             if arr.len() < 100 {

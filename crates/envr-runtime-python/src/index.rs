@@ -4,7 +4,8 @@
 //! - Files: `GET /api/v2/downloads/release_file/`
 
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::Deserialize;
 use std::{
@@ -80,18 +81,17 @@ pub fn release_id_from_uri(uri: &str) -> Option<u32> {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-python/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-python/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 pub fn fetch_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -101,7 +101,7 @@ pub fn fetch_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn parse_release_list(json: &str) -> EnvrResult<Vec<PyRelease>> {
@@ -109,13 +109,15 @@ pub fn parse_release_list(json: &str) -> EnvrResult<Vec<PyRelease>> {
     // 1) root array: `[ { ...release... }, ... ]`
     // 2) object with `value`: `{ "value": [ ... ] }`
     let v: serde_json::Value =
-        serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        serde_json::from_str(json)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))?;
     if v.is_array() {
         serde_json::from_value::<Vec<PyRelease>>(v)
-            .map_err(|e| EnvrError::Validation(e.to_string()))
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))
     } else if v.get("value").is_some() {
         let list: ApiList<PyRelease> =
-            serde_json::from_value(v).map_err(|e| EnvrError::Validation(e.to_string()))?;
+            serde_json::from_value(v)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(
@@ -129,13 +131,18 @@ pub fn parse_release_file_list(json: &str) -> EnvrResult<Vec<PyReleaseFile>> {
     // 1) root array
     // 2) object with `value`
     let v: serde_json::Value =
-        serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        serde_json::from_str(json)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e))?;
     if v.is_array() {
         serde_json::from_value::<Vec<PyReleaseFile>>(v)
-            .map_err(|e| EnvrError::Validation(e.to_string()))
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e)
+            })
     } else if v.get("value").is_some() {
         let list: ApiList<PyReleaseFile> =
-            serde_json::from_value(v).map_err(|e| EnvrError::Validation(e.to_string()))?;
+            serde_json::from_value(v).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e)
+            })?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(

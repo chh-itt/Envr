@@ -2,7 +2,8 @@
 //! Linux/macOS use **skaji/relocatable-perl** tarballs.
 
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,15 +47,14 @@ static STRAWBERRY_PORTABLE_ZIP_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!(
+    build_blocking_http_client(
+        concat!(
             "envr-runtime-perl/",
             env!("CARGO_PKG_VERSION"),
             " (https://www.perl.org; envr)"
-        ))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        ),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 fn github_api_auth_token() -> Option<String> {
@@ -85,7 +85,9 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req
+        .send()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -94,7 +96,7 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
@@ -188,8 +190,9 @@ fn fetch_release_pages(client: &reqwest::blocking::Client, base_url: &str) -> En
             format!("{base_url}?per_page=100&page={page}")
         };
         let body = fetch_text(client, &url)?;
-        let v: Value =
-            serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let v: Value = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let page_len = v.as_array().map(|a| a.len()).unwrap_or(0);
         if page_len == 0 {
             break;
@@ -203,7 +206,13 @@ fn fetch_release_pages(client: &reqwest::blocking::Client, base_url: &str) -> En
             }
             first = false;
             merged.push_str(
-                &serde_json::to_string(rel).map_err(|e| EnvrError::Validation(e.to_string()))?,
+                &serde_json::to_string(rel).map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Validation,
+                        "serialize github release page entry",
+                        e,
+                    )
+                })?,
             );
         }
         if page_len < 100 {
@@ -215,7 +224,8 @@ fn fetch_release_pages(client: &reqwest::blocking::Client, base_url: &str) -> En
 }
 
 fn parse_strawberry_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let v: Value = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
@@ -304,7 +314,8 @@ fn pick_skaji_asset_url(assets: &[Value], stem: &str) -> Option<(String, Option<
 }
 
 fn parse_skaji_rows(json: &str, stem: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    let v: Value = serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let v: Value = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
@@ -546,7 +557,8 @@ pub struct PerlReleaseRow {
 }
 
 pub fn parse_cached_install_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))
+    serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid cached install rows json", e))
 }
 
 pub fn list_remote_versions(rows: &[PerlReleaseRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {

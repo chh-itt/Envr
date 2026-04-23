@@ -1,4 +1,4 @@
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
 use std::{
@@ -89,13 +89,14 @@ pub fn extract_archive_atomic(
 
 fn extract_zip(path: &Path, dest: &Path) -> EnvrResult<()> {
     let f = fs::File::open(path).map_err(EnvrError::from)?;
-    let mut zip =
-        ZipArchive::new(f).map_err(|e| EnvrError::Validation(format!("invalid zip: {e}")))?;
+    let mut zip = ZipArchive::new(f).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid zip archive", e)
+    })?;
 
     for i in 0..zip.len() {
         let mut file = zip
             .by_index(i)
-            .map_err(|e| EnvrError::Validation(format!("zip entry: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "zip entry read failed", e))?;
         let name = file.name().to_string();
         let out_path = safe_join(dest, Path::new(&name))?;
 
@@ -145,12 +146,13 @@ fn extract_tar_xz(path: &Path, dest: &Path) -> EnvrResult<()> {
 fn unpack_tar<R: io::Read>(ar: &mut TarArchive<R>, dest: &Path) -> EnvrResult<()> {
     for entry in ar
         .entries()
-        .map_err(|e| EnvrError::Validation(format!("tar entries: {e}")))?
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar entries read failed", e))?
     {
-        let mut entry = entry.map_err(|e| EnvrError::Validation(format!("tar entry: {e}")))?;
+        let mut entry =
+            entry.map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar entry read failed", e))?;
         let path = entry
             .path()
-            .map_err(|e| EnvrError::Validation(format!("tar path: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar path decode failed", e))?;
         let out_path = safe_join(dest, &path)?;
 
         if let Some(parent) = out_path.parent() {
@@ -159,7 +161,7 @@ fn unpack_tar<R: io::Read>(ar: &mut TarArchive<R>, dest: &Path) -> EnvrResult<()
 
         entry
             .unpack(&out_path)
-            .map_err(|e| EnvrError::Validation(format!("tar unpack: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar unpack failed", e))?;
     }
     Ok(())
 }

@@ -5,7 +5,7 @@ use crate::index::{
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
@@ -147,7 +147,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -168,7 +168,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -260,7 +262,9 @@ impl VManager {
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
             let s =
-                serde_json::to_string(&rows).map_err(|e| EnvrError::Validation(e.to_string()))?;
+                serde_json::to_string(&rows).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "json encode v rows", e)
+                })?;
             envr_platform::fs_atomic::write_atomic(&cache_path, s.as_bytes())?;
             Ok(())
         })();

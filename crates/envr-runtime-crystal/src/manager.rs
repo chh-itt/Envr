@@ -6,7 +6,7 @@ use crate::index::{
 use envr_domain::crystal_paths;
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
 use std::io::{Read, Write};
@@ -146,7 +146,7 @@ fn download_to_path(
         .get(url)
         .header("Accept", "application/octet-stream")
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -170,7 +170,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -317,7 +319,8 @@ impl CrystalManager {
             fetch_all_crystal_release_rows(&self.client, &self.releases_url, self.host_slug)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let body =
-            serde_json::to_string(&rows).map_err(|e| EnvrError::Validation(e.to_string()))?;
+            serde_json::to_string(&rows)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode crystal rows", e))?;
         envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
             .map_err(EnvrError::from)?;
         Ok(rows)

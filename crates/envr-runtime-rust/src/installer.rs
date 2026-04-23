@@ -1,7 +1,7 @@
 use crate::manager::{RustManager, RustPaths, RustupMode};
 use envr_config::settings::{Settings, settings_path_from_platform};
 use envr_domain::runtime::{InstallRequest, VersionSpec};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::io::{Read, Write};
@@ -103,11 +103,11 @@ fn download_rustup_init_to(
         .timeout(std::time::Duration::from_secs(90))
         .user_agent(concat!("envr-runtime-rust/", env!("CARGO_PKG_VERSION")))
         .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, "build rustup init http client", e))?;
     let mut resp = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !resp.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -131,7 +131,9 @@ fn download_rustup_init_to(
         }
         let n = resp
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }

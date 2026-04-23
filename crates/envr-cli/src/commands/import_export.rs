@@ -7,7 +7,7 @@ use envr_config::project_config::{
     PROJECT_CONFIG_FILE, ProjectConfig, load_project_config_disk_only, parse_project_config,
     save_project_config,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
@@ -85,7 +85,8 @@ pub(crate) fn export_run_inner(
         )));
     };
 
-    let toml = toml::to_string_pretty(&cfg).map_err(|e| EnvrError::Config(e.to_string()))?;
+    let toml = toml::to_string_pretty(&cfg)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e))?;
 
     if let Some(out_path) = output {
         fs::write(&out_path, &toml)?;

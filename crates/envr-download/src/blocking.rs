@@ -3,7 +3,7 @@
 //! On `416 Range Not Satisfiable` with a non-zero resume offset, the partial file is removed and
 //! the download is retried without `Range` (shared policy with async [`crate::engine::DownloadEngine`] where applicable).
 
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use reqwest::blocking::Client;
 use std::fs;
 use std::io::{Read, Write};
@@ -25,6 +25,42 @@ fn remove_path_if_exists(path: &Path) {
         return;
     }
     let _ = fs::remove_dir_all(path);
+}
+
+/// Shared blocking HTTP client builder for runtime index fetches and other sync HTTP paths.
+pub fn blocking_http_client_builder(
+    user_agent: &str,
+    request_timeout: Option<Duration>,
+) -> reqwest::blocking::ClientBuilder {
+    const DEFAULT_TIMEOUT_SECS: u64 = 60;
+    const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 30;
+    let timeout = request_timeout.unwrap_or(Duration::from_secs(DEFAULT_TIMEOUT_SECS));
+    let connect_timeout = std::env::var("ENVR_HTTP_CONNECT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS));
+    reqwest::blocking::Client::builder()
+        .timeout(timeout)
+        .connect_timeout(connect_timeout)
+        .user_agent(user_agent)
+}
+
+/// Shared blocking HTTP client builder for runtime index fetches and other sync HTTP paths.
+pub fn build_blocking_http_client(
+    user_agent: &str,
+    request_timeout: Option<Duration>,
+) -> EnvrResult<Client> {
+    blocking_http_client_builder(user_agent, request_timeout)
+        .build()
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                "reqwest blocking client build failed",
+                e,
+            )
+        })
 }
 
 /// GET `url` to `path`, optionally resuming from existing partial file length, with bounded retries.
@@ -56,7 +92,11 @@ pub fn download_url_to_path_resumable(
         let response = match request.send() {
             Ok(r) => r,
             Err(e) => {
-                last_err = Some(EnvrError::Download(e.to_string()));
+                last_err = Some(EnvrError::with_source(
+                    ErrorCode::Download,
+                    format!("request failed for {url}"),
+                    e,
+                ));
                 if attempt < 3 {
                     let delay = match attempt {
                         1 => Duration::from_secs(1),
@@ -135,7 +175,11 @@ pub fn download_url_to_path_resumable(
             let n = match response.read(&mut buf) {
                 Ok(n) => n,
                 Err(e) => {
-                    read_error = Some(EnvrError::Download(e.to_string()));
+                    read_error = Some(EnvrError::with_source(
+                        ErrorCode::Download,
+                        format!("read failed for {url}"),
+                        e,
+                    ));
                     break;
                 }
             };

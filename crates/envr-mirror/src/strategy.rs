@@ -1,6 +1,6 @@
 use crate::registry::{Mirror, MirrorId, MirrorRegistry};
 use envr_config::settings::{MirrorMode, Settings};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use reqwest::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,12 +53,12 @@ pub fn join_url(base: &Url, path: &str) -> EnvrResult<Url> {
         ));
     }
     base.join(path)
-        .map_err(|e| EnvrError::Validation(format!("failed to join url: {e}")))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "failed to join url", e))
 }
 
 pub fn mirror_base_url(mirror: &Mirror) -> EnvrResult<Url> {
     Url::parse(&mirror.base_url)
-        .map_err(|e| EnvrError::Validation(format!("invalid mirror base_url: {e}")))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid mirror base_url", e))
 }
 
 #[cfg(test)]

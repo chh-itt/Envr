@@ -11,8 +11,7 @@ use envr_config::project_config::{
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec, parse_runtime_kind};
-use envr_error::EnvrError;
-use envr_error::EnvrResult;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -203,7 +202,7 @@ fn create_inner(
         "included_versions": included_versions_manifest,
     });
     let manifest_json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| EnvrError::Runtime(format!("manifest: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "manifest", e))?;
 
     write_bundle_zip(
         &bundle_zip,
@@ -355,7 +354,7 @@ fn write_bundle_zip(
 
     // Manifest
     zip.start_file("envr-bundle/manifest.json", opts)
-        .map_err(|e| EnvrError::Runtime(format!("zip manifest.json: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip manifest.json", e))?;
     zip.write_all(manifest_json.as_bytes())
         .map_err(EnvrError::from)?;
 
@@ -381,9 +380,11 @@ fn write_bundle_zip(
             "profile": profile,
         });
         let loc_text = serde_json::to_string_pretty(&loc_json)
-            .map_err(|e| EnvrError::Runtime(format!("serialize bundle location: {e}")))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Runtime, "serialize bundle location", e)
+            })?;
         zip.start_file("envr-bundle/project/location.json", opts)
-            .map_err(|e| EnvrError::Runtime(format!("zip location.json: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip location.json", e))?;
         zip.write_all(loc_text.as_bytes())
             .map_err(EnvrError::from)?;
     }
@@ -427,7 +428,7 @@ fn write_bundle_zip(
     }
 
     zip.finish()
-        .map_err(|e| EnvrError::Runtime(format!("zip finish: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip finish", e))?;
     Ok(())
 }
 
@@ -443,7 +444,7 @@ fn add_file_to_zip(
         .read_to_end(&mut body)
         .map_err(EnvrError::from)?;
     zip.start_file(dest_name, opts)
-        .map_err(|e| EnvrError::Runtime(format!("zip {dest_name}: {e}")))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, format!("zip {dest_name}"), e))?;
     zip.write_all(&body).map_err(EnvrError::from)?;
     Ok(())
 }
@@ -480,7 +481,7 @@ fn add_dir_to_zip(
                     .read_to_end(&mut body)
                     .map_err(EnvrError::from)?;
                 zip.start_file(zip_name, opts)
-                    .map_err(|e| EnvrError::Runtime(format!("zip file: {e}")))?;
+                    .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip file", e))?;
                 zip.write_all(&body).map_err(EnvrError::from)?;
             }
         }
@@ -497,11 +498,12 @@ fn bundle_zip_entry_name_unsafe(name: &str) -> bool {
 fn extract_bundle_zip(zip_path: &Path, dest: &Path) -> Result<(), EnvrError> {
     let file = File::open(zip_path).map_err(EnvrError::from)?;
     let mut zip =
-        ZipArchive::new(file).map_err(|e| EnvrError::Runtime(format!("open bundle zip: {e}")))?;
+        ZipArchive::new(file)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "open bundle zip", e))?;
     for i in 0..zip.len() {
         let mut f = zip
             .by_index(i)
-            .map_err(|e| EnvrError::Runtime(format!("read zip entry: {e}")))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "read zip entry", e))?;
         let name = f.name().to_string();
         if bundle_zip_entry_name_unsafe(&name) {
             return Err(EnvrError::Validation(format!("unsafe zip entry: {name}")));

@@ -1,5 +1,6 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -91,11 +92,10 @@ fn release_from_tag(tag: &GithubTag) -> EnvrResult<Option<ErlangRelease>> {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(90))
-        .user_agent(concat!("envr-runtime-erlang/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-erlang/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(90)),
+    )
 }
 
 fn parse_github_next_link(link: Option<&reqwest::header::HeaderValue>) -> Option<String> {
@@ -139,7 +139,7 @@ pub fn fetch_all_tags(
         let response = client
             .get(&url)
             .send()
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
         if !response.status().is_success() {
             return Err(EnvrError::Download(format!(
                 "GET {url} -> {}",
@@ -149,9 +149,10 @@ pub fn fetch_all_tags(
         let headers = response.headers().clone();
         let body = response
             .text()
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
         let mut page: Vec<GithubTag> =
-            serde_json::from_str(&body).map_err(|e| EnvrError::Validation(e.to_string()))?;
+            serde_json::from_str(&body)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github tags json", e))?;
         out.append(&mut page);
         next = parse_github_next_link(headers.get("link"));
     }

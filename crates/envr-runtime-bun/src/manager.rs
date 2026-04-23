@@ -1,10 +1,10 @@
 use crate::index::{
     DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_all_tags, resolve_bun_version,
 };
-use crate::mirror::{load_settings, maybe_mirror_url};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::error::Error;
 use std::fs;
@@ -200,7 +200,13 @@ fn download_to_path_once(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Download,
+                    format!("read response body failed for {url}"),
+                    e,
+                )
+            })?;
         if n == 0 {
             break;
         }
@@ -286,7 +292,13 @@ fn download_to_path(
             progress_total,
             cancel,
         )
-        .map_err(|e2| EnvrError::Download(format!("{e} (retried official URL {fb}: {e2})")))
+        .map_err(|e2| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("{e} (retried official URL {fb})"),
+                e2,
+            )
+        })
     })
 }
 
@@ -304,7 +316,7 @@ fn get_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String>
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 /// Tries `primary` first; if it differs from `official`, retries `official` on failure (broken mirror / proxy).
@@ -319,7 +331,11 @@ fn get_text_with_official_fallback(
     }
     first.or_else(|e| {
         get_text(client, official).map_err(|e2| {
-            EnvrError::Download(format!("{e} (retried official URL {official}: {e2})"))
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("{e} (retried official URL {official})"),
+                e2,
+            )
         })
     })
 }
@@ -403,7 +419,7 @@ impl BunManager {
     }
 
     fn load_tags(&self) -> EnvrResult<Vec<Tag>> {
-        let settings = load_settings()?;
+        let settings = load_settings_cached()?;
         let url = maybe_mirror_url(&settings, &self.tags_api)?;
         fetch_all_tags(&self.client, &url)
     }
@@ -443,7 +459,7 @@ impl BunManager {
         let tag = format!("bun-v{}", version.0);
 
         let base = format!("https://github.com/oven-sh/bun/releases/download/{tag}");
-        let settings = load_settings()?;
+        let settings = load_settings_cached()?;
         let direct_shasums = format!("{base}/SHASUMS256.txt");
         let shasums_url = maybe_mirror_url(&settings, &direct_shasums)?;
         let expected_sha =

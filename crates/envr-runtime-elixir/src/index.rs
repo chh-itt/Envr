@@ -1,5 +1,6 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use std::cmp::Ordering;
 use std::time::Duration;
@@ -54,18 +55,17 @@ pub(crate) fn cmp_semver(a: &str, b: &str) -> Ordering {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-elixir/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-elixir/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 pub fn fetch_builds_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "builds index request failed: {} {}",
@@ -75,12 +75,12 @@ pub fn fetch_builds_index(client: &reqwest::blocking::Client, url: &str) -> Envr
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn parse_elixir_builds(index_text: &str, base_url: &str) -> EnvrResult<Vec<ElixirBuild>> {
     let re = Regex::new(r"^(v\d+\.\d+\.\d+)(?:-otp-(\d+))?\b")
-        .map_err(|e| EnvrError::Validation(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid elixir build line regex", e))?;
     let mut out = Vec::<ElixirBuild>::new();
     for line in index_text.lines() {
         let Some(cap) = re.captures(line.trim()) else {

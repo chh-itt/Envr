@@ -1,5 +1,6 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use std::cmp::Ordering;
 use std::time::Duration;
@@ -8,20 +9,19 @@ pub const DEFAULT_RUBY_RELEASES_URL: &str = "https://www.ruby-lang.org/en/downlo
 pub const DEFAULT_RUBYINSTALLER_DOWNLOADS_URL: &str = "https://rubyinstaller.org/downloads/";
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        // RubyInstaller `.7z` assets are large; in some networks the request may
-        // need multiple tens of seconds just for TLS + first bytes.
-        .timeout(Duration::from_secs(180))
-        .user_agent(concat!("envr-runtime-ruby/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    // RubyInstaller `.7z` assets are large; in some networks the request may
+    // need multiple tens of seconds just for TLS + first bytes.
+    build_blocking_http_client(
+        concat!("envr-runtime-ruby/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(180)),
+    )
 }
 
 pub fn fetch_release_page(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "release page request failed: {} {}",
@@ -31,7 +31,7 @@ pub fn fetch_release_page(client: &reqwest::blocking::Client, url: &str) -> Envr
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,8 +110,8 @@ pub fn list_latest_per_major_from_installer_releases(
 }
 
 pub fn parse_ruby_releases(html: &str) -> EnvrResult<Vec<RubyRelease>> {
-    let re =
-        Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)").map_err(|e| EnvrError::Validation(e.to_string()))?;
+    let re = Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)")
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid ruby version regex", e))?;
     let mut versions: Vec<RubyRelease> = re
         .captures_iter(html)
         .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))
@@ -131,7 +131,7 @@ pub fn parse_rubyinstaller_7z_artifacts(html: &str) -> EnvrResult<Vec<RubyInstal
     let re = Regex::new(
         r#"https://github\.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-(\d+\.\d+\.\d+-\d+)/rubyinstaller-\d+\.\d+\.\d+-\d+-(x64|x86|arm)\.7z\.asc"#,
     )
-    .map_err(|e| EnvrError::Validation(e.to_string()))?;
+    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid rubyinstaller version regex", e))?;
     let mut out = Vec::new();
     for caps in re.captures_iter(html) {
         let installer_version = caps

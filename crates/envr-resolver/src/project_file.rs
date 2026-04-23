@@ -2,7 +2,7 @@ use crate::pin_spec::{RuntimePinSpec, runtime_kind_toml_key};
 use envr_config::project_config::{
     PROJECT_CONFIG_FILE, ProjectConfig, parse_project_config, save_project_config,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::path::{Path, PathBuf};
 
 /// Create or update `./.envr.toml` under `dir` with `[runtimes.<kind>].version`.
@@ -10,7 +10,13 @@ pub fn upsert_runtime_pin(dir: &Path, pin: &RuntimePinSpec) -> EnvrResult<PathBu
     let path = dir.join(PROJECT_CONFIG_FILE);
     let mut cfg = if path.exists() {
         parse_project_config(&path)
-            .map_err(|e| EnvrError::Config(format!("read {}: {e}", path.display())))?
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Config,
+                    format!("read {}", path.display()),
+                    e,
+                )
+            })?
     } else {
         ProjectConfig::default()
     };

@@ -3,7 +3,8 @@
 //! Upstream format: <https://nodejs.org/dist/index.json>
 
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -55,7 +56,8 @@ impl TryFrom<NodeReleaseJson> for NodeRelease {
 /// Parse the JSON body returned by `index.json`.
 pub fn parse_node_index(json: &str) -> EnvrResult<Vec<NodeRelease>> {
     let raw: Vec<NodeReleaseJson> =
-        serde_json::from_str(json).map_err(|e| EnvrError::Validation(e.to_string()))?;
+        serde_json::from_str(json)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
     raw.into_iter()
         .map(NodeRelease::try_from)
         .collect::<EnvrResult<Vec<_>>>()
@@ -70,7 +72,8 @@ pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec
 
     let iter = serde_json::Deserializer::from_str(json).into_iter::<NodeReleaseMajorsJson>();
     for item in iter {
-        let r = item.map_err(|e| EnvrError::Validation(e.to_string()))?;
+        let r = item
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
         if !release_has_platform(&r.files, os, arch) {
             continue;
         }
@@ -127,7 +130,7 @@ pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrRe
     let response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "index request failed: {} {}",
@@ -137,15 +140,14 @@ pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrRe
     }
     response
         .text()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(45))
-        .user_agent(concat!("envr-runtime-node/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-node/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(45)),
+    )
 }
 
 /// Returns `true` if this release ships binaries for `(os, arch)` as exposed in `index.json`

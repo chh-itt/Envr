@@ -2,14 +2,12 @@ use crate::index::{
     DEFAULT_DENO_TAGS_API, Tag, blocking_http_client, fetch_all_tags, list_remote_versions,
     resolve_deno_version,
 };
-use envr_config::settings::{
-    Settings, deno_official_release_zip_url, deno_release_zip_url, settings_path_from_platform,
-};
+use envr_config::settings::{deno_official_release_zip_url, deno_release_zip_url};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_mirror::resolver::load_settings_cached;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
-use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -164,7 +162,7 @@ fn download_to_path(
     let mut response = client
         .get(url)
         .send()
-        .map_err(|e| EnvrError::Download(e.to_string()))?;
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -189,7 +187,9 @@ fn download_to_path(
         }
         let n = response
             .read(&mut buf)
-            .map_err(|e| EnvrError::Download(e.to_string()))?;
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            })?;
         if n == 0 {
             break;
         }
@@ -230,7 +230,13 @@ fn download_to_path_with_fallback(
             progress_total,
             cancel,
         )
-        .map_err(|e2| EnvrError::Download(format!("{e} (retried official URL {fallback}: {e2})")))
+        .map_err(|e2| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("{e} (retried official URL {fallback})"),
+                e2,
+            )
+        })
     })
 }
 
@@ -307,9 +313,7 @@ impl DenoManager {
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".to_string()));
         }
-        let platform = current_platform_paths()?;
-        let path = settings_path_from_platform(&platform);
-        let settings = Settings::load_or_default_from(&path)?;
+        let settings = load_settings_cached()?;
         let url = deno_release_zip_url(&settings, &version.0)?;
         let official_url = deno_official_release_zip_url(&version.0)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;

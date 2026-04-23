@@ -13,7 +13,8 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use std::path::{Path, PathBuf};
 
@@ -57,8 +58,7 @@ impl DenoRuntimeProvider {
         let cache_file = base.join("tags.json");
 
         let ttl_secs = Self::remote_cache_ttl_secs();
-        let settings_path = envr_config::settings::settings_path_from_platform(&platform);
-        let st = envr_config::settings::Settings::load_or_default_from(&settings_path)?;
+        let st = load_settings_cached()?;
         let offline = st.mirror.mode == envr_config::settings::MirrorMode::Offline;
 
         if (offline || Self::file_is_within_ttl(&cache_file, ttl_secs))
@@ -80,11 +80,12 @@ impl DenoRuntimeProvider {
         }
 
         let client = blocking_http_client()?;
-        let tags = fetch_all_tags(&client, &self.tags_api)?;
+        let url = maybe_mirror_url(&st, &self.tags_api)?;
+        let tags = fetch_all_tags(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(&base)?;
             let s = serde_json::to_string(&tags)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode deno tags cache", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -201,7 +202,7 @@ impl RuntimeProvider for DenoRuntimeProvider {
             let paths = DenoPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
             let s = serde_json::to_string(&list)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode deno latest cache", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

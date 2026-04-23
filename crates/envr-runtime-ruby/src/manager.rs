@@ -6,7 +6,7 @@ use crate::index::{
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use std::collections::HashSet;
 use std::fs;
@@ -215,7 +215,9 @@ fn validate_ruby_installation(home: &Path) -> EnvrResult<()> {
     let out = Command::new(&ruby)
         .arg("--version")
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("ruby --version failed to start: {e}")))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, "ruby --version failed to start", e)
+        })?;
     if !out.status.success() {
         return Err(EnvrError::Runtime(format!(
             "ruby --version failed: {}",
@@ -235,7 +237,9 @@ fn extract_7z_with_bsdtar(archive: &Path, dest: &Path) -> EnvrResult<()> {
         .args(["-C"])
         .arg(dest)
         .status()
-        .map_err(|e| EnvrError::Runtime(format!("failed to start bsdtar for ruby 7z: {e}")))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, "failed to start bsdtar for ruby 7z", e)
+        })?;
     if !status.success() {
         return Err(EnvrError::Runtime(format!(
             "bsdtar failed extracting ruby archive {}",

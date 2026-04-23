@@ -1,6 +1,5 @@
 mod index;
 mod manager;
-mod mirror;
 
 pub use envr_platform::lua_binaries::lua_installation_valid;
 pub use index::{

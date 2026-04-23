@@ -1,7 +1,8 @@
 use envr_domain::runtime::{
     RemoteFilter, RuntimeVersion, numeric_version_segments,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -52,11 +53,10 @@ pub struct UnisonInstallableRow {
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .user_agent(concat!("envr-runtime-unison/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| EnvrError::Download(e.to_string()))
+    build_blocking_http_client(
+        concat!("envr-runtime-unison/", env!("CARGO_PKG_VERSION")),
+        Some(Duration::from_secs(120)),
+    )
 }
 
 fn github_api_auth_token() -> Option<String> {
@@ -77,11 +77,15 @@ fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<Strin
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req.send().map_err(|e| EnvrError::Download(e.to_string()))?;
+    let response = req
+        .send()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
     }
-    response.text().map_err(|e| EnvrError::Download(e.to_string()))
+    response
+        .text()
+        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
 }
 
 fn label_from_tag(tag: &str) -> Option<String> {
@@ -148,8 +152,8 @@ fn fetch_github_releases_index(
     loop {
         let url = format!("{releases_api_url}?per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
-        let v: Value =
-            serde_json::from_str(&text).map_err(|e| EnvrError::Download(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
         let Some(arr) = v.as_array() else {
             return Err(EnvrError::Download(
                 "unison releases API returned non-array payload".into(),
@@ -160,7 +164,8 @@ fn fetch_github_releases_index(
         }
         for item in arr {
             let r: GhRelease =
-                serde_json::from_value(item.clone()).map_err(|e| EnvrError::Download(e.to_string()))?;
+                serde_json::from_value(item.clone())
+                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e))?;
             out.push(r);
         }
         if arr.len() < 100 {

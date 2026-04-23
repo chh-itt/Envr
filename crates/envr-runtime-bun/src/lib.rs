@@ -1,6 +1,5 @@
 mod index;
 mod manager;
-mod mirror;
 
 pub use index::{
     DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_all_tags, fetch_tags,
@@ -14,8 +13,9 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
+use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use std::path::{Path, PathBuf};
 
 pub struct BunRuntimeProvider {
@@ -58,7 +58,7 @@ impl BunRuntimeProvider {
         let cache_file = base.join("tags.json");
 
         let ttl_secs = Self::remote_cache_ttl_secs();
-        let settings = mirror::load_settings()?;
+        let settings = load_settings_cached()?;
         let offline = settings.mirror.mode == envr_config::settings::MirrorMode::Offline;
 
         if (offline || Self::file_is_within_ttl(&cache_file, ttl_secs))
@@ -80,12 +80,12 @@ impl BunRuntimeProvider {
         }
 
         let client = blocking_http_client()?;
-        let url = mirror::maybe_mirror_url(&settings, &self.tags_api)?;
+        let url = maybe_mirror_url(&settings, &self.tags_api)?;
         let tags = fetch_all_tags(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(&base)?;
             let s = serde_json::to_string(&tags)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode bun tags cache", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -201,7 +201,7 @@ impl RuntimeProvider for BunRuntimeProvider {
             let paths = BunPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
             let s = serde_json::to_string(&list)
-                .map_err(|e| envr_error::EnvrError::Validation(e.to_string()))?;
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode bun latest cache", e))?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
