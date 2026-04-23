@@ -25,7 +25,7 @@ use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
 
-use crate::app::Message;
+use crate::app::{Message, Route};
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
@@ -239,6 +239,48 @@ pub(crate) fn kind_label(kind: RuntimeKind) -> &'static str {
 /// Display name for download-panel install tasks (Chinese UI copy).
 pub(crate) fn kind_label_zh(kind: RuntimeKind) -> &'static str {
     runtime_descriptor(kind).label_zh
+}
+
+fn path_proxy_toggle_msg(kind: RuntimeKind, on: bool) -> Option<EnvCenterMsg> {
+    Some(match kind {
+        RuntimeKind::Node => EnvCenterMsg::SetNodePathProxy(on),
+        RuntimeKind::Python => EnvCenterMsg::SetPythonPathProxy(on),
+        RuntimeKind::Java => EnvCenterMsg::SetJavaPathProxy(on),
+        RuntimeKind::Kotlin | RuntimeKind::Scala | RuntimeKind::Clojure | RuntimeKind::Groovy => {
+            EnvCenterMsg::SetJvmPathProxy(kind, on)
+        }
+        RuntimeKind::Terraform => EnvCenterMsg::SetTerraformPathProxy(on),
+        RuntimeKind::V => EnvCenterMsg::SetVPathProxy(on),
+        RuntimeKind::Odin => EnvCenterMsg::SetOdinPathProxy(on),
+        RuntimeKind::Purescript => EnvCenterMsg::SetPurescriptPathProxy(on),
+        RuntimeKind::Elm => EnvCenterMsg::SetElmPathProxy(on),
+        RuntimeKind::Gleam => EnvCenterMsg::SetGleamPathProxy(on),
+        RuntimeKind::Racket => EnvCenterMsg::SetRacketPathProxy(on),
+        RuntimeKind::Dart => EnvCenterMsg::SetDartPathProxy(on),
+        RuntimeKind::Flutter => EnvCenterMsg::SetFlutterPathProxy(on),
+        RuntimeKind::Go => EnvCenterMsg::SetGoPathProxy(on),
+        RuntimeKind::Ruby => EnvCenterMsg::SetRubyPathProxy(on),
+        RuntimeKind::Elixir => EnvCenterMsg::SetElixirPathProxy(on),
+        RuntimeKind::Erlang => EnvCenterMsg::SetErlangPathProxy(on),
+        RuntimeKind::Php => EnvCenterMsg::SetPhpPathProxy(on),
+        RuntimeKind::Deno => EnvCenterMsg::SetDenoPathProxy(on),
+        RuntimeKind::Bun => EnvCenterMsg::SetBunPathProxy(on),
+        RuntimeKind::Dotnet => EnvCenterMsg::SetDotnetPathProxy(on),
+        RuntimeKind::Zig => EnvCenterMsg::SetZigPathProxy(on),
+        RuntimeKind::Julia => EnvCenterMsg::SetJuliaPathProxy(on),
+        RuntimeKind::Janet => EnvCenterMsg::SetJanetPathProxy(on),
+        RuntimeKind::C3 => EnvCenterMsg::SetC3PathProxy(on),
+        RuntimeKind::Babashka => EnvCenterMsg::SetBabashkaPathProxy(on),
+        RuntimeKind::Sbcl => EnvCenterMsg::SetSbclPathProxy(on),
+        RuntimeKind::Haxe => EnvCenterMsg::SetHaxePathProxy(on),
+        RuntimeKind::Lua => EnvCenterMsg::SetLuaPathProxy(on),
+        RuntimeKind::Nim => EnvCenterMsg::SetNimPathProxy(on),
+        RuntimeKind::Crystal => EnvCenterMsg::SetCrystalPathProxy(on),
+        RuntimeKind::Perl => EnvCenterMsg::SetPerlPathProxy(on),
+        RuntimeKind::Unison => EnvCenterMsg::SetUnisonPathProxy(on),
+        RuntimeKind::RLang => EnvCenterMsg::SetRLangPathProxy(on),
+        RuntimeKind::Rust => return None,
+    })
 }
 
 fn node_runtime_settings_section(
@@ -2680,9 +2722,17 @@ pub fn env_center_view(
     let header_title = format!("{}设置", kind_label(state.kind));
     let show_runtime_fold = envr_domain::runtime::unified_major_list_rollout_enabled(state.kind);
     let toggle_lbl = if state.runtime_settings_expanded {
-        envr_core::i18n::tr_key("gui.action.collapse", "折叠", "Collapse")
+        envr_core::i18n::tr_key(
+            "gui.runtime.settings.advanced_collapse",
+            "收起高级设置",
+            "Hide advanced settings",
+        )
     } else {
-        envr_core::i18n::tr_key("gui.action.expand", "展开", "Expand")
+        envr_core::i18n::tr_key(
+            "gui.runtime.settings.advanced_expand",
+            "展开高级设置",
+            "Show advanced settings",
+        )
     };
 
     let toggle_btn = button(button_content_centered(
@@ -2721,6 +2771,51 @@ pub fn env_center_view(
         .style(move |theme: &Theme| card_s(theme));
 
     let txt = gui_theme::to_color(tokens.colors.text);
+
+    let config_btn = button(button_content_centered(
+        row![
+            Lucide::Settings.view(16.0, txt),
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.settings.open_global",
+                "打开配置页",
+                "Open config page",
+            )),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
+    .on_press(Message::Navigate(Route::Settings))
+    .height(Length::Fixed(tokens.control_height_secondary))
+    .style(button_style(tokens, ButtonVariant::Secondary));
+
+    let path_proxy_row: Element<'static, Message> =
+        if path_proxy_toggle_msg(state.kind, path_proxy_on).is_some() {
+            let kind = state.kind;
+            toggler(path_proxy_on)
+                .label(envr_core::i18n::tr_key(
+                    "gui.runtime.path_proxy",
+                    "Path 代理",
+                    "Path proxy",
+                ))
+                .on_toggle(move |v| {
+                    Message::EnvCenter(
+                        path_proxy_toggle_msg(kind, v)
+                            .expect("path_proxy_toggle_msg should exist for non-rust kinds"),
+                    )
+                })
+                .into()
+        } else {
+            text("").into()
+        };
+
+    let runtime_entry_block = container(
+        row![config_btn, path_proxy_row]
+            .spacing(sp.md as f32)
+            .align_y(Alignment::Center),
+    )
+    .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+    .style(card_container_style(tokens, 1));
 
     let prereq_hint: Option<Element<'static, Message>> = if state.kind == RuntimeKind::Elixir {
         state.elixir_prereq_error.as_ref().map(|msg| {
@@ -3680,20 +3775,20 @@ pub fn env_center_view(
     };
     let mut col = if state.kind == RuntimeKind::Java {
         if let Some(distro_row) = java_distro_row {
-            column![header, runtime_settings_block, distro_row]
+            column![header, runtime_entry_block, runtime_settings_block, distro_row]
         } else {
-            column![header, runtime_settings_block]
+            column![header, runtime_entry_block, runtime_settings_block]
         }
     } else if state.kind == RuntimeKind::Php {
         if let Some(build_row) = php_build_row {
-            column![header, runtime_settings_block, build_row, filter_row]
+            column![header, runtime_entry_block, runtime_settings_block, build_row, filter_row]
         } else {
-            column![header, runtime_settings_block, filter_row]
+            column![header, runtime_entry_block, runtime_settings_block, filter_row]
         }
     } else if let Some(hint) = bun_direct_spec_hint {
-        column![header, runtime_settings_block, filter_row, hint]
+        column![header, runtime_entry_block, runtime_settings_block, filter_row, hint]
     } else {
-        column![header, runtime_settings_block, filter_row]
+        column![header, runtime_entry_block, runtime_settings_block, filter_row]
     }
     .spacing(sp.sm as f32)
     .width(Length::Fill);
