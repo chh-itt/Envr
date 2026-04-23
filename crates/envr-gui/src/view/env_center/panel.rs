@@ -2758,9 +2758,9 @@ pub fn env_center_view(
         row![
             Lucide::Settings.view(16.0, txt),
             text(envr_core::i18n::tr_key(
-                "gui.runtime.settings.open_global",
-                "打开配置页",
-                "Open config page",
+                "gui.runtime.settings.open_runtime_config",
+                "打开运行时配置",
+                "Open runtime config",
             )),
         ]
         .spacing(sp.xs as f32)
@@ -2791,11 +2791,19 @@ pub fn env_center_view(
             text("").into()
         };
 
-    let runtime_entry_block = container(
+    let runtime_entry_block = container(column![
         row![config_btn, path_proxy_row]
             .spacing(sp.md as f32)
             .align_y(Alignment::Center),
-    )
+        text(envr_core::i18n::tr_key(
+            "gui.runtime.settings.entry_hint",
+            "网络/包源等运行时配置请进入“运行时配置”页面统一管理。",
+            "Manage runtime network/package config from the Runtime Config page.",
+        ))
+        .size(ty.micro)
+        .color(gui_theme::to_color(tokens.colors.text_muted)),
+    ]
+    .spacing(sp.xs as f32))
     .padding(Padding::from([sp.sm as f32, sp.md as f32]))
     .style(card_container_style(tokens, 1));
 
