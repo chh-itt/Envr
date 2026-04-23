@@ -25,7 +25,7 @@ use iced::{Alignment, Element, Length, Padding, Theme};
 
 use std::collections::{HashMap, HashSet};
 
-use crate::app::{Message, Route};
+use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::empty_state::{EmptyTone, illustrative_block_compact};
@@ -2754,23 +2754,6 @@ pub fn env_center_view(
 
     let txt = gui_theme::to_color(tokens.colors.text);
 
-    let config_btn = button(button_content_centered(
-        row![
-            Lucide::Settings.view(16.0, txt),
-            text(envr_core::i18n::tr_key(
-                "gui.runtime.settings.open_runtime_config",
-                "打开运行时配置",
-                "Open runtime config",
-            )),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
-        .into(),
-    ))
-    .on_press(Message::Navigate(Route::RuntimeConfig))
-    .height(Length::Fixed(tokens.control_height_secondary))
-    .style(button_style(tokens, ButtonVariant::Secondary));
-
     let path_proxy_row: Element<'static, Message> =
         if path_proxy_toggle_msg(state.kind, path_proxy_on).is_some() {
             let kind = state.kind;
@@ -2792,16 +2775,9 @@ pub fn env_center_view(
         };
 
     let runtime_entry_block = container(column![
-        row![config_btn, path_proxy_row]
+        row![path_proxy_row]
             .spacing(sp.md as f32)
             .align_y(Alignment::Center),
-        text(envr_core::i18n::tr_key(
-            "gui.runtime.settings.entry_hint",
-            "网络/包源等运行时配置请进入“运行时配置”页面统一管理。",
-            "Manage runtime network/package config from the Runtime Config page.",
-        ))
-        .size(ty.micro)
-        .color(gui_theme::to_color(tokens.colors.text_muted)),
     ]
     .spacing(sp.xs as f32))
     .padding(Padding::from([sp.sm as f32, sp.md as f32]))

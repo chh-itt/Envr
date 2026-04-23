@@ -1,6 +1,5 @@
 use envr_config::settings::{
-    FontMode, GoProxyMode, JavaDistro, LocaleMode, NpmRegistryMode, PhpWindowsBuildFlavor,
-    PipRegistryMode, PythonWindowsDistribution, ThemeMode,
+    FontMode, LocaleMode, ThemeMode,
 };
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
@@ -34,19 +33,6 @@ pub enum SettingsMsg {
     SetThemeMode(ThemeMode),
     AccentColorEdit(String),
     SetLocaleMode(LocaleMode),
-    SetPythonWindowsDistribution(PythonWindowsDistribution),
-    SetJavaDistro(JavaDistro),
-    SetPhpWindowsBuild(PhpWindowsBuildFlavor),
-    SetDenoPackageSource(NpmRegistryMode),
-    SetBunPackageSource(NpmRegistryMode),
-    SetNpmRegistryMode(NpmRegistryMode),
-    SetPipRegistryMode(PipRegistryMode),
-    NpmRegistryUrlEdit(String),
-    PipIndexUrlEdit(String),
-    SetGoProxyMode(GoProxyMode),
-    GoProxyCustomEdit(String),
-    GoPrivatePatternsEdit(String),
-    BunGlobalBinDirEdit(String),
     Save,
     ReloadDisk,
     DiskLoaded(Result<envr_config::settings::Settings, String>),

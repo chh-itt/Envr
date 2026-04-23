@@ -25,6 +25,9 @@ pub fn sidebar(current: Route, tokens: ThemeTokens) -> Element<'static, Message>
     let txt = gui_theme::to_color(tokens.colors.text_muted);
     let mut col = column![].spacing(sp.sm as f32);
     for route in Route::ALL {
+        if route == Route::RuntimeConfig {
+            continue;
+        }
         let selected = route == current;
         let icon_c = if selected {
             gui_theme::contrast_on_primary(tokens)
