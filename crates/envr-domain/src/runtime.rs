@@ -41,6 +41,7 @@ pub enum RuntimeKind {
     Nim,
     Crystal,
     Perl,
+    Unison,
     RLang,
 }
 
@@ -56,7 +57,7 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 37] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 38] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -382,6 +383,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 37] = [
         host_runtime: None,
     },
     RuntimeDescriptor {
+        kind: RuntimeKind::Unison,
+        key: "unison",
+        label_en: "Unison",
+        label_zh: "Unison",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
         kind: RuntimeKind::RLang,
         key: "r",
         label_en: "R",
@@ -592,6 +602,7 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
         | RuntimeKind::Nim
         | RuntimeKind::Crystal
         | RuntimeKind::Perl
+        | RuntimeKind::Unison
         | RuntimeKind::RLang => {
             let major = parts.first().copied()?;
             let minor = parts.get(1).copied()?;
@@ -652,7 +663,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 37);
+        assert_eq!(kinds.len(), 38);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -667,6 +678,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Nim));
         assert!(kinds.contains(&RuntimeKind::Crystal));
         assert!(kinds.contains(&RuntimeKind::Perl));
+        assert!(kinds.contains(&RuntimeKind::Unison));
         assert!(kinds.contains(&RuntimeKind::RLang));
         assert!(kinds.contains(&RuntimeKind::Lua));
         assert!(kinds.contains(&RuntimeKind::Kotlin));

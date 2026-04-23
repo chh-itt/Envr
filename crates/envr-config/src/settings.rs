@@ -785,6 +785,9 @@ pub struct RuntimeSettings {
     pub perl: PerlRuntimeSettings,
 
     #[serde(default)]
+    pub unison: UnisonRuntimeSettings,
+
+    #[serde(default)]
     pub r: RlangRuntimeSettings,
 }
 
@@ -1128,6 +1131,21 @@ impl Default for PerlRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::perl_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnisonRuntimeSettings {
+    /// When false, the ucm shim resolves to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::unison_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for UnisonRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::unison_path_proxy_enabled(),
         }
     }
 }
@@ -2285,6 +2303,10 @@ mod defaults {
         true
     }
 
+    pub fn unison_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn rlang_path_proxy_enabled() -> bool {
         true
     }
@@ -2402,6 +2424,7 @@ mod tests {
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),
                 perl: PerlRuntimeSettings::default(),
+                unison: UnisonRuntimeSettings::default(),
                 r: RlangRuntimeSettings::default(),
                 php: PhpRuntimeSettings::default(),
                 deno: DenoRuntimeSettings::default(),

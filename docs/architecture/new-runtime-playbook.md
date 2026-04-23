@@ -682,3 +682,20 @@ If a runtime keeps a **disk cache of full installable rows** (e.g. GitHub API ro
 ### 8.19 Erlang `erl` shim vs PATH proxy bypass
 
 When **`[runtime.erlang] path_proxy_enabled = false`**, the `erl` / `erlc` / `escript` core shims use **host PATH resolution outside envr shims** (so mixed stacks can call a system OTP install). If there is **no** OTP install on PATH except envr-managed shims, `erl` fails with “could not find `erl` on PATH outside envr shims”. That is expected: enable PATH proxy for Erlang, install a system OTP before shims on PATH, or use `envr exec --lang erlang -- erl …`. Elixir / Gleam can still resolve a **managed** OTP for their own launch when their PATH proxy is on, which is why `elixir` / `gleam` may work while bare `erl` does not under those settings.
+
+### 8.20 Unison follow-up friction (tag shape + command key mismatch)
+
+Unison adds two reusable reminders:
+
+- **Tag shape may include path separators**:
+  - Upstream tags are `release/<semver>` rather than `v<semver>`.
+  - Provider normalization should strip the `release/` prefix before semver-line grouping and `latest-per-major` calculations.
+
+- **Runtime key and executable stem can differ**:
+  - Runtime key is `unison`, but the core executable is `ucm`.
+  - Keep this mapping aligned across:
+    - shim command parse (`ucm` -> `CoreCommand::Ucm`),
+    - project runtime key (`CoreCommand::Ucm` -> `unison`),
+    - env key injection (`UNISON_HOME`),
+    - CLI template/env export key (`ENVR_UNISON_VERSION`),
+    - GUI path-proxy toggle wiring (`runtime.unison.path_proxy_enabled`).

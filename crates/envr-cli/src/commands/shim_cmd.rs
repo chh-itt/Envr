@@ -52,6 +52,7 @@ pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<Str
         RuntimeKind::Nim,
         RuntimeKind::Crystal,
         RuntimeKind::Perl,
+        RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
         svc.ensure_shims(kind)?;
@@ -106,6 +107,7 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<Cl
         RuntimeKind::Nim,
         RuntimeKind::Crystal,
         RuntimeKind::Perl,
+        RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
         match svc.ensure_shims(kind) {

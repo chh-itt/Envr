@@ -38,6 +38,7 @@ pub struct PathProxyRuntimeSnapshot {
     pub nim: bool,
     pub crystal: bool,
     pub perl: bool,
+    pub unison: bool,
     pub r: bool,
     pub ruby: bool,
     pub elixir: bool,
@@ -79,6 +80,7 @@ impl Default for PathProxyRuntimeSnapshot {
             nim: true,
             crystal: true,
             perl: true,
+            unison: true,
             r: true,
             ruby: true,
             elixir: true,
@@ -122,6 +124,7 @@ impl From<&RuntimeSettings> for PathProxyRuntimeSnapshot {
             nim: r.nim.path_proxy_enabled,
             crystal: r.crystal.path_proxy_enabled,
             perl: r.perl.path_proxy_enabled,
+            unison: r.unison.path_proxy_enabled,
             r: r.r.path_proxy_enabled,
             ruby: r.ruby.path_proxy_enabled,
             elixir: r.elixir.path_proxy_enabled,
@@ -170,6 +173,7 @@ impl PathProxyRuntimeSnapshot {
             RuntimeKind::Nim => Some(self.nim),
             RuntimeKind::Crystal => Some(self.crystal),
             RuntimeKind::Perl => Some(self.perl),
+            RuntimeKind::Unison => Some(self.unison),
             RuntimeKind::RLang => Some(self.r),
         }
     }

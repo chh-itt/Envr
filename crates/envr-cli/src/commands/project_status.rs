@@ -48,6 +48,7 @@ fn core_command_for_project_key(key: &str) -> Option<CoreCommand> {
         "deno" => Some(CoreCommand::Deno),
         "bun" => Some(CoreCommand::Bun),
         "perl" => Some(CoreCommand::Perl),
+        "unison" => Some(CoreCommand::Ucm),
         _ => None,
     }
 }
@@ -71,6 +72,7 @@ fn collect_lang_keys(cfg: Option<&ProjectConfig>) -> Vec<String> {
         "bun",
         "php",
         "perl",
+        "unison",
     ] {
         keys.insert(k.to_string());
     }

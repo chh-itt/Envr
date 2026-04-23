@@ -105,6 +105,7 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Nim => &[(CoreCommand::Nim, "nim")],
         RuntimeKind::Crystal => &[(CoreCommand::Crystal, "crystal")],
         RuntimeKind::Perl => &[(CoreCommand::Perl, "perl")],
+        RuntimeKind::Unison => &[(CoreCommand::Ucm, "ucm")],
         RuntimeKind::RLang => &[(CoreCommand::R, "R"), (CoreCommand::Rscript, "Rscript")],
     }
 }
@@ -663,6 +664,7 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "erl"
             | "erlc"
             | "escript"
+            | "ucm"
     )
 }
 

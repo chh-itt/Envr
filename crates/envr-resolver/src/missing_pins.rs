@@ -43,6 +43,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "nim",
     "crystal",
     "perl",
+    "unison",
     "r",
 ];
 

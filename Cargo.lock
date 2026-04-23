@@ -996,6 +996,7 @@ dependencies = [
  "envr-runtime-sbcl",
  "envr-runtime-scala",
  "envr-runtime-terraform",
+ "envr-runtime-unison",
  "envr-runtime-v",
  "envr-runtime-zig",
  "envr-shim-core",
@@ -1610,6 +1611,21 @@ dependencies = [
 
 [[package]]
 name = "envr-runtime-terraform"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-unison"
 version = "0.1.0"
 dependencies = [
  "envr-domain",

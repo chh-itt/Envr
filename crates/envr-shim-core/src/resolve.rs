@@ -175,6 +175,7 @@ pub enum CoreCommand {
     Nim,
     Crystal,
     Perl,
+    Ucm,
     R,
     Rscript,
 }
@@ -217,6 +218,7 @@ impl CoreCommand {
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
             CoreCommand::Perl => "perl",
+            CoreCommand::Ucm => "unison",
             CoreCommand::R | CoreCommand::Rscript => "r",
         }
     }
@@ -261,6 +263,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
         "perl" => vec![home.join("bin"), home.to_path_buf()],
+        "unison" => vec![home.join("bin"), home.to_path_buf()],
         "r" => vec![home.join("bin")],
         _ => vec![],
     }
@@ -335,6 +338,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
             ("HAXE_STD_PATH".into(), home.join("std").display().to_string()),
         ],
         "perl" => vec![("PERL_HOME".into(), home_env)],
+        "unison" => vec![("UNISON_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
         "gleam" => vec![("GLEAM_HOME".into(), home_env)],
@@ -525,6 +529,7 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "nim" => Some(CoreCommand::Nim),
         "crystal" => Some(CoreCommand::Crystal),
         "perl" => Some(CoreCommand::Perl),
+        "ucm" => Some(CoreCommand::Ucm),
         "r" => Some(CoreCommand::R),
         "rscript" => Some(CoreCommand::Rscript),
         _ => None,
@@ -1444,6 +1449,23 @@ fn perl_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn unison_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Ucm => first_existing(&[
+            home.join("ucm.exe"),
+            home.join("ucm.cmd"),
+            home.join("ucm.bat"),
+            home.join("ucm"),
+            home.join("bin").join("ucm.exe"),
+            home.join("bin").join("ucm.cmd"),
+            home.join("bin").join("ucm.bat"),
+            home.join("bin").join("ucm"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("ucm missing under {}", home.display()))),
+        _ => Err(EnvrError::Runtime("invalid unison command".into())),
+    }
+}
+
 fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::R => bin_tool_layout::resolve_r_exe(home)
@@ -1494,6 +1516,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
         CoreCommand::Perl => perl_tool_path(home, cmd),
+        CoreCommand::Ucm => unison_tool_path(home, cmd),
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
     }
 }
@@ -1670,6 +1693,7 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Nim => "nim",
         CoreCommand::Crystal => "crystal",
         CoreCommand::Perl => "perl",
+        CoreCommand::Ucm => "ucm",
         CoreCommand::R => "r",
         CoreCommand::Rscript => "rscript",
     }
@@ -1799,6 +1823,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
         CoreCommand::Perl => perl_tool_path(&home, cmd)?,
+        CoreCommand::Ucm => unison_tool_path(&home, cmd)?,
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
     };
 
@@ -1904,6 +1929,7 @@ mod tests {
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));
         assert_eq!(parse_core_command("crystal"), Some(CoreCommand::Crystal));
         assert_eq!(parse_core_command("perl"), Some(CoreCommand::Perl));
+        assert_eq!(parse_core_command("ucm"), Some(CoreCommand::Ucm));
         assert_eq!(parse_core_command("r"), Some(CoreCommand::R));
         assert_eq!(parse_core_command("rscript"), Some(CoreCommand::Rscript));
         assert_eq!(parse_core_command("unknown"), None);

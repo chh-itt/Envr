@@ -50,6 +50,7 @@ envr-runtime-nim = { path = "../envr-runtime-nim" }
 envr-runtime-crystal = { path = "../envr-runtime-crystal" }
 envr-runtime-perl = { path = "../envr-runtime-perl" }
 envr-runtime-rlang = { path = "../envr-runtime-rlang" }
+envr-runtime-unison = { path = "../envr-runtime-unison" }
 envr-shim-core = { path = "../envr-shim-core" }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }

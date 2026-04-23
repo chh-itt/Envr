@@ -49,6 +49,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "nim",
     "crystal",
     "perl",
+    "unison",
     "r",
 ];
 

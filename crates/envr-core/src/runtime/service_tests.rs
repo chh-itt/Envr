@@ -256,6 +256,7 @@ fn defaults_providers_registered() {
         RuntimeKind::Nim,
         RuntimeKind::Crystal,
         RuntimeKind::Perl,
+        RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
@@ -303,6 +304,7 @@ fn with_runtime_root_registers_providers() {
         RuntimeKind::Nim,
         RuntimeKind::Crystal,
         RuntimeKind::Perl,
+        RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
         let _ = svc.list_installed(kind).expect("list_installed");
