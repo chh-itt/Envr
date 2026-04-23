@@ -9,8 +9,7 @@ use crate::theme as gui_theme;
 use crate::view::env_center::kind_label;
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::widget_styles::{
-    ButtonVariant, SegmentPosition, button_content_centered, button_style, section_card, segmented_button_style,
-    setting_row, text_input_style,
+    ButtonVariant, button_content_centered, button_style, section_card, setting_row, text_input_style,
 };
 
 pub fn runtime_config_view(
@@ -129,17 +128,30 @@ pub fn runtime_config_view(
                 ));
         }
         RuntimeKind::Go => {
-            let go_custom_enabled = state.draft.runtime.go.proxy_mode == GoProxyMode::Custom;
+            let goproxy_managed = state.draft.runtime.go.proxy_mode == GoProxyMode::Custom;
+            let goprivate_managed = !state.go_private_patterns_draft.trim().is_empty();
+            let proxy_presets = [
+                "",
+                "https://proxy.golang.org,direct",
+                "https://goproxy.cn,direct",
+                "https://goproxy.io,direct",
+            ];
+            let private_presets = [
+                "",
+                "github.com/your-org/*",
+                "gitlab.com/your-group/*",
+                "gitee.com/your-team/*",
+            ];
             content = content
                 .push(setting_row(
                     tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.go.custom_enable", "启用自定义 GOPROXY", "Enable custom GOPROXY"),
+                    envr_core::i18n::tr_key("gui.runtime.config.go.custom_enable", "托管 GOPROXY", "Manage GOPROXY"),
                     Some(envr_core::i18n::tr_key(
                         "gui.runtime.config.go.custom_enable_desc",
-                        "未启用时不改写为自定义值（保留默认模式）。",
-                        "When disabled, custom override is not applied (keep default mode).",
+                        "不勾选：不处理该项；勾选：保存后应用输入值。",
+                        "Unchecked: do not manage this; checked: Save applies input value.",
                     )),
-                    toggler(go_custom_enabled)
+                    toggler(goproxy_managed)
                         .on_toggle(|on| {
                             Message::Settings(SettingsMsg::SetGoProxyMode(if on {
                                 GoProxyMode::Custom
@@ -153,36 +165,14 @@ pub fn runtime_config_view(
                     tokens,
                     "GOPROXY".to_string(),
                     None,
-                    segmented3(
-                        tokens,
-                        true,
-                        state.draft.runtime.go.proxy_mode == GoProxyMode::Auto,
-                        state.draft.runtime.go.proxy_mode == GoProxyMode::Domestic,
-                        state.draft.runtime.go.proxy_mode == GoProxyMode::Official,
-                        envr_core::i18n::tr_key("gui.choice.auto", "自动", "Auto"),
-                        envr_core::i18n::tr_key("gui.choice.domestic", "国内", "Domestic"),
-                        envr_core::i18n::tr_key("gui.choice.official", "官方", "Official"),
-                        Message::Settings(SettingsMsg::SetGoProxyMode(GoProxyMode::Auto)),
-                        Message::Settings(SettingsMsg::SetGoProxyMode(GoProxyMode::Domestic)),
-                        Message::Settings(SettingsMsg::SetGoProxyMode(GoProxyMode::Official)),
-                    ),
-                ))
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key(
-                        "gui.runtime.config.go.proxy_custom",
-                        "自定义 GOPROXY",
-                        "Custom GOPROXY",
-                    ),
-                    None,
-                    if go_custom_enabled {
+                    if goproxy_managed {
                         text_input(
                             "runtime.go.proxy_custom (e.g. https://proxy.golang.org,direct)",
                             &state.go_proxy_custom_draft,
                         )
                         .on_input(|s| Message::Settings(SettingsMsg::GoProxyCustomEdit(s)))
                         .padding(sp.sm)
-                        .width(Length::Fixed(360.0))
+                        .width(Length::Fixed(420.0))
                         .style(text_input_style(tokens))
                         .into()
                     } else {
@@ -191,24 +181,41 @@ pub fn runtime_config_view(
                             &state.go_proxy_custom_draft,
                         )
                         .padding(sp.sm)
-                        .width(Length::Fixed(360.0))
+                        .width(Length::Fixed(420.0))
                         .style(text_input_style(tokens))
                         .into()
                     },
                 ))
-                .push(row![
-                    button(button_content_centered(text("proxy.golang.org").into()))
-                        .on_press(Message::Settings(SettingsMsg::GoProxyCustomEdit(
-                            "https://proxy.golang.org,direct".to_string()
-                        )))
-                        .style(button_style(tokens, ButtonVariant::Secondary)),
-                    button(button_content_centered(text("goproxy.cn").into()))
-                        .on_press(Message::Settings(SettingsMsg::GoProxyCustomEdit(
-                            "https://goproxy.cn,direct".to_string()
-                        )))
-                        .style(button_style(tokens, ButtonVariant::Secondary)),
-                ]
-                .spacing(sp.sm as f32))
+                .push(setting_row(
+                    tokens,
+                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+                    None,
+                    pick_list(
+                        proxy_presets,
+                        None::<&'static str>,
+                        |v| Message::Settings(SettingsMsg::GoProxyCustomEdit(v.to_string())),
+                    )
+                    .width(Length::Fixed(420.0))
+                    .into(),
+                ))
+                .push(setting_row(
+                    tokens,
+                    envr_core::i18n::tr_key("gui.runtime.config.go.private_enable", "托管 GOPRIVATE", "Manage GOPRIVATE"),
+                    Some(envr_core::i18n::tr_key(
+                        "gui.runtime.config.go.private_enable_desc",
+                        "不勾选：不处理该项；勾选：保存后应用输入值。",
+                        "Unchecked: do not manage this; checked: Save applies input value.",
+                    )),
+                    toggler(goprivate_managed)
+                        .on_toggle(|on| {
+                            Message::Settings(SettingsMsg::GoPrivatePatternsEdit(if on {
+                                "github.com/your-org/*".to_string()
+                            } else {
+                                String::new()
+                            }))
+                        })
+                        .into(),
+                ))
                 .push(setting_row(
                     tokens,
                     "GOPRIVATE".to_string(),
@@ -217,24 +224,43 @@ pub fn runtime_config_view(
                         "逗号分隔私有模块前缀，例如：github.com/your-org/*",
                         "Comma-separated private module patterns, e.g. github.com/your-org/*",
                     )),
-                    if go_custom_enabled {
+                    if goprivate_managed {
                         text_input("runtime.go.private_patterns", &state.go_private_patterns_draft)
                             .on_input(|s| Message::Settings(SettingsMsg::GoPrivatePatternsEdit(s)))
                             .padding(sp.sm)
-                            .width(Length::Fixed(360.0))
+                            .width(Length::Fixed(420.0))
                             .style(text_input_style(tokens))
                             .into()
                     } else {
                         text_input("runtime.go.private_patterns", &state.go_private_patterns_draft)
                             .padding(sp.sm)
-                            .width(Length::Fixed(360.0))
+                            .width(Length::Fixed(420.0))
                             .style(text_input_style(tokens))
                             .into()
                     },
+                ))
+                .push(setting_row(
+                    tokens,
+                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+                    None,
+                    pick_list(
+                        private_presets,
+                        None::<&'static str>,
+                        |v| Message::Settings(SettingsMsg::GoPrivatePatternsEdit(v.to_string())),
+                    )
+                    .width(Length::Fixed(420.0))
+                    .into(),
                 ));
         }
         RuntimeKind::Bun => {
             let bun_enabled = !state.bun_global_bin_dir_draft.trim().is_empty();
+            let bun_bin_presets = [
+                "",
+                "C:\\Users\\<you>\\AppData\\Roaming\\npm",
+                "C:\\Users\\<you>\\.bun\\bin",
+                "/usr/local/bin",
+                "~/.bun/bin",
+            ];
             content = content.push(setting_row(
                 tokens,
                 envr_core::i18n::tr_key("gui.runtime.config.bun.bin_enable", "启用全局 bin 覆盖", "Enable global bin override"),
@@ -265,16 +291,28 @@ pub fn runtime_config_view(
                     text_input("runtime.bun.global_bin_dir", &state.bun_global_bin_dir_draft)
                         .on_input(|s| Message::Settings(SettingsMsg::BunGlobalBinDirEdit(s)))
                         .padding(sp.sm)
-                        .width(Length::Fixed(360.0))
+                        .width(Length::Fixed(420.0))
                         .style(text_input_style(tokens))
                         .into()
                 } else {
                     text_input("runtime.bun.global_bin_dir", &state.bun_global_bin_dir_draft)
                         .padding(sp.sm)
-                        .width(Length::Fixed(360.0))
+                        .width(Length::Fixed(420.0))
                         .style(text_input_style(tokens))
                         .into()
                 },
+            ));
+            content = content.push(setting_row(
+                tokens,
+                envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+                None,
+                pick_list(
+                    bun_bin_presets,
+                    None::<&'static str>,
+                    |v| Message::Settings(SettingsMsg::BunGlobalBinDirEdit(v.to_string())),
+                )
+                .width(Length::Fixed(420.0))
+                .into(),
             ));
         }
         _ => {
@@ -326,44 +364,3 @@ pub fn runtime_config_view(
     container(card).width(Length::Fill).into()
 }
 
-fn segmented3(
-    tokens: ThemeTokens,
-    enabled: bool,
-    a_selected: bool,
-    b_selected: bool,
-    c_selected: bool,
-    a_label: String,
-    b_label: String,
-    c_label: String,
-    a_msg: Message,
-    b_msg: Message,
-    c_msg: Message,
-) -> Element<'static, Message> {
-    row![
-        seg_btn(tokens, a_label, a_selected, SegmentPosition::Start, enabled.then_some(a_msg)),
-        seg_btn(tokens, b_label, b_selected, SegmentPosition::Middle, enabled.then_some(b_msg)),
-        seg_btn(tokens, c_label, c_selected, SegmentPosition::End, enabled.then_some(c_msg)),
-    ]
-    .spacing(-1.0)
-    .into()
-}
-
-fn seg_btn(
-    tokens: ThemeTokens,
-    label: String,
-    selected: bool,
-    pos: SegmentPosition,
-    msg: Option<Message>,
-) -> Element<'static, Message> {
-    let variant = if selected {
-        ButtonVariant::Primary
-    } else {
-        ButtonVariant::Secondary
-    };
-    button(button_content_centered(text(label).into()))
-        .on_press_maybe(msg)
-        .height(Length::Fixed(tokens.control_height_secondary))
-        .padding([tokens.space().sm as f32, (tokens.space().sm + 2) as f32])
-        .style(segmented_button_style(tokens, variant, pos))
-        .into()
-}
