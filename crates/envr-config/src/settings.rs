@@ -49,6 +49,11 @@ pub struct MirrorSettings {
 
     #[serde(default)]
     pub manual_id: Option<String>,
+
+    /// Global preference switch: when true, runtimes that support a China mirror
+    /// choose domestic sources for `auto` modes; unsupported runtimes remain official.
+    #[serde(default = "defaults::prefer_china_mirrors")]
+    pub prefer_china_mirrors: bool,
 }
 
 impl Default for MirrorSettings {
@@ -56,6 +61,7 @@ impl Default for MirrorSettings {
         Self {
             mode: defaults::mirror_mode(),
             manual_id: None,
+            prefer_china_mirrors: defaults::prefer_china_mirrors(),
         }
     }
 }
@@ -1637,7 +1643,7 @@ fn env_locale_vars_suggest_chinese() -> bool {
     false
 }
 
-/// Heuristic: OS or environment suggests a Chinese locale (used when [`LocaleMode::FollowSystem`]).
+/// Heuristic: OS or environment suggests a Chinese locale (used for i18n `follow_system`).
 ///
 /// Order: [`sys_locale::get_locale`] (cross-platform OS API), then `LC_*` / `LANG` / `LANGUAGE`.
 pub fn system_locale_suggests_chinese() -> bool {
@@ -1649,12 +1655,9 @@ pub fn system_locale_suggests_chinese() -> bool {
     env_locale_vars_suggest_chinese()
 }
 
+/// Global China mirror preference switch (explicit user-controlled behavior).
 pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
-    match settings.i18n.locale {
-        LocaleMode::ZhCn => true,
-        LocaleMode::EnUs => false,
-        LocaleMode::FollowSystem => system_locale_suggests_chinese(),
-    }
+    settings.mirror.prefer_china_mirrors
 }
 
 pub fn node_index_json_url(settings: &Settings) -> String {
@@ -2171,6 +2174,10 @@ mod defaults {
         MirrorMode::Auto
     }
 
+    pub fn prefer_china_mirrors() -> bool {
+        false
+    }
+
     pub fn font_mode() -> FontMode {
         FontMode::Auto
     }
@@ -2180,7 +2187,7 @@ mod defaults {
     }
 
     pub fn locale_mode() -> LocaleMode {
-        LocaleMode::FollowSystem
+        LocaleMode::EnUs
     }
 
     pub fn auto_sync_shims_on_use() -> bool {

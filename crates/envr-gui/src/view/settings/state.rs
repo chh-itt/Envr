@@ -33,7 +33,7 @@ impl SettingsViewState {
             retry_text: String::new(),
             font_family_draft: String::new(),
             accent_color_draft: String::new(),
-            locale_mode_draft: LocaleMode::FollowSystem,
+            locale_mode_draft: LocaleMode::EnUs,
             last_message: None,
         };
         s.sync_from_cache().expect("initial settings sync");
@@ -136,8 +136,8 @@ impl SettingsViewState {
             ),
             MirrorMode::Auto => envr_core::i18n::tr_key(
                 "gui.settings.mirror.auto",
-                "auto（自动测速）",
-                "auto (probe fastest mirror)",
+                "auto（默认官方；可受全局 China 开关影响）",
+                "auto (official by default; affected by global China switch)",
             ),
             MirrorMode::Manual => envr_core::i18n::tr_key(
                 "gui.settings.mirror.manual",

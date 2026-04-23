@@ -606,6 +606,10 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.settings.draft.mirror.mode = m;
             Task::none()
         }
+        SettingsMsg::SetPreferChinaMirrors(v) => {
+            state.settings.draft.mirror.prefer_china_mirrors = v;
+            Task::none()
+        }
         SettingsMsg::SetCleanup(v) => {
             state
                 .settings

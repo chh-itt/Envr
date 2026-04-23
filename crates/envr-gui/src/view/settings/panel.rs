@@ -25,6 +25,7 @@ pub enum SettingsMsg {
     MaxBpsEdit(String),
     RetryEdit(String),
     SetMirrorMode(MirrorMode),
+    SetPreferChinaMirrors(bool),
     SetCleanup(bool),
     SetFontMode(FontMode),
     FontFamilyEdit(String),
@@ -177,6 +178,13 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     } else {
         column![]
     };
+    let china_pref = toggler(state.draft.mirror.prefer_china_mirrors)
+        .label(envr_core::i18n::tr_key(
+            "gui.settings.mirror.prefer_china",
+            "全局 China 开关：支持国内源的运行时在 auto 模式下优先国内源",
+            "Global China switch: runtimes with China mirrors prefer domestic sources in auto mode",
+        ))
+        .on_toggle(|v| Message::Settings(SettingsMsg::SetPreferChinaMirrors(v)));
 
     let cleanup = toggler(state.draft.behavior.cleanup_downloads_after_install)
         .label(envr_core::i18n::tr_key(
@@ -546,6 +554,16 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                     "Choose how runtime mirrors are selected.",
                 )),
                 mirror_buttons.into(),
+            ),
+            setting_row(
+                tokens,
+                envr_core::i18n::tr_key(
+                    "gui.settings.mirror.preference",
+                    "镜像偏好开关",
+                    "Mirror preference switch",
+                ),
+                None,
+                china_pref.into(),
             ),
             manual,
             cleanup,

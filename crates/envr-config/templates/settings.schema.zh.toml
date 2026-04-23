@@ -19,14 +19,16 @@
 cleanup_downloads_after_install = false
 
 # -----------------------------------------------------------------------------
-# mirror — 下载镜像总开关（影响多语言包源解析）
+# mirror — 下载镜像总开关（显式控制，不再按语言自动猜测）
 # -----------------------------------------------------------------------------
 # mode：official | auto | manual | offline
-#   auto — 根据界面语言等启发式选择国内/官方源
+#   auto — 默认等同官方（仅在 prefer_china_mirrors=true 时，对支持国内源的运行时优先国内）
 #   manual — 必须设置 manual_id
 #   offline — 禁止联网拉取索引（仅用本地缓存）
 [mirror]
 mode = "auto"
+# 全局 China 开关：true 时，支持国内源的运行时在 auto 模式下优先国内源。
+prefer_china_mirrors = false
 # manual_id = "npmmirror"
 
 # -----------------------------------------------------------------------------
@@ -41,7 +43,7 @@ retry_max = 3
 # -----------------------------------------------------------------------------
 # locale：follow_system | zh_cn | en_us
 [i18n]
-locale = "follow_system"
+locale = "en_us"
 
 # -----------------------------------------------------------------------------
 # appearance — GUI 外观（CLI 可忽略）
