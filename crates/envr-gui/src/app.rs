@@ -652,6 +652,42 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.locale = envr_core::i18n::locale_from_settings(&st);
             Task::none()
         }
+        SettingsMsg::SetNodeDownloadSource(src) => {
+            state.settings.draft.runtime.node.download_source = src;
+            Task::none()
+        }
+        SettingsMsg::SetNpmRegistryMode(mode) => {
+            state.settings.draft.runtime.node.npm_registry_mode = mode;
+            Task::none()
+        }
+        SettingsMsg::SetPythonDownloadSource(src) => {
+            state.settings.draft.runtime.python.download_source = src;
+            Task::none()
+        }
+        SettingsMsg::SetPipRegistryMode(mode) => {
+            state.settings.draft.runtime.python.pip_registry_mode = mode;
+            Task::none()
+        }
+        SettingsMsg::SetGoDownloadSource(src) => {
+            state.settings.draft.runtime.go.download_source = src;
+            Task::none()
+        }
+        SettingsMsg::SetGoProxyMode(mode) => {
+            state.settings.draft.runtime.go.proxy_mode = mode;
+            Task::none()
+        }
+        SettingsMsg::GoProxyCustomEdit(s) => {
+            state.settings.go_proxy_custom_draft = s;
+            Task::none()
+        }
+        SettingsMsg::GoPrivatePatternsEdit(s) => {
+            state.settings.go_private_patterns_draft = s;
+            Task::none()
+        }
+        SettingsMsg::BunGlobalBinDirEdit(s) => {
+            state.settings.bun_global_bin_dir_draft = s;
+            Task::none()
+        }
         SettingsMsg::Save => {
             state.settings.last_message = Some(envr_core::i18n::tr_key(
                 "gui.app.saving",

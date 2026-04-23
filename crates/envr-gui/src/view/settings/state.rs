@@ -14,6 +14,9 @@ pub struct SettingsViewState {
     pub font_family_draft: String,
     pub accent_color_draft: String,
     pub locale_mode_draft: LocaleMode,
+    pub go_proxy_custom_draft: String,
+    pub go_private_patterns_draft: String,
+    pub bun_global_bin_dir_draft: String,
     pub last_message: Option<String>,
 }
 
@@ -34,6 +37,9 @@ impl SettingsViewState {
             font_family_draft: String::new(),
             accent_color_draft: String::new(),
             locale_mode_draft: LocaleMode::EnUs,
+            go_proxy_custom_draft: String::new(),
+            go_private_patterns_draft: String::new(),
+            bun_global_bin_dir_draft: String::new(),
             last_message: None,
         };
         s.sync_from_cache().expect("initial settings sync");
@@ -51,6 +57,15 @@ impl SettingsViewState {
         self.font_family_draft = st.appearance.font.family.clone().unwrap_or_default();
         self.accent_color_draft = st.appearance.accent_color.clone().unwrap_or_default();
         self.locale_mode_draft = st.i18n.locale;
+        self.go_proxy_custom_draft = st
+            .runtime
+            .go
+            .proxy_custom
+            .clone()
+            .or_else(|| st.runtime.go.goproxy.clone())
+            .unwrap_or_default();
+        self.go_private_patterns_draft = st.runtime.go.private_patterns.clone().unwrap_or_default();
+        self.bun_global_bin_dir_draft = st.runtime.bun.global_bin_dir.clone().unwrap_or_default();
         Ok(())
     }
 
@@ -102,6 +117,24 @@ impl SettingsViewState {
         }
 
         s.i18n.locale = self.locale_mode_draft;
+        let gp = self.go_proxy_custom_draft.trim();
+        s.runtime.go.proxy_custom = if gp.is_empty() {
+            None
+        } else {
+            Some(gp.to_string())
+        };
+        let gpriv = self.go_private_patterns_draft.trim();
+        s.runtime.go.private_patterns = if gpriv.is_empty() {
+            None
+        } else {
+            Some(gpriv.to_string())
+        };
+        let bbin = self.bun_global_bin_dir_draft.trim();
+        s.runtime.bun.global_bin_dir = if bbin.is_empty() {
+            None
+        } else {
+            Some(bbin.to_string())
+        };
 
         let ac = self.accent_color_draft.trim();
         s.appearance.accent_color = if ac.is_empty() {

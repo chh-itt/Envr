@@ -2869,6 +2869,22 @@ pub fn env_center_view(
 
     let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
         column![].into()
+    } else if matches!(
+        state.kind,
+        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Go
+    ) {
+        container(
+            text(envr_core::i18n::tr_key(
+                "gui.runtime.settings.moved_to_settings",
+                "该运行时的下载源/包源配置已迁移到“设置”页面，请使用上方“打开配置页”。",
+                "Download/package source settings moved to the Settings page. Use \"Open config page\" above.",
+            ))
+            .size(ty.micro)
+            .color(gui_theme::to_color(tokens.colors.text_muted)),
+        )
+        .padding(Padding::from([sp.sm as f32, sp.md as f32]))
+        .style(card_container_style(tokens, 1))
+        .into()
     } else if state.kind == RuntimeKind::Node {
         node_runtime
             .map(|n| node_runtime_settings_section(n, tokens))
