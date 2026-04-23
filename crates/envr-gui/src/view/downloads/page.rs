@@ -39,7 +39,10 @@ pub fn downloads_page_view(
         let meta = text(status).size(ty.micro).color(muted);
 
         let mut actions = row![].spacing(sp.sm as f32).align_y(Alignment::Center);
-        if matches!(j.state, JobState::Running | JobState::Queued) && j.cancellable {
+        if matches!(j.state, JobState::Running | JobState::Queued)
+            && j.cancellable
+            && !j.cancel.is_cancelled()
+        {
             actions = actions.push(
                 button(text(envr_core::i18n::tr_key(
                     "gui.action.cancel",

@@ -1239,6 +1239,9 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
         }
         DownloadMsg::Cancel(id) => {
             if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
+                if j.cancel.is_cancelled() {
+                    return Task::none();
+                }
                 j.cancel.cancel();
                 if j.state == JobState::Queued {
                     j.state = JobState::Cancelled;
