@@ -19,6 +19,9 @@ pub enum DownloadMsg {
 
 pub fn format_job_state_line(job: &DownloadJob) -> String {
     match job.state {
+        JobState::Queued => {
+            envr_core::i18n::tr_key("gui.job.queued", "排队中", "Queued").to_string()
+        }
         JobState::Running => {
             if job.is_runtime_install_row() {
                 let d = job.downloaded_display();

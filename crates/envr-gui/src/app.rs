@@ -37,14 +37,16 @@ pub enum Route {
     #[default]
     Dashboard,
     Runtime,
+    Downloads,
     Settings,
     About,
 }
 
 impl Route {
-    pub(crate) const ALL: [Self; 4] = [
+    pub(crate) const ALL: [Self; 5] = [
         Route::Dashboard,
         Route::Runtime,
+        Route::Downloads,
         Route::Settings,
         Route::About,
     ];
@@ -55,6 +57,7 @@ impl Route {
                 envr_core::i18n::tr_key("gui.route.dashboard", "仪表盘", "Dashboard")
             }
             Route::Runtime => envr_core::i18n::tr_key("gui.route.runtime", "运行时", "Runtimes"),
+            Route::Downloads => envr_core::i18n::tr_key("gui.route.downloads", "下载", "Downloads"),
             Route::Settings => envr_core::i18n::tr_key("gui.route.settings", "设置", "Settings"),
             Route::About => envr_core::i18n::tr_key("gui.route.about", "关于", "About"),
         }
@@ -86,6 +89,8 @@ impl Default for AppState {
         let gui_defaults = load_gui_downloads_panel_settings_cached();
         let startup = STARTUP_SETTINGS.get().cloned().unwrap_or_default();
         let locale = envr_core::i18n::locale_from_settings(&startup);
+        // Best-effort: configure global download bandwidth cap for this GUI process.
+        let _ = envr_download::set_global_download_limit(Some(startup.download.max_bytes_per_sec));
         Self {
             locale,
             route: Route::default(),
@@ -589,6 +594,10 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.settings.max_conc_text = s;
             Task::none()
         }
+        SettingsMsg::MaxBpsEdit(s) => {
+            state.settings.max_bps_text = s;
+            Task::none()
+        }
         SettingsMsg::RetryEdit(s) => {
             state.settings.retry_text = s;
             Task::none()
@@ -734,6 +743,10 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
                             "Saved.",
                         ));
                     }
+                    // Apply global download bandwidth cap immediately for the current process.
+                    let _ = envr_download::set_global_download_limit(Some(
+                        state.settings.cache.snapshot().download.max_bytes_per_sec,
+                    ));
                     sync_go_env_center_drafts_from_settings(state);
                     if matches!(state.route(), Route::Runtime) {
                         let k = state.env_center.kind;
@@ -1227,8 +1240,12 @@ fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
         DownloadMsg::Cancel(id) => {
             if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
                 j.cancel.cancel();
+                if j.state == JobState::Queued {
+                    j.state = JobState::Cancelled;
+                    j.last_error = None;
+                }
             }
-            Task::none()
+            maybe_start_queued_jobs(state)
         }
         DownloadMsg::Retry(id) => {
             let Some(failed) = state
@@ -1350,9 +1367,8 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
         ));
         return Task::none();
     }
-    let url = match reqwest::Url::parse(url_str) {
-        Ok(u) => u,
-        Err(e) => {
+    // Validate URL early so queued jobs don't fail later with a generic message.
+    if let Err(e) = reqwest::Url::parse(url_str) {
             state.error = Some(format!(
                 "{}: {e}",
                 envr_core::i18n::tr_key(
@@ -1362,8 +1378,7 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
                 )
             ));
             return Task::none();
-        }
-    };
+    }
     let id = state.downloads.next_id;
     state.downloads.next_id += 1;
     let dest = std::env::temp_dir().join(format!("envr-gui-dl-{id}.tmp"));
@@ -1374,7 +1389,7 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
         id,
         label: label.to_string(),
         url: url_str.to_string(),
-        state: JobState::Running,
+        state: JobState::Queued,
         cancellable: true,
         downloaded: downloaded.clone(),
         total: total.clone(),
@@ -1383,11 +1398,49 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
         tick_prev_bytes: 0,
         tick_prev_at: None,
         speed_bps: 0.0,
+        payload: Some(crate::view::downloads::DownloadJobPayload::HttpDownload {
+            url: url_str.to_string(),
+            dest,
+        }),
     });
-    download_runner::start_http_job(id, url, dest, cancel, downloaded, total)
+    maybe_start_queued_jobs(state)
 }
 
 fn enqueue_runtime_install_job(
+    state: &mut AppState,
+    label: String,
+    cancellable: bool,
+    payload: crate::view::downloads::DownloadJobPayload,
+) -> (u64, Arc<AtomicU64>, Arc<AtomicU64>, CancelToken) {
+    let id = state.downloads.next_id;
+    state.downloads.next_id += 1;
+    let downloaded = Arc::new(AtomicU64::new(0));
+    let total = Arc::new(AtomicU64::new(0));
+    let cancel = CancelToken::new();
+    // Empty `url` marks a local install task (see downloads panel / `format_job_state_line`).
+    state.downloads.jobs.push(DownloadJob {
+        id,
+        label,
+        url: String::new(),
+        state: JobState::Queued,
+        cancellable,
+        downloaded: downloaded.clone(),
+        total: total.clone(),
+        cancel: cancel.clone(),
+        last_error: None,
+        tick_prev_bytes: 0,
+        tick_prev_at: None,
+        speed_bps: 0.0,
+        payload: Some(payload),
+    });
+    let tokens = state.tokens();
+    if !state.downloads.visible {
+        state.downloads.start_show_anim(tokens);
+    }
+    (id, downloaded, total, cancel)
+}
+
+fn enqueue_op_job_running(
     state: &mut AppState,
     label: String,
     cancellable: bool,
@@ -1397,7 +1450,6 @@ fn enqueue_runtime_install_job(
     let downloaded = Arc::new(AtomicU64::new(0));
     let total = Arc::new(AtomicU64::new(0));
     let cancel = CancelToken::new();
-    // Empty `url` marks a local install task (see downloads panel / `format_job_state_line`).
     state.downloads.jobs.push(DownloadJob {
         id,
         label,
@@ -1411,12 +1463,106 @@ fn enqueue_runtime_install_job(
         tick_prev_bytes: 0,
         tick_prev_at: None,
         speed_bps: 0.0,
+        payload: None,
     });
     let tokens = state.tokens();
     if !state.downloads.visible {
         state.downloads.start_show_anim(tokens);
     }
     (id, downloaded, total, cancel)
+}
+
+fn maybe_start_queued_jobs(state: &mut AppState) -> Task<Message> {
+    let max = state.settings.cache.snapshot().download.max_concurrent_downloads.max(1) as usize;
+    let running = state
+        .downloads
+        .jobs
+        .iter()
+        .filter(|j| j.state == JobState::Running)
+        .count();
+    if running >= max {
+        return Task::none();
+    }
+    let available = max - running;
+    let mut tasks: Vec<Task<Message>> = Vec::new();
+    for _ in 0..available {
+        let Some(j) = state
+            .downloads
+            .jobs
+            .iter_mut()
+            .find(|j| j.state == JobState::Queued)
+        else {
+            break;
+        };
+        if j.cancel.is_cancelled() {
+            j.state = JobState::Cancelled;
+            j.last_error = None;
+            continue;
+        }
+        let Some(payload) = j.payload.clone() else {
+            j.state = JobState::Failed;
+            j.last_error = Some("internal: missing job payload".into());
+            continue;
+        };
+        j.state = JobState::Running;
+        let id = j.id;
+        match payload {
+            crate::view::downloads::DownloadJobPayload::HttpDownload { url, dest } => {
+                let Ok(url) = reqwest::Url::parse(&url) else {
+                    j.state = JobState::Failed;
+                    j.last_error = Some("invalid url".into());
+                    continue;
+                };
+                tasks.push(download_runner::start_http_job(
+                    id,
+                    url,
+                    dest,
+                    j.cancel.clone(),
+                    j.downloaded.clone(),
+                    j.total.clone(),
+                ));
+            }
+            crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                kind,
+                spec,
+                resolve_precheck,
+                install_and_use,
+            } => {
+                let cancel = j.cancel.clone();
+                let downloaded = j.downloaded.clone();
+                let total = j.total.clone();
+                let task = if resolve_precheck && install_and_use {
+                    gui_ops::install_then_use_with_resolve_precheck(
+                        id,
+                        kind,
+                        spec,
+                        downloaded,
+                        total,
+                        cancel,
+                    )
+                } else if resolve_precheck {
+                    gui_ops::install_version_with_resolve_precheck(
+                        id,
+                        kind,
+                        spec,
+                        downloaded,
+                        total,
+                        cancel,
+                    )
+                } else if install_and_use {
+                    gui_ops::install_then_use(id, kind, spec, downloaded, total, cancel)
+                } else {
+                    gui_ops::install_version(id, kind, spec, downloaded, total, cancel)
+                };
+                tasks.push(task);
+            }
+        }
+    }
+    if tasks.is_empty() {
+        Task::none()
+    } else {
+        Task::batch(tasks)
+    }
 }
 
 fn looks_like_user_cancelled(err: &str) -> bool {
@@ -1749,20 +1895,19 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.error = None;
-            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+            let (id, _downloaded, _total, _cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
                 true,
+                crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                    kind: state.env_center.kind,
+                    spec,
+                    resolve_precheck: true,
+                    install_and_use: false,
+                },
             );
             state.env_center.active_install_job_ids.insert(id);
-            gui_ops::install_version_with_resolve_precheck(
-                id,
-                state.env_center.kind,
-                spec,
-                downloaded,
-                total,
-                cancel,
-            )
+            maybe_start_queued_jobs(state)
         }
         EnvCenterMsg::SubmitDirectInstallAndUse => {
             if runtime_path_proxy_blocks_use(state) {
@@ -1789,33 +1934,38 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.error = None;
-            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+            let (id, _downloaded, _total, _cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
                 true,
+                crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                    kind: state.env_center.kind,
+                    spec,
+                    resolve_precheck: true,
+                    install_and_use: true,
+                },
             );
             state.env_center.active_install_job_ids.insert(id);
-            gui_ops::install_then_use_with_resolve_precheck(
-                id,
-                state.env_center.kind,
-                spec,
-                downloaded,
-                total,
-                cancel,
-            )
+            maybe_start_queued_jobs(state)
         }
         EnvCenterMsg::SubmitInstall(spec) => {
             if spec.trim().is_empty() {
                 return Task::none();
             }
             state.error = None;
-            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+            let (id, _downloaded, _total, _cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
                 true,
+                crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                    kind: state.env_center.kind,
+                    spec,
+                    resolve_precheck: false,
+                    install_and_use: false,
+                },
             );
             state.env_center.active_install_job_ids.insert(id);
-            gui_ops::install_version(id, state.env_center.kind, spec, downloaded, total, cancel)
+            maybe_start_queued_jobs(state)
         }
         EnvCenterMsg::SubmitInstallAndUse(spec) => {
             if runtime_path_proxy_blocks_use(state) {
@@ -1825,13 +1975,19 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 return Task::none();
             }
             state.error = None;
-            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
+            let (id, _downloaded, _total, _cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
                 true,
+                crate::view::downloads::DownloadJobPayload::RuntimeInstall {
+                    kind: state.env_center.kind,
+                    spec,
+                    resolve_precheck: false,
+                    install_and_use: true,
+                },
             );
             state.env_center.active_install_job_ids.insert(id);
-            gui_ops::install_then_use(id, state.env_center.kind, spec, downloaded, total, cancel)
+            maybe_start_queued_jobs(state)
         }
         EnvCenterMsg::InstallFinished {
             job_id,
@@ -1879,9 +2035,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                         gui_ops::refresh_runtimes(kind),
                     ];
                     tasks.push(env_center_jvm_check_task(kind));
+                    tasks.push(maybe_start_queued_jobs(state));
                     Task::batch(tasks)
                 }
-                Err(_) => gui_ops::refresh_runtimes(kind),
+                Err(_) => Task::batch([gui_ops::refresh_runtimes(kind), maybe_start_queued_jobs(state)]),
             }
         }
         EnvCenterMsg::SubmitUse(v) => {
@@ -2303,7 +2460,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.error = None;
             let label = rust_runtime_task_label("channel", &channel);
             let (id, _downloaded, _total, _cancel) =
-                enqueue_runtime_install_job(state, label, false);
+                enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_channel_install_or_switch(channel)
         }
@@ -2315,7 +2472,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.error = None;
             let label = rust_runtime_task_label("update", "");
             let (id, _downloaded, _total, _cancel) =
-                enqueue_runtime_install_job(state, label, false);
+                enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_update_current()
         }
@@ -2330,7 +2487,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 "正在安装托管 rustup（stable）…",
                 "Installing managed rustup (stable)…",
             );
-            let (id, downloaded, total, cancel) = enqueue_runtime_install_job(state, label, true);
+            let (id, downloaded, total, cancel) = enqueue_op_job_running(state, label, true);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_install_stable(downloaded, total, cancel)
         }
@@ -2342,7 +2499,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.error = None;
             let label = rust_runtime_task_label("managed_uninstall", "");
             let (id, _downloaded, _total, _cancel) =
-                enqueue_runtime_install_job(state, label, false);
+                enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_uninstall()
         }
@@ -2358,7 +2515,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 rust_runtime_task_label("component_uninstall", &name)
             };
             let (id, _downloaded, _total, _cancel) =
-                enqueue_runtime_install_job(state, label, false);
+                enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_component_toggle(name, install)
         }
@@ -2374,7 +2531,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 rust_runtime_task_label("target_uninstall", &name)
             };
             let (id, _downloaded, _total, _cancel) =
-                enqueue_runtime_install_job(state, label, false);
+                enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_target_toggle(name, install)
         }

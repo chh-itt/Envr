@@ -181,6 +181,8 @@ fn maybe_prune_artifact_cache_on_start() {
     let Ok(settings) = envr_config::settings::Settings::load_or_default_from(&settings_path) else {
         return;
     };
+    // Best-effort: configure global download bandwidth cap for this CLI process.
+    let _ = envr_download::set_global_download_limit(Some(settings.download.max_bytes_per_sec));
     if !settings.behavior.cache_auto_prune_on_start {
         return;
     }

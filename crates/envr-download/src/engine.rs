@@ -1,4 +1,5 @@
 use crate::task::CancelToken;
+use crate::{GlobalRateLimiter, global_download_limiter};
 use envr_error::{EnvrError, EnvrResult};
 use futures::StreamExt;
 use reqwest::{Client, StatusCode, Url, header};
@@ -35,7 +36,10 @@ fn http_connect_timeout_from_env() -> Duration {
 #[derive(Debug, Clone)]
 pub struct DownloadOptions {
     pub timeout: Duration,
+    /// Per-request limiter (bytes/sec). Prefer [`crate::set_global_download_limit`] for a shared total limiter.
     pub max_bytes_per_sec: Option<u64>,
+    /// Optional shared global limiter for a group of downloads.
+    pub global_limiter: Option<Arc<GlobalRateLimiter>>,
 }
 
 impl Default for DownloadOptions {
@@ -43,6 +47,7 @@ impl Default for DownloadOptions {
         Self {
             timeout: Duration::from_secs(60),
             max_bytes_per_sec: None,
+            global_limiter: None,
         }
     }
 }
@@ -151,6 +156,10 @@ impl DownloadEngine {
                 .map_err(EnvrError::from)?;
 
             let mut limiter = RateLimiter::new(options.max_bytes_per_sec);
+            let global_limiter = options
+                .global_limiter
+                .clone()
+                .or_else(global_download_limiter);
             let mut bytes_written = 0u64;
 
             let emit_state: Option<Arc<Mutex<(Instant, u64)>>> = on_progress
@@ -185,6 +194,9 @@ impl DownloadEngine {
                 let chunk =
                     chunk.map_err(|e| EnvrError::Download(format!("read chunk failed: {e}")))?;
 
+                if let Some(gl) = global_limiter.as_ref() {
+                    gl.throttle_async(chunk.len() as u64).await?;
+                }
                 limiter.throttle(chunk.len() as u64).await?;
 
                 file.write_all(&chunk).await.map_err(EnvrError::from)?;
@@ -361,6 +373,7 @@ mod tests {
         let opts = DownloadOptions {
             timeout: Duration::from_secs(10),
             max_bytes_per_sec: None,
+            global_limiter: None,
         };
         let out = DownloadEngine::new(Client::new())
             .download_to_file(url, &dest, &cancel, &opts, None, None, None)
@@ -395,6 +408,7 @@ mod tests {
         let opts = DownloadOptions {
             timeout: Duration::from_secs(10),
             max_bytes_per_sec: None,
+            global_limiter: None,
         };
         let out = DownloadEngine::new(Client::new())
             .download_to_file(url, &dest, &cancel, &opts, None, None, None)

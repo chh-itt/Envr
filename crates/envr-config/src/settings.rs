@@ -24,6 +24,10 @@ pub struct DownloadSettings {
     #[serde(default = "defaults::max_concurrent_downloads")]
     pub max_concurrent_downloads: u32,
 
+    /// Global total download bandwidth cap in bytes/sec. `0` means unlimited.
+    #[serde(default = "defaults::max_bytes_per_sec")]
+    pub max_bytes_per_sec: u64,
+
     #[serde(default = "defaults::retry_max")]
     pub retry_max: u32,
 }
@@ -32,6 +36,7 @@ impl Default for DownloadSettings {
     fn default() -> Self {
         Self {
             max_concurrent_downloads: defaults::max_concurrent_downloads(),
+            max_bytes_per_sec: defaults::max_bytes_per_sec(),
             retry_max: defaults::retry_max(),
         }
     }
@@ -2154,6 +2159,10 @@ mod defaults {
         4
     }
 
+    pub fn max_bytes_per_sec() -> u64 {
+        0
+    }
+
     pub fn retry_max() -> u32 {
         3
     }
@@ -2415,6 +2424,7 @@ mod tests {
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,
+                max_bytes_per_sec: 0,
                 retry_max: 5,
             },
             mirror: MirrorSettings {

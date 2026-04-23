@@ -12,6 +12,7 @@ fn route_icon(route: Route) -> Lucide {
     match route {
         Route::Dashboard => Lucide::LayoutDashboard,
         Route::Runtime => Lucide::Package,
+        Route::Downloads => Lucide::Download,
         Route::Settings => Lucide::Settings,
         Route::About => Lucide::Info,
     }

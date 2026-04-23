@@ -572,6 +572,7 @@ fn recent_jobs_card(
     } else {
         for j in downloads.jobs.iter().rev().take(5) {
             let st = match j.state {
+                JobState::Queued => envr_core::i18n::tr_key("gui.job.queued", "排队中", "Queued"),
                 JobState::Running => {
                     envr_core::i18n::tr_key("gui.job.running", "进行中", "Running")
                 }

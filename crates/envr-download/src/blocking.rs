@@ -12,6 +12,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::global_limit::global_download_limiter;
+
 fn remove_path_if_exists(path: &Path) {
     if fs::symlink_metadata(path).is_err() {
         return;
@@ -125,6 +127,7 @@ pub fn download_url_to_path_resumable(
         let mut response = response;
         let mut buf = [0u8; 64 * 1024];
         let mut read_error: Option<EnvrError> = None;
+        let global = global_download_limiter();
         loop {
             if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
                 return Err(EnvrError::Download("download cancelled".to_string()));
@@ -138,6 +141,9 @@ pub fn download_url_to_path_resumable(
             };
             if n == 0 {
                 break;
+            }
+            if let Some(gl) = global.as_ref() {
+                gl.throttle_blocking(n as u64)?;
             }
             if let Err(e) = file.write_all(&buf[..n]) {
                 read_error = Some(EnvrError::from(e));

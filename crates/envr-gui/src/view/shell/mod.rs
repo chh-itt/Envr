@@ -8,7 +8,7 @@ use crate::app::{AppState, Message, Route};
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
 use crate::view::dashboard::dashboard_view;
-use crate::view::downloads::floating_download_panel;
+use crate::view::downloads::{downloads_page_view, floating_download_panel};
 use crate::view::env_center::env_center_view;
 use crate::view::runtime_nav::runtime_nav_bar;
 use crate::view::settings::settings_view;
@@ -190,6 +190,9 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 &state.settings.cache.snapshot().runtime,
                 tokens,
             ));
+        }
+        Route::Downloads => {
+            col = col.push(downloads_page_view(&state.downloads, tokens));
         }
         Route::Settings => {
             col = col.push(settings_view(&state.settings, tokens));

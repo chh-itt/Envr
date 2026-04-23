@@ -187,7 +187,7 @@ pub fn floating_download_panel(
                 let ratio = j.progress_ratio();
                 let line = format_job_state_line(j);
                 let mut actions = row![].spacing(sp.sm as f32);
-                if j.state == JobState::Running && j.cancellable {
+                if matches!(j.state, JobState::Running | JobState::Queued) && j.cancellable {
                     actions = actions.push(
                         button(text(envr_core::i18n::tr_key(
                             "gui.action.cancel",
@@ -214,6 +214,7 @@ pub fn floating_download_panel(
                     );
                 }
                 let status_icon = match j.state {
+                    JobState::Queued => "⏳",
                     JobState::Done => "✅",
                     JobState::Failed => "⚠️",
                     JobState::Cancelled => "🚫",

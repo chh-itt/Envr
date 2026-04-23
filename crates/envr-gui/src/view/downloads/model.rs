@@ -6,10 +6,27 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
+    Queued,
     Running,
     Done,
     Failed,
     Cancelled,
+}
+
+#[derive(Debug, Clone)]
+pub enum DownloadJobPayload {
+    /// GUI runtime install task (spawn_blocking RuntimeService install).
+    RuntimeInstall {
+        kind: envr_domain::runtime::RuntimeKind,
+        spec: String,
+        resolve_precheck: bool,
+        install_and_use: bool,
+    },
+    /// Direct HTTP download (demo / retryable URL).
+    HttpDownload {
+        url: String,
+        dest: std::path::PathBuf,
+    },
 }
 
 pub struct DownloadJob {
@@ -26,6 +43,7 @@ pub struct DownloadJob {
     pub tick_prev_bytes: u64,
     pub tick_prev_at: Option<Instant>,
     pub speed_bps: f64,
+    pub payload: Option<DownloadJobPayload>,
 }
 
 impl DownloadJob {
@@ -58,10 +76,14 @@ impl DownloadJob {
         }
         if self.is_runtime_install_row() && self.has_no_transfer_stats() {
             return match self.state {
+                JobState::Queued => 0.0,
                 JobState::Done => 100.0,
                 JobState::Failed | JobState::Cancelled => 0.0,
                 JobState::Running => 0.0,
             };
+        }
+        if self.state == JobState::Queued {
+            return 0.0;
         }
         let d = self.downloaded.load(Ordering::Relaxed);
         let t = self.total.load(Ordering::Relaxed);

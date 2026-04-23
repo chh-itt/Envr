@@ -9,6 +9,7 @@ pub struct SettingsViewState {
     pub runtime_root_draft: String,
     pub manual_id_draft: String,
     pub max_conc_text: String,
+    pub max_bps_text: String,
     pub retry_text: String,
     pub font_family_draft: String,
     pub accent_color_draft: String,
@@ -28,6 +29,7 @@ impl SettingsViewState {
             runtime_root_draft: String::new(),
             manual_id_draft: String::new(),
             max_conc_text: String::new(),
+            max_bps_text: String::new(),
             retry_text: String::new(),
             font_family_draft: String::new(),
             accent_color_draft: String::new(),
@@ -44,6 +46,7 @@ impl SettingsViewState {
         self.runtime_root_draft = st.paths.runtime_root.clone().unwrap_or_default();
         self.manual_id_draft = st.mirror.manual_id.clone().unwrap_or_default();
         self.max_conc_text = st.download.max_concurrent_downloads.to_string();
+        self.max_bps_text = st.download.max_bytes_per_sec.to_string();
         self.retry_text = st.download.retry_max.to_string();
         self.font_family_draft = st.appearance.font.family.clone().unwrap_or_default();
         self.accent_color_draft = st.appearance.accent_color.clone().unwrap_or_default();
@@ -70,6 +73,13 @@ impl SettingsViewState {
                 "gui.settings.err.max_conc",
                 "download.max_concurrent_downloads 必须是正整数",
                 "download.max_concurrent_downloads must be a positive integer",
+            ))
+        })?;
+        s.download.max_bytes_per_sec = self.max_bps_text.trim().parse().map_err(|_| {
+            envr_error::EnvrError::Validation(envr_core::i18n::tr_key(
+                "gui.settings.err.max_bps",
+                "download.max_bytes_per_sec 必须是整数（0 表示不限制）",
+                "download.max_bytes_per_sec must be an integer (0 = unlimited)",
             ))
         })?;
         s.download.retry_max = self.retry_text.trim().parse().map_err(|_| {

@@ -22,6 +22,7 @@ pub enum SettingsMsg {
     ClearRuntimeRoot,
     ManualIdEdit(String),
     MaxConcEdit(String),
+    MaxBpsEdit(String),
     RetryEdit(String),
     SetMirrorMode(MirrorMode),
     SetCleanup(bool),
@@ -382,6 +383,22 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 &state.max_conc_text,
             )
             .on_input(|s| Message::Settings(SettingsMsg::MaxConcEdit(s)))
+            .padding(sp.xs + 2)
+            .style(text_input_style(tokens)),
+        ]
+        .spacing(sp.xs as f32),
+        column![
+            text(envr_core::i18n::tr_key(
+                "gui.settings.max_bps",
+                "全局下载限速（字节/秒，0 不限制）",
+                "Global bandwidth cap (bytes/sec, 0 = unlimited)",
+            ))
+            .size(ty.caption),
+            text_input(
+                &envr_core::i18n::tr_key("gui.settings.max_bps_example", "例如 10485760", "e.g. 10485760"),
+                &state.max_bps_text,
+            )
+            .on_input(|s| Message::Settings(SettingsMsg::MaxBpsEdit(s)))
             .padding(sp.xs + 2)
             .style(text_input_style(tokens)),
         ]

@@ -27,6 +27,7 @@ clap_complete = { workspace = true }
 envr-config = { path = "../envr-config" }
 envr-core = { path = "../envr-core" }
 envr-domain = { path = "../envr-domain" }
+envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-resolver = { path = "../envr-resolver" }

@@ -935,6 +935,7 @@ dependencies = [
  "envr-config",
  "envr-core",
  "envr-domain",
+ "envr-download",
  "envr-error",
  "envr-platform",
  "envr-resolver",
