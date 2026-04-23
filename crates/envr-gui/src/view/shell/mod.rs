@@ -10,6 +10,7 @@ use crate::theme as gui_theme;
 use crate::view::dashboard::dashboard_view;
 use crate::view::downloads::{downloads_page_view, floating_download_panel};
 use crate::view::env_center::env_center_view;
+use crate::view::runtime_config::runtime_config_view;
 use crate::view::runtime_nav::runtime_nav_bar;
 use crate::view::settings::settings_view;
 use crate::widget_styles::{ButtonVariant, button_content_centered, button_style};
@@ -188,6 +189,19 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                 matches!(state.env_center.kind, RuntimeKind::RLang)
                     .then_some(&state.settings.cache.snapshot().runtime.r),
                 &state.settings.cache.snapshot().runtime,
+                tokens,
+            ));
+        }
+        Route::RuntimeConfig => {
+            col = col.push(runtime_nav_bar(
+                state.env_center.kind,
+                false,
+                &state.settings.cache.snapshot().gui.runtime_layout,
+                tokens,
+            ));
+            col = col.push(runtime_config_view(
+                &state.settings,
+                state.env_center.kind,
                 tokens,
             ));
         }

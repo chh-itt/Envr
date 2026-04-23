@@ -37,15 +37,17 @@ pub enum Route {
     #[default]
     Dashboard,
     Runtime,
+    RuntimeConfig,
     Downloads,
     Settings,
     About,
 }
 
 impl Route {
-    pub(crate) const ALL: [Self; 5] = [
+    pub(crate) const ALL: [Self; 6] = [
         Route::Dashboard,
         Route::Runtime,
+        Route::RuntimeConfig,
         Route::Downloads,
         Route::Settings,
         Route::About,
@@ -57,6 +59,11 @@ impl Route {
                 envr_core::i18n::tr_key("gui.route.dashboard", "仪表盘", "Dashboard")
             }
             Route::Runtime => envr_core::i18n::tr_key("gui.route.runtime", "运行时", "Runtimes"),
+            Route::RuntimeConfig => envr_core::i18n::tr_key(
+                "gui.route.runtime_config",
+                "运行时配置",
+                "Runtime Config",
+            ),
             Route::Downloads => envr_core::i18n::tr_key("gui.route.downloads", "下载", "Downloads"),
             Route::Settings => envr_core::i18n::tr_key("gui.route.settings", "设置", "Settings"),
             Route::About => envr_core::i18n::tr_key("gui.route.about", "关于", "About"),
@@ -364,7 +371,7 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 state.dashboard.last_error = None;
                 return gui_ops::refresh_dashboard();
             }
-            if route == Route::Settings {
+            if matches!(route, Route::Settings | Route::RuntimeConfig) {
                 state.settings.last_message = Some(envr_core::i18n::tr_key(
                     "gui.app.loading",
                     "正在加载…",
@@ -1808,7 +1815,6 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.rust_targets.clear();
             state.env_center.install_input.clear();
             state.env_center.direct_install_input.clear();
-            state.env_center.runtime_settings_expanded = false;
             state.env_center.unified_expanded_major_keys.clear();
             state.env_center.active_install_job_ids.clear();
             if k == envr_domain::runtime::RuntimeKind::Elixir {
@@ -2188,11 +2194,6 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 state.error = Some(e);
             }
             gui_ops::refresh_runtimes(state.env_center.kind)
-        }
-        EnvCenterMsg::ToggleRuntimeSettings => {
-            state.env_center.runtime_settings_expanded =
-                !state.env_center.runtime_settings_expanded;
-            Task::none()
         }
         EnvCenterMsg::SetNodeDownloadSource(src) => {
             persist_runtime_settings_update(state, move |st| {

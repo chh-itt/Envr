@@ -64,8 +64,6 @@ pub enum EnvCenterMsg {
     UseFinished(Result<(), String>),
     SubmitUninstall(String),
     UninstallFinished(Result<(), String>),
-    /// Fold/unfold Node-only settings (download mirror, npm registry, PATH proxy).
-    ToggleRuntimeSettings,
     SetNodeDownloadSource(NodeDownloadSource),
     SetNpmRegistryMode(NpmRegistryMode),
     SetNodePathProxy(bool),
@@ -172,8 +170,6 @@ pub struct EnvCenterState {
     pub direct_install_input: String,
     /// 0..1 phase for skeleton shimmer (`tasks_gui.md` GUI-041).
     pub skeleton_phase: f32,
-    /// Runtime: whether the settings strip is visible (`03-gui-设计.md`).
-    pub runtime_settings_expanded: bool,
     /// Active install job ids (each corresponds to a row in downloads panel).
     pub active_install_job_ids: HashSet<u64>,
     /// Synthetic job id for the current **serialized** env-center operation (Rust page ops, etc.).
@@ -211,7 +207,6 @@ impl Default for EnvCenterState {
             jvm_java_hints: HashMap::new(),
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
-            runtime_settings_expanded: false,
             active_install_job_ids: HashSet::new(),
             op_job_id: None,
             go_proxy_custom_draft: String::new(),
@@ -2720,51 +2715,14 @@ pub fn env_center_view(
     };
 
     let header_title = format!("{}设置", kind_label(state.kind));
-    let show_runtime_fold = envr_domain::runtime::unified_major_list_rollout_enabled(state.kind);
-    let toggle_lbl = if state.runtime_settings_expanded {
-        envr_core::i18n::tr_key(
-            "gui.runtime.settings.advanced_collapse",
-            "收起高级设置",
-            "Hide advanced settings",
-        )
-    } else {
-        envr_core::i18n::tr_key(
-            "gui.runtime.settings.advanced_expand",
-            "展开高级设置",
-            "Show advanced settings",
-        )
-    };
-
-    let toggle_btn = button(button_content_centered(
-        row![
-            Lucide::ChevronsUpDown.view(16.0, gui_theme::to_color(tokens.colors.text)),
-            text(toggle_lbl),
-        ]
-        .spacing(sp.xs as f32)
-        .align_y(Alignment::Center)
-        .into(),
-    ))
-    .on_press_maybe(
-        show_runtime_fold.then_some(Message::EnvCenter(EnvCenterMsg::ToggleRuntimeSettings)),
-    )
-    .height(Length::Fixed(tokens.control_height_secondary))
-    .style(button_style(tokens, ButtonVariant::Secondary));
-
     let cur_el = text(cur_line)
         .size(ty.caption)
         .color(gui_theme::to_color(tokens.colors.text_muted));
 
-    let header_content = if show_runtime_fold {
-        row![text(header_title).size(ty.section), cur_el, toggle_btn,]
-            .spacing(sp.sm as f32)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
-    } else {
-        row![text(header_title).size(ty.section), cur_el]
-            .spacing(sp.sm as f32)
-            .align_y(Alignment::Center)
-            .width(Length::Fill)
-    };
+    let header_content = row![text(header_title).size(ty.section), cur_el]
+        .spacing(sp.sm as f32)
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
 
     let header = container(header_content)
         .padding(Padding::from([sp.md as f32, sp.md as f32]))
@@ -2785,7 +2743,7 @@ pub fn env_center_view(
         .align_y(Alignment::Center)
         .into(),
     ))
-    .on_press(Message::Navigate(Route::Settings))
+    .on_press(Message::Navigate(Route::RuntimeConfig))
     .height(Length::Fixed(tokens.control_height_secondary))
     .style(button_style(tokens, ButtonVariant::Secondary));
 
@@ -2867,25 +2825,7 @@ pub fn env_center_view(
                 .into()
         });
 
-    let runtime_settings_block: Element<'static, Message> = if !state.runtime_settings_expanded {
-        column![].into()
-    } else if matches!(
-        state.kind,
-        RuntimeKind::Node | RuntimeKind::Python | RuntimeKind::Go
-    ) {
-        container(
-            text(envr_core::i18n::tr_key(
-                "gui.runtime.settings.moved_to_settings",
-                "该运行时的下载源/包源配置已迁移到“设置”页面，请使用上方“打开配置页”。",
-                "Download/package source settings moved to the Settings page. Use \"Open config page\" above.",
-            ))
-            .size(ty.micro)
-            .color(gui_theme::to_color(tokens.colors.text_muted)),
-        )
-        .padding(Padding::from([sp.sm as f32, sp.md as f32]))
-        .style(card_container_style(tokens, 1))
-        .into()
-    } else if state.kind == RuntimeKind::Node {
+    let _runtime_settings_block: Element<'static, Message> = if state.kind == RuntimeKind::Node {
         node_runtime
             .map(|n| node_runtime_settings_section(n, tokens))
             .unwrap_or_else(|| column![].into())
@@ -3009,6 +2949,9 @@ pub fn env_center_view(
     } else {
         column![].into()
     };
+
+    // Runtime sub-page detailed settings are migrated to the dedicated Runtime Config page.
+    let runtime_settings_block: Element<'static, Message> = column![].into();
 
     // Search/filter text (we reuse `install_input` field). Actual grouping/sorting is precomputed
     // in `update()` and stored on the state to keep `view()` fast.

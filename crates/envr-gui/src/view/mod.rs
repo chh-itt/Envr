@@ -4,6 +4,7 @@ pub mod empty_state;
 pub mod env_center;
 pub mod loading;
 pub mod runtime_layout;
+pub mod runtime_config;
 pub mod runtime_nav;
 pub mod settings;
 pub mod shell;
