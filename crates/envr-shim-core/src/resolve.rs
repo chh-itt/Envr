@@ -168,6 +168,8 @@ pub enum CoreCommand {
     C3c,
     Bb,
     Sbcl,
+    Haxe,
+    Haxelib,
     Lua,
     Luac,
     Nim,
@@ -210,6 +212,7 @@ impl CoreCommand {
             CoreCommand::C3c => "c3",
             CoreCommand::Bb => "babashka",
             CoreCommand::Sbcl => "sbcl",
+            CoreCommand::Haxe | CoreCommand::Haxelib => "haxe",
             CoreCommand::Lua | CoreCommand::Luac => "lua",
             CoreCommand::Nim => "nim",
             CoreCommand::Crystal => "crystal",
@@ -253,6 +256,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "c3" => vec![home.join("bin"), home.to_path_buf()],
         "babashka" => vec![home.join("bin"), home.to_path_buf()],
         "sbcl" => vec![home.join("bin"), home.to_path_buf()],
+        "haxe" => vec![home.join("bin"), home.to_path_buf()],
         "lua" => vec![home.to_path_buf()],
         "nim" => vec![home.join("bin")],
         "crystal" => envr_domain::crystal_paths::crystal_path_entries(home),
@@ -326,6 +330,10 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "c3" => vec![("C3_HOME".into(), home_env)],
         "babashka" => vec![("BABASHKA_HOME".into(), home_env)],
         "sbcl" => vec![("SBCL_HOME".into(), home_env)],
+        "haxe" => vec![
+            ("HAXE_HOME".into(), home_env.clone()),
+            ("HAXE_STD_PATH".into(), home.join("std").display().to_string()),
+        ],
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "purescript" => vec![("PURESCRIPT_HOME".into(), home_env)],
         "elm" => vec![("ELM_HOME".into(), home_env)],
@@ -510,6 +518,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "c3c" => Some(CoreCommand::C3c),
         "bb" => Some(CoreCommand::Bb),
         "sbcl" => Some(CoreCommand::Sbcl),
+        "haxe" => Some(CoreCommand::Haxe),
+        "haxelib" => Some(CoreCommand::Haxelib),
         "lua" => Some(CoreCommand::Lua),
         "luac" => Some(CoreCommand::Luac),
         "nim" => Some(CoreCommand::Nim),
@@ -1375,6 +1385,26 @@ fn sbcl_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn haxe_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Haxe => Ok(first_existing(&[
+            home.join("haxe.exe"),
+            home.join("haxe"),
+            home.join("bin").join("haxe.exe"),
+            home.join("bin").join("haxe"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("haxe missing under {}", home.display())))?),
+        CoreCommand::Haxelib => Ok(first_existing(&[
+            home.join("haxelib.exe"),
+            home.join("haxelib"),
+            home.join("bin").join("haxelib.exe"),
+            home.join("bin").join("haxelib"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("haxelib missing under {}", home.display())))?),
+        _ => Err(EnvrError::Runtime("internal: not a haxe tool".into())),
+    }
+}
+
 fn lua_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
         CoreCommand::Lua => lua_binaries::resolve_lua_interpreter_exe(home)
@@ -1459,6 +1489,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::C3c => c3_tool_path(home, cmd),
         CoreCommand::Bb => babashka_tool_path(home, cmd),
         CoreCommand::Sbcl => sbcl_tool_path(home, cmd),
+        CoreCommand::Haxe | CoreCommand::Haxelib => haxe_tool_path(home, cmd),
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(home, cmd),
         CoreCommand::Nim => nim_tool_path(home, cmd),
         CoreCommand::Crystal => crystal_tool_path(home, cmd),
@@ -1632,6 +1663,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::C3c => "c3c",
         CoreCommand::Bb => "bb",
         CoreCommand::Sbcl => "sbcl",
+        CoreCommand::Haxe => "haxe",
+        CoreCommand::Haxelib => "haxelib",
         CoreCommand::Lua => "lua",
         CoreCommand::Luac => "luac",
         CoreCommand::Nim => "nim",
@@ -1761,6 +1794,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::C3c => c3_tool_path(&home, cmd)?,
         CoreCommand::Bb => babashka_tool_path(&home, cmd)?,
         CoreCommand::Sbcl => sbcl_tool_path(&home, cmd)?,
+        CoreCommand::Haxe | CoreCommand::Haxelib => haxe_tool_path(&home, cmd)?,
         CoreCommand::Lua | CoreCommand::Luac => lua_tool_path(&home, cmd)?,
         CoreCommand::Nim => nim_tool_path(&home, cmd)?,
         CoreCommand::Crystal => crystal_tool_path(&home, cmd)?,
@@ -1863,6 +1897,8 @@ mod tests {
         assert_eq!(parse_core_command("c3c"), Some(CoreCommand::C3c));
         assert_eq!(parse_core_command("bb"), Some(CoreCommand::Bb));
         assert_eq!(parse_core_command("sbcl"), Some(CoreCommand::Sbcl));
+        assert_eq!(parse_core_command("haxe"), Some(CoreCommand::Haxe));
+        assert_eq!(parse_core_command("haxelib"), Some(CoreCommand::Haxelib));
         assert_eq!(parse_core_command("lua"), Some(CoreCommand::Lua));
         assert_eq!(parse_core_command("luac"), Some(CoreCommand::Luac));
         assert_eq!(parse_core_command("nim"), Some(CoreCommand::Nim));

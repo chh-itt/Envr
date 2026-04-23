@@ -770,6 +770,9 @@ pub struct RuntimeSettings {
     pub sbcl: SbclRuntimeSettings,
 
     #[serde(default)]
+    pub haxe: HaxeRuntimeSettings,
+
+    #[serde(default)]
     pub lua: LuaRuntimeSettings,
 
     #[serde(default)]
@@ -1050,6 +1053,21 @@ impl Default for SbclRuntimeSettings {
     fn default() -> Self {
         Self {
             path_proxy_enabled: defaults::sbcl_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HaxeRuntimeSettings {
+    /// When false, haxe/haxelib shims resolve to the next matching binaries on PATH outside envr shims.
+    #[serde(default = "defaults::haxe_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for HaxeRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::haxe_path_proxy_enabled(),
         }
     }
 }
@@ -2247,6 +2265,10 @@ mod defaults {
         true
     }
 
+    pub fn haxe_path_proxy_enabled() -> bool {
+        true
+    }
+
     pub fn lua_path_proxy_enabled() -> bool {
         true
     }
@@ -2375,6 +2397,7 @@ mod tests {
                 c3: C3RuntimeSettings::default(),
                 babashka: BabashkaRuntimeSettings::default(),
                 sbcl: SbclRuntimeSettings::default(),
+                haxe: HaxeRuntimeSettings::default(),
                 lua: LuaRuntimeSettings::default(),
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),

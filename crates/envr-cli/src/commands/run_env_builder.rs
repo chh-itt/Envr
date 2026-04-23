@@ -44,6 +44,7 @@ pub(crate) const RUN_STACK_LANG_ORDER: &[&str] = &[
     "c3",
     "babashka",
     "sbcl",
+    "haxe",
     "lua",
     "nim",
     "crystal",

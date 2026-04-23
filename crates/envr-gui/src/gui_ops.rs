@@ -974,7 +974,7 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
             let to_core_stems = [
                 "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
                 "bunx", "crystal", "perl", "lua", "luac", "r", "rscript", "janet", "jpm", "c3c",
-                "bb", "sbcl",
+                "bb", "sbcl", "haxe", "haxelib",
             ];
 
             for to_root in roots {

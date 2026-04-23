@@ -188,6 +188,10 @@ path_proxy_enabled = true
 # 当为 false 时，sbcl shim 将透传到系统 PATH 中的 sbcl 可执行文件
 path_proxy_enabled = true
 
+[runtime.haxe]
+# 当为 false 时，haxe / haxelib shim 将透传到系统 PATH 中的同名可执行文件
+path_proxy_enabled = true
+
 [runtime.lua]
 # 当为 false 时，lua / luac shim 将透传到系统 PATH 中的同名可执行文件
 path_proxy_enabled = true

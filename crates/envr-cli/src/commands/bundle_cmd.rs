@@ -149,6 +149,7 @@ fn create_inner(
             RuntimeKind::C3,
             RuntimeKind::Babashka,
             RuntimeKind::Sbcl,
+            RuntimeKind::Haxe,
             RuntimeKind::Lua,
             RuntimeKind::Nim,
             RuntimeKind::Crystal,

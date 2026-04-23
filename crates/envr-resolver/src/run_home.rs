@@ -148,7 +148,7 @@ pub fn resolve_run_lang_home(
         "go" => resolve_go_home(ctx, cfg, None),
         "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "groovy" | "terraform"
         | "v" | "odin" | "purescript" | "elm" | "gleam" | "racket" | "dart" | "flutter"
-        | "zig" | "julia" | "janet" | "c3" | "babashka" | "sbcl" | "lua" | "nim" | "crystal" | "perl"
+        | "zig" | "julia" | "janet" | "c3" | "babashka" | "sbcl" | "haxe" | "lua" | "nim" | "crystal" | "perl"
         | "r" | "elixir"
         | "erlang" => {
             resolve_runtime_home_for_lang(ctx, lang, None)

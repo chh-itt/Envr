@@ -2190,6 +2190,12 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.sbcl.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetHaxePathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Haxe,
+            on,
+            |st, on| st.runtime.haxe.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetLuaPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Lua,

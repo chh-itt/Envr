@@ -976,6 +976,7 @@ dependencies = [
  "envr-runtime-gleam",
  "envr-runtime-go",
  "envr-runtime-groovy",
+ "envr-runtime-haxe",
  "envr-runtime-janet",
  "envr-runtime-java",
  "envr-runtime-julia",
@@ -1317,6 +1318,21 @@ dependencies = [
  "envr-error",
  "envr-platform",
  "envr-shim-core",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-haxe"
+version = "0.1.0"
+dependencies = [
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
  "regex",
  "reqwest",
  "serde",

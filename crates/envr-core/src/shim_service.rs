@@ -97,6 +97,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::C3 => &[(CoreCommand::C3c, "c3c")],
         RuntimeKind::Babashka => &[(CoreCommand::Bb, "bb")],
         RuntimeKind::Sbcl => &[(CoreCommand::Sbcl, "sbcl")],
+        RuntimeKind::Haxe => &[
+            (CoreCommand::Haxe, "haxe"),
+            (CoreCommand::Haxelib, "haxelib"),
+        ],
         RuntimeKind::Lua => &[(CoreCommand::Lua, "lua"), (CoreCommand::Luac, "luac")],
         RuntimeKind::Nim => &[(CoreCommand::Nim, "nim")],
         RuntimeKind::Crystal => &[(CoreCommand::Crystal, "crystal")],
@@ -648,6 +652,8 @@ fn is_global_skip_stem(stem: &str) -> bool {
             | "jpm"
             | "bb"
             | "sbcl"
+            | "haxe"
+            | "haxelib"
             | "dart"
             | "flutter"
             | "php"

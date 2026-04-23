@@ -63,6 +63,7 @@ fn major_line_key(kind: RuntimeKind, v: &str) -> String {
         | RuntimeKind::C3
         | RuntimeKind::Babashka
         | RuntimeKind::Sbcl
+        | RuntimeKind::Haxe
         | RuntimeKind::Lua
         | RuntimeKind::Kotlin
         | RuntimeKind::Scala
