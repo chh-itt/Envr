@@ -171,11 +171,26 @@ fn ensure_erlang_runtime_available() -> EnvrResult<()> {
 
     match cmd.output() {
         Ok(out) if out.status.success() => Ok(()),
-        Ok(_) => Err(EnvrError::Runtime(
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+            if let Some(diag) = envr_platform::process::classify_exit_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Elixir),
+                "erlang runtime check",
+                out.status,
+                &stderr,
+            ) {
+                return Err(EnvrError::Runtime(diag));
+            }
+            Err(EnvrError::Runtime(
             "Erlang/OTP runtime check failed: `erl` is present but not runnable. Install or repair Erlang/OTP, then retry Elixir install.".into(),
-        )),
-        Err(_) => Err(EnvrError::Runtime(
-            "missing Erlang/OTP runtime: `erl` (`erl.exe` on Windows) was not found on PATH. Install Erlang/OTP first, then retry Elixir install.".into(),
+            ))
+        }
+        Err(e) => Err(EnvrError::Runtime(
+            envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Elixir),
+                "erlang runtime check",
+                &e,
+            ),
         )),
     }
 }
@@ -230,11 +245,26 @@ fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<
     }
     let out = cmd
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("elixir --version failed to start: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Elixir),
+                "elixir --version",
+                &e,
+            ))
+        })?;
     if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        if let Some(diag) = envr_platform::process::classify_exit_failure_message(
+            Some(envr_domain::runtime::RuntimeKind::Elixir),
+            "elixir --version",
+            out.status,
+            &stderr,
+        ) {
+            return Err(EnvrError::Runtime(diag));
+        }
         return Err(EnvrError::Runtime(format!(
             "elixir --version failed: {}",
-            String::from_utf8_lossy(&out.stderr)
+            stderr
         )));
     }
     Ok(())

@@ -55,7 +55,11 @@ pub enum EnvCenterMsg {
     SubmitInstallAndUse(String),
     SubmitDirectInstall,
     SubmitDirectInstallAndUse,
-    InstallFinished(Result<RuntimeVersion, String>),
+    InstallFinished {
+        job_id: u64,
+        kind: RuntimeKind,
+        result: Result<RuntimeVersion, String>,
+    },
     SubmitUse(String),
     UseFinished(Result<(), String>),
     SubmitUninstall(String),
@@ -156,6 +160,7 @@ pub struct EnvCenterState {
     pub current: Option<RuntimeVersion>,
     /// Global PHP build for `current` (`true` = TS). Only used when [`Self::kind`] is PHP.
     pub php_global_current_want_ts: Option<bool>,
+    /// Busy for operations that must be serialized (e.g. `use`, `uninstall`, and Rust page actions).
     pub busy: bool,
     /// Non-fatal remote fetch/parse error shown inline (keeps global UI usable).
     pub remote_error: Option<String>,
@@ -169,7 +174,9 @@ pub struct EnvCenterState {
     pub skeleton_phase: f32,
     /// Runtime: whether the settings strip is visible (`03-gui-设计.md`).
     pub runtime_settings_expanded: bool,
-    /// Synthetic job shown in downloads panel for current env-center operation.
+    /// Active install job ids (each corresponds to a row in downloads panel).
+    pub active_install_job_ids: HashSet<u64>,
+    /// Synthetic job id for the current **serialized** env-center operation (Rust page ops, etc.).
     pub op_job_id: Option<u64>,
     /// Draft for `runtime.go.proxy_custom` (applied via [`EnvCenterMsg::ApplyGoNetworkSettings`]).
     pub go_proxy_custom_draft: String,
@@ -205,6 +212,7 @@ impl Default for EnvCenterState {
             direct_install_input: String::new(),
             skeleton_phase: 0.0,
             runtime_settings_expanded: false,
+            active_install_job_ids: HashSet::new(),
             op_job_id: None,
             go_proxy_custom_draft: String::new(),
             go_private_patterns_draft: String::new(),

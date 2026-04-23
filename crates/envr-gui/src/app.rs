@@ -1568,6 +1568,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.direct_install_input.clear();
             state.env_center.runtime_settings_expanded = false;
             state.env_center.unified_expanded_major_keys.clear();
+            state.env_center.active_install_job_ids.clear();
             if k == envr_domain::runtime::RuntimeKind::Elixir {
                 state.env_center.elixir_prereq_error = None;
             }
@@ -1727,9 +1728,6 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             Task::none()
         }
         EnvCenterMsg::SubmitDirectInstall => {
-            if state.env_center.busy {
-                return Task::none();
-            }
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
                 return Task::none();
@@ -1750,15 +1748,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 ));
                 return Task::none();
             }
-            state.env_center.busy = true;
             state.error = None;
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
                 true,
             );
-            state.env_center.op_job_id = Some(id);
+            state.env_center.active_install_job_ids.insert(id);
             gui_ops::install_version_with_resolve_precheck(
+                id,
                 state.env_center.kind,
                 spec,
                 downloaded,
@@ -1767,7 +1765,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             )
         }
         EnvCenterMsg::SubmitDirectInstallAndUse => {
-            if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
+            if runtime_path_proxy_blocks_use(state) {
                 return Task::none();
             }
             let spec = state.env_center.direct_install_input.trim().to_string();
@@ -1790,15 +1788,15 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                 ));
                 return Task::none();
             }
-            state.env_center.busy = true;
             state.error = None;
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
                 true,
             );
-            state.env_center.op_job_id = Some(id);
+            state.env_center.active_install_job_ids.insert(id);
             gui_ops::install_then_use_with_resolve_precheck(
+                id,
                 state.env_center.kind,
                 spec,
                 downloaded,
@@ -1807,46 +1805,42 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             )
         }
         EnvCenterMsg::SubmitInstall(spec) => {
-            if state.env_center.busy {
-                return Task::none();
-            }
             if spec.trim().is_empty() {
                 return Task::none();
             }
-            state.env_center.busy = true;
             state.error = None;
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, false),
                 true,
             );
-            state.env_center.op_job_id = Some(id);
-            gui_ops::install_version(state.env_center.kind, spec, downloaded, total, cancel)
+            state.env_center.active_install_job_ids.insert(id);
+            gui_ops::install_version(id, state.env_center.kind, spec, downloaded, total, cancel)
         }
         EnvCenterMsg::SubmitInstallAndUse(spec) => {
-            if state.env_center.busy || runtime_path_proxy_blocks_use(state) {
+            if runtime_path_proxy_blocks_use(state) {
                 return Task::none();
             }
             if spec.trim().is_empty() {
                 return Task::none();
             }
-            state.env_center.busy = true;
             state.error = None;
             let (id, downloaded, total, cancel) = enqueue_runtime_install_job(
                 state,
                 runtime_install_task_label(state.env_center.kind, &spec, true),
                 true,
             );
-            state.env_center.op_job_id = Some(id);
-            gui_ops::install_then_use(state.env_center.kind, spec, downloaded, total, cancel)
+            state.env_center.active_install_job_ids.insert(id);
+            gui_ops::install_then_use(id, state.env_center.kind, spec, downloaded, total, cancel)
         }
-        EnvCenterMsg::InstallFinished(res) => {
-            state.env_center.busy = false;
-            let kind = state.env_center.kind;
-            if let Some(id) = state.env_center.op_job_id.take()
-                && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
-            {
-                match &res {
+        EnvCenterMsg::InstallFinished {
+            job_id,
+            kind,
+            result,
+        } => {
+            state.env_center.active_install_job_ids.remove(&job_id);
+            if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == job_id) {
+                match &result {
                     Ok(_) => {
                         j.state = JobState::Done;
                         let d = j.downloaded.load(Ordering::Relaxed);
@@ -1867,7 +1861,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     }
                 }
             }
-            match &res {
+            match &result {
                 Ok(v) => {
                     tracing::info!(version = %v.0, "gui install ok");
                     // `install_input` is now the search keyword; keep it for better feedback.
@@ -1878,7 +1872,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     }
                 }
             }
-            match res {
+            match result {
                 Ok(_) => {
                     let mut tasks = vec![
                         gui_ops::sync_shims_for_kind(kind),

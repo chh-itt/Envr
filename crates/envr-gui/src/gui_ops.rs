@@ -527,6 +527,7 @@ pub fn invalidate_unified_list_disk_cache(kind: RuntimeKind) -> Task<Message> {
 
 /// Like [`install_version`], but runs [`RuntimeService::resolve`] first so invalid specs fail before download.
 pub fn install_version_with_resolve_precheck(
+    job_id: u64,
     kind: RuntimeKind,
     spec: String,
     progress_downloaded: Arc<AtomicU64>,
@@ -561,15 +562,28 @@ pub fn install_version_with_resolve_precheck(
             })
             .await;
         let msg = match res {
-            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
-            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
-            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Ok(v),
+            },
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e),
+            },
+            Err(e) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e.to_string()),
+            },
         };
         Message::EnvCenter(msg)
     })
 }
 
 pub fn install_version(
+    job_id: u64,
     kind: RuntimeKind,
     spec: String,
     progress_downloaded: Arc<AtomicU64>,
@@ -601,9 +615,21 @@ pub fn install_version(
             })
             .await;
         let msg = match res {
-            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
-            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
-            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Ok(v),
+            },
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e),
+            },
+            Err(e) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e.to_string()),
+            },
         };
         Message::EnvCenter(msg)
     })
@@ -611,6 +637,7 @@ pub fn install_version(
 
 /// Like [`install_then_use`], but resolves the spec before install (fail fast on bad input).
 pub fn install_then_use_with_resolve_precheck(
+    job_id: u64,
     kind: RuntimeKind,
     spec: String,
     progress_downloaded: Arc<AtomicU64>,
@@ -644,15 +671,28 @@ pub fn install_then_use_with_resolve_precheck(
             })
             .await;
         let msg = match res {
-            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
-            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
-            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Ok(v),
+            },
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e),
+            },
+            Err(e) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e.to_string()),
+            },
         };
         Message::EnvCenter(msg)
     })
 }
 
 pub fn install_then_use(
+    job_id: u64,
     kind: RuntimeKind,
     spec: String,
     progress_downloaded: Arc<AtomicU64>,
@@ -689,9 +729,21 @@ pub fn install_then_use(
             })
             .await;
         let msg = match res {
-            Ok(Ok(v)) => EnvCenterMsg::InstallFinished(Ok(v)),
-            Ok(Err(e)) => EnvCenterMsg::InstallFinished(Err(e)),
-            Err(e) => EnvCenterMsg::InstallFinished(Err(e.to_string())),
+            Ok(Ok(v)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Ok(v),
+            },
+            Ok(Err(e)) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e),
+            },
+            Err(e) => EnvCenterMsg::InstallFinished {
+                job_id,
+                kind,
+                result: Err(e.to_string()),
+            },
         };
         Message::EnvCenter(msg)
     })

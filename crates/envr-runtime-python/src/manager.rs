@@ -343,7 +343,13 @@ fn run_get_pip(
         )
         .current_dir(home)
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("get-pip: {e}")))
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Python),
+                "get-pip.py",
+                &e,
+            ))
+        })
 }
 
 fn bootstrap_pip_windows(
@@ -463,15 +469,30 @@ fn verify_windows_pip_launcher(home: &Path) -> EnvrResult<()> {
         .arg("--version")
         .current_dir(home)
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("pip.exe probe: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Python),
+                "pip.exe probe",
+                &e,
+            ))
+        })?;
     if out.status.success() {
         return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    if let Some(diag) = envr_platform::process::classify_exit_failure_message(
+        Some(envr_domain::runtime::RuntimeKind::Python),
+        "pip.exe probe",
+        out.status,
+        &stderr,
+    ) {
+        return Err(EnvrError::Runtime(diag));
     }
     Err(EnvrError::Runtime(format!(
         "pip.exe failed after install (exit={}); stdout={}; stderr={}",
         out.status,
         String::from_utf8_lossy(&out.stdout).trim(),
-        String::from_utf8_lossy(&out.stderr).trim()
+        stderr.trim()
     )))
 }
 
@@ -491,7 +512,13 @@ fn ensure_windows_pip_launchers(home: &Path) -> EnvrResult<()> {
         .args(["-m", "ensurepip", "--upgrade", "--default-pip"])
         .current_dir(home)
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("ensurepip: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Python),
+                "ensurepip",
+                &e,
+            ))
+        })?;
 
     if ensure.status.success() && pip_launcher_path(home).is_file() {
         return verify_windows_pip_launcher(home);
@@ -563,7 +590,13 @@ fn verify_python_and_pip(home: &Path) -> EnvrResult<()> {
     let first = Command::new(&py)
         .args(["-m", "pip", "--version"])
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("pip check: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Python),
+                "python -m pip --version",
+                &e,
+            ))
+        })?;
     if first.status.success() {
         #[cfg(windows)]
         ensure_windows_pip_launchers(home)?;
@@ -574,12 +607,24 @@ fn verify_python_and_pip(home: &Path) -> EnvrResult<()> {
     let ensure = Command::new(&py)
         .args(["-m", "ensurepip", "--upgrade"])
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("ensurepip check: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Python),
+                "python -m ensurepip --upgrade",
+                &e,
+            ))
+        })?;
     if ensure.status.success() {
         let second = Command::new(&py)
             .args(["-m", "pip", "--version"])
             .output()
-            .map_err(|e| EnvrError::Runtime(format!("pip re-check: {e}")))?;
+            .map_err(|e| {
+                EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                    Some(envr_domain::runtime::RuntimeKind::Python),
+                    "python -m pip --version (re-check)",
+                    &e,
+                ))
+            })?;
         if second.status.success() {
             #[cfg(windows)]
             ensure_windows_pip_launchers(home)?;
