@@ -667,6 +667,14 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             state.settings.draft.runtime.python.pip_registry_mode = mode;
             Task::none()
         }
+        SettingsMsg::NpmRegistryUrlEdit(s) => {
+            state.settings.npm_registry_url_draft = s;
+            Task::none()
+        }
+        SettingsMsg::PipIndexUrlEdit(s) => {
+            state.settings.pip_index_url_draft = s;
+            Task::none()
+        }
         SettingsMsg::SetGoProxyMode(mode) => {
             state.settings.draft.runtime.go.proxy_mode = mode;
             Task::none()
@@ -1031,23 +1039,42 @@ fn apply_pip_registry_config(settings: &Settings) -> Result<(), String> {
     ) {
         return Ok(());
     }
-    let index_urls = envr_config::settings::pip_registry_urls_for_bootstrap(settings);
-    let Some(index_url) = index_urls.first().copied() else {
-        return Ok(());
+    let (index_url, extra) = match settings.runtime.python.pip_registry_mode {
+        envr_config::settings::PipRegistryMode::Custom => {
+            let Some(u) = settings
+                .runtime
+                .python
+                .pip_index_url_custom
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            else {
+                return Ok(());
+            };
+            (u.to_string(), None)
+        }
+        _ => {
+            let index_urls = envr_config::settings::pip_registry_urls_for_bootstrap(settings);
+            let Some(index_url) = index_urls.first().copied() else {
+                return Ok(());
+            };
+            let extra = if index_urls.len() > 1 {
+                Some(
+                    index_urls
+                        .iter()
+                        .skip(1)
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                )
+            } else {
+                None
+            };
+            (index_url.to_string(), extra)
+        }
     };
-    let extra = if index_urls.len() > 1 {
-        Some(
-            index_urls
-                .iter()
-                .skip(1)
-                .copied()
-                .collect::<Vec<_>>()
-                .join(" "),
-        )
-    } else {
-        None
-    };
-    let host = reqwest::Url::parse(index_url)
+
+    let host = reqwest::Url::parse(&index_url)
         .ok()
         .and_then(|u| u.host_str().map(|s| s.to_string()))
         .ok_or_else(|| format!("invalid pip index url: {index_url}"))?;
@@ -1060,7 +1087,7 @@ fn apply_pip_registry_config(settings: &Settings) -> Result<(), String> {
         existing
     };
     for p in targets {
-        write_pip_user_ini(&p, index_url, &host, extra.as_deref())?;
+        write_pip_user_ini(&p, &index_url, &host, extra.as_deref())?;
     }
     Ok(())
 }
@@ -1072,8 +1099,8 @@ fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
         async move {
             settings.validate().map_err(|e| e.to_string())?;
             settings.save_to(&path).map_err(|e| e.to_string())?;
-            if let Some(url) = envr_config::settings::npm_registry_url_to_apply(&settings)
-                && let Err(e) = apply_npm_registry_cli(url)
+            if let Some(url) = envr_config::settings::npm_registry_url_to_apply_owned(&settings)
+                && let Err(e) = apply_npm_registry_cli(&url)
             {
                 tracing::warn!(%e, "npm config set registry skipped after settings save");
             }

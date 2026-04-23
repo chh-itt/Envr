@@ -278,6 +278,8 @@ pub enum NpmRegistryMode {
     Auto,
     Domestic,
     Official,
+    /// Use a user-provided URL in `runtime.node.npm_registry_url_custom`.
+    Custom,
     /// Do not run `npm config set`; user may use a custom registry.
     Restore,
 }
@@ -300,6 +302,8 @@ pub enum PipRegistryMode {
     Auto,
     Domestic,
     Official,
+    /// Use a user-provided URL in `runtime.python.pip_index_url_custom`.
+    Custom,
     /// Do not force `--index-url` during bootstrap.
     Restore,
 }
@@ -424,6 +428,9 @@ pub struct NodeRuntimeSettings {
     pub download_source: NodeDownloadSource,
     #[serde(default)]
     pub npm_registry_mode: NpmRegistryMode,
+    /// Used when `npm_registry_mode = "custom"`.
+    #[serde(default)]
+    pub npm_registry_url_custom: Option<String>,
     /// When false, Node/npm/npx shims resolve to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::node_path_proxy_enabled")]
     pub path_proxy_enabled: bool,
@@ -434,6 +441,7 @@ impl Default for NodeRuntimeSettings {
         Self {
             download_source: NodeDownloadSource::default(),
             npm_registry_mode: NpmRegistryMode::default(),
+            npm_registry_url_custom: None,
             path_proxy_enabled: defaults::node_path_proxy_enabled(),
         }
     }
@@ -448,6 +456,9 @@ pub struct PythonRuntimeSettings {
     pub windows_distribution: PythonWindowsDistribution,
     #[serde(default)]
     pub pip_registry_mode: PipRegistryMode,
+    /// Used when `pip_registry_mode = "custom"`.
+    #[serde(default)]
+    pub pip_index_url_custom: Option<String>,
     /// When false, python/pip shims resolve to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::python_path_proxy_enabled")]
     pub path_proxy_enabled: bool,
@@ -459,6 +470,7 @@ impl Default for PythonRuntimeSettings {
             download_source: PythonDownloadSource::default(),
             windows_distribution: PythonWindowsDistribution::default(),
             pip_registry_mode: PipRegistryMode::default(),
+            pip_index_url_custom: None,
             path_proxy_enabled: defaults::python_path_proxy_enabled(),
         }
     }
@@ -1280,6 +1292,20 @@ impl Settings {
                 "runtime.go.proxy_custom must not be whitespace-only".to_string(),
             ));
         }
+        if let Some(ref v) = self.runtime.node.npm_registry_url_custom
+            && v.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.node.npm_registry_url_custom must not be whitespace-only".to_string(),
+            ));
+        }
+        if let Some(ref v) = self.runtime.python.pip_index_url_custom
+            && v.trim().is_empty()
+        {
+            return Err(EnvrError::Validation(
+                "runtime.python.pip_index_url_custom must not be whitespace-only".to_string(),
+            ));
+        }
         if self.runtime.go.proxy_mode == GoProxyMode::Custom
             && self
                 .runtime
@@ -1296,6 +1322,32 @@ impl Settings {
         {
             return Err(EnvrError::Validation(
                 "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom"
+                    .to_string(),
+            ));
+        }
+        if self.runtime.node.npm_registry_mode == NpmRegistryMode::Custom
+            && self
+                .runtime
+                .node
+                .npm_registry_url_custom
+                .as_deref()
+                .is_none_or(|s| s.trim().is_empty())
+        {
+            return Err(EnvrError::Validation(
+                "runtime.node.npm_registry_url_custom is required when runtime.node.npm_registry_mode = custom"
+                    .to_string(),
+            ));
+        }
+        if self.runtime.python.pip_registry_mode == PipRegistryMode::Custom
+            && self
+                .runtime
+                .python
+                .pip_index_url_custom
+                .as_deref()
+                .is_none_or(|s| s.trim().is_empty())
+        {
+            return Err(EnvrError::Validation(
+                "runtime.python.pip_index_url_custom is required when runtime.python.pip_registry_mode = custom"
                     .to_string(),
             ));
         }
@@ -1689,11 +1741,37 @@ pub fn npm_registry_url_to_apply(settings: &Settings) -> Option<&'static str> {
         NpmRegistryMode::Restore => None,
         NpmRegistryMode::Official => Some(NPM_REGISTRY_OFFICIAL),
         NpmRegistryMode::Domestic => Some(NPM_REGISTRY_DOMESTIC),
+        NpmRegistryMode::Custom => None,
         NpmRegistryMode::Auto => Some(if prefer_china_mirrors(settings) {
             NPM_REGISTRY_DOMESTIC
         } else {
             NPM_REGISTRY_OFFICIAL
         }),
+    }
+}
+
+/// Owned version: supports `custom` URLs.
+pub fn npm_registry_url_to_apply_owned(settings: &Settings) -> Option<String> {
+    match settings.runtime.node.npm_registry_mode {
+        NpmRegistryMode::Restore => None,
+        NpmRegistryMode::Official => Some(NPM_REGISTRY_OFFICIAL.to_string()),
+        NpmRegistryMode::Domestic => Some(NPM_REGISTRY_DOMESTIC.to_string()),
+        NpmRegistryMode::Auto => Some(
+            if prefer_china_mirrors(settings) {
+                NPM_REGISTRY_DOMESTIC
+            } else {
+                NPM_REGISTRY_OFFICIAL
+            }
+            .to_string(),
+        ),
+        NpmRegistryMode::Custom => settings
+            .runtime
+            .node
+            .npm_registry_url_custom
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
     }
 }
 
@@ -1784,6 +1862,14 @@ pub fn deno_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
                 ]
             }
         }
+        // Not supported for Deno yet; fall back to official.
+        NpmRegistryMode::Custom => vec![
+            (
+                "NPM_CONFIG_REGISTRY".into(),
+                NPM_REGISTRY_OFFICIAL.to_string(),
+            ),
+            ("JSR_URL".into(), JSR_REGISTRY_OFFICIAL.to_string()),
+        ],
     }
 }
 
@@ -1801,6 +1887,8 @@ pub fn bun_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
                 NPM_REGISTRY_OFFICIAL
             }
         }
+        // Not supported for Bun yet; fall back to official.
+        NpmRegistryMode::Custom => NPM_REGISTRY_OFFICIAL,
     };
     vec![("NPM_CONFIG_REGISTRY".into(), npm.to_string())]
 }
@@ -1866,6 +1954,7 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
             PIP_INDEX_DOMESTIC_FALLBACK,
             PIP_INDEX_OFFICIAL,
         ],
+        PipRegistryMode::Custom => vec![PIP_INDEX_OFFICIAL],
         PipRegistryMode::Auto => {
             if prefer_china_mirrors(settings) {
                 vec![
@@ -1877,6 +1966,31 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
                 vec![PIP_INDEX_OFFICIAL]
             }
         }
+    }
+}
+
+/// Owned version: supports `custom` URLs.
+pub fn pip_index_url_for_bootstrap_owned(settings: &Settings) -> Option<String> {
+    match settings.runtime.python.pip_registry_mode {
+        PipRegistryMode::Restore => None,
+        PipRegistryMode::Official => Some(PIP_INDEX_OFFICIAL.to_string()),
+        PipRegistryMode::Domestic => Some(PIP_INDEX_DOMESTIC.to_string()),
+        PipRegistryMode::Auto => Some(
+            if prefer_china_mirrors(settings) {
+                PIP_INDEX_DOMESTIC
+            } else {
+                PIP_INDEX_OFFICIAL
+            }
+            .to_string(),
+        ),
+        PipRegistryMode::Custom => settings
+            .runtime
+            .python
+            .pip_index_url_custom
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
     }
 }
 

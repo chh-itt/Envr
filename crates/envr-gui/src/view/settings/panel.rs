@@ -37,6 +37,8 @@ pub enum SettingsMsg {
     SetLocaleMode(LocaleMode),
     SetNpmRegistryMode(NpmRegistryMode),
     SetPipRegistryMode(PipRegistryMode),
+    NpmRegistryUrlEdit(String),
+    PipIndexUrlEdit(String),
     SetGoProxyMode(GoProxyMode),
     GoProxyCustomEdit(String),
     GoPrivatePatternsEdit(String),

@@ -17,6 +17,8 @@ pub struct SettingsViewState {
     pub go_proxy_custom_draft: String,
     pub go_private_patterns_draft: String,
     pub bun_global_bin_dir_draft: String,
+    pub npm_registry_url_draft: String,
+    pub pip_index_url_draft: String,
     pub last_message: Option<String>,
 }
 
@@ -40,6 +42,8 @@ impl SettingsViewState {
             go_proxy_custom_draft: String::new(),
             go_private_patterns_draft: String::new(),
             bun_global_bin_dir_draft: String::new(),
+            npm_registry_url_draft: String::new(),
+            pip_index_url_draft: String::new(),
             last_message: None,
         };
         s.sync_from_cache().expect("initial settings sync");
@@ -66,6 +70,18 @@ impl SettingsViewState {
             .unwrap_or_default();
         self.go_private_patterns_draft = st.runtime.go.private_patterns.clone().unwrap_or_default();
         self.bun_global_bin_dir_draft = st.runtime.bun.global_bin_dir.clone().unwrap_or_default();
+        self.npm_registry_url_draft = st
+            .runtime
+            .node
+            .npm_registry_url_custom
+            .clone()
+            .unwrap_or_default();
+        self.pip_index_url_draft = st
+            .runtime
+            .python
+            .pip_index_url_custom
+            .clone()
+            .unwrap_or_default();
         Ok(())
     }
 
@@ -134,6 +150,19 @@ impl SettingsViewState {
             None
         } else {
             Some(bbin.to_string())
+        };
+
+        let npm = self.npm_registry_url_draft.trim();
+        s.runtime.node.npm_registry_url_custom = if npm.is_empty() {
+            None
+        } else {
+            Some(npm.to_string())
+        };
+        let pip = self.pip_index_url_draft.trim();
+        s.runtime.python.pip_index_url_custom = if pip.is_empty() {
+            None
+        } else {
+            Some(pip.to_string())
         };
 
         let ac = self.accent_color_draft.trim();

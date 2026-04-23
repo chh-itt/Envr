@@ -339,6 +339,7 @@ fn node_runtime_settings_section(
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
         NpmRegistryMode::Official,
+        NpmRegistryMode::Custom,
         NpmRegistryMode::Restore,
     ] {
         let lab = match mode {
@@ -357,6 +358,11 @@ fn node_runtime_settings_section(
                 "gui.runtime.node.npm.restore",
                 "还原（不修改 npm）",
                 "Restore (leave npm as-is)",
+            ),
+            NpmRegistryMode::Custom => envr_core::i18n::tr_key(
+                "gui.runtime.node.npm.custom",
+                "自定义（配置页）",
+                "Custom (config page)",
             ),
         };
         let variant = if mode == node.npm_registry_mode {
@@ -491,6 +497,7 @@ fn python_runtime_settings_section(
         PipRegistryMode::Auto,
         PipRegistryMode::Domestic,
         PipRegistryMode::Official,
+        PipRegistryMode::Custom,
         PipRegistryMode::Restore,
     ] {
         let lab = match mode {
@@ -511,6 +518,11 @@ fn python_runtime_settings_section(
                 "gui.runtime.python.pip.restore",
                 "还原（不改源）",
                 "Restore (no change)",
+            ),
+            PipRegistryMode::Custom => envr_core::i18n::tr_key(
+                "gui.runtime.python.pip.custom",
+                "自定义（配置页）",
+                "Custom (config page)",
             ),
         };
         let variant = if mode == py.pip_registry_mode {
@@ -1164,6 +1176,7 @@ fn deno_runtime_settings_section(
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
         NpmRegistryMode::Official,
+        NpmRegistryMode::Custom,
         NpmRegistryMode::Restore,
     ];
     let mut pkg_buttons = row![].spacing(-1.0);
@@ -1184,6 +1197,11 @@ fn deno_runtime_settings_section(
                 "gui.runtime.deno.pkg.restore",
                 "还原（不注入）",
                 "Restore (leave as-is)",
+            ),
+            NpmRegistryMode::Custom => envr_core::i18n::tr_key(
+                "gui.runtime.deno.pkg.custom",
+                "自定义（配置页）",
+                "Custom (config page)",
             ),
         };
         let variant = if mode == deno.package_source {
@@ -1307,6 +1325,7 @@ fn bun_runtime_settings_section(
         NpmRegistryMode::Auto,
         NpmRegistryMode::Domestic,
         NpmRegistryMode::Official,
+        NpmRegistryMode::Custom,
         NpmRegistryMode::Restore,
     ];
     let mut pkg_buttons = row![].spacing(-1.0);
@@ -1327,6 +1346,11 @@ fn bun_runtime_settings_section(
                 "gui.runtime.bun.pkg.restore",
                 "还原（不注入）",
                 "Restore (leave as-is)",
+            ),
+            NpmRegistryMode::Custom => envr_core::i18n::tr_key(
+                "gui.runtime.bun.pkg.custom",
+                "自定义（配置页）",
+                "Custom (config page)",
             ),
         };
         let variant = if mode == bun.package_source {

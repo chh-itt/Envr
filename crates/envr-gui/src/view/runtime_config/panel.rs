@@ -1,7 +1,7 @@
 use envr_config::settings::{GoProxyMode, NpmRegistryMode, PipRegistryMode};
 use envr_domain::runtime::RuntimeKind;
 use envr_ui::theme::ThemeTokens;
-use iced::widget::{button, column, container, row, text, text_input, toggler};
+use iced::widget::{button, column, container, pick_list, row, text, text_input, toggler};
 use iced::{Alignment, Element, Length};
 
 use crate::app::Message;
@@ -24,91 +24,108 @@ pub fn runtime_config_view(
     let mut content = column![].spacing(sp.md as f32);
     match active_kind {
         RuntimeKind::Node => {
-            let npm_enabled = state.draft.runtime.node.npm_registry_mode != NpmRegistryMode::Restore;
+            let managed = state.draft.runtime.node.npm_registry_mode != NpmRegistryMode::Restore;
+            let presets = [
+                "",
+                "https://registry.npmjs.org/",
+                "https://registry.npmmirror.com/",
+                "https://mirrors.huaweicloud.com/repository/npm/",
+                "https://mirrors.aliyun.com/npm/",
+            ];
             content = content
                 .push(setting_row(
                     tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.node.npm_enable", "启用 NPM 源配置", "Enable NPM registry config"),
+                    envr_core::i18n::tr_key("gui.runtime.config.node.npm_enable", "托管 NPM registry", "Manage NPM registry"),
                     Some(envr_core::i18n::tr_key(
                         "gui.runtime.config.node.npm_enable_desc",
-                        "未启用时不处理该项（恢复默认行为）。",
-                        "When disabled, this config is not managed (restored behavior).",
+                        "不勾选：不修改用户 npm 配置；勾选：保存后写入 registry。",
+                        "Unchecked: do not touch user npm config; checked: Save writes registry.",
                     )),
-                    toggler(npm_enabled)
-                        .on_toggle(|on| {
-                            Message::Settings(SettingsMsg::SetNpmRegistryMode(if on {
-                                NpmRegistryMode::Auto
-                            } else {
-                                NpmRegistryMode::Restore
-                            }))
-                        })
+                    toggler(managed).on_toggle(|on| {
+                        Message::Settings(SettingsMsg::SetNpmRegistryMode(if on {
+                            NpmRegistryMode::Custom
+                        } else {
+                            NpmRegistryMode::Restore
+                        }))
+                    })
                         .into(),
                 ))
                 .push(setting_row(
                     tokens,
-                    "NPM registry".to_string(),
+                    "registry".to_string(),
                     None,
-                    segmented3(
-                        tokens,
-                        npm_enabled,
-                        state.draft.runtime.node.npm_registry_mode == NpmRegistryMode::Auto,
-                        state.draft.runtime.node.npm_registry_mode == NpmRegistryMode::Domestic,
-                        state.draft.runtime.node.npm_registry_mode == NpmRegistryMode::Official,
-                        envr_core::i18n::tr_key("gui.choice.auto", "自动", "Auto"),
-                        envr_core::i18n::tr_key("gui.choice.domestic", "国内", "Domestic"),
-                        envr_core::i18n::tr_key("gui.choice.official", "官方", "Official"),
-                        Message::Settings(SettingsMsg::SetNpmRegistryMode(NpmRegistryMode::Auto)),
-                        Message::Settings(SettingsMsg::SetNpmRegistryMode(
-                            NpmRegistryMode::Domestic,
-                        )),
-                        Message::Settings(SettingsMsg::SetNpmRegistryMode(
-                            NpmRegistryMode::Official,
-                        )),
-                    ),
+                    text_input(
+                        "https://registry.npmjs.org/",
+                        &state.npm_registry_url_draft,
+                    )
+                    .on_input(|s| Message::Settings(SettingsMsg::NpmRegistryUrlEdit(s)))
+                    .padding(sp.sm)
+                    .width(Length::Fixed(420.0))
+                    .style(text_input_style(tokens))
+                    .into(),
+                ))
+                .push(setting_row(
+                    tokens,
+                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+                    None,
+                    pick_list(
+                        presets,
+                        None::<&'static str>,
+                        |v| Message::Settings(SettingsMsg::NpmRegistryUrlEdit(v.to_string())),
+                    )
+                    .width(Length::Fixed(420.0))
+                    .into(),
                 ));
         }
         RuntimeKind::Python => {
-            let pip_enabled = state.draft.runtime.python.pip_registry_mode != PipRegistryMode::Restore;
+            let managed = state.draft.runtime.python.pip_registry_mode != PipRegistryMode::Restore;
+            let presets = [
+                "",
+                "https://pypi.org/simple",
+                "https://pypi.tuna.tsinghua.edu.cn/simple",
+                "https://mirrors.aliyun.com/pypi/simple",
+                "https://repo.huaweicloud.com/repository/pypi/simple",
+            ];
             content = content
                 .push(setting_row(
                     tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.python.pip_enable", "启用 PIP 源配置", "Enable PIP index config"),
+                    envr_core::i18n::tr_key("gui.runtime.config.python.pip_enable", "托管 PIP index-url", "Manage PIP index-url"),
                     Some(envr_core::i18n::tr_key(
                         "gui.runtime.config.python.pip_enable_desc",
-                        "未启用时不处理该项（恢复默认行为）。",
-                        "When disabled, this config is not managed (restored behavior).",
+                        "不勾选：不修改用户 pip 配置；勾选：保存后写入 pip.ini 的 index-url。",
+                        "Unchecked: do not touch user pip config; checked: Save writes index-url to pip.ini.",
                     )),
-                    toggler(pip_enabled)
-                        .on_toggle(|on| {
-                            Message::Settings(SettingsMsg::SetPipRegistryMode(if on {
-                                PipRegistryMode::Auto
-                            } else {
-                                PipRegistryMode::Restore
-                            }))
-                        })
+                    toggler(managed).on_toggle(|on| {
+                        Message::Settings(SettingsMsg::SetPipRegistryMode(if on {
+                            PipRegistryMode::Custom
+                        } else {
+                            PipRegistryMode::Restore
+                        }))
+                    })
                         .into(),
                 ))
                 .push(setting_row(
                     tokens,
-                    "PIP index".to_string(),
+                    "index-url".to_string(),
                     None,
-                    segmented3(
-                        tokens,
-                        pip_enabled,
-                        state.draft.runtime.python.pip_registry_mode == PipRegistryMode::Auto,
-                        state.draft.runtime.python.pip_registry_mode == PipRegistryMode::Domestic,
-                        state.draft.runtime.python.pip_registry_mode == PipRegistryMode::Official,
-                        envr_core::i18n::tr_key("gui.choice.auto", "自动", "Auto"),
-                        envr_core::i18n::tr_key("gui.choice.domestic", "国内", "Domestic"),
-                        envr_core::i18n::tr_key("gui.choice.official", "官方", "Official"),
-                        Message::Settings(SettingsMsg::SetPipRegistryMode(PipRegistryMode::Auto)),
-                        Message::Settings(SettingsMsg::SetPipRegistryMode(
-                            PipRegistryMode::Domestic,
-                        )),
-                        Message::Settings(SettingsMsg::SetPipRegistryMode(
-                            PipRegistryMode::Official,
-                        )),
-                    ),
+                    text_input("https://pypi.org/simple", &state.pip_index_url_draft)
+                        .on_input(|s| Message::Settings(SettingsMsg::PipIndexUrlEdit(s)))
+                        .padding(sp.sm)
+                        .width(Length::Fixed(420.0))
+                        .style(text_input_style(tokens))
+                        .into(),
+                ))
+                .push(setting_row(
+                    tokens,
+                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+                    None,
+                    pick_list(
+                        presets,
+                        None::<&'static str>,
+                        |v| Message::Settings(SettingsMsg::PipIndexUrlEdit(v.to_string())),
+                    )
+                    .width(Length::Fixed(420.0))
+                    .into(),
                 ));
         }
         RuntimeKind::Go => {
