@@ -593,10 +593,6 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             ));
             persist_settings_draft_task(state)
         }
-        SettingsMsg::ManualIdEdit(s) => {
-            state.settings.manual_id_draft = s;
-            Task::none()
-        }
         SettingsMsg::MaxConcEdit(s) => {
             state.settings.max_conc_text = s;
             Task::none()
@@ -607,10 +603,6 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
         }
         SettingsMsg::RetryEdit(s) => {
             state.settings.retry_text = s;
-            Task::none()
-        }
-        SettingsMsg::SetMirrorMode(m) => {
-            state.settings.draft.mirror.mode = m;
             Task::none()
         }
         SettingsMsg::SetPreferChinaMirrors(v) => {
@@ -657,6 +649,26 @@ fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Message> {
             let mut st = state.settings.draft.clone();
             st.i18n.locale = m;
             state.locale = envr_core::i18n::locale_from_settings(&st);
+            Task::none()
+        }
+        SettingsMsg::SetPythonWindowsDistribution(dist) => {
+            state.settings.draft.runtime.python.windows_distribution = dist;
+            Task::none()
+        }
+        SettingsMsg::SetJavaDistro(distro) => {
+            state.settings.draft.runtime.java.current_distro = distro;
+            Task::none()
+        }
+        SettingsMsg::SetPhpWindowsBuild(build) => {
+            state.settings.draft.runtime.php.windows_build = build;
+            Task::none()
+        }
+        SettingsMsg::SetDenoPackageSource(mode) => {
+            state.settings.draft.runtime.deno.package_source = mode;
+            Task::none()
+        }
+        SettingsMsg::SetBunPackageSource(mode) => {
+            state.settings.draft.runtime.bun.package_source = mode;
             Task::none()
         }
         SettingsMsg::SetNpmRegistryMode(mode) => {

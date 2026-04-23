@@ -1,5 +1,6 @@
 use envr_config::settings::{
-    FontMode, GoProxyMode, LocaleMode, MirrorMode, NpmRegistryMode, PipRegistryMode, ThemeMode,
+    FontMode, GoProxyMode, JavaDistro, LocaleMode, NpmRegistryMode, PhpWindowsBuildFlavor,
+    PipRegistryMode, PythonWindowsDistribution, ThemeMode,
 };
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
@@ -22,11 +23,9 @@ pub enum SettingsMsg {
     BrowseRuntimeRoot,
     RuntimeRootBrowseResult(Option<std::path::PathBuf>),
     ClearRuntimeRoot,
-    ManualIdEdit(String),
     MaxConcEdit(String),
     MaxBpsEdit(String),
     RetryEdit(String),
-    SetMirrorMode(MirrorMode),
     SetPreferChinaMirrors(bool),
     SetCleanup(bool),
     SetFontMode(FontMode),
@@ -35,6 +34,11 @@ pub enum SettingsMsg {
     SetThemeMode(ThemeMode),
     AccentColorEdit(String),
     SetLocaleMode(LocaleMode),
+    SetPythonWindowsDistribution(PythonWindowsDistribution),
+    SetJavaDistro(JavaDistro),
+    SetPhpWindowsBuild(PhpWindowsBuildFlavor),
+    SetDenoPackageSource(NpmRegistryMode),
+    SetBunPackageSource(NpmRegistryMode),
     SetNpmRegistryMode(NpmRegistryMode),
     SetPipRegistryMode(PipRegistryMode),
     NpmRegistryUrlEdit(String),
@@ -128,71 +132,18 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     .spacing(sp.sm as f32)
     .align_y(Alignment::Center);
 
-    let mut mirror_buttons = row![].spacing(-1.0);
-    let mirror_modes = [
-        MirrorMode::Official,
-        MirrorMode::Auto,
-        MirrorMode::Manual,
-        MirrorMode::Offline,
-    ];
-    for (idx, mode) in mirror_modes.iter().copied().enumerate() {
-        let lab = SettingsViewState::mirror_mode_label(mode);
-        let variant = if mode == state.draft.mirror.mode {
-            ButtonVariant::Primary
-        } else {
-            ButtonVariant::Secondary
-        };
-        let h = if mode == state.draft.mirror.mode {
-            tokens.control_height_primary
-        } else {
-            tokens.control_height_secondary
-        };
-        let pos = if mirror_modes.len() == 1 {
-            SegmentPosition::Single
-        } else if idx == 0 {
-            SegmentPosition::Start
-        } else if idx + 1 == mirror_modes.len() {
-            SegmentPosition::End
-        } else {
-            SegmentPosition::Middle
-        };
-        let b = button(button_content_centered(text(lab).into()))
-            .on_press(Message::Settings(SettingsMsg::SetMirrorMode(mode)))
-            .width(Length::Shrink)
-            .height(Length::Fixed(h))
-            .padding([sp.sm as f32, (sp.sm + 2) as f32])
-            .style(segmented_button_style(tokens, variant, pos));
-        mirror_buttons = mirror_buttons.push(b);
-    }
-
-    let manual = if state.draft.mirror.mode == MirrorMode::Manual {
-        column![
-            text(envr_core::i18n::tr_key(
-                "gui.settings.manual_mirror_hint",
-                "manual 模式下请填写镜像 ID（与 envr-mirror 预设一致，如 official、cn-1、cn-2）。",
-                "In manual mode, enter a mirror ID (from envr-mirror presets, e.g. official, cn-1, cn-2).",
-            ))
-            .size(ty.micro),
-            container(
-                text_input("mirror.manual_id", &state.manual_id_draft)
-                    .on_input(|s| Message::Settings(SettingsMsg::ManualIdEdit(s)))
-                    .padding(sp.sm)
-                    .width(Length::Fill)
-                    .style(text_input_style(tokens)),
-            )
-            .width(Length::Fill)
-            .height(Length::Fixed(tokens.control_height_secondary))
-            .align_y(Vertical::Center),
-        ]
-        .spacing((sp.xs + 2) as f32)
-    } else {
-        column![]
-    };
+    let mirror_note = text(envr_core::i18n::tr_key(
+        "gui.settings.mirror_strategy_desc",
+        "镜像策略已统一：默认仅官方源；开启全局 China 开关后，支持国内源的运行时优先国内源，不支持的保持官方源。",
+        "Mirror policy is unified: official-only by default; with the global China switch enabled, runtimes with China mirrors prefer domestic sources, while others stay on official sources.",
+    ))
+    .size(ty.micro)
+    .color(gui_theme::to_color(tokens.colors.text_muted));
     let china_pref = toggler(state.draft.mirror.prefer_china_mirrors)
         .label(envr_core::i18n::tr_key(
             "gui.settings.mirror.prefer_china",
-            "全局 China 开关：支持国内源的运行时在 auto 模式下优先国内源",
-            "Global China switch: runtimes with China mirrors prefer domestic sources in auto mode",
+            "全局 China 开关：支持国内源的运行时优先国内源",
+            "Global China switch: runtimes with China mirrors prefer domestic sources",
         ))
         .on_toggle(|v| Message::Settings(SettingsMsg::SetPreferChinaMirrors(v)));
 
@@ -559,11 +510,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                     "Mirror strategy",
                 ),
                 Some(envr_core::i18n::tr_key(
-                    "gui.settings.mirror_strategy_desc",
-                    "控制运行时下载镜像选择方式。",
-                    "Choose how runtime mirrors are selected.",
+                    "gui.settings.mirror_strategy_mode_fixed",
+                    "策略已固定为「官方优先 + 可选 China 开关」。",
+                    "Policy is fixed to 'official-first + optional China switch'.",
                 )),
-                mirror_buttons.into(),
+                mirror_note.into(),
             ),
             setting_row(
                 tokens,
@@ -575,7 +526,6 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
                 None,
                 china_pref.into(),
             ),
-            manual,
             cleanup,
         ]
         .spacing(sp.md as f32)

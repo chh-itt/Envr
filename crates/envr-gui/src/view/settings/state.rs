@@ -1,4 +1,4 @@
-use envr_config::settings::{FontMode, LocaleMode, MirrorMode, Settings, SettingsCache};
+use envr_config::settings::{FontMode, LocaleMode, Settings, SettingsCache};
 use envr_error::EnvrResult;
 use envr_ui::theme::Srgb;
 
@@ -7,7 +7,6 @@ pub struct SettingsViewState {
     pub cache: SettingsCache,
     pub draft: Settings,
     pub runtime_root_draft: String,
-    pub manual_id_draft: String,
     pub max_conc_text: String,
     pub max_bps_text: String,
     pub retry_text: String,
@@ -32,7 +31,6 @@ impl SettingsViewState {
             cache,
             draft: Settings::default(),
             runtime_root_draft: String::new(),
-            manual_id_draft: String::new(),
             max_conc_text: String::new(),
             max_bps_text: String::new(),
             retry_text: String::new(),
@@ -53,8 +51,9 @@ impl SettingsViewState {
     pub fn sync_from_cache(&mut self) -> EnvrResult<()> {
         let st = self.cache.snapshot().clone();
         self.draft = st.clone();
+        self.draft.mirror.mode = envr_config::settings::MirrorMode::Official;
+        self.draft.mirror.manual_id = None;
         self.runtime_root_draft = st.paths.runtime_root.clone().unwrap_or_default();
-        self.manual_id_draft = st.mirror.manual_id.clone().unwrap_or_default();
         self.max_conc_text = st.download.max_concurrent_downloads.to_string();
         self.max_bps_text = st.download.max_bytes_per_sec.to_string();
         self.retry_text = st.download.retry_max.to_string();
@@ -93,12 +92,8 @@ impl SettingsViewState {
         } else {
             Some(rr.to_string())
         };
-        let mid = self.manual_id_draft.trim();
-        s.mirror.manual_id = if mid.is_empty() {
-            None
-        } else {
-            Some(mid.to_string())
-        };
+        s.mirror.mode = envr_config::settings::MirrorMode::Official;
+        s.mirror.manual_id = None;
         s.download.max_concurrent_downloads = self.max_conc_text.trim().parse().map_err(|_| {
             envr_error::EnvrError::Validation(envr_core::i18n::tr_key(
                 "gui.settings.err.max_conc",
@@ -189,28 +184,6 @@ impl SettingsViewState {
             .unwrap_or(false)
     }
 
-    pub fn mirror_mode_label(m: MirrorMode) -> String {
-        match m {
-            MirrorMode::Official => envr_core::i18n::tr_key(
-                "gui.settings.mirror.official",
-                "official（仅官方）",
-                "official (upstream only)",
-            ),
-            MirrorMode::Auto => envr_core::i18n::tr_key(
-                "gui.settings.mirror.auto",
-                "auto（默认官方；可受全局 China 开关影响）",
-                "auto (official by default; affected by global China switch)",
-            ),
-            MirrorMode::Manual => envr_core::i18n::tr_key(
-                "gui.settings.mirror.manual",
-                "manual（指定镜像 ID）",
-                "manual (specific mirror ID)",
-            ),
-            MirrorMode::Offline => {
-                envr_core::i18n::tr_key("gui.settings.mirror.offline", "offline", "offline")
-            }
-        }
-    }
 }
 
 impl Default for SettingsViewState {
