@@ -31,50 +31,22 @@ pub fn runtime_config_view(
                 "https://mirrors.huaweicloud.com/repository/npm/",
                 "https://mirrors.aliyun.com/npm/",
             ];
-            content = content
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.node.npm_enable", "托管 NPM registry", "Manage NPM registry"),
-                    Some(envr_core::i18n::tr_key(
-                        "gui.runtime.config.node.npm_enable_desc",
-                        "不勾选：不修改用户 npm 配置；勾选：保存后写入 registry。",
-                        "Unchecked: do not touch user npm config; checked: Save writes registry.",
-                    )),
-                    toggler(managed).on_toggle(|on| {
-                        Message::Settings(SettingsMsg::SetNpmRegistryMode(if on {
-                            NpmRegistryMode::Custom
-                        } else {
-                            NpmRegistryMode::Restore
-                        }))
-                    })
-                        .into(),
-                ))
-                .push(setting_row(
-                    tokens,
-                    "registry".to_string(),
-                    None,
-                    text_input(
-                        "https://registry.npmjs.org/",
-                        &state.npm_registry_url_draft,
-                    )
-                    .on_input(|s| Message::Settings(SettingsMsg::NpmRegistryUrlEdit(s)))
-                    .padding(sp.sm)
-                    .width(Length::Fixed(420.0))
-                    .style(text_input_style(tokens))
-                    .into(),
-                ))
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
-                    None,
-                    pick_list(
-                        presets,
-                        None::<&'static str>,
-                        |v| Message::Settings(SettingsMsg::NpmRegistryUrlEdit(v.to_string())),
-                    )
-                    .width(Length::Fixed(420.0))
-                    .into(),
-                ));
+            content = content.push(managed_url_setting_row(
+                tokens,
+                envr_core::i18n::tr_key("gui.runtime.config.node.npm_enable", "托管 NPM registry", "Manage NPM registry"),
+                envr_core::i18n::tr_key(
+                    "gui.runtime.config.node.npm_enable_desc",
+                    "不勾选：不修改用户 npm 配置；勾选：保存后写入 registry。",
+                    "Unchecked: do not touch user npm config; checked: Save writes registry.",
+                ),
+                "registry",
+                managed,
+                msg_npm_toggle,
+                &state.npm_registry_url_draft,
+                "https://registry.npmjs.org/",
+                msg_npm_edit,
+                &presets,
+            ));
         }
         RuntimeKind::Python => {
             let managed = state.draft.runtime.python.pip_registry_mode != PipRegistryMode::Restore;
@@ -85,47 +57,22 @@ pub fn runtime_config_view(
                 "https://mirrors.aliyun.com/pypi/simple",
                 "https://repo.huaweicloud.com/repository/pypi/simple",
             ];
-            content = content
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.python.pip_enable", "托管 PIP index-url", "Manage PIP index-url"),
-                    Some(envr_core::i18n::tr_key(
-                        "gui.runtime.config.python.pip_enable_desc",
-                        "不勾选：不修改用户 pip 配置；勾选：保存后写入 pip.ini 的 index-url。",
-                        "Unchecked: do not touch user pip config; checked: Save writes index-url to pip.ini.",
-                    )),
-                    toggler(managed).on_toggle(|on| {
-                        Message::Settings(SettingsMsg::SetPipRegistryMode(if on {
-                            PipRegistryMode::Custom
-                        } else {
-                            PipRegistryMode::Restore
-                        }))
-                    })
-                        .into(),
-                ))
-                .push(setting_row(
-                    tokens,
-                    "index-url".to_string(),
-                    None,
-                    text_input("https://pypi.org/simple", &state.pip_index_url_draft)
-                        .on_input(|s| Message::Settings(SettingsMsg::PipIndexUrlEdit(s)))
-                        .padding(sp.sm)
-                        .width(Length::Fixed(420.0))
-                        .style(text_input_style(tokens))
-                        .into(),
-                ))
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
-                    None,
-                    pick_list(
-                        presets,
-                        None::<&'static str>,
-                        |v| Message::Settings(SettingsMsg::PipIndexUrlEdit(v.to_string())),
-                    )
-                    .width(Length::Fixed(420.0))
-                    .into(),
-                ));
+            content = content.push(managed_url_setting_row(
+                tokens,
+                envr_core::i18n::tr_key("gui.runtime.config.python.pip_enable", "托管 PIP index-url", "Manage PIP index-url"),
+                envr_core::i18n::tr_key(
+                    "gui.runtime.config.python.pip_enable_desc",
+                    "不勾选：不修改用户 pip 配置；勾选：保存后写入 pip.ini 的 index-url。",
+                    "Unchecked: do not touch user pip config; checked: Save writes index-url to pip.ini.",
+                ),
+                "index-url",
+                managed,
+                msg_pip_toggle,
+                &state.pip_index_url_draft,
+                "https://pypi.org/simple",
+                msg_pip_edit,
+                &presets,
+            ));
         }
         RuntimeKind::Go => {
             let goproxy_managed = state.draft.runtime.go.proxy_mode == GoProxyMode::Custom;
@@ -143,113 +90,37 @@ pub fn runtime_config_view(
                 "gitee.com/your-team/*",
             ];
             content = content
-                .push(setting_row(
+                .push(managed_url_setting_row(
                     tokens,
                     envr_core::i18n::tr_key("gui.runtime.config.go.custom_enable", "托管 GOPROXY", "Manage GOPROXY"),
-                    Some(envr_core::i18n::tr_key(
+                    envr_core::i18n::tr_key(
                         "gui.runtime.config.go.custom_enable_desc",
                         "不勾选：不处理该项；勾选：保存后应用输入值。",
                         "Unchecked: do not manage this; checked: Save applies input value.",
-                    )),
-                    toggler(goproxy_managed)
-                        .on_toggle(|on| {
-                            Message::Settings(SettingsMsg::SetGoProxyMode(if on {
-                                GoProxyMode::Custom
-                            } else {
-                                GoProxyMode::Auto
-                            }))
-                        })
-                        .into(),
+                    ),
+                    "GOPROXY",
+                    goproxy_managed,
+                    msg_go_proxy_toggle,
+                    &state.go_proxy_custom_draft,
+                    "runtime.go.proxy_custom (e.g. https://proxy.golang.org,direct)",
+                    msg_go_proxy_edit,
+                    &proxy_presets,
                 ))
-                .push(setting_row(
-                    tokens,
-                    "GOPROXY".to_string(),
-                    None,
-                    if goproxy_managed {
-                        text_input(
-                            "runtime.go.proxy_custom (e.g. https://proxy.golang.org,direct)",
-                            &state.go_proxy_custom_draft,
-                        )
-                        .on_input(|s| Message::Settings(SettingsMsg::GoProxyCustomEdit(s)))
-                        .padding(sp.sm)
-                        .width(Length::Fixed(420.0))
-                        .style(text_input_style(tokens))
-                        .into()
-                    } else {
-                        text_input(
-                            "runtime.go.proxy_custom (e.g. https://proxy.golang.org,direct)",
-                            &state.go_proxy_custom_draft,
-                        )
-                        .padding(sp.sm)
-                        .width(Length::Fixed(420.0))
-                        .style(text_input_style(tokens))
-                        .into()
-                    },
-                ))
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
-                    None,
-                    pick_list(
-                        proxy_presets,
-                        None::<&'static str>,
-                        |v| Message::Settings(SettingsMsg::GoProxyCustomEdit(v.to_string())),
-                    )
-                    .width(Length::Fixed(420.0))
-                    .into(),
-                ))
-                .push(setting_row(
+                .push(managed_url_setting_row(
                     tokens,
                     envr_core::i18n::tr_key("gui.runtime.config.go.private_enable", "托管 GOPRIVATE", "Manage GOPRIVATE"),
-                    Some(envr_core::i18n::tr_key(
+                    envr_core::i18n::tr_key(
                         "gui.runtime.config.go.private_enable_desc",
                         "不勾选：不处理该项；勾选：保存后应用输入值。",
                         "Unchecked: do not manage this; checked: Save applies input value.",
-                    )),
-                    toggler(goprivate_managed)
-                        .on_toggle(|on| {
-                            Message::Settings(SettingsMsg::GoPrivatePatternsEdit(if on {
-                                "github.com/your-org/*".to_string()
-                            } else {
-                                String::new()
-                            }))
-                        })
-                        .into(),
-                ))
-                .push(setting_row(
-                    tokens,
-                    "GOPRIVATE".to_string(),
-                    Some(envr_core::i18n::tr_key(
-                        "gui.runtime.config.go.private_hint",
-                        "逗号分隔私有模块前缀，例如：github.com/your-org/*",
-                        "Comma-separated private module patterns, e.g. github.com/your-org/*",
-                    )),
-                    if goprivate_managed {
-                        text_input("runtime.go.private_patterns", &state.go_private_patterns_draft)
-                            .on_input(|s| Message::Settings(SettingsMsg::GoPrivatePatternsEdit(s)))
-                            .padding(sp.sm)
-                            .width(Length::Fixed(420.0))
-                            .style(text_input_style(tokens))
-                            .into()
-                    } else {
-                        text_input("runtime.go.private_patterns", &state.go_private_patterns_draft)
-                            .padding(sp.sm)
-                            .width(Length::Fixed(420.0))
-                            .style(text_input_style(tokens))
-                            .into()
-                    },
-                ))
-                .push(setting_row(
-                    tokens,
-                    envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
-                    None,
-                    pick_list(
-                        private_presets,
-                        None::<&'static str>,
-                        |v| Message::Settings(SettingsMsg::GoPrivatePatternsEdit(v.to_string())),
-                    )
-                    .width(Length::Fixed(420.0))
-                    .into(),
+                    ),
+                    "GOPRIVATE",
+                    goprivate_managed,
+                    msg_go_private_toggle,
+                    &state.go_private_patterns_draft,
+                    "runtime.go.private_patterns",
+                    msg_go_private_edit,
+                    &private_presets,
                 ));
         }
         RuntimeKind::Bun => {
@@ -261,58 +132,25 @@ pub fn runtime_config_view(
                 "/usr/local/bin",
                 "~/.bun/bin",
             ];
-            content = content.push(setting_row(
+            content = content.push(managed_url_setting_row(
                 tokens,
                 envr_core::i18n::tr_key("gui.runtime.config.bun.bin_enable", "启用全局 bin 覆盖", "Enable global bin override"),
-                None,
-                toggler(bun_enabled)
-                    .on_toggle(|on| {
-                        Message::Settings(SettingsMsg::BunGlobalBinDirEdit(if on {
-                            "C:/path/to/.bun/bin".to_string()
-                        } else {
-                            String::new()
-                        }))
-                    })
-                    .into(),
-            ));
-            content = content.push(setting_row(
-                tokens,
                 envr_core::i18n::tr_key(
+                    "gui.runtime.config.bun.global_bin_hint",
+                    "可选：覆盖 `bun pm bin -g` 检测结果",
+                    "Optional: override detected `bun pm bin -g` path",
+                ),
+                &envr_core::i18n::tr_key(
                     "gui.runtime.config.bun.global_bin_dir",
                     "全局 bin 目录",
                     "Global bin directory",
                 ),
-                Some(envr_core::i18n::tr_key(
-                    "gui.runtime.config.bun.global_bin_hint",
-                    "可选：覆盖 `bun pm bin -g` 检测结果",
-                    "Optional: override detected `bun pm bin -g` path",
-                )),
-                if bun_enabled {
-                    text_input("runtime.bun.global_bin_dir", &state.bun_global_bin_dir_draft)
-                        .on_input(|s| Message::Settings(SettingsMsg::BunGlobalBinDirEdit(s)))
-                        .padding(sp.sm)
-                        .width(Length::Fixed(420.0))
-                        .style(text_input_style(tokens))
-                        .into()
-                } else {
-                    text_input("runtime.bun.global_bin_dir", &state.bun_global_bin_dir_draft)
-                        .padding(sp.sm)
-                        .width(Length::Fixed(420.0))
-                        .style(text_input_style(tokens))
-                        .into()
-                },
-            ));
-            content = content.push(setting_row(
-                tokens,
-                envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
-                None,
-                pick_list(
-                    bun_bin_presets,
-                    None::<&'static str>,
-                    |v| Message::Settings(SettingsMsg::BunGlobalBinDirEdit(v.to_string())),
-                )
-                .width(Length::Fixed(420.0))
-                .into(),
+                bun_enabled,
+                msg_bun_bin_toggle,
+                &state.bun_global_bin_dir_draft,
+                "runtime.bun.global_bin_dir",
+                msg_bun_bin_edit,
+                &bun_bin_presets,
             ));
         }
         _ => {
@@ -362,5 +200,103 @@ pub fn runtime_config_view(
         .into(),
     );
     container(card).width(Length::Fill).into()
+}
+
+fn managed_url_setting_row(
+    tokens: ThemeTokens,
+    manage_title: String,
+    manage_desc: String,
+    value_title: &str,
+    managed: bool,
+    on_toggle: fn(bool) -> Message,
+    value: &str,
+    placeholder: &str,
+    on_edit: fn(String) -> Message,
+    presets: &[&'static str],
+) -> Element<'static, Message> {
+    let sp = tokens.space();
+    let manage_row = setting_row(
+        tokens,
+        manage_title,
+        Some(manage_desc),
+        toggler(managed).on_toggle(on_toggle).into(),
+    );
+    let input_el: Element<'static, Message> = if managed {
+        text_input(placeholder, value)
+            .on_input(on_edit)
+            .padding(sp.sm)
+            .width(Length::Fixed(420.0))
+            .style(text_input_style(tokens))
+            .into()
+    } else {
+        text_input(placeholder, value)
+            .padding(sp.sm)
+            .width(Length::Fixed(420.0))
+            .style(text_input_style(tokens))
+            .into()
+    };
+    let input_row = setting_row(tokens, value_title.to_string(), None, input_el);
+    let presets_row = setting_row(
+        tokens,
+        envr_core::i18n::tr_key("gui.runtime.config.common.presets", "常用值", "Presets"),
+        None,
+        pick_list(presets.to_vec(), None::<&'static str>, move |v| on_edit(v.to_string()))
+            .width(Length::Fixed(420.0))
+            .into(),
+    );
+    column![manage_row, input_row, presets_row]
+        .spacing(sp.md as f32)
+        .into()
+}
+
+fn msg_npm_toggle(on: bool) -> Message {
+    Message::Settings(SettingsMsg::SetNpmRegistryMode(if on {
+        NpmRegistryMode::Custom
+    } else {
+        NpmRegistryMode::Restore
+    }))
+}
+fn msg_npm_edit(s: String) -> Message {
+    Message::Settings(SettingsMsg::NpmRegistryUrlEdit(s))
+}
+fn msg_pip_toggle(on: bool) -> Message {
+    Message::Settings(SettingsMsg::SetPipRegistryMode(if on {
+        PipRegistryMode::Custom
+    } else {
+        PipRegistryMode::Restore
+    }))
+}
+fn msg_pip_edit(s: String) -> Message {
+    Message::Settings(SettingsMsg::PipIndexUrlEdit(s))
+}
+fn msg_go_proxy_toggle(on: bool) -> Message {
+    Message::Settings(SettingsMsg::SetGoProxyMode(if on {
+        GoProxyMode::Custom
+    } else {
+        GoProxyMode::Auto
+    }))
+}
+fn msg_go_proxy_edit(s: String) -> Message {
+    Message::Settings(SettingsMsg::GoProxyCustomEdit(s))
+}
+fn msg_go_private_toggle(on: bool) -> Message {
+    Message::Settings(SettingsMsg::GoPrivatePatternsEdit(if on {
+        "github.com/your-org/*".to_string()
+    } else {
+        String::new()
+    }))
+}
+fn msg_go_private_edit(s: String) -> Message {
+    Message::Settings(SettingsMsg::GoPrivatePatternsEdit(s))
+}
+fn msg_bun_bin_toggle(on: bool) -> Message {
+    Message::Settings(SettingsMsg::BunGlobalBinDirEdit(if on {
+        "C:/path/to/.bun/bin".to_string()
+    } else {
+        String::new()
+    }))
+}
+fn msg_bun_bin_edit(s: String) -> Message {
+    Message::Settings(SettingsMsg::BunGlobalBinDirEdit(s))
 }
 
