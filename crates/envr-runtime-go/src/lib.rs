@@ -11,7 +11,7 @@ pub use manager::{
 };
 
 use envr_config::settings::{
-    GoDownloadSource, Settings, prefer_china_mirror_locale, settings_path_from_platform,
+    GoDownloadSource, Settings, prefer_china_mirrors, settings_path_from_platform,
 };
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
@@ -79,7 +79,7 @@ impl GoRuntimeProvider {
         let s = Settings::load_or_default_from(&path).unwrap_or_default();
         let src = match s.runtime.go.download_source {
             GoDownloadSource::Auto => {
-                if prefer_china_mirror_locale(&s) {
+                if prefer_china_mirrors(&s) {
                     GoDownloadSource::Domestic
                 } else {
                     GoDownloadSource::Official

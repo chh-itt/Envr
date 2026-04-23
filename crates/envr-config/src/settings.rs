@@ -1656,8 +1656,13 @@ pub fn system_locale_suggests_chinese() -> bool {
 }
 
 /// Global China mirror preference switch (explicit user-controlled behavior).
-pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
+pub fn prefer_china_mirrors(settings: &Settings) -> bool {
     settings.mirror.prefer_china_mirrors
+}
+
+/// Backward-compatible alias; keep during transition to explicit naming.
+pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
+    prefer_china_mirrors(settings)
 }
 
 pub fn node_index_json_url(settings: &Settings) -> String {
@@ -1684,7 +1689,7 @@ pub fn npm_registry_url_to_apply(settings: &Settings) -> Option<&'static str> {
         NpmRegistryMode::Restore => None,
         NpmRegistryMode::Official => Some(NPM_REGISTRY_OFFICIAL),
         NpmRegistryMode::Domestic => Some(NPM_REGISTRY_DOMESTIC),
-        NpmRegistryMode::Auto => Some(if prefer_china_mirror_locale(settings) {
+        NpmRegistryMode::Auto => Some(if prefer_china_mirrors(settings) {
             NPM_REGISTRY_DOMESTIC
         } else {
             NPM_REGISTRY_OFFICIAL
@@ -1761,7 +1766,7 @@ pub fn deno_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
             ("JSR_URL".into(), JSR_REGISTRY_DOMESTIC.to_string()),
         ],
         NpmRegistryMode::Auto => {
-            if prefer_china_mirror_locale(settings) {
+            if prefer_china_mirrors(settings) {
                 vec![
                     (
                         "NPM_CONFIG_REGISTRY".into(),
@@ -1790,7 +1795,7 @@ pub fn bun_package_registry_env(settings: &Settings) -> Vec<(String, String)> {
         NpmRegistryMode::Official => NPM_REGISTRY_OFFICIAL,
         NpmRegistryMode::Domestic => NPM_REGISTRY_DOMESTIC,
         NpmRegistryMode::Auto => {
-            if prefer_china_mirror_locale(settings) {
+            if prefer_china_mirrors(settings) {
                 NPM_REGISTRY_DOMESTIC
             } else {
                 NPM_REGISTRY_OFFICIAL
@@ -1862,7 +1867,7 @@ pub fn pip_registry_urls_for_bootstrap(settings: &Settings) -> Vec<&'static str>
             PIP_INDEX_OFFICIAL,
         ],
         PipRegistryMode::Auto => {
-            if prefer_china_mirror_locale(settings) {
+            if prefer_china_mirrors(settings) {
                 vec![
                     PIP_INDEX_DOMESTIC,
                     PIP_INDEX_DOMESTIC_FALLBACK,
@@ -1894,7 +1899,7 @@ pub fn php_windows_releases_json_url(settings: &Settings) -> &'static str {
 }
 
 fn prefer_domestic_source(settings: &Settings, explicit_domestic: bool, is_auto: bool) -> bool {
-    explicit_domestic || (is_auto && prefer_china_mirror_locale(settings))
+    explicit_domestic || (is_auto && prefer_china_mirrors(settings))
 }
 
 /// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.

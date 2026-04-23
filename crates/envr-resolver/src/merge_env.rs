@@ -5,7 +5,7 @@
 
 use envr_config::settings::{
     GoProxyMode, Settings, bun_package_registry_env, deno_package_registry_env,
-    prefer_china_mirror_locale,
+    prefer_china_mirrors,
 };
 use envr_shim_core::runtime_bin_dirs_for_key;
 use std::collections::{HashMap, HashSet};
@@ -77,7 +77,7 @@ pub fn go_env_from_settings(settings: &Settings) -> Vec<(String, String)> {
         GoProxyMode::Auto => {
             if !legacy.is_empty() {
                 legacy.to_string()
-            } else if prefer_china_mirror_locale(settings) {
+            } else if prefer_china_mirrors(settings) {
                 "https://goproxy.cn,direct".to_string()
             } else {
                 "https://proxy.golang.org,direct".to_string()

@@ -15,7 +15,7 @@ pub use manager::{
 pub use vendor::JavaVendor;
 
 use envr_config::settings::{
-    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirror_locale,
+    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirrors,
     settings_path_from_platform,
 };
 use envr_domain::runtime::{
@@ -111,7 +111,7 @@ impl JavaRuntimeProvider {
         let s = Settings::load_or_default_from(&path).unwrap_or_default();
         let src = match s.runtime.java.download_source {
             JavaDownloadSource::Auto => {
-                if prefer_china_mirror_locale(&s) {
+                if prefer_china_mirrors(&s) {
                     JavaDownloadSource::Domestic
                 } else {
                     JavaDownloadSource::Official
