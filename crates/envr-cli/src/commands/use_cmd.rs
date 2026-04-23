@@ -3,8 +3,10 @@ use crate::CliUxPolicy;
 use crate::app;
 use crate::cli::GlobalArgs;
 use crate::commands::common::{emit_verbose_step, kind_label};
+use crate::commands::shim_cmd;
 use crate::output::{self, fmt_template};
 
+use envr_config::settings::Settings;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
@@ -61,6 +63,14 @@ pub(crate) fn run_inner(
 
     let spec = VersionSpec(runtime_version.clone());
     let resolved = app::runtime_installation::set_current(service, kind, spec)?;
+    let auto_sync_behavior = load_use_auto_sync_behavior();
+    if auto_sync_behavior.auto_sync_shims_on_use {
+        let _ = shim_cmd::sync_kind_after_use(
+            kind,
+            auto_sync_behavior.auto_sync_globals_on_use,
+            auto_sync_behavior.auto_sync_windows_path_mirror_on_use,
+        );
+    }
     emit_verbose_step(
         g,
         &fmt_template(
@@ -73,6 +83,33 @@ pub(crate) fn run_inner(
         ),
     );
     Ok(print_success(g, kind, &resolved))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UseAutoSyncBehavior {
+    auto_sync_shims_on_use: bool,
+    auto_sync_globals_on_use: bool,
+    auto_sync_windows_path_mirror_on_use: bool,
+}
+
+fn load_use_auto_sync_behavior() -> UseAutoSyncBehavior {
+    let defaults = UseAutoSyncBehavior {
+        auto_sync_shims_on_use: true,
+        auto_sync_globals_on_use: false,
+        auto_sync_windows_path_mirror_on_use: cfg!(windows),
+    };
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return defaults;
+    };
+    let path = envr_config::settings::settings_path_from_platform(&platform);
+    let Ok(settings) = Settings::load_or_default_from(&path) else {
+        return defaults;
+    };
+    UseAutoSyncBehavior {
+        auto_sync_shims_on_use: settings.behavior.auto_sync_shims_on_use,
+        auto_sync_globals_on_use: settings.behavior.auto_sync_globals_on_use,
+        auto_sync_windows_path_mirror_on_use: settings.behavior.auto_sync_windows_path_mirror_on_use,
+    }
 }
 
 fn print_success(g: &GlobalArgs, kind: RuntimeKind, v: &RuntimeVersion) -> CliExit {

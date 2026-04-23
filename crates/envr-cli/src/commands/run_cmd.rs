@@ -2,7 +2,6 @@ use crate::CliExit;
 use crate::CliUxPolicy;
 use crate::cli::{ExecRunSharedArgs, GlobalArgs, OutputFormat};
 use crate::commands::child_env;
-use crate::commands::cli_install_progress;
 use crate::commands::dry_run_env;
 use crate::commands::env_overrides;
 use crate::output::fmt_template;
@@ -12,6 +11,7 @@ use envr_config::project_config::ProjectConfig;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
+use std::sync::{Arc, Mutex};
 fn escape_windows_cmd_token(arg: &str) -> String {
     if arg.is_empty() {
         return "\"\"".to_string();
@@ -264,31 +264,11 @@ pub(crate) fn run_inner(
             }
         }
         if !uniq.is_empty() {
-            let service = rex.service();
-            for (lang, spec) in uniq {
-                let kind = parse_runtime_kind(&lang)?;
-                let headline = fmt_template(
-                    &envr_core::i18n::tr_key(
-                        "cli.run.installing_missing",
-                        "envr：正在安装缺失的运行时 {lang} {version}…",
-                        "envr: installing missing runtime {lang} {version}…",
-                    ),
-                    &[("lang", &lang), ("version", &spec)],
-                );
-                let use_prog = cli_install_progress::wants_cli_download_progress(g);
-                let (request, guard) = cli_install_progress::install_request_with_progress(
-                    g,
-                    VersionSpec(spec.clone()),
-                    headline.clone(),
-                );
-                if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
-                    eprintln!("{headline}");
-                }
-                let installed: RuntimeVersion = service.install(kind, &request)?;
-                guard.finish();
+            let installs = install_missing_in_parallel(uniq)?;
+            for (lang, version) in installs {
                 auto_installed.push(json!({
                     "kind": lang,
-                    "version": installed.0,
+                    "version": version,
                 }));
             }
         }
@@ -326,7 +306,13 @@ pub(crate) fn run_inner(
     let mut child =
         crate::commands::common::build_child_command(&exe, &exe_args, &env_map, &ctx.working_dir);
 
-    let status = child.status().map_err(EnvrError::from)?;
+    let status = child.status().map_err(|e| {
+        EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+            None,
+            "run command",
+            &e,
+        ))
+    })?;
     let exit = status.code().unwrap_or(1);
     let env_file_s: Vec<String> = env_files.iter().map(|p| p.display().to_string()).collect();
     let data = json!({
@@ -343,4 +329,83 @@ pub(crate) fn run_inner(
     Ok(crate::commands::common::emit_child_process_outcome(
         g, data, exit,
     ))
+}
+
+fn install_missing_in_parallel(uniq: Vec<(String, String)>) -> EnvrResult<Vec<(String, String)>> {
+    let max_workers = read_max_download_workers().max(1) as usize;
+    let queue = Arc::new(Mutex::new(uniq));
+    let results = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let first_err = Arc::new(Mutex::new(None::<EnvrError>));
+    let workers = max_workers.min(queue.lock().map(|q| q.len()).unwrap_or(1).max(1));
+    let mut joins = Vec::new();
+    for _ in 0..workers {
+        let queue = Arc::clone(&queue);
+        let results = Arc::clone(&results);
+        let first_err = Arc::clone(&first_err);
+        joins.push(std::thread::spawn(move || loop {
+            if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
+                break;
+            }
+            let next = queue.lock().ok().and_then(|mut q| q.pop());
+            let Some((lang, spec)) = next else {
+                break;
+            };
+            let kind = match parse_runtime_kind(&lang) {
+                Ok(v) => v,
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            };
+            let service = match crate::commands::common::runtime_service() {
+                Ok(v) => v,
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            };
+            let request = envr_domain::runtime::InstallRequest {
+                spec: VersionSpec(spec),
+                progress_downloaded: None,
+                progress_total: None,
+                cancel: None,
+            };
+            match service.install(kind, &request) {
+                Ok(RuntimeVersion(v)) => {
+                    if let Ok(mut out) = results.lock() {
+                        out.push((lang, v));
+                    }
+                }
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            }
+        }));
+    }
+    for join in joins {
+        let _ = join.join();
+    }
+    if let Ok(mut slot) = first_err.lock()
+        && let Some(err) = slot.take()
+    {
+        return Err(err);
+    }
+    Ok(results.lock().map(|v| v.clone()).unwrap_or_default())
+}
+
+fn read_max_download_workers() -> u32 {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return 4;
+    };
+    let path = envr_config::settings::settings_path_from_platform(&platform);
+    envr_config::settings::Settings::load_or_default_from(&path)
+        .map(|s| s.download.max_concurrent_downloads)
+        .unwrap_or(4)
 }

@@ -112,10 +112,26 @@ fn run_rustup(
 ) -> EnvrResult<(i32, String, String)> {
     let out = configure_rustup_cmd(mode, paths, args)
         .output()
-        .map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Rust),
+                "rustup",
+                &e,
+            ))
+        })?;
     let code = out.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    if code != 0
+        && let Some(diag) = envr_platform::process::classify_exit_failure_message(
+            Some(envr_domain::runtime::RuntimeKind::Rust),
+            "rustup",
+            out.status,
+            &stderr,
+        )
+    {
+        return Err(EnvrError::Runtime(diag));
+    }
     Ok((code, stdout, stderr))
 }
 
@@ -126,7 +142,13 @@ fn run_rustup_inherit_stdio(mode: RustupMode, paths: &RustPaths, args: &[&str]) 
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .map_err(|e| EnvrError::Runtime(format!("failed to spawn rustup: {e}")))?;
+        .map_err(|e| {
+            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+                Some(envr_domain::runtime::RuntimeKind::Rust),
+                "rustup",
+                &e,
+            ))
+        })?;
     Ok(status.code().unwrap_or(1))
 }
 

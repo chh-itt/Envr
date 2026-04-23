@@ -29,6 +29,7 @@ regex = { version = "1", default-features = false, features = ["std", "unicode"]
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi", "env-filter", "std", "json"] }
 tracing-appender = { version = "0.2", default-features = false }
+indicatif = { version = "0.17", default-features = false }
 
 # archives
 zip = { version = "2", default-features = false, features = ["deflate"] }

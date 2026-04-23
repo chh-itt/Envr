@@ -57,6 +57,21 @@ pub struct RuntimeDescriptor {
     pub host_runtime: Option<RuntimeKind>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowsPrereq {
+    VcRedist2015To2022X64,
+    VcRedist2015To2022X86,
+}
+
+impl WindowsPrereq {
+    pub fn as_label(self) -> &'static str {
+        match self {
+            WindowsPrereq::VcRedist2015To2022X64 => "Microsoft Visual C++ Redistributable 2015-2022 (x64)",
+            WindowsPrereq::VcRedist2015To2022X86 => "Microsoft Visual C++ Redistributable 2015-2022 (x86)",
+        }
+    }
+}
+
 pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 38] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
@@ -417,6 +432,22 @@ pub fn runtime_host_runtime(kind: RuntimeKind) -> Option<RuntimeKind> {
 
 pub fn runtime_kinds_all() -> impl Iterator<Item = RuntimeKind> {
     RUNTIME_DESCRIPTORS.iter().map(|d| d.kind)
+}
+
+pub fn runtime_windows_prereqs(kind: RuntimeKind) -> &'static [WindowsPrereq] {
+    match kind {
+        RuntimeKind::Python
+        | RuntimeKind::Node
+        | RuntimeKind::Bun
+        | RuntimeKind::Deno
+        | RuntimeKind::Ruby
+        | RuntimeKind::Php
+        | RuntimeKind::Dotnet => &[
+            WindowsPrereq::VcRedist2015To2022X64,
+            WindowsPrereq::VcRedist2015To2022X86,
+        ],
+        _ => &[],
+    }
 }
 
 /// Env-center hub uses the unified major-line remote list UX for this runtime.

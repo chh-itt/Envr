@@ -8,6 +8,8 @@ use envr_error::EnvrResult;
 
 use envr_core::shim_service::ShimService;
 use envr_domain::runtime::RuntimeKind;
+#[cfg(windows)]
+use std::fs;
 
 /// Ensure all core shims exist (strict). Used by `doctor --fix`.
 pub fn sync_core_shims_strict(_g: &GlobalArgs) -> envr_error::EnvrResult<Vec<String>> {
@@ -156,6 +158,116 @@ pub(crate) fn sync_inner(g: &GlobalArgs, include_globals: bool) -> EnvrResult<Cl
             }
         },
     ))
+}
+
+pub(crate) fn sync_kind_after_use(
+    kind: RuntimeKind,
+    include_globals: bool,
+    include_windows_path_mirror: bool,
+) -> EnvrResult<()> {
+    let root = common::effective_runtime_root()?;
+    let shim_exe = find_envr_shim_executable()?;
+    let svc = ShimService::new(root.clone(), shim_exe.clone());
+    svc.ensure_shims(kind)?;
+    if include_globals {
+        match kind {
+            RuntimeKind::Python => {
+                let _ = svc.sync_python_global_package_shims_fast();
+            }
+            RuntimeKind::Java => {
+                let _ = svc.sync_java_global_package_shims_fast();
+            }
+            RuntimeKind::Node | RuntimeKind::Bun => {
+                let _ = svc.sync_all_global_package_shims();
+            }
+            _ => {}
+        }
+    }
+    #[cfg(windows)]
+    if include_windows_path_mirror {
+        ensure_windows_path_shim_mirror(kind, &root, &shim_exe)?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn ensure_windows_path_shim_mirror(
+    kind: RuntimeKind,
+    runtime_root: &std::path::Path,
+    shim_exe: &std::path::Path,
+) -> EnvrResult<()> {
+    let mut roots = windows_path_shim_roots();
+    roots.push(runtime_root.to_path_buf());
+    roots.sort();
+    roots.dedup();
+    for root in &roots {
+        let svc = ShimService::new(root.clone(), shim_exe.to_path_buf());
+        svc.ensure_shims(kind)?;
+    }
+    if matches!(kind, RuntimeKind::Node) {
+        let from_dir = runtime_root.join("shims");
+        let to_core_stems = [
+            "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
+            "bunx", "crystal", "perl", "ucm", "lua", "luac", "r", "rscript", "janet", "jpm",
+            "c3c", "bb", "sbcl", "haxe", "haxelib",
+        ];
+        for to_root in roots {
+            if to_root == runtime_root {
+                continue;
+            }
+            let to_dir = to_root.join("shims");
+            if fs::create_dir_all(&to_dir).is_err() {
+                continue;
+            }
+            let Ok(entries) = fs::read_dir(&from_dir) else {
+                continue;
+            };
+            for e in entries.flatten() {
+                let path = e.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let stem = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if to_core_stems.contains(&stem.as_str()) {
+                    continue;
+                }
+                let dst = to_dir.join(path.file_name().unwrap_or_default());
+                let _ = fs::copy(&path, &dst);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn windows_path_shim_roots() -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let p = std::env::var_os("Path").unwrap_or_default();
+    let s = p.to_string_lossy();
+    for seg in s.split(';') {
+        let mut seg = seg.trim();
+        if seg.is_empty() {
+            continue;
+        }
+        while seg.ends_with('\\') || seg.ends_with('/') {
+            seg = seg.trim_end_matches(['\\', '/']).trim();
+        }
+        let lower = seg.to_ascii_lowercase();
+        if lower.contains("envr") && lower.ends_with(r"\shims") {
+            let shims_dir = std::path::Path::new(seg);
+            if !shims_dir.is_dir() {
+                continue;
+            }
+            if let Some(root) = shims_dir.parent() {
+                out.push(root.to_path_buf());
+            }
+        }
+    }
+    out
 }
 
 fn find_envr_shim_executable() -> envr_error::EnvrResult<std::path::PathBuf> {

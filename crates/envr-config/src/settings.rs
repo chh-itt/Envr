@@ -68,6 +68,18 @@ pub struct BehaviorSettings {
     /// Remove staging/temp artifacts after a successful install (providers may adopt later).
     #[serde(default)]
     pub cleanup_downloads_after_install: bool,
+    #[serde(default = "defaults::auto_sync_shims_on_use")]
+    pub auto_sync_shims_on_use: bool,
+    #[serde(default = "defaults::auto_sync_globals_on_use")]
+    pub auto_sync_globals_on_use: bool,
+    #[serde(default = "defaults::auto_sync_windows_path_mirror_on_use")]
+    pub auto_sync_windows_path_mirror_on_use: bool,
+    #[serde(default = "defaults::cache_artifact_ttl_days")]
+    pub cache_artifact_ttl_days: u32,
+    #[serde(default = "defaults::cache_max_size_mb")]
+    pub cache_max_size_mb: u64,
+    #[serde(default = "defaults::cache_auto_prune_on_start")]
+    pub cache_auto_prune_on_start: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2162,6 +2174,30 @@ mod defaults {
         LocaleMode::FollowSystem
     }
 
+    pub fn auto_sync_shims_on_use() -> bool {
+        true
+    }
+
+    pub fn auto_sync_globals_on_use() -> bool {
+        false
+    }
+
+    pub fn auto_sync_windows_path_mirror_on_use() -> bool {
+        cfg!(windows)
+    }
+
+    pub fn cache_artifact_ttl_days() -> u32 {
+        30
+    }
+
+    pub fn cache_max_size_mb() -> u64 {
+        10 * 1024
+    }
+
+    pub fn cache_auto_prune_on_start() -> bool {
+        true
+    }
+
     pub fn downloads_panel_visible() -> bool {
         true
     }
@@ -2351,6 +2387,12 @@ mod tests {
             },
             behavior: BehaviorSettings {
                 cleanup_downloads_after_install: true,
+                auto_sync_shims_on_use: true,
+                auto_sync_globals_on_use: false,
+                auto_sync_windows_path_mirror_on_use: cfg!(windows),
+                cache_artifact_ttl_days: 30,
+                cache_max_size_mb: 10 * 1024,
+                cache_auto_prune_on_start: true,
             },
             appearance: AppearanceSettings {
                 font: FontSettings {

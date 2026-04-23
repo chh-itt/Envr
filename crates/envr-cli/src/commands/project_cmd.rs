@@ -3,7 +3,6 @@ use crate::CliPathProfile;
 use crate::CliUxPolicy;
 use crate::cli::{GlobalArgs, ProjectCmd};
 use crate::commands::child_env;
-use crate::commands::cli_install_progress;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
@@ -15,6 +14,7 @@ use envr_resolver::{parse_runtime_pin_spec, runtime_kind_toml_key, upsert_runtim
 use envr_shim_core::pick_version_home;
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 fn next_steps_for_project_validate_ok(check_remote: bool) -> Vec<(&'static str, String)> {
     let mut steps = Vec::new();
@@ -136,7 +136,7 @@ fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<CliExit>
 
 fn sync_inner(
     g: &GlobalArgs,
-    service: &RuntimeService,
+    _service: &RuntimeService,
     path: PathBuf,
     install: bool,
 ) -> EnvrResult<CliExit> {
@@ -193,7 +193,6 @@ fn sync_inner(
         return Ok(code);
     }
 
-    let mut installed = Vec::new();
     for (lang, spec) in &pending {
         let kind = parse_runtime_kind(lang)?;
         common::emit_verbose_step(
@@ -212,33 +211,12 @@ fn sync_inner(
                 "rust pin sync is not automated here; use `envr rust` / rustup".into(),
             ));
         }
-        let headline = fmt_template(
-            &envr_core::i18n::tr_key(
-                "cli.project.sync_installing",
-                "正在安装项目 pin：{kind} {version}…",
-                "Installing pinned runtime {kind} {version}…",
-            ),
-            &[("kind", lang.as_str()), ("version", spec.as_str())],
-        );
-        let use_prog = cli_install_progress::wants_cli_download_progress(g);
-        let (request, guard) = cli_install_progress::install_request_with_progress(
-            g,
-            VersionSpec(spec.clone()),
-            headline.clone(),
-        );
-        if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
-            eprintln!("{headline}");
-        }
-        let version = match service.install(kind, &request) {
-            Ok(v) => v,
-            Err(e) => {
-                guard.finish();
-                return Err(e);
-            }
-        };
-        guard.finish();
-        installed.push(json!({ "kind": lang, "version": version.0 }));
     }
+    let installed_pairs = install_pending_parallel(pending.clone())?;
+    let installed: Vec<_> = installed_pairs
+        .into_iter()
+        .map(|(lang, version)| json!({ "kind": lang, "version": version }))
+        .collect();
 
     let data = json!({
         "missing_before": pending
@@ -264,6 +242,85 @@ fn sync_inner(
             }
         },
     ))
+}
+
+fn install_pending_parallel(pending: Vec<(String, String)>) -> EnvrResult<Vec<(String, String)>> {
+    let max_workers = read_max_download_workers().max(1) as usize;
+    let queue = Arc::new(Mutex::new(pending));
+    let results = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let first_err = Arc::new(Mutex::new(None::<EnvrError>));
+    let workers = max_workers.min(queue.lock().map(|q| q.len()).unwrap_or(1).max(1));
+    let mut joins = Vec::new();
+    for _ in 0..workers {
+        let queue = Arc::clone(&queue);
+        let results = Arc::clone(&results);
+        let first_err = Arc::clone(&first_err);
+        joins.push(std::thread::spawn(move || loop {
+            if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
+                break;
+            }
+            let next = queue.lock().ok().and_then(|mut q| q.pop());
+            let Some((lang, spec)) = next else {
+                break;
+            };
+            let kind = match parse_runtime_kind(&lang) {
+                Ok(v) => v,
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            };
+            let service = match common::runtime_service() {
+                Ok(v) => v,
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            };
+            let request = envr_domain::runtime::InstallRequest {
+                spec: VersionSpec(spec),
+                progress_downloaded: None,
+                progress_total: None,
+                cancel: None,
+            };
+            match service.install(kind, &request) {
+                Ok(v) => {
+                    if let Ok(mut out) = results.lock() {
+                        out.push((lang, v.0));
+                    }
+                }
+                Err(e) => {
+                    if let Ok(mut slot) = first_err.lock() {
+                        *slot = Some(e);
+                    }
+                    break;
+                }
+            }
+        }));
+    }
+    for join in joins {
+        let _ = join.join();
+    }
+    if let Ok(mut slot) = first_err.lock()
+        && let Some(err) = slot.take()
+    {
+        return Err(err);
+    }
+    Ok(results.lock().map(|v| v.clone()).unwrap_or_default())
+}
+
+fn read_max_download_workers() -> u32 {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return 4;
+    };
+    let path = envr_config::settings::settings_path_from_platform(&platform);
+    envr_config::settings::Settings::load_or_default_from(&path)
+        .map(|s| s.download.max_concurrent_downloads)
+        .unwrap_or(4)
 }
 
 fn validate_inner(

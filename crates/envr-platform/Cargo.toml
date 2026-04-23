@@ -5,6 +5,7 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
+envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }
 serde_json = { workspace = true }
 

@@ -12,9 +12,11 @@ use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::ShimContext;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{Duration, SystemTime};
 
 /// Resolve the effective runtime root for this process (re-reads `settings.toml` each call so edits
 /// in another terminal are picked up on the next `exec` / `run` / `which`, unless `ENVR_RUNTIME_ROOT` is set).
@@ -50,6 +52,7 @@ pub fn kind_label(kind: RuntimeKind) -> &'static str {
 /// [`RuntimeService`] for the **process default** runtime root (see [`CliRuntimeSession::connect`]).
 /// For an explicit root (e.g. bundle apply target), use [`RuntimeService::with_runtime_root`].
 pub fn runtime_service() -> Result<RuntimeService, EnvrError> {
+    maybe_prune_artifact_cache_on_start();
     Ok(CliRuntimeSession::connect()?.into_service())
 }
 
@@ -168,6 +171,57 @@ fn rustc_version_from_output(out: &str) -> Option<String> {
     } else {
         Some(v.to_string())
     }
+}
+
+fn maybe_prune_artifact_cache_on_start() {
+    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
+        return;
+    };
+    let settings_path = envr_config::settings::settings_path_from_platform(&platform);
+    let Ok(settings) = envr_config::settings::Settings::load_or_default_from(&settings_path) else {
+        return;
+    };
+    if !settings.behavior.cache_auto_prune_on_start {
+        return;
+    }
+    let root = resolve_runtime_root().ok();
+    let Some(root) = root else {
+        return;
+    };
+    let cache_dir = root.join("cache");
+    let ttl_days = settings.behavior.cache_artifact_ttl_days.max(1) as u64;
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(ttl_days * 86_400))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let _ = prune_dir_by_mtime(&cache_dir, cutoff);
+}
+
+fn prune_dir_by_mtime(path: &Path, cutoff: SystemTime) -> EnvrResult<()> {
+    if !path.is_dir() {
+        return Ok(());
+    }
+    for ent in fs::read_dir(path).map_err(EnvrError::from)? {
+        let ent = ent.map_err(EnvrError::from)?;
+        let p = ent.path();
+        if p.is_dir() {
+            let _ = prune_dir_by_mtime(&p, cutoff);
+            if fs::read_dir(&p)
+                .map_err(EnvrError::from)?
+                .next()
+                .is_none()
+            {
+                let _ = fs::remove_dir(&p);
+            }
+            continue;
+        }
+        if let Ok(meta) = fs::metadata(&p)
+            && let Ok(m) = meta.modified()
+            && m < cutoff
+        {
+            let _ = fs::remove_file(&p);
+        }
+    }
+    Ok(())
 }
 
 pub fn enforce_rust_constraints(

@@ -4,6 +4,7 @@
 use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use envr_domain::runtime::{InstallRequest, VersionSpec};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::io::{IsTerminal, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -23,6 +24,7 @@ pub fn wants_cli_download_progress(g: &GlobalArgs) -> bool {
 pub struct CliInstallProgressGuard {
     done: Arc<AtomicBool>,
     join: Option<JoinHandle<()>>,
+    bar: Option<ProgressBar>,
 }
 
 impl CliInstallProgressGuard {
@@ -30,13 +32,17 @@ impl CliInstallProgressGuard {
         Self {
             done: Arc::new(AtomicBool::new(true)),
             join: None,
+            bar: None,
         }
     }
 
-    pub fn finish(self) {
+    pub fn finish(mut self) {
         self.done.store(true, Ordering::SeqCst);
         if let Some(h) = self.join {
             let _ = h.join();
+        }
+        if let Some(bar) = self.bar.take() {
+            bar.finish_and_clear();
         }
     }
 }
@@ -68,6 +74,16 @@ pub fn install_request_with_progress(
     let d2 = downloaded.clone();
     let t2 = total.clone();
     let done2 = done.clone();
+    let bar = Arc::new(ProgressBar::new(0));
+    let style = ProgressStyle::with_template(
+        "{spinner:.cyan} [{bar:30.cyan/white}] {percent:>3}% {bytes:>9}/{total_bytes:<9} {bytes_per_sec:>10}",
+    )
+    .unwrap_or_else(|_| ProgressStyle::default_bar())
+    .progress_chars("=> ");
+    bar.set_style(style);
+    bar.enable_steady_tick(Duration::from_millis(100));
+    bar.set_message(headline.clone());
+    let bar2 = Arc::clone(&bar);
     let handle = std::thread::spawn(move || {
         let _ = writeln!(std::io::stderr(), "{headline}");
         let _ = std::io::stderr().flush();
@@ -76,23 +92,11 @@ pub fn install_request_with_progress(
             let dl = d2.load(Ordering::Relaxed);
             let tot = t2.load(Ordering::Relaxed);
             if tot > 0 {
-                let pct = (dl.saturating_mul(100) / tot.max(1)).min(100);
-                let _ = write!(std::io::stderr(), "\r    {pct}%  {dl} / {tot} bytes  ");
+                bar2.set_length(tot);
+                bar2.set_position(dl.min(tot));
             } else if dl > 0 {
-                let _ = write!(std::io::stderr(), "\r    {dl} bytes…  ");
-            } else {
-                let _ = write!(std::io::stderr(), "\r    …  ");
+                bar2.set_position(dl);
             }
-            let _ = std::io::stderr().flush();
-        }
-        let dl = d2.load(Ordering::Relaxed);
-        let tot = t2.load(Ordering::Relaxed);
-        if tot > 0 {
-            let _ = writeln!(std::io::stderr(), "\r    100%  {dl} / {tot} bytes    ");
-        } else if dl > 0 {
-            let _ = writeln!(std::io::stderr(), "\r    {dl} bytes    ");
-        } else {
-            let _ = writeln!(std::io::stderr());
         }
     });
 
@@ -106,6 +110,7 @@ pub fn install_request_with_progress(
         CliInstallProgressGuard {
             done,
             join: Some(handle),
+            bar: Some((*bar).clone()),
         },
     )
 }

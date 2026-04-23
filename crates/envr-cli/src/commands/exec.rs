@@ -182,7 +182,13 @@ pub(crate) fn run_inner(
         child.stderr(f2);
     }
 
-    let status = child.status().map_err(EnvrError::from)?;
+    let status = child.status().map_err(|e| {
+        EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+            parse_runtime_kind(&lang).ok(),
+            "exec command",
+            &e,
+        ))
+    })?;
     let exit = status.code().unwrap_or(1);
     let env_file_s: Vec<String> = env_files.iter().map(|p| p.display().to_string()).collect();
     let data = json!({

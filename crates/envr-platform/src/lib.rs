@@ -8,4 +8,5 @@ pub mod links;
 pub mod lua_binaries;
 pub mod path;
 pub mod paths;
+pub mod process;
 pub mod shell;
