@@ -1,7 +1,9 @@
 use crate::index::{
     DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_all_tags, resolve_bun_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -434,9 +436,6 @@ impl BunManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
         let asset = pick_bun_asset(os, arch)?;
@@ -457,32 +456,42 @@ impl BunManager {
                         .map(|(sha, _)| sha)
                 });
 
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(asset);
         let direct_zip = format!("{base}/{asset}");
         let zip_url = maybe_mirror_url(&settings, &direct_zip)?;
-        download_to_path(
-            &self.client,
-            &zip_url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-            Some(direct_zip.as_str()),
-        )?;
-        if let Some(sha) = expected_sha.as_deref() {
-            checksum::verify_sha256_hex(&cache_file, sha)?;
-        }
-
-        let staging_parent = self.paths.cache_dir().join(&version.0);
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-
         let final_dir = self.paths.version_dir(&version.0);
-        promote_archive(staging.path(), &final_dir)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    &zip_url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                    Some(direct_zip.as_str()),
+                )
+            },
+            || {
+                if let Some(sha) = expected_sha.as_deref() {
+                    checksum::verify_sha256_hex(&cache_file, sha)?;
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = self.paths.cache_dir().join(&version.0);
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                promote_archive(staging.path(), &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

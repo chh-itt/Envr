@@ -13,7 +13,7 @@ use std::sync::{
 };
 
 use crate::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
-use envr_error::EnvrResult;
+use envr_error::{EnvrError, EnvrResult};
 
 /// Optional download progress and cooperative cancellation from [`InstallRequest`].
 pub type InstallProgressHandles<'a> = (
@@ -60,4 +60,44 @@ where
 {
     let (downloaded, total, cancel) = install_progress_handles(request);
     f(&request.spec, downloaded, total, cancel)
+}
+
+#[inline]
+pub fn ensure_not_cancelled(cancel: Option<&Arc<AtomicBool>>) -> EnvrResult<()> {
+    if cancel.is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+        return Err(EnvrError::Download("download cancelled".to_string()));
+    }
+    Ok(())
+}
+
+/// Shared install pipeline orchestration for archive-based runtime installers.
+///
+/// Runtime managers provide stage hooks while this function standardizes ordering and
+/// cancellation checks:
+/// prepare -> download -> verify -> install_layout -> activate.
+#[inline]
+pub fn execute_install_pipeline<Prepare, Download, Verify, InstallLayout, Activate>(
+    cancel: Option<&Arc<AtomicBool>>,
+    prepare: Prepare,
+    download: Download,
+    verify: Verify,
+    install_layout: InstallLayout,
+    activate: Activate,
+) -> EnvrResult<RuntimeVersion>
+where
+    Prepare: FnOnce() -> EnvrResult<()>,
+    Download: FnOnce() -> EnvrResult<()>,
+    Verify: FnOnce() -> EnvrResult<()>,
+    InstallLayout: FnOnce() -> EnvrResult<()>,
+    Activate: FnOnce() -> EnvrResult<RuntimeVersion>,
+{
+    ensure_not_cancelled(cancel)?;
+    prepare()?;
+    ensure_not_cancelled(cancel)?;
+    download()?;
+    ensure_not_cancelled(cancel)?;
+    verify()?;
+    install_layout()?;
+    ensure_not_cancelled(cancel)?;
+    activate()
 }

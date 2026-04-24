@@ -3,7 +3,9 @@ use crate::index::{
     resolve_deno_version,
 };
 use envr_config::settings::{deno_official_release_zip_url, deno_release_zip_url};
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -293,42 +295,48 @@ impl DenoManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
         let settings = load_settings_cached()?;
         let url = deno_release_zip_url(&settings, &version.0)?;
         let official_url = deno_official_release_zip_url(&version.0)?;
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join("deno.zip");
-        download_to_path_with_fallback(
-            &self.client,
-            &url,
-            Some(&official_url),
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-
-        // Optional checksum: dl.deno.land has `.sha256sum` files, but we keep install robust without it.
-        let sha_url = format!("{url}.sha256sum");
-        if let Ok(s) = self.client.get(&sha_url).send().and_then(|r| r.text()) {
-            let hash = s.split_whitespace().next().unwrap_or("").trim().to_string();
-            if hash.len() >= 64 {
-                let _ = checksum::verify_sha256_hex(&cache_file, &hash);
-            }
-        }
-
-        let staging_parent = self.paths.cache_dir().join(&version.0);
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-
         let final_dir = self.paths.version_dir(&version.0);
-        promote_archive(staging.path(), &final_dir)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_to_path_with_fallback(
+                    &self.client,
+                    &url,
+                    Some(&official_url),
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || {
+                // Optional checksum: dl.deno.land has `.sha256sum` files, but keep install robust without it.
+                let sha_url = format!("{url}.sha256sum");
+                if let Ok(s) = self.client.get(&sha_url).send().and_then(|r| r.text()) {
+                    let hash = s.split_whitespace().next().unwrap_or("").trim().to_string();
+                    if hash.len() >= 64 {
+                        let _ = checksum::verify_sha256_hex(&cache_file, &hash);
+                    }
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = self.paths.cache_dir().join(&version.0);
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                promote_archive(staging.path(), &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

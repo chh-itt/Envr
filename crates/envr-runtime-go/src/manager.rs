@@ -1,4 +1,6 @@
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -224,7 +226,6 @@ impl GoManager {
             .ok_or_else(|| EnvrError::Validation(format!("Go release not found: {}", version.0)))?;
         let dist = self.pick_dist_file(release)?;
 
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self
             .paths
             .cache_dir()
@@ -232,30 +233,41 @@ impl GoManager {
             .join(&dist.filename);
         let base = self.dl_base_url.trim_end_matches('/');
         let url = format!("{base}/dl/{}", dist.filename);
-        self.download_to_path(
-            &url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        if !dist.sha256.trim().is_empty() {
-            checksum::verify_sha256_hex(&cache_file, dist.sha256.trim())?;
-        }
-
-        let staging_parent = self
-            .paths
-            .cache_dir()
-            .join(normalize_go_version(&version.0));
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-
         let final_dir = self.paths.version_dir(&normalize_go_version(&version.0));
-        promote_single_root_dir(staging.path(), &final_dir)?;
         let normalized = RuntimeVersion(normalize_go_version(&version.0));
-        self.set_current(&normalized)?;
-        Ok(normalized)
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                self.download_to_path(
+                    &url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || {
+                if !dist.sha256.trim().is_empty() {
+                    checksum::verify_sha256_hex(&cache_file, dist.sha256.trim())?;
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = self
+                    .paths
+                    .cache_dir()
+                    .join(normalize_go_version(&version.0));
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                promote_single_root_dir(staging.path(), &final_dir)
+            },
+            || {
+                self.set_current(&normalized)?;
+                Ok(normalized)
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
