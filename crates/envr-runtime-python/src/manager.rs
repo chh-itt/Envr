@@ -9,7 +9,9 @@ use envr_config::settings::PythonWindowsDistribution;
 use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_via_version_spec};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_via_version_spec,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -818,7 +820,6 @@ impl PythonManager {
             artifact = n;
         }
 
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let fname = artifact.url.rsplit('/').next().unwrap_or("download.bin");
         let cache_file = self.paths.cache_dir().join(&version.0).join(fname);
         let download_urls = if let Some(st) = load_settings_snapshot() {
@@ -826,167 +827,167 @@ impl PythonManager {
         } else {
             vec![artifact.url.clone()]
         };
-        let download_res = download_with_fallbacks(
-            &self.client,
-            &download_urls,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        );
-        #[cfg(windows)]
-        let download_res = match download_res {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                // Auto: NuGet might not have every python.org release. Fall back to embeddable zip.
-                if os == "windows"
-                    && matches!(win_dist, PythonWindowsDistribution::Auto)
-                    && artifact.name.starts_with("nuget:")
-                {
-                    artifact = embed_artifact.clone();
-                    let download_urls = if let Some(st) = load_settings_snapshot() {
-                        python_download_url_candidates(&st, &artifact.url)
-                    } else {
-                        vec![artifact.url.clone()]
-                    };
-                    download_with_fallbacks(
-                        &self.client,
-                        &download_urls,
-                        &cache_file,
-                        progress_downloaded,
-                        progress_total,
-                        cancel,
-                    )
-                } else {
-                    Err(e)
-                }
-            }
-        };
-        download_res?;
-        verify_sha256_if_present(&cache_file, &artifact.sha256_sum)?;
-
         let final_dir = self.paths.version_dir(&version.0);
-        use envr_platform::install_layout;
-        install_layout::ensure_final_parent(&final_dir)?;
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                let download_res = download_with_fallbacks(
+                    &self.client,
+                    &download_urls,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                );
+                #[cfg(windows)]
+                let download_res = match download_res {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        if os == "windows"
+                            && matches!(win_dist, PythonWindowsDistribution::Auto)
+                            && artifact.name.starts_with("nuget:")
+                        {
+                            artifact = embed_artifact.clone();
+                            let download_urls = if let Some(st) = load_settings_snapshot() {
+                                python_download_url_candidates(&st, &artifact.url)
+                            } else {
+                                vec![artifact.url.clone()]
+                            };
+                            download_with_fallbacks(
+                                &self.client,
+                                &download_urls,
+                                &cache_file,
+                                progress_downloaded,
+                                progress_total,
+                                cancel,
+                            )
+                        } else {
+                            Err(e)
+                        }
+                    }
+                };
+                download_res?;
+                verify_sha256_if_present(&cache_file, &artifact.sha256_sum)
+            },
+            || Ok(()),
+            || {
+                use envr_platform::install_layout;
+                install_layout::ensure_final_parent(&final_dir)?;
 
-        if os == "windows" {
-            fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
-            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
-                .map_err(EnvrError::from)?;
-            extract::extract_archive(&cache_file, staging.path())?;
-            let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-            install_layout::remove_if_exists(&staging_final)?;
-            install_layout::hoist_directory_children(staging.path(), &staging_final)?;
-            // NuGet packages store payload under `tools/` - hoist if present.
-            #[cfg(windows)]
-            promote_nuget_tools_dir(&staging_final)?;
-            // For embeddable zips, ensure `_pth` enables site-packages.
-            #[cfg(windows)]
-            if staging_final.read_dir().ok().is_some()
-                && (staging_final.join("python311._pth").exists()
-                    || staging_final.join("python312._pth").exists()
-                    || staging_final.join("python313._pth").exists()
-                    || staging_final.join("python314._pth").exists())
-            {
-                fix_windows_embed_pth(&staging_final)?;
-            }
-            let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
-            if !python_installation_valid(&install_root) {
-                let _ = fs::remove_dir_all(&staging_final);
-                return Err(EnvrError::Validation(
-                    "python install did not produce a usable prefix".into(),
-                ));
-            }
-            install_layout::commit_staging_dir(&staging_final, &final_dir)?;
-        } else {
-            fs::create_dir_all(self.paths.cache_dir().join(&version.0)).map_err(EnvrError::from)?;
-            let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
-                .map_err(EnvrError::from)?;
-            extract::extract_archive(&cache_file, staging.path())?;
-            let src_root = lone_child_directory(staging.path())?;
-            let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-            install_layout::remove_if_exists(&staging_final)?;
-            if let Err(e) = build_cpython_unix(&src_root, &staging_final) {
-                let _ = fs::remove_dir_all(&staging_final);
-                return Err(e);
-            }
-            let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
-            if !python_installation_valid(&install_root) {
-                let _ = fs::remove_dir_all(&staging_final);
-                return Err(EnvrError::Validation(
-                    "python install did not produce a usable prefix".into(),
-                ));
-            }
-            if let Err(e) = verify_python_and_pip(&install_root) {
-                let _ = fs::remove_dir_all(&staging_final);
-                return Err(e);
-            }
-            install_layout::commit_staging_dir(&staging_final, &final_dir)?;
-        }
-
-        let install_root = fs::canonicalize(&final_dir).map_err(EnvrError::from)?;
-        if !python_installation_valid(&install_root) {
-            return Err(EnvrError::Validation(
-                "python install did not produce a usable prefix".into(),
-            ));
-        }
-        #[cfg(windows)]
-        {
-            // Install pip *after* promotion to final directory so `pip.exe` launchers do not embed staging paths.
-            // For Windows, prefer NuGet full distribution when configured; it includes full stdlib (e.g. `venv`).
-            // If `venv` is missing after install, bootstrap via NuGet is expected to fix this (embeddable may not).
-            if matches!(
-                win_dist,
-                PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget
-            ) && !python_has_venv(&install_root)
-            {
-                return Err(EnvrError::Validation(
-                    "python install missing stdlib modules (venv/ensurepip); consider runtime.python.windows_distribution = \"nuget\"".into(),
-                ));
-            }
-            // Best-effort: only bootstrap pip when `python -m pip` is not available.
-            let pip_ok = Command::new(python_executable(&install_root).expect("py"))
-                .args(["-m", "pip", "--version"])
-                .current_dir(&install_root)
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-            if !pip_ok {
-                // First try ensurepip (no network), then fall back to get-pip if needed.
-                if ensure_windows_pip_launchers(&install_root).is_err() {
-                    if let Err(e) = bootstrap_pip_windows(
-                        &self.client,
-                        &self.paths,
-                        &install_root,
-                        progress_downloaded,
-                        progress_total,
-                        cancel,
-                    ) {
-                        let _ = fs::remove_dir_all(&final_dir);
+                if os == "windows" {
+                    fs::create_dir_all(self.paths.cache_dir().join(&version.0))
+                        .map_err(EnvrError::from)?;
+                    let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
+                        .map_err(EnvrError::from)?;
+                    extract::extract_archive(&cache_file, staging.path())?;
+                    let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+                    install_layout::remove_if_exists(&staging_final)?;
+                    install_layout::hoist_directory_children(staging.path(), &staging_final)?;
+                    #[cfg(windows)]
+                    promote_nuget_tools_dir(&staging_final)?;
+                    #[cfg(windows)]
+                    if staging_final.read_dir().ok().is_some()
+                        && (staging_final.join("python311._pth").exists()
+                            || staging_final.join("python312._pth").exists()
+                            || staging_final.join("python313._pth").exists()
+                            || staging_final.join("python314._pth").exists())
+                    {
+                        fix_windows_embed_pth(&staging_final)?;
+                    }
+                    let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
+                    if !python_installation_valid(&install_root) {
+                        let _ = fs::remove_dir_all(&staging_final);
+                        return Err(EnvrError::Validation(
+                            "python install did not produce a usable prefix".into(),
+                        ));
+                    }
+                    install_layout::commit_staging_dir(&staging_final, &final_dir)?;
+                } else {
+                    fs::create_dir_all(self.paths.cache_dir().join(&version.0))
+                        .map_err(EnvrError::from)?;
+                    let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
+                        .map_err(EnvrError::from)?;
+                    extract::extract_archive(&cache_file, staging.path())?;
+                    let src_root = lone_child_directory(staging.path())?;
+                    let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+                    install_layout::remove_if_exists(&staging_final)?;
+                    if let Err(e) = build_cpython_unix(&src_root, &staging_final) {
+                        let _ = fs::remove_dir_all(&staging_final);
                         return Err(e);
                     }
-                }
-            } else {
-                // `python -m pip` is available but `pip.exe` may still be missing (NuGet layouts).
-                if ensure_windows_pip_launchers(&install_root).is_err() {
-                    // As a last resort, use get-pip to generate entrypoint launchers.
-                    if let Err(e) = bootstrap_pip_windows(
-                        &self.client,
-                        &self.paths,
-                        &install_root,
-                        progress_downloaded,
-                        progress_total,
-                        cancel,
-                    ) {
-                        let _ = fs::remove_dir_all(&final_dir);
+                    let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
+                    if !python_installation_valid(&install_root) {
+                        let _ = fs::remove_dir_all(&staging_final);
+                        return Err(EnvrError::Validation(
+                            "python install did not produce a usable prefix".into(),
+                        ));
+                    }
+                    if let Err(e) = verify_python_and_pip(&install_root) {
+                        let _ = fs::remove_dir_all(&staging_final);
                         return Err(e);
                     }
+                    install_layout::commit_staging_dir(&staging_final, &final_dir)?;
                 }
-            }
-        }
-        verify_python_and_pip(&install_root)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+
+                let install_root = fs::canonicalize(&final_dir).map_err(EnvrError::from)?;
+                if !python_installation_valid(&install_root) {
+                    return Err(EnvrError::Validation(
+                        "python install did not produce a usable prefix".into(),
+                    ));
+                }
+                #[cfg(windows)]
+                {
+                    if matches!(
+                        win_dist,
+                        PythonWindowsDistribution::Auto | PythonWindowsDistribution::Nuget
+                    ) && !python_has_venv(&install_root)
+                    {
+                        return Err(EnvrError::Validation(
+                            "python install missing stdlib modules (venv/ensurepip); consider runtime.python.windows_distribution = \"nuget\"".into(),
+                        ));
+                    }
+                    let pip_ok = Command::new(python_executable(&install_root).expect("py"))
+                        .args(["-m", "pip", "--version"])
+                        .current_dir(&install_root)
+                        .output()
+                        .map(|o| o.status.success())
+                        .unwrap_or(false);
+                    if !pip_ok {
+                        if ensure_windows_pip_launchers(&install_root).is_err() {
+                            if let Err(e) = bootstrap_pip_windows(
+                                &self.client,
+                                &self.paths,
+                                &install_root,
+                                progress_downloaded,
+                                progress_total,
+                                cancel,
+                            ) {
+                                let _ = fs::remove_dir_all(&final_dir);
+                                return Err(e);
+                            }
+                        }
+                    } else if ensure_windows_pip_launchers(&install_root).is_err() {
+                        if let Err(e) = bootstrap_pip_windows(
+                            &self.client,
+                            &self.paths,
+                            &install_root,
+                            progress_downloaded,
+                            progress_total,
+                            cancel,
+                        ) {
+                            let _ = fs::remove_dir_all(&final_dir);
+                            return Err(e);
+                        }
+                    }
+                }
+                verify_python_and_pip(&install_root)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

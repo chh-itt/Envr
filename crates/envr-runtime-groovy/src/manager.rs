@@ -2,7 +2,9 @@ use crate::index::{
     GroovyIndexRow, blocking_http_client, fetch_text, list_remote_latest_per_major_lines,
     list_remote_versions, merge_rows, resolve_groovy_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -441,27 +443,35 @@ impl GroovyManager {
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
         ensure_java_preflight(&self.paths.runtime_root, version_label)?;
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".into()));
-        }
         let cache_dir = self.paths.cache_dir().join(version_label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
         let archive_path = cache_dir.join(format!("apache-groovy-binary-{version_label}.zip"));
-        self.maybe_download_archive_fallback(
-            artifact_url,
-            &archive_path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
         let final_dir = self.paths.version_dir(version_label);
-        promote_groovy_extracted_tree(staging.path(), &final_dir)?;
-        self.set_current(&RuntimeVersion(version_label.to_string()))?;
-        Ok(RuntimeVersion(version_label.to_string()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(&cache_dir).map_err(EnvrError::from),
+            || {
+                self.maybe_download_archive_fallback(
+                    artifact_url,
+                    &archive_path,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || Ok(()),
+            || {
+                let staging_parent = cache_dir.join("extract_staging");
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&archive_path, staging.path())?;
+                promote_groovy_extracted_tree(staging.path(), &final_dir)
+            },
+            || {
+                let resolved = RuntimeVersion(version_label.to_string());
+                self.set_current(&resolved)?;
+                Ok(resolved)
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

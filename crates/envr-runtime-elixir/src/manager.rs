@@ -3,7 +3,9 @@ use crate::index::{
     fetch_builds_index, parse_elixir_builds, pick_build_for_version, resolve_elixir_version,
     select_builds_prefer_otp,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
@@ -348,31 +350,42 @@ impl ElixirManager {
             .next()
             .ok_or_else(|| EnvrError::Validation("elixir build url missing filename".into()))?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(file_name);
-        download_url_to_path_resumable(
-            &self.client,
-            &build.url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-
-        use envr_platform::install_layout;
         let final_dir = self.paths.version_dir(&version.0);
-        install_layout::ensure_final_parent(&final_dir)?;
-        let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-        install_layout::remove_if_exists(&staging_final)?;
-        fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, &staging_final)?;
-        patch_windows_elixir_batch(&staging_final)?;
-
-        if let Err(e) = validate_elixir_installation(&staging_final, &self.paths.runtime_root) {
-            let _ = fs::remove_dir_all(&staging_final);
-            return Err(e);
-        }
-        install_layout::commit_staging_dir(&staging_final, &final_dir)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_url_to_path_resumable(
+                    &self.client,
+                    &build.url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || Ok(()),
+            || {
+                use envr_platform::install_layout;
+                install_layout::ensure_final_parent(&final_dir)?;
+                let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+                install_layout::remove_if_exists(&staging_final)?;
+                fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, &staging_final)?;
+                patch_windows_elixir_batch(&staging_final)?;
+                if let Err(e) =
+                    validate_elixir_installation(&staging_final, &self.paths.runtime_root)
+                {
+                    let _ = fs::remove_dir_all(&staging_final);
+                    return Err(e);
+                }
+                install_layout::commit_staging_dir(&staging_final, &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

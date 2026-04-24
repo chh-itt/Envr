@@ -3,7 +3,9 @@ use crate::index::{
     host_rubyinstaller_arch, parse_ruby_releases, parse_rubyinstaller_7z_artifacts,
     pick_rubyinstaller_artifact, resolve_ruby_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
@@ -327,37 +329,46 @@ impl RubyManager {
                 EnvrError::Validation("rubyinstaller url missing filename".into())
             })?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(file_name);
-        download_url_to_path_resumable(
-            &self.client,
-            &artifact.url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-
-        use envr_platform::install_layout;
         let final_dir = self.paths.version_dir(&version.0);
-        install_layout::ensure_final_parent(&final_dir)?;
-        let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-        install_layout::remove_if_exists(&staging_final)?;
-        fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_url_to_path_resumable(
+                    &self.client,
+                    &artifact.url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || Ok(()),
+            || {
+                use envr_platform::install_layout;
+                install_layout::ensure_final_parent(&final_dir)?;
+                let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+                install_layout::remove_if_exists(&staging_final)?;
+                fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
 
-        if file_name.ends_with(".7z") {
-            extract_7z_with_bsdtar(&cache_file, &staging_final)?;
-        } else {
-            extract::extract_archive(&cache_file, &staging_final)?;
-        }
+                if file_name.ends_with(".7z") {
+                    extract_7z_with_bsdtar(&cache_file, &staging_final)?;
+                } else {
+                    extract::extract_archive(&cache_file, &staging_final)?;
+                }
 
-        maybe_promote_single_root_dir(&staging_final)?;
-
-        if let Err(e) = validate_ruby_installation(&staging_final) {
-            let _ = fs::remove_dir_all(&staging_final);
-            return Err(e);
-        }
-        install_layout::commit_staging_dir(&staging_final, &final_dir)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+                maybe_promote_single_root_dir(&staging_final)?;
+                if let Err(e) = validate_ruby_installation(&staging_final) {
+                    let _ = fs::remove_dir_all(&staging_final);
+                    return Err(e);
+                }
+                install_layout::commit_staging_dir(&staging_final, &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

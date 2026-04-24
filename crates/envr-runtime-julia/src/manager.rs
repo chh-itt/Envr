@@ -3,7 +3,9 @@ use crate::index::{
     list_remote_latest_per_major_lines, list_remote_versions, parse_versions_root,
     pick_file_for_host, resolve_julia_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -289,9 +291,6 @@ impl JuliaManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".into()));
-        }
         let m = self.load_versions_map()?;
         let host = julia_host_target()?;
         let entry = find_version_entry(&m, version_label)?;
@@ -321,28 +320,40 @@ impl JuliaManager {
         };
 
         let cache_dir = self.paths.cache_dir().join(version_label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
         let archive_path = cache_dir.join(format!("julia{ext}"));
-        download_to_path(
-            &self.client,
-            url,
-            &archive_path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        if let Some(h) = sha256 {
-            checksum::verify_sha256_hex(&archive_path, h)?;
-        }
-
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
         let final_dir = self.paths.version_dir(version_label);
-        promote_single_root_dir(staging.path(), &final_dir)?;
-        self.set_current(&RuntimeVersion(version_label.to_string()))?;
-        Ok(RuntimeVersion(version_label.to_string()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(&cache_dir).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    url,
+                    &archive_path,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || {
+                if let Some(h) = sha256 {
+                    checksum::verify_sha256_hex(&archive_path, h)?;
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = cache_dir.join("extract_staging");
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&archive_path, staging.path())?;
+                promote_single_root_dir(staging.path(), &final_dir)
+            },
+            || {
+                let resolved = RuntimeVersion(version_label.to_string());
+                self.set_current(&resolved)?;
+                Ok(resolved)
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

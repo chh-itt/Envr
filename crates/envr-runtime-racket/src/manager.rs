@@ -2,7 +2,9 @@ use crate::index::{
     RacketInstallableRow, blocking_http_client, fetch_racket_installable_rows,
     list_remote_latest_per_major_lines, list_remote_versions, resolve_racket_version,
 };
-use envr_domain::installer::SpecDrivenInstaller;
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -379,16 +381,15 @@ impl SpecDrivenInstaller for RacketManager {
         if final_dir.is_dir() && racket_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
         }
-        fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let dl_dir = self.paths.cache_dir().join("downloads");
-        fs::create_dir_all(&dl_dir).map_err(EnvrError::from)?;
         let dl_tmp = tempfile::tempdir_in(&dl_dir).map_err(EnvrError::from)?;
         let archive = dl_tmp.path().join(format!("racket-minimal-{label}.tgz"));
         let fallback = row.url.replace("-cs.tgz", ".tgz");
         let mirror_primary = mirror_url_for_release_asset(&label, &row.url);
         let mirror_fallback = mirror_url_for_release_asset(&label, &fallback);
+        let label_for_cache = label.clone();
+        let resolved_label = label.clone();
         let mut candidates = vec![row.url.clone()];
         if fallback != row.url {
             candidates.push(fallback.clone());
@@ -401,41 +402,57 @@ impl SpecDrivenInstaller for RacketManager {
         {
             candidates.push(mf);
         }
-        let mut errs = Vec::new();
-        for url in &candidates {
-            match download_file_atomic(&client, url, &archive) {
-                Ok(()) => {
-                    if file_starts_with_gzip_magic(&archive)? {
-                        errs.clear();
-                        break;
+        let (_, _, cancel) = install_progress_handles(request);
+        execute_install_pipeline(
+            cancel,
+            || {
+                fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
+                fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
+                fs::create_dir_all(&dl_dir).map_err(EnvrError::from)?;
+                Ok(())
+            },
+            || {
+                let mut errs = Vec::new();
+                for url in &candidates {
+                    match download_file_atomic(&client, url, &archive) {
+                        Ok(()) => {
+                            if file_starts_with_gzip_magic(&archive)? {
+                                errs.clear();
+                                break;
+                            }
+                            errs.push(format!("{url} (downloaded file is not gzip data)"));
+                        }
+                        Err(e) => {
+                            errs.push(format!("{url} ({e})"));
+                        }
                     }
-                    errs.push(format!("{url} (downloaded file is not gzip data)"));
                 }
-                Err(e) => {
-                    errs.push(format!("{url} ({e})"));
+                if !archive.is_file() || !file_starts_with_gzip_magic(&archive)? {
+                    return Err(EnvrError::Download(format!(
+                        "failed to download racket archive; tried: {}",
+                        errs.join("; ")
+                    )));
                 }
-            }
-        }
-        if !archive.is_file() || !file_starts_with_gzip_magic(&archive)? {
-            return Err(EnvrError::Download(format!(
-                "failed to download racket archive; tried: {}",
-                errs.join("; ")
-            )));
-        }
-        // Keep a copy in cache for operator debugging; ignore failures (install can proceed from temp file).
-        let _ = fs::copy(&archive, self.paths.archive_cache_path(&label));
-
-        let staging_parent = self.paths.cache_dir().join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive, staging.path())?;
-        promote_racket_extract(staging.path(), &final_dir)?;
-
-        if !racket_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation(
-                "racket install validation failed".into(),
-            ));
-        }
-        Ok(RuntimeVersion(label))
+                // Keep a copy in cache for operator debugging; ignore failures (install can proceed from temp file).
+                let _ = fs::copy(&archive, self.paths.archive_cache_path(&label_for_cache));
+                Ok(())
+            },
+            || Ok(()),
+            || {
+                let staging_parent = self.paths.cache_dir().join("extract_staging");
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&archive, staging.path())?;
+                promote_racket_extract(staging.path(), &final_dir)
+            },
+            || {
+                if !racket_installation_valid(&final_dir) {
+                    return Err(EnvrError::Validation(
+                        "racket install validation failed".into(),
+                    ));
+                }
+                Ok(RuntimeVersion(resolved_label))
+            },
+        )
     }
 }

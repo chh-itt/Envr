@@ -3,7 +3,9 @@ use crate::index::{
     list_remote_latest_per_major_lines, list_remote_versions, parse_versions_from_index_html,
     resolve_terraform_version, terraform_platform_tuple,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -309,17 +311,26 @@ impl SpecDrivenInstaller for TerraformManager {
         let platform = terraform_platform_tuple()?;
         let url = artifact_url(&self.index_url, &label, platform);
         let cache_dir = self.paths.cache_dir().join(&label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
         let archive_path = cache_dir.join("terraform.zip");
         let (downloaded, total, cancel) = install_progress_handles(request);
-        download_to_path(&self.client, &url, &archive_path, downloaded, total, cancel)?;
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
         let final_dir = self.paths.version_dir(&label);
-        promote_terraform_extracted_tree(staging.path(), &final_dir)?;
-        self.set_current(&RuntimeVersion(label.clone()))?;
-        Ok(RuntimeVersion(label))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(&cache_dir).map_err(EnvrError::from),
+            || download_to_path(&self.client, &url, &archive_path, downloaded, total, cancel),
+            || Ok(()),
+            || {
+                let staging_parent = cache_dir.join("extract_staging");
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&archive_path, staging.path())?;
+                promote_terraform_extracted_tree(staging.path(), &final_dir)
+            },
+            || {
+                let resolved = RuntimeVersion(label.clone());
+                self.set_current(&resolved)?;
+                Ok(resolved)
+            },
+        )
     }
 }

@@ -3,7 +3,9 @@ use crate::index::{
     pick_windows_zip, resolve_php_version,
 };
 use envr_config::php_layout;
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -320,29 +322,38 @@ impl PhpManager {
         let storage_key = php_layout::version_dir_name(&version.0, self.want_ts);
         let cache_file = self.paths.cache_dir().join(&storage_key).join(&zip_name);
         let url = format!("{}/{}", self.releases_base_url, zip_name);
-
-        download_to_path(
-            &self.client,
-            &url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        if !sha.trim().is_empty() {
-            checksum::verify_sha256_hex(&cache_file, sha.trim())?;
-        }
-
-        let staging_parent = self.paths.cache_dir().join(&storage_key);
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-
         let final_dir = self.paths.version_dir_for(&version.0, self.want_ts);
-        promote_archive_layout(staging.path(), &final_dir)?;
-
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    &url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || {
+                if !sha.trim().is_empty() {
+                    checksum::verify_sha256_hex(&cache_file, sha.trim())?;
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = self.paths.cache_dir().join(&storage_key);
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                promote_archive_layout(staging.path(), &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

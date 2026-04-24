@@ -2,7 +2,9 @@ use crate::index::{
     DotnetSdkRelease, blocking_http_client, load_sdk_releases, pick_install_file,
     resolve_dotnet_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -284,32 +286,42 @@ impl DotnetManager {
             .ok_or_else(|| EnvrError::Validation(format!("dotnet sdk not found: {}", version.0)))?;
         let file = pick_install_file(&release.files, &version.0)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(&file.name);
-        download_to_path(
-            &self.client,
-            &file.url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-
         let final_dir = self.paths.version_dir(&version.0);
-        use envr_platform::install_layout;
-        install_layout::ensure_final_parent(&final_dir)?;
-        let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
-            .map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-        let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-        install_layout::remove_if_exists(&staging_final)?;
-        install_layout::hoist_directory_children(staging.path(), &staging_final)?;
-        let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
-        if let Err(e) = validate_dotnet_installation(&install_root) {
-            let _ = fs::remove_dir_all(&staging_final);
-            return Err(e);
-        }
-        install_layout::commit_staging_dir(&staging_final, &final_dir)?;
-        self.set_current(version)?;
-        Ok(RuntimeVersion(version.0.clone()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    &file.url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || Ok(()),
+            || {
+                use envr_platform::install_layout;
+                install_layout::ensure_final_parent(&final_dir)?;
+                let staging = tempfile::tempdir_in(self.paths.cache_dir().join(&version.0))
+                    .map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                let staging_final = install_layout::sibling_staging_path(&final_dir)?;
+                install_layout::remove_if_exists(&staging_final)?;
+                install_layout::hoist_directory_children(staging.path(), &staging_final)?;
+                let install_root = fs::canonicalize(&staging_final).map_err(EnvrError::from)?;
+                if let Err(e) = validate_dotnet_installation(&install_root) {
+                    let _ = fs::remove_dir_all(&staging_final);
+                    return Err(e);
+                }
+                install_layout::commit_staging_dir(&staging_final, &final_dir)
+            },
+            || {
+                self.set_current(version)?;
+                Ok(RuntimeVersion(version.0.clone()))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

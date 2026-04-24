@@ -3,7 +3,9 @@ use crate::index::{
     list_remote_latest_per_major_lines, list_remote_versions, parse_cached_install_rows,
     perl_upstream, resolve_perl_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -383,9 +385,6 @@ impl PerlManager {
         progress_total: Option<&Arc<AtomicU64>>,
         cancel: Option<&Arc<AtomicBool>>,
     ) -> EnvrResult<RuntimeVersion> {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".into()));
-        }
         let rows = self.load_rows()?;
         let row = self.row_for_version(&rows, version_label)?;
         let url = row.download_url.as_str();
@@ -401,30 +400,43 @@ impl PerlManager {
             )));
         };
         let cache_dir = self.paths.cache_dir().join(version_label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
         let archive_path = cache_dir.join(format!("perl{ext}"));
-        download_to_path(
-            &self.client,
-            url,
-            &archive_path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        if let Some(hex) = row.sha256_hex.as_deref() {
-            let t = hex.trim();
-            if !t.is_empty() {
-                checksum::verify_sha256_hex(&archive_path, t)?;
-            }
-        }
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
         let final_dir = self.paths.version_dir(version_label);
-        promote_perl_extract(staging.path(), &final_dir)?;
-        self.set_current(&RuntimeVersion(version_label.to_string()))?;
-        Ok(RuntimeVersion(version_label.to_string()))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(&cache_dir).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    url,
+                    &archive_path,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || {
+                if let Some(hex) = row.sha256_hex.as_deref() {
+                    let t = hex.trim();
+                    if !t.is_empty() {
+                        checksum::verify_sha256_hex(&archive_path, t)?;
+                    }
+                }
+                Ok(())
+            },
+            || {
+                let staging_parent = cache_dir.join("extract_staging");
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&archive_path, staging.path())?;
+                promote_perl_extract(staging.path(), &final_dir)
+            },
+            || {
+                let resolved = RuntimeVersion(version_label.to_string());
+                self.set_current(&resolved)?;
+                Ok(resolved)
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

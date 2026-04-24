@@ -4,7 +4,9 @@ use crate::index::{
     NodeRelease, blocking_http_client, fetch_node_index, node_version_v_prefix,
     normalize_node_version, parse_node_index, resolve_node_version,
 };
-use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::installer::{
+    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
+};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -362,10 +364,6 @@ impl NodeManager {
         let arch = std::env::consts::ARCH;
         let version_v = node_version_v_prefix(&version.0);
 
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
-
         let shasums_url = join_url_path(&self.dist_root(), &format!("{version_v}/SHASUMS256.txt"));
         let shasums_text = self
             .client
@@ -399,34 +397,39 @@ impl NodeManager {
         let (sha_expect, filename) = pick_node_dist_artifact(&entries, os, arch, &version_v)?;
         let artifact_url = join_url_path(&self.dist_root(), &format!("{version_v}/{filename}"));
 
-        fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let cache_file = self.paths.cache_dir().join(&version.0).join(&filename);
-        download_to_path(
-            &self.client,
-            &artifact_url,
-            &cache_file,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
-        checksum::verify_sha256_hex(&cache_file, &sha_expect)?;
-
-        let staging_parent = self.paths.cache_dir().join(&version.0);
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&cache_file, staging.path())?;
-
         let final_dir = self.paths.version_dir(&version.0);
-        promote_single_root_dir(staging.path(), &final_dir)?;
-
-        if !node_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation(
-                "extracted node layout missing node binary".into(),
-            ));
-        }
-
-        self.set_current(version)?;
-        Ok(RuntimeVersion(normalize_node_version(&version.0)))
+        execute_install_pipeline(
+            cancel,
+            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
+            || {
+                download_to_path(
+                    &self.client,
+                    &artifact_url,
+                    &cache_file,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                )
+            },
+            || checksum::verify_sha256_hex(&cache_file, &sha_expect),
+            || {
+                let staging_parent = self.paths.cache_dir().join(&version.0);
+                fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+                let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+                extract::extract_archive(&cache_file, staging.path())?;
+                promote_single_root_dir(staging.path(), &final_dir)
+            },
+            || {
+                if !node_installation_valid(&final_dir) {
+                    return Err(EnvrError::Validation(
+                        "extracted node layout missing node binary".into(),
+                    ));
+                }
+                self.set_current(version)?;
+                Ok(RuntimeVersion(normalize_node_version(&version.0)))
+            },
+        )
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
