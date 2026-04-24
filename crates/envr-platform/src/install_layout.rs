@@ -110,3 +110,66 @@ pub fn commit_staging_dir(validated_staging: &Path, final_dir: &Path) -> EnvrRes
     })?;
     Ok(())
 }
+
+/// Promote an extracted archive tree by hoisting direct children into a staging directory,
+/// validating, then committing to `final_dir`.
+pub fn commit_hoisted_children<F>(
+    extracted_root: &Path,
+    final_dir: &Path,
+    validate: F,
+    validation_error: &str,
+) -> EnvrResult<()>
+where
+    F: FnOnce(&Path) -> bool,
+{
+    ensure_final_parent(final_dir)?;
+    let staging_final = sibling_staging_path(final_dir)?;
+    remove_if_exists(&staging_final)?;
+    hoist_directory_children(extracted_root, &staging_final)?;
+    if !validate(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(validation_error.into()));
+    }
+    commit_staging_dir(&staging_final, final_dir)
+}
+
+/// Promote an extracted archive tree that contains exactly one top-level directory.
+///
+/// Moves that inner directory to a sibling staging directory, validates, then commits.
+pub fn commit_single_root_dir<F>(
+    extracted_root: &Path,
+    final_dir: &Path,
+    validate: F,
+    empty_error: &str,
+    multiple_roots_error: &str,
+    root_not_dir_error: &str,
+    validation_error: &str,
+) -> EnvrResult<()>
+where
+    F: FnOnce(&Path) -> bool,
+{
+    let mut iter = fs::read_dir(extracted_root).map_err(EnvrError::from)?;
+    let first = iter
+        .next()
+        .transpose()
+        .map_err(EnvrError::from)?
+        .ok_or_else(|| EnvrError::Validation(empty_error.into()))?;
+    if iter.next().transpose().map_err(EnvrError::from)?.is_some() {
+        return Err(EnvrError::Validation(multiple_roots_error.into()));
+    }
+    let inner = first.path();
+    if !inner.is_dir() {
+        return Err(EnvrError::Validation(root_not_dir_error.into()));
+    }
+
+    ensure_final_parent(final_dir)?;
+    let staging_final = sibling_staging_path(final_dir)?;
+    remove_if_exists(&staging_final)?;
+
+    move_dir(&inner, &staging_final)?;
+    if !validate(&staging_final) {
+        let _ = fs::remove_dir_all(&staging_final);
+        return Err(EnvrError::Validation(validation_error.into()));
+    }
+    commit_staging_dir(&staging_final, final_dir)
+}

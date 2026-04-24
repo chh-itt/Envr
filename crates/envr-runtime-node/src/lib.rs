@@ -8,8 +8,7 @@ pub use index::{
 };
 pub use manager::{
     NodeManager, NodePaths, dist_root_from_index_json_url, list_installed_versions,
-    node_installation_valid, parse_shasums256, pick_node_dist_artifact, promote_single_root_dir,
-    read_current,
+    node_installation_valid, parse_shasums256, pick_node_dist_artifact, read_current,
 };
 
 use envr_config::env_context::{load_settings_cached, runtime_root};

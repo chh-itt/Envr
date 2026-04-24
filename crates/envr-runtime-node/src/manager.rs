@@ -8,15 +8,14 @@ use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use std::{
     fs,
-    io::{Read, Write},
     path::{Path, PathBuf},
     sync::Arc,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64},
 };
 
 /// Layout: `{runtime_root}/runtimes/node/versions/<semver>/...` and `current` → version dir.
@@ -165,101 +164,6 @@ pub fn pick_node_dist_artifact(
     )))
 }
 
-fn download_to_path(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    path: &Path,
-    progress_downloaded: Option<&Arc<AtomicU64>>,
-    progress_total: Option<&Arc<AtomicU64>>,
-    cancel: Option<&Arc<AtomicBool>>,
-) -> EnvrResult<()> {
-    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-        return Err(EnvrError::Download("download cancelled".to_string()));
-    }
-    let mut response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    if let Some(t) = progress_total {
-        let total = response.content_length().unwrap_or(0);
-        t.store(total, Ordering::Relaxed);
-    }
-    if let Some(d) = progress_downloaded {
-        d.store(0, Ordering::Relaxed);
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        if let Some(d) = progress_downloaded {
-            d.fetch_add(n as u64, Ordering::Relaxed);
-        }
-    }
-    Ok(())
-}
-
-/// Node official archives contain a single top-level directory; promote it to `final_dir`.
-/// Uses a sibling staging directory under `versions/` so a failed install does not leave a
-/// half-populated version directory (staging is removed on validation failure).
-pub fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
-    use envr_platform::install_layout;
-
-    let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
-    let first = iter
-        .next()
-        .transpose()
-        .map_err(EnvrError::from)?
-        .ok_or_else(|| EnvrError::Validation("empty node archive".into()))?;
-    if iter.next().transpose().map_err(EnvrError::from)?.is_some() {
-        return Err(EnvrError::Validation(
-            "expected exactly one root directory in node archive".into(),
-        ));
-    }
-    let inner = first.path();
-    if !inner.is_dir() {
-        return Err(EnvrError::Validation(
-            "expected node archive root to be a directory".into(),
-        ));
-    }
-    install_layout::ensure_final_parent(final_dir)?;
-    let staging_final = install_layout::sibling_staging_path(final_dir)?;
-    install_layout::remove_if_exists(&staging_final)?;
-
-    fs::rename(&inner, &staging_final).map_err(EnvrError::from)?;
-
-    if !node_installation_valid(&staging_final) {
-        let _ = fs::remove_dir_all(&staging_final);
-        return Err(EnvrError::Validation(
-            "extracted node layout missing node binary".into(),
-        ));
-    }
-
-    install_layout::commit_staging_dir(&staging_final, final_dir)?;
-    Ok(())
-}
-
 pub fn node_installation_valid(home: &Path) -> bool {
     #[cfg(windows)]
     {
@@ -403,7 +307,7 @@ impl NodeManager {
             cancel,
             || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
             || {
-                download_to_path(
+                download_url_to_path_resumable(
                     &self.client,
                     &artifact_url,
                     &cache_file,
@@ -418,7 +322,15 @@ impl NodeManager {
                 fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
                 let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
                 extract::extract_archive(&cache_file, staging.path())?;
-                promote_single_root_dir(staging.path(), &final_dir)
+                envr_platform::install_layout::commit_single_root_dir(
+                    staging.path(),
+                    &final_dir,
+                    node_installation_valid,
+                    "empty node archive",
+                    "expected exactly one root directory in node archive",
+                    "expected node archive root to be a directory",
+                    "extracted node layout missing node binary",
+                )
             },
             || {
                 if !node_installation_valid(&final_dir) {
@@ -525,7 +437,16 @@ mod tests {
             fs::write(inner.join("bin").join("node"), []).expect("node");
         }
         let fin = tmp.path().join("out");
-        promote_single_root_dir(&staging, &fin).expect("promote");
+        envr_platform::install_layout::commit_single_root_dir(
+            &staging,
+            &fin,
+            node_installation_valid,
+            "empty node archive",
+            "expected exactly one root directory in node archive",
+            "expected node archive root to be a directory",
+            "extracted node layout missing node binary",
+        )
+        .expect("promote");
         assert!(node_installation_valid(&fin));
     }
 }

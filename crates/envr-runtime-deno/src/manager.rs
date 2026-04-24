@@ -7,15 +7,14 @@ use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_mirror::resolver::load_settings_cached;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 #[derive(Debug, Clone)]
 pub struct DenoPaths {
@@ -151,60 +150,6 @@ fn exact_semver_spec(spec: &str) -> Option<String> {
     None
 }
 
-fn download_to_path(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    path: &Path,
-    progress_downloaded: Option<&Arc<AtomicU64>>,
-    progress_total: Option<&Arc<AtomicU64>>,
-    cancel: Option<&Arc<AtomicBool>>,
-) -> EnvrResult<()> {
-    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-        return Err(EnvrError::Download("download cancelled".to_string()));
-    }
-    let mut response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    if let Some(t) = progress_total {
-        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
-    }
-    if let Some(d) = progress_downloaded {
-        d.store(0, Ordering::Relaxed);
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        if let Some(d) = progress_downloaded {
-            d.fetch_add(n as u64, Ordering::Relaxed);
-        }
-    }
-    Ok(())
-}
-
 fn download_to_path_with_fallback(
     client: &reqwest::blocking::Client,
     primary_url: &str,
@@ -214,7 +159,7 @@ fn download_to_path_with_fallback(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
-    let first = download_to_path(
+    let first = download_url_to_path_resumable(
         client,
         primary_url,
         path,
@@ -226,7 +171,7 @@ fn download_to_path_with_fallback(
         return first;
     };
     first.or_else(|e| {
-        download_to_path(
+        download_url_to_path_resumable(
             client,
             fallback,
             path,
@@ -242,23 +187,6 @@ fn download_to_path_with_fallback(
             )
         })
     })
-}
-
-fn promote_archive(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
-    use envr_platform::install_layout;
-
-    install_layout::ensure_final_parent(final_dir)?;
-    let staging_final = install_layout::sibling_staging_path(final_dir)?;
-    install_layout::remove_if_exists(&staging_final)?;
-    install_layout::hoist_directory_children(staging, &staging_final)?;
-    if !deno_installation_valid(&staging_final) {
-        let _ = fs::remove_dir_all(&staging_final);
-        return Err(EnvrError::Validation(
-            "extracted deno layout missing deno executable".into(),
-        ));
-    }
-    install_layout::commit_staging_dir(&staging_final, final_dir)?;
-    Ok(())
 }
 
 pub struct DenoManager {
@@ -330,7 +258,12 @@ impl DenoManager {
                 fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
                 let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
                 extract::extract_archive(&cache_file, staging.path())?;
-                promote_archive(staging.path(), &final_dir)
+                envr_platform::install_layout::commit_hoisted_children(
+                    staging.path(),
+                    &final_dir,
+                    deno_installation_valid,
+                    "extracted deno layout missing deno executable",
+                )
             },
             || {
                 self.set_current(version)?;
