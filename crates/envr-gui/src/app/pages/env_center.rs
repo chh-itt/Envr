@@ -3,6 +3,9 @@ use crate::view::env_center::EnvCenterMsg;
 use iced::Task;
 use std::sync::atomic::Ordering;
 
+use super::downloads::{
+    enqueue_op_job_running, enqueue_runtime_install_job, maybe_start_queued_jobs,
+};
 use crate::view::downloads::JobState;
 
 pub(crate) fn persist_jvm_path_proxy_toggle(
