@@ -1,6 +1,5 @@
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_error::EnvrResult;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
 
 mod defaults;
 mod general_config;
@@ -15,6 +14,7 @@ mod runtime_sources;
 mod runtime_web_tooling;
 mod rustup_policy;
 mod settings_io;
+mod settings_store;
 mod storage_utils;
 mod ui_config;
 mod validation;
@@ -59,10 +59,7 @@ pub use runtime_root_cache::{
     SettingsCache, process_runtime_root_override, reset_settings_load_caches, resolve_runtime_root,
     set_process_runtime_root_override, settings_path_from_platform,
 };
-use runtime_root_cache::{
-    runtime_root_cache_clear, settings_file_cache_get, settings_file_cache_insert,
-    settings_file_cache_remove,
-};
+// (settings_store impl imports internal cache helpers)
 pub use runtime_sources::{
     bun_package_registry_env, deno_official_release_zip_url, deno_package_registry_env,
     deno_release_zip_url, node_index_json_url, npm_registry_url_to_apply,
@@ -75,9 +72,7 @@ pub use runtime_web_tooling::{
     PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
 };
 pub use rustup_policy::{rustup_dist_server_from_settings, rustup_update_root_from_settings};
-use settings_io::format_toml_settings_deser_error;
 pub use settings_io::validate_settings_file;
-use storage_utils::{backup_corrupted_file, file_mtime};
 pub use ui_config::{
     AppearanceSettings, DownloadsPanelSettings, FontMode, FontSettings, GuiSettings, I18nSettings,
     LocaleMode, RuntimeLayoutSettings, ThemeMode,
@@ -432,58 +427,6 @@ impl Settings {
         validate_core_settings(self)?;
         validate_runtime_settings(&self.runtime)?;
 
-        Ok(())
-    }
-
-    pub fn load_from(path: impl AsRef<Path>) -> EnvrResult<Self> {
-        let path = path.as_ref();
-        let content = fs::read_to_string(path).map_err(EnvrError::from)?;
-        let settings: Settings = toml::from_str(&content).map_err(|err| {
-            EnvrError::Config(format!(
-                "failed to parse {}: {}",
-                path.display(),
-                format_toml_settings_deser_error(&content, &err)
-            ))
-        })?;
-        settings.validate()?;
-        Ok(settings)
-    }
-
-    pub fn load_or_default_from(path: impl AsRef<Path>) -> EnvrResult<Self> {
-        let path = path.as_ref().to_path_buf();
-        let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
-
-        if let Some(s) = settings_file_cache_get(&path, mtime) {
-            return Ok(s);
-        }
-
-        let loaded: Settings = match Self::load_from(&path) {
-            Ok(v) => v,
-            Err(_err) => {
-                if path.exists() {
-                    let _ = backup_corrupted_file(&path);
-                }
-                let defaults = Settings::default();
-                defaults.validate()?;
-                defaults
-            }
-        };
-
-        settings_file_cache_insert(path, mtime, loaded.clone());
-        Ok(loaded)
-    }
-
-    pub fn save_to(&self, path: impl AsRef<Path>) -> EnvrResult<()> {
-        self.validate()?;
-
-        let path = path.as_ref();
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode settings", e))?;
-        envr_platform::fs_atomic::write_atomic_with_backup(path, content.as_bytes(), "bak")
-            .map_err(EnvrError::from)?;
-        let pb = path.to_path_buf();
-        settings_file_cache_remove(&pb);
-        runtime_root_cache_clear();
         Ok(())
     }
 }

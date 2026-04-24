@@ -5,7 +5,8 @@ use std::{
 use envr_error::EnvrResult;
 use envr_platform::paths::EnvrPaths;
 
-use super::{Settings, file_mtime};
+use super::Settings;
+use super::storage_utils::file_mtime;
 
 thread_local! {
     static SETTINGS_FILE_CACHE: RefCell<HashMap<PathBuf, (Option<SystemTime>, Settings)>> =
