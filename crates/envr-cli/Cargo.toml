@@ -21,11 +21,53 @@ path = "src/bin/er.rs"
 name = "i18n_cli_help_locale"
 path = "tests/i18n/cli_help_locale.rs"
 
+[features]
+default = ["default-runtime-set"]
+default-runtime-set = ["envr-core/default-runtime-set"]
+runtime-node = ["envr-core/runtime-node"]
+runtime-python = ["envr-core/runtime-python"]
+runtime-java = ["envr-core/runtime-java"]
+runtime-kotlin = ["envr-core/runtime-kotlin"]
+runtime-scala = ["envr-core/runtime-scala"]
+runtime-clojure = ["envr-core/runtime-clojure"]
+runtime-groovy = ["envr-core/runtime-groovy"]
+runtime-terraform = ["envr-core/runtime-terraform"]
+runtime-v = ["envr-core/runtime-v"]
+runtime-odin = ["envr-core/runtime-odin"]
+runtime-purescript = ["envr-core/runtime-purescript"]
+runtime-elm = ["envr-core/runtime-elm"]
+runtime-gleam = ["envr-core/runtime-gleam"]
+runtime-racket = ["envr-core/runtime-racket"]
+runtime-dart = ["envr-core/runtime-dart"]
+runtime-flutter = ["envr-core/runtime-flutter"]
+runtime-go = ["envr-core/runtime-go"]
+runtime-rust = ["envr-core/runtime-rust"]
+runtime-ruby = ["envr-core/runtime-ruby"]
+runtime-elixir = ["envr-core/runtime-elixir"]
+runtime-erlang = ["envr-core/runtime-erlang"]
+runtime-php = ["envr-core/runtime-php"]
+runtime-deno = ["envr-core/runtime-deno"]
+runtime-bun = ["envr-core/runtime-bun"]
+runtime-dotnet = ["envr-core/runtime-dotnet"]
+runtime-zig = ["envr-core/runtime-zig"]
+runtime-julia = ["envr-core/runtime-julia"]
+runtime-janet = ["envr-core/runtime-janet"]
+runtime-c3 = ["envr-core/runtime-c3"]
+runtime-babashka = ["envr-core/runtime-babashka"]
+runtime-sbcl = ["envr-core/runtime-sbcl"]
+runtime-haxe = ["envr-core/runtime-haxe"]
+runtime-lua = ["envr-core/runtime-lua"]
+runtime-nim = ["envr-core/runtime-nim"]
+runtime-crystal = ["envr-core/runtime-crystal"]
+runtime-perl = ["envr-core/runtime-perl"]
+runtime-unison = ["envr-core/runtime-unison"]
+runtime-rlang = ["envr-core/runtime-rlang"]
+
 [dependencies]
 clap = { workspace = true }
 clap_complete = { workspace = true }
 envr-config = { path = "../envr-config" }
-envr-core = { path = "../envr-core" }
+envr-core = { path = "../envr-core", default-features = false }
 envr-domain = { path = "../envr-domain" }
 envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }

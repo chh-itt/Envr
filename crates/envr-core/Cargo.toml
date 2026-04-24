@@ -4,6 +4,87 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[features]
+default = ["default-runtime-set"]
+default-runtime-set = [
+    "runtime-node",
+    "runtime-python",
+    "runtime-java",
+    "runtime-kotlin",
+    "runtime-scala",
+    "runtime-clojure",
+    "runtime-groovy",
+    "runtime-terraform",
+    "runtime-v",
+    "runtime-odin",
+    "runtime-purescript",
+    "runtime-elm",
+    "runtime-gleam",
+    "runtime-racket",
+    "runtime-dart",
+    "runtime-flutter",
+    "runtime-go",
+    "runtime-rust",
+    "runtime-ruby",
+    "runtime-elixir",
+    "runtime-erlang",
+    "runtime-php",
+    "runtime-deno",
+    "runtime-bun",
+    "runtime-dotnet",
+    "runtime-zig",
+    "runtime-julia",
+    "runtime-janet",
+    "runtime-c3",
+    "runtime-babashka",
+    "runtime-sbcl",
+    "runtime-haxe",
+    "runtime-lua",
+    "runtime-nim",
+    "runtime-crystal",
+    "runtime-perl",
+    "runtime-unison",
+    "runtime-rlang",
+]
+runtime-node = ["envr-runtime-registry/runtime-node"]
+runtime-python = ["envr-runtime-registry/runtime-python"]
+runtime-java = ["envr-runtime-registry/runtime-java"]
+runtime-kotlin = ["envr-runtime-registry/runtime-kotlin"]
+runtime-scala = ["envr-runtime-registry/runtime-scala"]
+runtime-clojure = ["envr-runtime-registry/runtime-clojure"]
+runtime-groovy = ["envr-runtime-registry/runtime-groovy"]
+runtime-terraform = ["envr-runtime-registry/runtime-terraform"]
+runtime-v = ["envr-runtime-registry/runtime-v"]
+runtime-odin = ["envr-runtime-registry/runtime-odin"]
+runtime-purescript = ["envr-runtime-registry/runtime-purescript"]
+runtime-elm = ["envr-runtime-registry/runtime-elm"]
+runtime-gleam = ["envr-runtime-registry/runtime-gleam"]
+runtime-racket = ["envr-runtime-registry/runtime-racket"]
+runtime-dart = ["envr-runtime-registry/runtime-dart"]
+runtime-flutter = ["envr-runtime-registry/runtime-flutter"]
+runtime-go = ["envr-runtime-registry/runtime-go"]
+runtime-rust = ["envr-runtime-registry/runtime-rust"]
+runtime-ruby = ["envr-runtime-registry/runtime-ruby"]
+runtime-elixir = ["envr-runtime-registry/runtime-elixir"]
+runtime-erlang = ["envr-runtime-registry/runtime-erlang"]
+runtime-php = ["envr-runtime-registry/runtime-php"]
+runtime-deno = ["envr-runtime-registry/runtime-deno"]
+runtime-bun = ["envr-runtime-registry/runtime-bun"]
+runtime-dotnet = ["envr-runtime-registry/runtime-dotnet"]
+runtime-zig = ["envr-runtime-registry/runtime-zig"]
+runtime-julia = ["envr-runtime-registry/runtime-julia"]
+runtime-janet = ["envr-runtime-registry/runtime-janet"]
+runtime-c3 = ["envr-runtime-registry/runtime-c3"]
+runtime-babashka = ["envr-runtime-registry/runtime-babashka"]
+runtime-sbcl = ["envr-runtime-registry/runtime-sbcl"]
+runtime-haxe = ["envr-runtime-registry/runtime-haxe"]
+runtime-lua = ["envr-runtime-registry/runtime-lua"]
+runtime-nim = ["envr-runtime-registry/runtime-nim"]
+runtime-crystal = ["envr-runtime-registry/runtime-crystal"]
+runtime-perl = ["envr-runtime-registry/runtime-perl"]
+runtime-unison = ["envr-runtime-registry/runtime-unison"]
+runtime-rlang = ["envr-runtime-registry/runtime-rlang"]
+
 [[test]]
 name = "i18n_gui_tr_key"
 path = "tests/i18n/gui_tr_key.rs"
@@ -13,44 +94,7 @@ envr-config = { path = "../envr-config" }
 envr-error = { path = "../envr-error" }
 envr-domain = { path = "../envr-domain" }
 envr-platform = { path = "../envr-platform" }
-envr-runtime-node = { path = "../envr-runtime-node" }
-envr-runtime-python = { path = "../envr-runtime-python" }
-envr-runtime-java = { path = "../envr-runtime-java" }
-envr-runtime-kotlin = { path = "../envr-runtime-kotlin" }
-envr-runtime-scala = { path = "../envr-runtime-scala" }
-envr-runtime-clojure = { path = "../envr-runtime-clojure" }
-envr-runtime-groovy = { path = "../envr-runtime-groovy" }
-envr-runtime-terraform = { path = "../envr-runtime-terraform" }
-envr-runtime-v = { path = "../envr-runtime-v" }
-envr-runtime-odin = { path = "../envr-runtime-odin" }
-envr-runtime-purescript = { path = "../envr-runtime-purescript" }
-envr-runtime-elm = { path = "../envr-runtime-elm" }
-envr-runtime-gleam = { path = "../envr-runtime-gleam" }
-envr-runtime-racket = { path = "../envr-runtime-racket" }
-envr-runtime-dart = { path = "../envr-runtime-dart" }
-envr-runtime-flutter = { path = "../envr-runtime-flutter" }
-envr-runtime-go = { path = "../envr-runtime-go" }
-envr-runtime-rust = { path = "../envr-runtime-rust" }
-envr-runtime-ruby = { path = "../envr-runtime-ruby" }
-envr-runtime-elixir = { path = "../envr-runtime-elixir" }
-envr-runtime-erlang = { path = "../envr-runtime-erlang" }
-envr-runtime-php = { path = "../envr-runtime-php" }
-envr-runtime-deno = { path = "../envr-runtime-deno" }
-envr-runtime-bun = { path = "../envr-runtime-bun" }
-envr-runtime-dotnet = { path = "../envr-runtime-dotnet" }
-envr-runtime-zig = { path = "../envr-runtime-zig" }
-envr-runtime-julia = { path = "../envr-runtime-julia" }
-envr-runtime-janet = { path = "../envr-runtime-janet" }
-envr-runtime-c3 = { path = "../envr-runtime-c3" }
-envr-runtime-babashka = { path = "../envr-runtime-babashka" }
-envr-runtime-sbcl = { path = "../envr-runtime-sbcl" }
-envr-runtime-haxe = { path = "../envr-runtime-haxe" }
-envr-runtime-lua = { path = "../envr-runtime-lua" }
-envr-runtime-nim = { path = "../envr-runtime-nim" }
-envr-runtime-crystal = { path = "../envr-runtime-crystal" }
-envr-runtime-perl = { path = "../envr-runtime-perl" }
-envr-runtime-rlang = { path = "../envr-runtime-rlang" }
-envr-runtime-unison = { path = "../envr-runtime-unison" }
+envr-runtime-registry = { path = "../envr-runtime-registry", default-features = false }
 envr-shim-core = { path = "../envr-shim-core" }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }

@@ -1,6 +1,6 @@
 use envr_domain::runtime::{
-    InstallRequest, MajorVersionRecord, RemoteFilter, ResolvedVersion, RuntimeKind,
-    RuntimeIndex, RuntimeInstaller, RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec,
+    InstallRequest, MajorVersionRecord, RemoteFilter, ResolvedVersion, RuntimeIndex,
+    RuntimeInstaller, RuntimeKind, RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec,
     major_line_remote_install_blocked, runtime_descriptor, version_line_key_for_kind,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -85,212 +85,6 @@ impl RuntimeInstaller for ProviderInstallerRef<'_> {
     }
 }
 
-fn attach_runtime_root<T>(
-    runtime_root: &Option<PathBuf>,
-    new: impl FnOnce() -> T,
-    with_root: impl FnOnce(T, PathBuf) -> T,
-) -> T {
-    match runtime_root {
-        None => new(),
-        Some(r) => with_root(new(), r.clone()),
-    }
-}
-
-fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeProvider>> {
-    vec![
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_node::NodeRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_python::PythonRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_java::JavaRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_kotlin::KotlinRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_scala::ScalaRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_clojure::ClojureRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_groovy::GroovyRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_terraform::TerraformRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_v::VRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_odin::OdinRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_purescript::PurescriptRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_elm::ElmRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_gleam::GleamRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_racket::RacketRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_dart::DartRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_flutter::FlutterRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_go::GoRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_rust::RustRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_ruby::RubyRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_elixir::ElixirRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_erlang::ErlangRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_php::PhpRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_deno::DenoRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_bun::BunRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_dotnet::DotnetRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_zig::ZigRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_julia::JuliaRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_janet::JanetRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_c3::C3RuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_babashka::BabashkaRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_sbcl::SbclRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_haxe::HaxeRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_lua::LuaRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_nim::NimRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_crystal::CrystalRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_perl::PerlRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_unison::UnisonRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-        Box::new(attach_runtime_root(
-            &runtime_root,
-            envr_runtime_rlang::RlangRuntimeProvider::new,
-            |p, r| p.with_runtime_root(r),
-        )) as Box<dyn RuntimeProvider>,
-    ]
-}
-
 pub struct RuntimeService {
     providers: HashMap<RuntimeKind, Box<dyn RuntimeProvider>>,
     runtime_root_override: Option<PathBuf>,
@@ -325,13 +119,13 @@ impl RuntimeService {
     }
 
     pub fn with_defaults() -> EnvrResult<Self> {
-        Self::new(default_provider_boxes(None))
+        Self::new(envr_runtime_registry::default_provider_boxes(None))
     }
 
     /// Same as [`Self::with_defaults`], but all providers use this runtime root (e.g. from `ENVR_RUNTIME_ROOT`).
     pub fn with_runtime_root(root: PathBuf) -> EnvrResult<Self> {
         let root_override = root.clone();
-        let mut svc = Self::new(default_provider_boxes(Some(root)))?;
+        let mut svc = Self::new(envr_runtime_registry::default_provider_boxes(Some(root)))?;
         svc.runtime_root_override = Some(root_override);
         Ok(svc)
     }
@@ -348,7 +142,8 @@ impl RuntimeService {
     }
 
     fn installer_provider(&self, kind: RuntimeKind) -> EnvrResult<ProviderInstallerRef<'_>> {
-        self.provider(kind).map(|p| ProviderInstallerRef { inner: p })
+        self.provider(kind)
+            .map(|p| ProviderInstallerRef { inner: p })
     }
 
     pub fn index_port(&self, kind: RuntimeKind) -> EnvrResult<Box<dyn RuntimeIndex + '_>> {
@@ -597,9 +392,55 @@ impl RuntimeService {
 
     /// `Some(true)` = global active PHP is TS, `Some(false)` = NTS/legacy; `None` = no global current.
     pub fn php_global_current_want_ts(&self) -> EnvrResult<Option<bool>> {
+        #[cfg(not(windows))]
+        {
+            return Ok(None);
+        }
+        #[cfg(windows)]
         let root = self.cache_runtime_root()?;
-        let paths = envr_runtime_php::PhpPaths::new(root);
-        envr_runtime_php::read_current_global_want_ts(&paths)
+        #[cfg(windows)]
+        let php_home = root.join("runtimes").join("php");
+        #[cfg(windows)]
+        for link in [
+            php_home.join("current"),
+            php_home.join("current-ts"),
+            php_home.join("current-nts"),
+        ] {
+            if let Some(target) = Self::resolve_current_link_target(&link)? {
+                let Some(name) = target.file_name().and_then(|s| s.to_str()) else {
+                    return Ok(None);
+                };
+                if name.is_empty() {
+                    return Ok(None);
+                }
+                return Ok(Some(envr_config::php_layout::dir_flavor_is_ts(name)));
+            }
+        }
+        Ok(None)
+    }
+
+    fn resolve_current_link_target(link: &Path) -> EnvrResult<Option<PathBuf>> {
+        if !link.exists() {
+            return Ok(None);
+        }
+        if link.is_file() {
+            let s = fs::read_to_string(link).map_err(EnvrError::from)?;
+            let t = s.trim();
+            let target = PathBuf::from(t);
+            return Ok(Some(fs::canonicalize(&target).map_err(EnvrError::from)?));
+        }
+        if let Ok(t) = fs::read_link(link) {
+            let resolved = if t.is_relative() {
+                link.parent().map(|p| p.join(&t)).unwrap_or(t)
+            } else {
+                t
+            };
+            return Ok(Some(fs::canonicalize(&resolved).map_err(EnvrError::from)?));
+        }
+        if link.is_dir() {
+            return Ok(Some(fs::canonicalize(link).map_err(EnvrError::from)?));
+        }
+        Ok(None)
     }
 
     fn cache_runtime_root(&self) -> EnvrResult<PathBuf> {
