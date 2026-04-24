@@ -261,18 +261,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
 
 /// Environment variables that should point at the selected runtime home.
 pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)> {
-    fn env_path_string(home: &Path) -> String {
-        let raw = home.display().to_string();
-        #[cfg(windows)]
-        {
-            if let Some(stripped) = raw.strip_prefix(r"\\?\") {
-                return stripped.to_string();
-            }
-        }
-        raw
-    }
-
-    let home_env = env_path_string(home);
+    let home_env = envr_platform::path_norm::normalize_fs_path_string_lossy(home);
     match key {
         "java" => vec![("JAVA_HOME".into(), home_env.clone())],
         // Override stale parent env values so the selected runtime stays authoritative.
@@ -289,8 +278,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
                     }
                     let candidate: PathBuf = dir.join("erl.exe");
                     if candidate.is_file() {
-                        let s = dir.display().to_string();
-                        let s = s.strip_prefix(r"\\?\").unwrap_or(&s).to_string();
+                        let s = envr_platform::path_norm::normalize_fs_path_string_lossy(&dir);
                         // `elixir.bat` concatenates `%ERTS_BIN%erl.exe`, so keep a trailing backslash.
                         return Some(if s.ends_with('\\') {
                             s
@@ -1725,22 +1713,13 @@ pub fn resolve_core_shim_command_with_settings(
     if key == "elixir"
         && let Ok(erlang_home) = runtime_home_for_key(ctx, "erlang", cfg.as_ref(), None, settings)
     {
-        let mut erlang_home_env = erlang_home.display().to_string();
+        let erlang_home_env =
+            envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home);
+        let mut erts =
+            envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home.join("bin"));
         #[cfg(windows)]
-        {
-            if let Some(stripped) = erlang_home_env.strip_prefix(r"\\?\") {
-                erlang_home_env = stripped.to_string();
-            }
-        }
-        let mut erts = erlang_home.join("bin").display().to_string();
-        #[cfg(windows)]
-        {
-            if let Some(stripped) = erts.strip_prefix(r"\\?\") {
-                erts = stripped.to_string();
-            }
-            if !erts.ends_with('\\') {
-                erts.push('\\');
-            }
+        if !erts.ends_with('\\') {
+            erts.push('\\');
         }
         if let Some((_, v)) = extra_env.iter_mut().find(|(k, _)| k == "ERTS_BIN") {
             *v = erts;

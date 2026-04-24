@@ -232,14 +232,9 @@ fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<
     cmd.arg("--version");
     #[cfg(windows)]
     if let Some(erlang_home) = resolve_erlang_home(runtime_root) {
-        let mut eh = erlang_home.display().to_string();
-        if let Some(stripped) = eh.strip_prefix(r"\\?\") {
-            eh = stripped.to_string();
-        }
-        let mut erts = erlang_home.join("bin").display().to_string();
-        if let Some(stripped) = erts.strip_prefix(r"\\?\") {
-            erts = stripped.to_string();
-        }
+        let eh = envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home);
+        let mut erts =
+            envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home.join("bin"));
         if !erts.ends_with('\\') {
             erts.push('\\');
         }

@@ -127,13 +127,8 @@ fn create_symlink(src: &Path, dst: &Path) -> EnvrResult<()> {
 fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
     use std::process::{Command, Stdio};
 
-    fn normalize_for_cmd(p: &Path) -> String {
-        let s = p.to_string_lossy().to_string();
-        s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
-    }
-
-    let src_s = normalize_for_cmd(src);
-    let dst_s = normalize_for_cmd(dst);
+    let src_s = crate::path_norm::normalize_fs_path_string_lossy(src);
+    let dst_s = crate::path_norm::normalize_fs_path_string_lossy(dst);
 
     // `mklink /J <dst> <src>` creates a junction.
     // We intentionally run through `cmd /C` to let Windows handle quoting.

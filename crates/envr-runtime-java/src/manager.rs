@@ -456,8 +456,7 @@ fn sync_user_java_home(home: Option<&Path>) -> EnvrResult<()> {
     {
         use std::process::Command;
         let value = home
-            .map(|p| p.display().to_string())
-            .map(|s| s.strip_prefix(r"\\?\").unwrap_or(&s).to_string())
+            .map(envr_platform::path_norm::normalize_fs_path_string_lossy)
             .unwrap_or_default();
         let out = Command::new("setx")
             .args(["JAVA_HOME", &value])

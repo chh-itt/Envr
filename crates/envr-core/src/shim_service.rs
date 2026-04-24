@@ -6,6 +6,7 @@
 use envr_config::env_context::load_settings_cached;
 use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use envr_error::{EnvrError, EnvrResult};
+use envr_platform::path_norm::normalize_fs_path_string_lossy;
 use envr_shim_core::{CoreCommand, core_tool_executable};
 use std::collections::HashSet;
 use std::fs;
@@ -17,15 +18,7 @@ const JS_BIN_EXTS: [&str; 3] = ["js", "cjs", "mjs"];
 
 #[cfg(windows)]
 fn normalize_windows_path_for_cmd(p: &Path) -> String {
-    let s = p.display().to_string();
-    // Rust/Windows canonicalize often produces `\\?\` long paths.
-    // `cmd.exe` and some Win32 CreateProcess paths don't like them in batch files.
-    let b = s.as_bytes();
-    if b.len() >= 4 && b[0] == b'\\' && b[1] == b'\\' && b[2] == b'?' && b[3] == b'\\' {
-        s[4..].to_string()
-    } else {
-        s
-    }
+    normalize_fs_path_string_lossy(p)
 }
 
 #[cfg(windows)]

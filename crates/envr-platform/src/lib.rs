@@ -7,6 +7,7 @@ pub mod layout_common;
 pub mod links;
 pub mod lua_binaries;
 pub mod path;
+pub mod path_norm;
 pub mod paths;
 pub mod process;
 pub mod shell;

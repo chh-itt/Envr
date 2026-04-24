@@ -208,14 +208,7 @@ fn sync_globals_via_envr_cli_best_effort(runtime_root: &Path) {
 
 #[cfg(windows)]
 fn strip_windows_verbatim_prefix(p: &Path) -> std::path::PathBuf {
-    let s = p.as_os_str().to_string_lossy();
-    if let Some(rest) = s.strip_prefix(r"\\?\") {
-        return std::path::PathBuf::from(rest);
-    }
-    if let Some(rest) = s.strip_prefix("//?/") {
-        return std::path::PathBuf::from(rest.replace('/', "\\"));
-    }
-    p.to_path_buf()
+    envr_platform::path_norm::normalize_fs_path(p)
 }
 
 #[cfg(windows)]
