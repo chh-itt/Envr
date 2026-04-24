@@ -1,9 +1,6 @@
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    path::Path,
-};
+use std::{fs, path::Path};
 
 mod defaults;
 mod general_config;
@@ -16,6 +13,7 @@ mod runtime_long_tail;
 mod runtime_root_cache;
 mod runtime_sources;
 mod runtime_web_tooling;
+mod settings_io;
 mod storage_utils;
 mod ui_config;
 mod validation;
@@ -75,6 +73,8 @@ pub use runtime_web_tooling::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
     PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
 };
+use settings_io::format_toml_settings_deser_error;
+pub use settings_io::validate_settings_file;
 use storage_utils::{backup_corrupted_file, file_mtime};
 pub use ui_config::{
     AppearanceSettings, DownloadsPanelSettings, FontMode, FontSettings, GuiSettings, I18nSettings,
@@ -484,40 +484,6 @@ impl Settings {
         runtime_root_cache_clear();
         Ok(())
     }
-}
-
-fn format_toml_settings_deser_error(content: &str, e: &toml::de::Error) -> String {
-    match e.span() {
-        Some(span) => {
-            let start = span.start.min(content.len());
-            let line = content[..start].bytes().filter(|&b| b == b'\n').count() + 1;
-            format!("line {line}: {e}")
-        }
-        None => e.to_string(),
-    }
-}
-
-/// Read `settings.toml` from disk, deserialize, and run [`Settings::validate`].
-///
-/// Fails on missing file, TOML/serde errors (with best-effort **line number**), or semantic validation.
-pub fn validate_settings_file(path: impl AsRef<Path>) -> EnvrResult<()> {
-    let path = path.as_ref();
-    if !path.is_file() {
-        return Err(EnvrError::Validation(format!(
-            "not a file: {}",
-            path.display()
-        )));
-    }
-    let content = fs::read_to_string(path).map_err(EnvrError::from)?;
-    let settings: Settings = toml::from_str(&content).map_err(|e| {
-        EnvrError::Config(format!(
-            "{}: {}",
-            path.display(),
-            format_toml_settings_deser_error(&content, &e)
-        ))
-    })?;
-    settings.validate()?;
-    Ok(())
 }
 
 /// Returns `RUSTUP_DIST_SERVER` when a non-official mirror is selected, otherwise `None`.
