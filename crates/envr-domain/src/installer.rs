@@ -1,11 +1,11 @@
 //! Shared vocabulary for blocking runtime installs (`install_from_spec`, progress handles).
 //!
 //! `JavaManager` and `PythonManager` also keep an inherent
-//! `install_from_spec` that takes `&VersionSpec` plus progress/cancel refs; their
+//! `install_for_spec` that takes `&VersionSpec` plus progress/cancel refs; their
 //! [`SpecDrivenInstaller`] implementation forwards from [`InstallRequest`] via
 //! [`install_progress_handles`]. Providers should call
-//! `SpecDrivenInstaller::install_from_spec(&manager, request)` to avoid
-//! colliding with that inherent method.
+//! `SpecDrivenInstaller::install_from_spec(&manager, request)` for a consistent
+//! entry point.
 
 use std::sync::{
     Arc,

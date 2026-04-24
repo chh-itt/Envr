@@ -959,7 +959,7 @@ impl JavaManager {
         fetch_json(&self.client, &url)
     }
 
-    pub fn install_from_spec(
+    pub fn install_for_spec(
         &self,
         spec: &VersionSpec,
         progress_downloaded: Option<&Arc<AtomicU64>>,
@@ -1133,7 +1133,7 @@ impl JavaManager {
 impl SpecDrivenInstaller for JavaManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let (downloaded, total, cancel) = install_progress_handles(request);
-        self.install_from_spec(&request.spec, downloaded, total, cancel)
+        self.install_for_spec(&request.spec, downloaded, total, cancel)
     }
 }
 
