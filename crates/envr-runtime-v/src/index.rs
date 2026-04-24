@@ -45,44 +45,8 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
     )
 }
 
-fn github_api_auth_token() -> Option<String> {
-    ["GITHUB_TOKEN", "GH_TOKEN", "ENVR_GITHUB_TOKEN"]
-        .into_iter()
-        .find_map(|k| std::env::var(k).ok())
-        .and_then(|s| {
-            let t = s.trim();
-            if t.is_empty() {
-                None
-            } else {
-                Some(t.to_string())
-            }
-        })
-}
-
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(tok) = github_api_auth_token() {
-        req = req.header("Authorization", format!("Bearer {tok}"));
-    }
-    let response = req.send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {url} -> {}",
-            response.status()
-        )));
-    }
-    response.text().map_err(|e| {
-        EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
-            e,
-        )
-    })
+    envr_runtime_github_release::fetch_text(client, url)
 }
 
 fn cmp_semver_release_labels(a: &str, b: &str) -> Ordering {

@@ -2,45 +2,23 @@ use envr_domain::runtime::{
     RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
 };
 use envr_download::blocking::build_blocking_http_client;
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_error::EnvrResult;
+use envr_runtime_github_release::{GhAsset, GhRelease, GhRepo};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const DEFAULT_HAXE_RELEASES_API_URL: &str =
     "https://api.github.com/repos/HaxeFoundation/haxe/releases";
-const HAXE_RELEASES_ATOM_URL: &str = "https://github.com/HaxeFoundation/haxe/releases.atom";
-
-static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"https://github\.com/HaxeFoundation/haxe/releases/tag/([^"<>]+)"#)
-        .expect("haxe atom release tag regex")
-});
-static HTML_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"/HaxeFoundation/haxe/releases/tag/([^"<>/]+)"#)
-        .expect("haxe html release tag regex")
-});
+const HAXE_REPO: GhRepo = GhRepo {
+    owner: "HaxeFoundation",
+    name: "haxe",
+};
 static TAG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^v?(\d+\.\d+\.\d+)$").expect("haxe tag regex"));
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GhAsset {
-    pub name: String,
-    pub browser_download_url: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GhRelease {
-    pub tag_name: String,
-    #[serde(default)]
-    pub draft: bool,
-    #[serde(default)]
-    pub prerelease: bool,
-    pub assets: Vec<GhAsset>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HaxeInstallableRow {
@@ -53,48 +31,6 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
         concat!("envr-runtime-haxe/", env!("CARGO_PKG_VERSION")),
         Some(Duration::from_secs(120)),
     )
-}
-
-fn github_api_auth_token() -> Option<String> {
-    ["GITHUB_TOKEN", "GH_TOKEN", "ENVR_GITHUB_TOKEN"]
-        .into_iter()
-        .find_map(|k| std::env::var(k).ok())
-        .and_then(|s| {
-            let t = s.trim();
-            if t.is_empty() {
-                None
-            } else {
-                Some(t.to_string())
-            }
-        })
-}
-
-fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client
-        .get(url)
-        .header("Accept", "application/vnd.github+json");
-    if url.contains("api.github.com") {
-        req = req.header("X-GitHub-Api-Version", "2022-11-28");
-        if let Some(tok) = github_api_auth_token() {
-            req = req.header("Authorization", format!("Bearer {tok}"));
-        }
-    }
-    let response = req.send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {url} -> {}",
-            response.status()
-        )));
-    }
-    response.text().map_err(|e| {
-        EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
-            e,
-        )
-    })
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -176,34 +112,11 @@ fn fetch_github_releases_index(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
 ) -> EnvrResult<Vec<GhRelease>> {
-    let mut page = 1;
-    let mut out = Vec::new();
-    loop {
-        let url = format!("{releases_api_url}?per_page=100&page={page}");
-        let text = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&text).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
-        })?;
-        let Some(arr) = v.as_array() else {
-            return Err(EnvrError::Download(
-                "haxe releases API returned non-array payload".into(),
-            ));
-        };
-        if arr.is_empty() {
-            break;
-        }
-        for item in arr {
-            let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
-            })?;
-            out.push(r);
-        }
-        if arr.len() < 100 {
-            break;
-        }
-        page += 1;
-    }
-    Ok(out)
+    envr_runtime_github_release::fetch_github_releases_index(
+        client,
+        releases_api_url,
+        DEFAULT_HAXE_RELEASES_API_URL,
+    )
 }
 
 fn make_synthetic_url(tag: &str, version: &str) -> Option<String> {
@@ -220,66 +133,6 @@ fn make_synthetic_url(tag: &str, version: &str) -> Option<String> {
     ))
 }
 
-fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<HaxeInstallableRow>> {
-    let mut out = Vec::new();
-    let mut seen = HashSet::new();
-    let mut empty_pages = 0usize;
-    for page in 1..=30 {
-        let url = format!("https://github.com/HaxeFoundation/haxe/releases?page={page}");
-        let text = match fetch_text(client, &url) {
-            Ok(t) => t,
-            Err(_) => break,
-        };
-        let mut found = 0usize;
-        for cap in HTML_RELEASE_TAG_RE.captures_iter(&text) {
-            let tag = cap.get(1).map(|m| m.as_str()).unwrap_or("").trim();
-            let Some(version) = label_from_tag(tag) else {
-                continue;
-            };
-            found += 1;
-            if !seen.insert(version.clone()) {
-                continue;
-            }
-            let Some(url) = make_synthetic_url(tag, &version) else {
-                continue;
-            };
-            out.push(HaxeInstallableRow { version, url });
-        }
-        if found == 0 {
-            empty_pages += 1;
-            if empty_pages >= 2 {
-                break;
-            }
-        } else {
-            empty_pages = 0;
-        }
-    }
-    out.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
-    out.dedup_by(|a, b| a.version == b.version);
-    Ok(out)
-}
-
-fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<HaxeInstallableRow>> {
-    let mut out = Vec::new();
-    let text = fetch_text(client, HAXE_RELEASES_ATOM_URL)?;
-    let mut seen = HashSet::new();
-    for cap in ATOM_RELEASE_TAG_RE.captures_iter(&text) {
-        let tag = cap.get(1).map(|m| m.as_str()).unwrap_or("").trim();
-        let Some(version) = label_from_tag(tag) else {
-            continue;
-        };
-        if !seen.insert(version.clone()) {
-            continue;
-        }
-        let Some(url) = make_synthetic_url(tag, &version) else {
-            continue;
-        };
-        out.push(HaxeInstallableRow { version, url });
-    }
-    out.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
-    Ok(out)
-}
-
 pub fn fetch_haxe_installable_rows_with_fallback(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
@@ -290,12 +143,36 @@ pub fn fetch_haxe_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    if let Ok(rows) = fetch_rows_via_html(client)
-        && !rows.is_empty()
+    if let Ok(rows) = envr_runtime_github_release::fetch_rows_via_html(
+        client,
+        HAXE_REPO,
+        label_from_tag,
+        make_synthetic_url,
+        cmp_release_labels,
+    ) && !rows.is_empty()
     {
-        return Ok(rows);
+        return Ok(rows
+            .into_iter()
+            .map(|r| HaxeInstallableRow {
+                version: r.version,
+                url: r.url,
+            })
+            .collect());
     }
-    fetch_rows_via_atom(client)
+    let rows = envr_runtime_github_release::fetch_rows_via_atom(
+        client,
+        HAXE_REPO,
+        label_from_tag,
+        make_synthetic_url,
+        cmp_release_labels,
+    )?;
+    Ok(rows
+        .into_iter()
+        .map(|r| HaxeInstallableRow {
+            version: r.version,
+            url: r.url,
+        })
+        .collect())
 }
 
 pub fn list_remote_versions(
