@@ -2262,6 +2262,7 @@ version = "20"
             "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n[runtime.erlang]\npath_proxy_enabled = false\n",
         )
         .expect("write");
+        envr_config::env_context::clear_settings_cache();
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
         assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
@@ -2278,6 +2279,7 @@ version = "20"
             "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n[runtime.erlang]\npath_proxy_enabled = true\n",
         )
         .expect("write");
+        envr_config::env_context::clear_settings_cache();
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
         assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));

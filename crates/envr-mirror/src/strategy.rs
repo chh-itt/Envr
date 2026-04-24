@@ -73,6 +73,7 @@ mod tests {
             mirror: envr_config::settings::MirrorSettings {
                 mode: MirrorMode::Official,
                 manual_id: None,
+                prefer_china_mirrors: false,
             },
             ..Default::default()
         };
@@ -90,6 +91,7 @@ mod tests {
             mirror: envr_config::settings::MirrorSettings {
                 mode: MirrorMode::Manual,
                 manual_id: Some("does-not-exist".to_string()),
+                prefer_china_mirrors: false,
             },
             ..Default::default()
         };

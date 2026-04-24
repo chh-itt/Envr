@@ -530,7 +530,7 @@ pub fn invalidate_unified_list_disk_cache(kind: RuntimeKind) -> Task<Message> {
     })
 }
 
-/// Like [`install_version`], but runs [`RuntimeService::resolve`] first so invalid specs fail before download.
+/// Like [`install_version`], but resolves spec first so invalid input fails before download.
 pub fn install_version_with_resolve_precheck(
     job_id: u64,
     kind: RuntimeKind,

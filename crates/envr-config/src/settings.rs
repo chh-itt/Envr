@@ -2556,6 +2556,7 @@ mod tests {
             mirror: MirrorSettings {
                 mode: MirrorMode::Manual,
                 manual_id: Some("cn-fast".to_string()),
+                prefer_china_mirrors: defaults::prefer_china_mirrors(),
             },
             i18n: I18nSettings {
                 locale: LocaleMode::EnUs,

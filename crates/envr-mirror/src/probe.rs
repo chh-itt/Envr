@@ -301,7 +301,7 @@ mod tests {
         let path = dir.path().join("bad.json");
         std::fs::write(&path, b"{ not json").expect("write");
         let err = load_cache_if_fresh(&path, u64::MAX).expect_err("bad json");
-        assert!(matches!(err, EnvrError::Config(_)));
+        assert_eq!(err.code(), ErrorCode::Config);
     }
 
     #[tokio::test]
@@ -348,6 +348,7 @@ mod tests {
             mirror: MirrorSettings {
                 mode: MirrorMode::Official,
                 manual_id: None,
+                prefer_china_mirrors: false,
             },
             ..Default::default()
         };
@@ -389,6 +390,7 @@ mod tests {
             mirror: MirrorSettings {
                 mode: MirrorMode::Auto,
                 manual_id: None,
+                prefer_china_mirrors: false,
             },
             ..Default::default()
         };

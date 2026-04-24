@@ -56,11 +56,33 @@ def check_read_paths_use_index_port() -> None:
         text = read(rel)
         reject(bad, text, f"{rel} should use RuntimeIndex via index_port")
 
+def check_runtime_service_has_no_legacy_passthroughs() -> None:
+    service_rs = read("crates/envr-core/src/runtime/service.rs")
+    banned_methods = [
+        r"pub fn list_installed\(",
+        r"pub fn list_remote\(",
+        r"pub fn list_remote_majors\(",
+        r"pub fn list_remote_latest_per_major\(",
+        r"pub fn resolve\(",
+        r"pub fn install\(",
+        r"pub fn uninstall\(",
+        r"pub fn uninstall_dry_run_targets\(",
+        r"pub fn current\(",
+        r"pub fn set_current\(",
+    ]
+    for pattern in banned_methods:
+        reject(
+            pattern,
+            service_rs,
+            "legacy RuntimeService passthroughs must not be reintroduced",
+        )
+
 
 def main() -> int:
     try:
         check_domain_contracts()
         check_read_paths_use_index_port()
+        check_runtime_service_has_no_legacy_passthroughs()
     except AssertionError as exc:
         print(f"[runtime-trait-split] FAIL: {exc}")
         return 1

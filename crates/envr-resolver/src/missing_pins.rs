@@ -48,7 +48,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
 ];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and
-/// [`envr_core::runtime::RuntimeService::install`] may create the missing tree.
+/// a runtime installer port call may create the missing tree.
 pub fn runtime_error_might_install_fix(err: &EnvrError) -> bool {
     match err {
         EnvrError::Runtime(msg) => {

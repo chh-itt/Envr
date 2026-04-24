@@ -361,36 +361,6 @@ impl RuntimeService {
             .map(|p| Box::new(p) as Box<dyn RuntimeInstaller>)
     }
 
-    #[deprecated(note = "use index_port(kind)?.list_installed() instead")]
-    pub fn list_installed(&self, kind: RuntimeKind) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.index_provider(kind)?.list_installed()
-    }
-
-    /// Remote versions that [`RuntimeProvider::install`] is expected to satisfy (see
-    /// [`RuntimeProvider::list_remote_installable`]).
-    #[deprecated(note = "use index_port(kind)?.list_remote_installable(filter) instead")]
-    pub fn list_remote(
-        &self,
-        kind: RuntimeKind,
-        filter: &RemoteFilter,
-    ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.index_provider(kind)?.list_remote_installable(filter)
-    }
-
-    #[deprecated(note = "use index_port(kind)?.list_remote_majors() instead")]
-    pub fn list_remote_majors(&self, kind: RuntimeKind) -> EnvrResult<Vec<String>> {
-        self.index_provider(kind)?.list_remote_majors()
-    }
-
-    #[deprecated(note = "use index_port(kind)?.list_remote_latest_installable_per_major() instead")]
-    pub fn list_remote_latest_per_major(
-        &self,
-        kind: RuntimeKind,
-    ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.index_provider(kind)?
-            .list_remote_latest_installable_per_major()
-    }
-
     pub fn try_load_remote_latest_per_major_from_disk(
         &self,
         kind: RuntimeKind,
@@ -558,7 +528,7 @@ impl RuntimeService {
             .join("full_installable_versions.json"))
     }
 
-    /// Full installable remote list (same source as [`Self::list_remote`] with no prefix), with disk cache
+    /// Full installable remote list (same source as `RuntimeIndex::list_remote_installable` with no prefix), with disk cache
     /// so expanding multiple major lines does not re-fetch the upstream index for each expand.
     fn load_full_remote_installable_cached(
         &self,
@@ -625,50 +595,11 @@ impl RuntimeService {
         Ok(())
     }
 
-    #[deprecated(note = "use index_port(kind)?.resolve(spec) instead")]
-    pub fn resolve(&self, kind: RuntimeKind, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
-        self.index_provider(kind)?.resolve(spec)
-    }
-
-    #[deprecated(note = "use installer_port(kind)?.install(request) instead")]
-    pub fn install(
-        &self,
-        kind: RuntimeKind,
-        request: &InstallRequest,
-    ) -> EnvrResult<RuntimeVersion> {
-        self.installer_provider(kind)?.install(request)
-    }
-
-    #[deprecated(note = "use installer_port(kind)?.uninstall(version) instead")]
-    pub fn uninstall(&self, kind: RuntimeKind, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.installer_provider(kind)?.uninstall(version)
-    }
-
-    #[deprecated(note = "use installer_port(kind)?.uninstall_dry_run_targets(version) instead")]
-    pub fn uninstall_dry_run_targets(
-        &self,
-        kind: RuntimeKind,
-        version: &RuntimeVersion,
-    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
-        self.installer_provider(kind)?
-            .uninstall_dry_run_targets(version)
-    }
-
-    #[deprecated(note = "use index_port(kind)?.current() instead")]
-    pub fn current(&self, kind: RuntimeKind) -> EnvrResult<Option<RuntimeVersion>> {
-        self.index_provider(kind)?.current()
-    }
-
     /// `Some(true)` = global active PHP is TS, `Some(false)` = NTS/legacy; `None` = no global current.
     pub fn php_global_current_want_ts(&self) -> EnvrResult<Option<bool>> {
         let root = self.cache_runtime_root()?;
         let paths = envr_runtime_php::PhpPaths::new(root);
         envr_runtime_php::read_current_global_want_ts(&paths)
-    }
-
-    #[deprecated(note = "use installer_port(kind)?.set_current(version) instead")]
-    pub fn set_current(&self, kind: RuntimeKind, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.installer_provider(kind)?.set_current(version)
     }
 
     fn cache_runtime_root(&self) -> EnvrResult<PathBuf> {
