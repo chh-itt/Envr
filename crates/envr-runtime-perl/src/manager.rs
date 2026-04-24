@@ -3,6 +3,7 @@ use crate::index::{
     list_remote_latest_per_major_lines, list_remote_versions, parse_cached_install_rows, perl_upstream,
     resolve_perl_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -422,16 +423,6 @@ impl PerlManager {
         Ok(RuntimeVersion(version_label.to_string()))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let label = self.resolve_label(&request.spec.0)?;
-        self.install_resolved_version(
-            &label,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !perl_installation_valid(&dir) {
@@ -455,6 +446,14 @@ impl PerlManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for PerlManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let label = self.resolve_label(&request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&label, downloaded, total, cancel)
     }
 }
 

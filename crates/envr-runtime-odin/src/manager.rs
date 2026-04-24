@@ -2,6 +2,7 @@ use crate::index::{
     OdinInstallableRow, blocking_http_client, fetch_odin_installable_rows_with_fallback,
     list_remote_latest_per_major_lines, list_remote_versions, resolve_odin_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -340,7 +341,10 @@ impl OdinManager {
         Ok(())
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+}
+
+impl SpecDrivenInstaller for OdinManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
         let row = rows
@@ -362,13 +366,14 @@ impl OdinManager {
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("odin-archive");
         let archive_path = tmp.path().join(archive_name);
+        let (downloaded, total, cancel) = install_progress_handles(request);
         download_to_path(
             &client,
             &row.url,
             &archive_path,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
+            downloaded,
+            total,
+            cancel,
         )?;
 
         let staging = tmp.path().join("staging");

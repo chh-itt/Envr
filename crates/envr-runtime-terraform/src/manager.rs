@@ -3,6 +3,7 @@ use crate::index::{
     list_remote_latest_per_major_lines, list_remote_versions, parse_versions_from_index_html,
     resolve_terraform_version, terraform_platform_tuple,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -279,31 +280,6 @@ impl TerraformManager {
         resolve_terraform_version(&rows, spec)
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let label = self.resolve_label(&request.spec.0)?;
-        let platform = terraform_platform_tuple()?;
-        let url = artifact_url(&self.index_url, &label, platform);
-        let cache_dir = self.paths.cache_dir().join(&label);
-        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
-        let archive_path = cache_dir.join("terraform.zip");
-        download_to_path(
-            &self.client,
-            &url,
-            &archive_path,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )?;
-        let staging_parent = cache_dir.join("extract_staging");
-        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
-        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
-        extract::extract_archive(&archive_path, staging.path())?;
-        let final_dir = self.paths.version_dir(&label);
-        promote_terraform_extracted_tree(staging.path(), &final_dir)?;
-        self.set_current(&RuntimeVersion(label.clone()))?;
-        Ok(RuntimeVersion(label))
-    }
-
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !terraform_installation_valid(&dir) {
@@ -326,5 +302,33 @@ impl TerraformManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for TerraformManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let label = self.resolve_label(&request.spec.0)?;
+        let platform = terraform_platform_tuple()?;
+        let url = artifact_url(&self.index_url, &label, platform);
+        let cache_dir = self.paths.cache_dir().join(&label);
+        fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
+        let archive_path = cache_dir.join("terraform.zip");
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        download_to_path(
+            &self.client,
+            &url,
+            &archive_path,
+            downloaded,
+            total,
+            cancel,
+        )?;
+        let staging_parent = cache_dir.join("extract_staging");
+        fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
+        let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
+        extract::extract_archive(&archive_path, staging.path())?;
+        let final_dir = self.paths.version_dir(&label);
+        promote_terraform_extracted_tree(staging.path(), &final_dir)?;
+        self.set_current(&RuntimeVersion(label.clone()))?;
+        Ok(RuntimeVersion(label))
     }
 }

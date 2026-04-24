@@ -3,6 +3,7 @@ use crate::index::{
     resolve_deno_version,
 };
 use envr_config::settings::{deno_official_release_zip_url, deno_release_zip_url};
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -284,25 +285,6 @@ impl DenoManager {
         list_remote_versions(&tags, filter)
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        if let Some(v) = exact_semver_spec(&request.spec.0) {
-            return self.install_resolved_version(
-                &RuntimeVersion(v),
-                request.progress_downloaded.as_ref(),
-                request.progress_total.as_ref(),
-                request.cancel.as_ref(),
-            );
-        }
-        let tags = self.load_tags()?;
-        let v = resolve_deno_version(&tags, &request.spec.0)?;
-        self.install_resolved_version(
-            &RuntimeVersion(v),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         version: &RuntimeVersion,
@@ -371,6 +353,18 @@ impl DenoManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for DenoManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        if let Some(v) = exact_semver_spec(&request.spec.0) {
+            return self.install_resolved_version(&RuntimeVersion(v), downloaded, total, cancel);
+        }
+        let tags = self.load_tags()?;
+        let v = resolve_deno_version(&tags, &request.spec.0)?;
+        self.install_resolved_version(&RuntimeVersion(v), downloaded, total, cancel)
     }
 }
 

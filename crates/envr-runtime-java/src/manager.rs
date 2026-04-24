@@ -6,7 +6,8 @@ use crate::index::{
 };
 use crate::vendor::JavaVendor;
 use envr_config::settings::JavaDownloadSource;
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
@@ -1126,6 +1127,13 @@ impl JavaManager {
             sync_java_home_export(&self.paths)?;
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for JavaManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_from_spec(&request.spec, downloaded, total, cancel)
     }
 }
 

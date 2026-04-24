@@ -1,6 +1,7 @@
 use crate::index::{
     DEFAULT_BUN_TAGS_API, Tag, blocking_http_client, fetch_all_tags, resolve_bun_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -424,25 +425,6 @@ impl BunManager {
         fetch_all_tags(&self.client, &url)
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        if let Some(v) = exact_semver_spec(&request.spec.0) {
-            return self.install_resolved_version(
-                &RuntimeVersion(v),
-                request.progress_downloaded.as_ref(),
-                request.progress_total.as_ref(),
-                request.cancel.as_ref(),
-            );
-        }
-        let tags = self.load_tags()?;
-        let v = resolve_bun_version(&tags, &request.spec.0)?;
-        self.install_resolved_version(
-            &RuntimeVersion(v),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         version: &RuntimeVersion,
@@ -531,6 +513,18 @@ impl BunManager {
             fs::remove_dir_all(&dir).map_err(EnvrError::from)?;
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for BunManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        if let Some(v) = exact_semver_spec(&request.spec.0) {
+            return self.install_resolved_version(&RuntimeVersion(v), downloaded, total, cancel);
+        }
+        let tags = self.load_tags()?;
+        let v = resolve_bun_version(&tags, &request.spec.0)?;
+        self.install_resolved_version(&RuntimeVersion(v), downloaded, total, cancel)
     }
 }
 

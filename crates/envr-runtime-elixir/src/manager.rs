@@ -3,6 +3,7 @@ use crate::index::{
     fetch_builds_index, parse_elixir_builds, pick_build_for_version, resolve_elixir_version,
     select_builds_prefer_otp,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
@@ -333,17 +334,6 @@ impl ElixirManager {
         Ok(RuntimeVersion(resolve_elixir_version(&builds, spec)?))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let builds = self.load_builds()?;
-        let version = resolve_elixir_version(&builds, &request.spec.0)?;
-        self.install_resolved_version(
-            &RuntimeVersion(version),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     fn install_resolved_version(
         &self,
         version: &RuntimeVersion,
@@ -423,5 +413,14 @@ impl ElixirManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for ElixirManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let builds = self.load_builds()?;
+        let version = resolve_elixir_version(&builds, &request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&RuntimeVersion(version), downloaded, total, cancel)
     }
 }

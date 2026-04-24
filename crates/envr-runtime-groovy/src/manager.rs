@@ -2,6 +2,7 @@ use crate::index::{
     GroovyIndexRow, blocking_http_client, fetch_text, list_remote_latest_per_major_lines,
     list_remote_versions, merge_rows, resolve_groovy_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -461,18 +462,6 @@ impl GroovyManager {
         Ok(RuntimeVersion(version_label.to_string()))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let label = self.resolve_label(&request.spec.0)?;
-        let row = self.row_for_label(&label)?;
-        self.install_resolved_version(
-            &label,
-            &row.url,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         ensure_java_preflight(&self.paths.runtime_root, &version.0)?;
         let dir = self.paths.version_dir(&version.0);
@@ -496,5 +485,14 @@ impl GroovyManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for GroovyManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let label = self.resolve_label(&request.spec.0)?;
+        let row = self.row_for_label(&label)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&label, &row.url, downloaded, total, cancel)
     }
 }

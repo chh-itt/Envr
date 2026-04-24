@@ -2,8 +2,9 @@ use crate::index::{
     RacketInstallableRow, blocking_http_client, fetch_racket_installable_rows,
     list_remote_latest_per_major_lines, list_remote_versions, resolve_racket_version,
 };
-use envr_download::extract;
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
+use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
@@ -331,7 +332,10 @@ impl RacketManager {
         }
         Ok(())
     }
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+}
+
+impl SpecDrivenInstaller for RacketManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
         let row = rows
@@ -397,7 +401,6 @@ impl RacketManager {
         if !racket_installation_valid(&final_dir) {
             return Err(EnvrError::Validation("racket install validation failed".into()));
         }
-        let _ = request;
         Ok(RuntimeVersion(label))
     }
 }

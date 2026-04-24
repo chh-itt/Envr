@@ -19,6 +19,7 @@ use envr_config::env_context::{load_settings_cached, runtime_root};
 use envr_config::settings::{
     JavaDistro, JavaDownloadSource, prefer_china_mirrors,
 };
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
@@ -249,12 +250,7 @@ impl RuntimeProvider for JavaRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(
-            &request.spec,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
+        SpecDrivenInstaller::install_from_spec(&self.manager()?, request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

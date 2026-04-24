@@ -3,6 +3,7 @@ use crate::index::{
     pick_windows_zip, resolve_php_version,
 };
 use envr_config::php_layout;
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -294,22 +295,6 @@ impl PhpManager {
         parse_php_windows_index(&body)
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        if !cfg!(windows) {
-            return Err(EnvrError::Platform(
-                "php install is currently supported on Windows only".into(),
-            ));
-        }
-        let idx = self.load_index()?;
-        let version = resolve_php_version(&idx, &request.spec.0)?;
-        self.install_resolved_version(
-            &RuntimeVersion(version),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         version: &RuntimeVersion,
@@ -398,6 +383,20 @@ impl PhpManager {
             remove_stale_split_current_files(&self.paths);
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for PhpManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        if !cfg!(windows) {
+            return Err(EnvrError::Platform(
+                "php install is currently supported on Windows only".into(),
+            ));
+        }
+        let idx = self.load_index()?;
+        let version = resolve_php_version(&idx, &request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&RuntimeVersion(version), downloaded, total, cancel)
     }
 }
 

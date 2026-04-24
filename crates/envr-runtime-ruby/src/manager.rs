@@ -3,6 +3,7 @@ use crate::index::{
     host_rubyinstaller_arch, parse_ruby_releases, parse_rubyinstaller_7z_artifacts,
     pick_rubyinstaller_artifact, resolve_ruby_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
@@ -313,27 +314,6 @@ impl RubyManager {
         }
     }
 
-    pub fn install_from_spec(&self, _request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        #[cfg(not(windows))]
-        {
-            let _ = _request;
-            return Err(EnvrError::Platform(
-                "ruby install is currently implemented only for Windows RubyInstaller archives"
-                    .into(),
-            ));
-        }
-        #[cfg(windows)]
-        {
-            let version = self.resolve_spec(&_request.spec.0)?;
-            self.install_resolved_version(
-                &version,
-                _request.progress_downloaded.as_ref(),
-                _request.progress_total.as_ref(),
-                _request.cancel.as_ref(),
-            )
-        }
-    }
-
     #[cfg(windows)]
     fn install_resolved_version(
         &self,
@@ -417,5 +397,24 @@ impl RubyManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for RubyManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        #[cfg(not(windows))]
+        {
+            let _ = request;
+            return Err(EnvrError::Platform(
+                "ruby install is currently implemented only for Windows RubyInstaller archives"
+                    .into(),
+            ));
+        }
+        #[cfg(windows)]
+        {
+            let version = self.resolve_spec(&request.spec.0)?;
+            let (downloaded, total, cancel) = install_progress_handles(request);
+            self.install_resolved_version(&version, downloaded, total, cancel)
+        }
     }
 }

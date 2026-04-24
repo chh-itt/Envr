@@ -4,6 +4,7 @@ use crate::index::{
     resolve_crystal_version,
 };
 use envr_domain::crystal_paths;
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -405,16 +406,6 @@ impl CrystalManager {
         Ok(RuntimeVersion(version_label.to_string()))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let label = self.resolve_label(&request.spec.0)?;
-        self.install_resolved_version(
-            &label,
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !crystal_installation_valid(&dir) {
@@ -438,6 +429,14 @@ impl CrystalManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for CrystalManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let label = self.resolve_label(&request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&label, downloaded, total, cancel)
     }
 }
 

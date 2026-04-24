@@ -2,6 +2,7 @@ use crate::index::{
     DEFAULT_GITHUB_TAGS_API, ErlangRelease, blocking_http_client, fetch_all_tags,
     resolve_erlang_version, tags_to_releases,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
 use envr_download::extract;
@@ -217,18 +218,6 @@ impl ErlangManager {
         Ok(RuntimeVersion(version))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let releases = self.load_releases()?;
-        let version = resolve_erlang_version(&releases, &request.spec.0)?;
-        self.install_resolved_version(
-            &releases,
-            &RuntimeVersion(version),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         releases: &[ErlangRelease],
@@ -304,6 +293,15 @@ impl ErlangManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for ErlangManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let releases = self.load_releases()?;
+        let version = resolve_erlang_version(&releases, &request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&releases, &RuntimeVersion(version), downloaded, total, cancel)
     }
 }
 

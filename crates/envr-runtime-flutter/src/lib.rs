@@ -10,6 +10,7 @@ pub use index::{
 pub use manager::{FlutterManager, FlutterPaths, list_installed_versions, read_current};
 
 use envr_config::env_context::runtime_root;
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,

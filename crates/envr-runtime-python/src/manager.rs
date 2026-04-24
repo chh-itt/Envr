@@ -9,7 +9,8 @@ use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
 };
 use envr_config::env_context::load_settings_cached;
-use envr_domain::runtime::{RuntimeVersion, VersionSpec};
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
+use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
@@ -1013,6 +1014,13 @@ impl PythonManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for PythonManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_from_spec(&request.spec, downloaded, total, cancel)
     }
 }
 

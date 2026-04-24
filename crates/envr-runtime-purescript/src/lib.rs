@@ -13,6 +13,7 @@ pub use manager::{
 };
 
 use envr_config::env_context::runtime_root;
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,

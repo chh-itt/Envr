@@ -2,6 +2,7 @@ use crate::index::{
     BabashkaInstallableRow, blocking_http_client, fetch_babashka_installable_rows_with_fallback,
     list_remote_latest_per_major_lines, list_remote_versions, resolve_babashka_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -10,8 +11,6 @@ use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -296,7 +295,10 @@ impl BabashkaManager {
         Ok(())
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+}
+
+impl SpecDrivenInstaller for BabashkaManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
         let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
@@ -314,13 +316,14 @@ impl BabashkaManager {
             .paths
             .cache_dir()
             .join(row.url.split('/').next_back().unwrap_or("babashka-archive"));
+        let (downloaded, total, cancel) = install_progress_handles(request);
         envr_download::blocking::download_url_to_path_resumable(
             &client,
             &row.url,
             &cache_file,
-            request.progress_downloaded.as_ref() as Option<&Arc<AtomicU64>>,
-            request.progress_total.as_ref() as Option<&Arc<AtomicU64>>,
-            request.cancel.as_ref() as Option<&Arc<AtomicBool>>,
+            downloaded,
+            total,
+            cancel,
         )?;
 
         let staging_parent = self.paths.cache_dir().join("extract_staging");

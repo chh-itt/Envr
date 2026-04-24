@@ -2,6 +2,7 @@ use crate::index::{
     DotnetSdkRelease, blocking_http_client, load_sdk_releases, pick_install_file,
     resolve_dotnet_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -268,18 +269,6 @@ impl DotnetManager {
         Ok(RuntimeVersion(v))
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let releases = self.load_releases()?;
-        let version = resolve_dotnet_version(&releases, &request.spec.0)?;
-        self.install_resolved_version(
-            &releases,
-            &RuntimeVersion(version),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         releases: &[DotnetSdkRelease],
@@ -351,6 +340,15 @@ impl DotnetManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for DotnetManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let releases = self.load_releases()?;
+        let version = resolve_dotnet_version(&releases, &request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&releases, &RuntimeVersion(version), downloaded, total, cancel)
     }
 }
 
