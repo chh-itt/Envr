@@ -1097,6 +1097,7 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "envr-runtime-github-release",
  "regex",
  "reqwest",
  "serde",
@@ -1129,6 +1130,7 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "envr-runtime-github-release",
  "regex",
  "reqwest",
  "serde",
@@ -1238,6 +1240,7 @@ dependencies = [
  "envr-download",
  "envr-error",
  "envr-platform",
+ "envr-runtime-github-release",
  "flate2",
  "regex",
  "reqwest",
@@ -1274,6 +1277,17 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "envr-runtime-github-release"
+version = "0.1.0"
+dependencies = [
+ "envr-error",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

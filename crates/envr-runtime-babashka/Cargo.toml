@@ -10,6 +10,7 @@ envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 envr-download = { path = "../envr-download" }
+envr-runtime-github-release = { path = "../envr-runtime-github-release" }
 regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
