@@ -17,7 +17,7 @@ pub use releases_url::{
 };
 
 use envr_config::env_context::runtime_root;
-use envr_domain::installer::SpecDrivenInstaller;
+use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
@@ -124,7 +124,7 @@ impl RuntimeProvider for GroovyRuntimeProvider {
     }
 
     fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        self.manager()?.install_from_spec(request)
+        install_via_manager(self.manager(), request)
     }
 
     fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {

@@ -35,3 +35,12 @@ pub fn install_progress_handles(request: &InstallRequest) -> InstallProgressHand
 pub trait SpecDrivenInstaller: Send + Sync {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion>;
 }
+
+#[inline]
+pub fn install_via_manager<M>(manager: EnvrResult<M>, request: &InstallRequest) -> EnvrResult<RuntimeVersion>
+where
+    M: SpecDrivenInstaller,
+{
+    let mgr = manager?;
+    SpecDrivenInstaller::install_from_spec(&mgr, request)
+}
