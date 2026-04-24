@@ -4,6 +4,7 @@ use crate::index::{
     NodeRelease, blocking_http_client, fetch_node_index, node_version_v_prefix,
     normalize_node_version, parse_node_index, resolve_node_version,
 };
+use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -349,19 +350,6 @@ impl NodeManager {
         parse_node_index(&body)
     }
 
-    pub fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        let releases = self.load_releases()?;
-        let os = std::env::consts::OS;
-        let arch = std::env::consts::ARCH;
-        let label = resolve_node_version(&releases, os, arch, &request.spec.0)?;
-        self.install_resolved_version(
-            &RuntimeVersion(label),
-            request.progress_downloaded.as_ref(),
-            request.progress_total.as_ref(),
-            request.cancel.as_ref(),
-        )
-    }
-
     pub fn install_resolved_version(
         &self,
         version: &RuntimeVersion,
@@ -468,6 +456,17 @@ impl NodeManager {
             remove_path_if_exists(&self.paths.current_link());
         }
         Ok(())
+    }
+}
+
+impl SpecDrivenInstaller for NodeManager {
+    fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        let releases = self.load_releases()?;
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let label = resolve_node_version(&releases, os, arch, &request.spec.0)?;
+        let (downloaded, total, cancel) = install_progress_handles(request);
+        self.install_resolved_version(&RuntimeVersion(label), downloaded, total, cancel)
     }
 }
 
