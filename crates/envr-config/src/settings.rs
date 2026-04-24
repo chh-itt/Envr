@@ -13,6 +13,7 @@ mod runtime_long_tail;
 mod runtime_root_cache;
 mod runtime_sources;
 mod runtime_web_tooling;
+mod rustup_policy;
 mod settings_io;
 mod storage_utils;
 mod ui_config;
@@ -73,6 +74,7 @@ pub use runtime_web_tooling::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
     PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
 };
+pub use rustup_policy::{rustup_dist_server_from_settings, rustup_update_root_from_settings};
 use settings_io::format_toml_settings_deser_error;
 pub use settings_io::validate_settings_file;
 use storage_utils::{backup_corrupted_file, file_mtime};
@@ -484,36 +486,6 @@ impl Settings {
         runtime_root_cache_clear();
         Ok(())
     }
-}
-
-/// Returns `RUSTUP_DIST_SERVER` when a non-official mirror is selected, otherwise `None`.
-pub fn rustup_dist_server_from_settings(s: &Settings) -> Option<String> {
-    if prefer_domestic_source(
-        s,
-        matches!(s.runtime.rust.download_source, RustDownloadSource::Domestic),
-        matches!(s.runtime.rust.download_source, RustDownloadSource::Auto),
-    ) {
-        Some("https://mirrors.ustc.edu.cn/rust-static".to_string())
-    } else {
-        None
-    }
-}
-
-/// Returns `RUSTUP_UPDATE_ROOT` when a non-official mirror is selected, otherwise `None`.
-pub fn rustup_update_root_from_settings(s: &Settings) -> Option<String> {
-    if prefer_domestic_source(
-        s,
-        matches!(s.runtime.rust.download_source, RustDownloadSource::Domestic),
-        matches!(s.runtime.rust.download_source, RustDownloadSource::Auto),
-    ) {
-        Some("https://mirrors.ustc.edu.cn/rust-static/rustup".to_string())
-    } else {
-        None
-    }
-}
-
-fn prefer_domestic_source(settings: &Settings, explicit_domestic: bool, is_auto: bool) -> bool {
-    explicit_domestic || (is_auto && prefer_china_mirrors(settings))
 }
 
 #[cfg(test)]
