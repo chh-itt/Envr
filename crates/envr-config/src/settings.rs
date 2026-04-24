@@ -20,6 +20,7 @@ mod runtime_lang_core;
 mod runtime_long_tail;
 mod runtime_sources;
 mod runtime_web_tooling;
+mod storage_utils;
 mod ui_config;
 mod validation;
 pub use general_config::{
@@ -70,6 +71,7 @@ pub use runtime_web_tooling::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
     PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
 };
+use storage_utils::{backup_corrupted_file, file_mtime};
 pub use ui_config::{
     AppearanceSettings, DownloadsPanelSettings, FontMode, FontSettings, GuiSettings, I18nSettings,
     LocaleMode, RuntimeLayoutSettings, ThemeMode,
@@ -704,22 +706,6 @@ pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
 
 fn prefer_domestic_source(settings: &Settings, explicit_domestic: bool, is_auto: bool) -> bool {
     explicit_domestic || (is_auto && prefer_china_mirrors(settings))
-}
-
-fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
-    let meta = fs::metadata(path).map_err(EnvrError::from)?;
-    meta.modified()
-        .map_err(|e| EnvrError::Io(std::io::Error::other(e)))
-}
-
-fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
-    let ts = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "time error", e))?
-        .as_secs();
-    let bad = path.with_extension(format!("toml.bad.{ts}"));
-    let _ = fs::rename(path, bad);
-    Ok(())
 }
 
 #[cfg(test)]
