@@ -13,18 +13,17 @@ use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_via_version_spec,
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use std::{
     ffi::OsStr,
     fs,
-    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64},
     },
     time::Duration,
 };
@@ -68,49 +67,14 @@ fn download_to_path(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
-    let mut response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    if let Some(total) = progress_total {
-        total.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
-    }
-    if let Some(downloaded) = progress_downloaded {
-        downloaded.store(0, Ordering::Relaxed);
-    }
-    let mut buf = vec![0_u8; 64 * 1024];
-    let mut wrote = 0_u64;
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Runtime("download cancelled".into()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        wrote = wrote.saturating_add(n as u64);
-        if let Some(downloaded) = progress_downloaded {
-            downloaded.store(wrote, Ordering::Relaxed);
-        }
-    }
-    Ok(())
+    download_url_to_path_resumable(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    )
 }
 
 fn verify_sha256_if_present(path: &Path, hex: &Option<String>) -> EnvrResult<()> {
