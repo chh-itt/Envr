@@ -158,7 +158,11 @@ fn try_fetch_remote_with_timeout(
     let _ = thread::Builder::new()
         .name(format!("envr-remote-fast-{kind:?}").to_ascii_lowercase())
         .spawn(move || {
-            let res = runtime_service().and_then(|svc| svc.list_remote(kind, &filter));
+            let res = (|| -> EnvrResult<Vec<envr_domain::runtime::RuntimeVersion>> {
+                let svc = runtime_service()?;
+                let idx = svc.index_port(kind)?;
+                idx.list_remote_installable(&filter)
+            })();
             let _ = tx.send(res);
         });
     match rx.recv_timeout(timeout) {
@@ -206,7 +210,7 @@ pub(crate) fn run_inner(
             }
             let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
             if filter.prefix.is_none() {
-                let _ = service.list_remote_latest_per_major(kind);
+                let _ = index.list_remote_latest_installable_per_major();
             }
             let payload = if kind == RuntimeKind::Node {
                 if let Some(enriched) = try_node_remote_rows(&filter) {
@@ -234,7 +238,7 @@ pub(crate) fn run_inner(
                 let full = index.list_remote_installable(&RemoteFilter::default())?;
                 let _ = service.persist_full_remote_installable_snapshot(kind, &full);
                 let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
-                let _ = service.list_remote_latest_per_major(kind);
+                let _ = index.list_remote_latest_installable_per_major();
                 rows.push((kind, RemoteRow::Plain(vers)));
                 continue;
             }
@@ -293,10 +297,12 @@ pub(crate) fn run_inner(
             .spawn(move || {
                 if let Ok(svc) = runtime_service() {
                     for kind in kinds_for_refresh {
-                        let _ = svc.list_remote_latest_per_major(kind);
-                        if let Ok(full) = svc.list_remote(kind, &filter_bg) {
+                        if let Ok(index) = svc.index_port(kind) {
+                            let _ = index.list_remote_latest_installable_per_major();
+                            if let Ok(full) = index.list_remote_installable(&filter_bg) {
                             if filter_bg.prefix.is_none() {
                                 let _ = svc.persist_full_remote_installable_snapshot(kind, &full);
+                            }
                             }
                         }
                     }

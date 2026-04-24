@@ -820,12 +820,13 @@ fn index_sync_inner(
         }
         // Prefer smaller indexes; ensure Node index.json is populated.
         let res: Result<(), envr_error::EnvrError> = (|| {
+            let index = service.index_port(k)?;
             if k == envr_domain::runtime::RuntimeKind::Node {
-                let _ = service.list_remote_majors(k)?;
-                let _ = service.list_remote_latest_per_major(k);
+                let _ = index.list_remote_majors()?;
+                let _ = index.list_remote_latest_installable_per_major();
                 return Ok(());
             }
-            let _ = service.list_remote_latest_per_major(k)?;
+            let _ = index.list_remote_latest_installable_per_major()?;
             Ok(())
         })();
         if let Err(e) = res {

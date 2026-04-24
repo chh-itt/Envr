@@ -329,7 +329,9 @@ pub(crate) fn run_inner(
             .spawn(move || {
                 if let Ok(svc) = runtime_service() {
                     for kind in kinds_for_refresh {
-                        let _ = svc.list_remote_latest_per_major(kind);
+                        if let Ok(index) = svc.index_port(kind) {
+                            let _ = index.list_remote_latest_installable_per_major();
+                        }
                     }
                 }
             });

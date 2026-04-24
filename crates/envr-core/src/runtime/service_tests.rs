@@ -93,7 +93,8 @@ fn new_rejects_duplicate_provider_kind() {
 fn provider_not_registered_errors() {
     let svc = RuntimeService::new(vec![]).expect("empty map is ok");
     let err = svc
-        .list_installed(RuntimeKind::Node)
+        .index_port(RuntimeKind::Node)
+        .and_then(|idx| idx.list_installed())
         .expect_err("no provider");
     assert!(matches!(err, EnvrError::Validation(_)));
 }
@@ -109,15 +110,19 @@ fn passthrough_methods_delegate_to_stub_provider() {
     )
     .expect("svc");
 
+    let index = svc.index_port(RuntimeKind::Go).expect("index port");
     assert_eq!(
-        svc.list_installed(RuntimeKind::Go).expect("list"),
+        index.list_installed().expect("list"),
         vec![RuntimeVersion("1.0.0".to_string())]
     );
-    assert_eq!(svc.current(RuntimeKind::Go).expect("current"), None);
-    svc.set_current(RuntimeKind::Go, &RuntimeVersion("1.0.0".to_string()))
+    assert_eq!(index.current().expect("current"), None);
+    svc.installer_port(RuntimeKind::Go)
+        .expect("installer port")
+        .set_current(&RuntimeVersion("1.0.0".to_string()))
         .expect("set_current");
     assert_eq!(
-        svc.list_remote(RuntimeKind::Go, &RemoteFilter::default())
+        index
+            .list_remote_installable(&RemoteFilter::default())
             .expect("remote"),
         vec![
             RuntimeVersion("28.4.2".to_string()),
@@ -126,7 +131,8 @@ fn passthrough_methods_delegate_to_stub_provider() {
         ]
     );
     assert_eq!(
-        svc.list_remote_latest_per_major(RuntimeKind::Go)
+        index
+            .list_remote_latest_installable_per_major()
             .expect("latest"),
         vec![
             RuntimeVersion("28.4.2".to_string()),
@@ -134,25 +140,27 @@ fn passthrough_methods_delegate_to_stub_provider() {
         ]
     );
     assert_eq!(
-        svc.resolve(RuntimeKind::Go, &VersionSpec("x".to_string()))
+        index
+            .resolve(&VersionSpec("x".to_string()))
             .expect("resolve")
             .version,
         RuntimeVersion("2.0.0".to_string())
     );
     assert_eq!(
-        svc.install(
-            RuntimeKind::Go,
-            &InstallRequest {
+        svc.installer_port(RuntimeKind::Go)
+            .expect("installer port")
+            .install(&InstallRequest {
                 spec: VersionSpec("latest".to_string()),
                 progress_downloaded: None,
                 progress_total: None,
                 cancel: None,
-            },
-        )
-        .expect("install"),
+            })
+            .expect("install"),
         RuntimeVersion("3.0.0".to_string())
     );
-    svc.uninstall(RuntimeKind::Go, &RuntimeVersion("3.0.0".to_string()))
+    svc.installer_port(RuntimeKind::Go)
+        .expect("installer port")
+        .uninstall(&RuntimeVersion("3.0.0".to_string()))
         .expect("uninstall");
 
     let disk_major_rows = svc
@@ -290,7 +298,11 @@ fn defaults_providers_registered() {
         RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
-        let _ = svc.list_installed(kind).expect("list_installed");
+        let _ = svc
+            .index_port(kind)
+            .expect("index port")
+            .list_installed()
+            .expect("list_installed");
     }
 }
 
@@ -338,6 +350,10 @@ fn with_runtime_root_registers_providers() {
         RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
-        let _ = svc.list_installed(kind).expect("list_installed");
+        let _ = svc
+            .index_port(kind)
+            .expect("index port")
+            .list_installed()
+            .expect("list_installed");
     }
 }

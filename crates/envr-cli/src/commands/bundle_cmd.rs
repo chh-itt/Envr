@@ -317,7 +317,9 @@ fn apply_inner(
                 continue;
             }
             if let Ok(kind) = parse_runtime_kind(kind_str) {
-                let _ = svc.set_current(kind, &RuntimeVersion(ver.to_string()));
+                if let Ok(installer) = svc.installer_port(kind) {
+                    let _ = installer.set_current(&RuntimeVersion(ver.to_string()));
+                }
             }
         }
     }
