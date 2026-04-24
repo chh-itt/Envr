@@ -4,12 +4,12 @@ mod manager;
 pub use installer::{RustChannel, install_rustup_managed};
 pub use manager::{RustManager, RustPaths, RustupMode};
 
+use envr_config::env_context::runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 pub struct RustRuntimeProvider {
@@ -31,7 +31,7 @@ impl RustRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 

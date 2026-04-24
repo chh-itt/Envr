@@ -8,6 +8,7 @@ use crate::output::fmt_template;
 use crate::run_context::CliPathProfile;
 
 use envr_config::project_config::ProjectConfig;
+use envr_config::env_context::load_settings_cached;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
@@ -401,11 +402,7 @@ fn install_missing_in_parallel(uniq: Vec<(String, String)>) -> EnvrResult<Vec<(S
 }
 
 fn read_max_download_workers() -> u32 {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return 4;
-    };
-    let path = envr_config::settings::settings_path_from_platform(&platform);
-    envr_config::settings::Settings::load_or_default_from(&path)
+    load_settings_cached()
         .map(|s| s.download.max_concurrent_downloads)
         .unwrap_or(4)
 }

@@ -1,8 +1,8 @@
 use envr_config::PathProxyRuntimeSnapshot;
+use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
     Settings, bun_package_registry_env, deno_package_registry_env, resolve_runtime_root,
-    settings_path_from_platform,
 };
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
@@ -46,11 +46,7 @@ impl ShimSettingsSnapshot {
     }
 
     pub fn from_disk() -> Self {
-        let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-            return Self::default();
-        };
-        let path = settings_path_from_platform(&platform);
-        let Ok(settings) = Settings::load_or_default_from(&path) else {
+        let Ok(settings) = load_settings_cached() else {
             return Self::default();
         };
         Self::from_settings(&settings)
@@ -82,14 +78,8 @@ impl ShimContext {
     /// `working_dir` is [`std::env::current_dir`].
     pub fn from_process_env() -> EnvrResult<Self> {
         let envs = EnvSnapshot::capture_current()?;
-        let runtime_root = if let Some(r) = envs.get("ENVR_RUNTIME_ROOT").filter(|s| !s.is_empty())
-        {
-            PathBuf::from(r)
-        } else {
-            // Keep shim resolution consistent with CLI/GUI settings.
-            // GUI edits `settings.toml` under the platform home, so read it here too.
-            resolve_runtime_root()?
-        };
+        // Same precedence as CLI: process override, `ENVR_RUNTIME_ROOT`, `settings.toml`, platform default.
+        let runtime_root = resolve_runtime_root()?;
         let working_dir = std::env::current_dir().map_err(EnvrError::from)?;
         let profile = envs
             .get("ENVR_PROFILE")

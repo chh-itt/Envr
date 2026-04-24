@@ -5,6 +5,7 @@ use crate::command_outcome::CliExit;
 use crate::runtime_session::CliRuntimeSession;
 
 use envr_config::project_config::{ProjectConfig, RustEnforceMode};
+use envr_config::env_context::load_settings_cached;
 use envr_config::settings::resolve_runtime_root;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, runtime_descriptor};
@@ -18,8 +19,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-/// Resolve the effective runtime root for this process (re-reads `settings.toml` each call so edits
-/// in another terminal are picked up on the next `exec` / `run` / `which`, unless `ENVR_RUNTIME_ROOT` is set).
+/// Resolve the effective runtime root for this process (same rules as [`resolve_runtime_root`]:
+/// CLI `--runtime-root` override, then `ENVR_RUNTIME_ROOT`, then `settings.toml` `paths.runtime_root`,
+/// then the platform default; `settings.toml` is re-read when its mtime changes).
 pub fn session_runtime_root() -> EnvrResult<PathBuf> {
     effective_runtime_root()
 }
@@ -174,11 +176,7 @@ fn rustc_version_from_output(out: &str) -> Option<String> {
 }
 
 fn maybe_prune_artifact_cache_on_start() {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return;
-    };
-    let settings_path = envr_config::settings::settings_path_from_platform(&platform);
-    let Ok(settings) = envr_config::settings::Settings::load_or_default_from(&settings_path) else {
+    let Ok(settings) = load_settings_cached() else {
         return;
     };
     // Best-effort: configure global download bandwidth cap for this CLI process.

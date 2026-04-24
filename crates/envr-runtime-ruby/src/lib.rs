@@ -9,12 +9,12 @@ pub use manager::{
     RubyManager, RubyPaths, list_installed_versions, read_current, ruby_installation_valid,
 };
 
+use envr_config::env_context::runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -44,7 +44,7 @@ impl RubyRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 

@@ -5,6 +5,7 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
+envr-config = { path = "../envr-config" }
 envr-download = { path = "../envr-download" }
 envr-domain = { path = "../envr-domain" }
 envr-error = { path = "../envr-error" }

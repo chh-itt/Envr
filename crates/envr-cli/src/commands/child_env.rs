@@ -4,13 +4,13 @@ use super::run_env_builder::{
     ExecLangResolution, RUN_STACK_LANG_ORDER, RunEnvStack, RunStackLang, resolve_exec_lang_layer,
     resolve_rust_bins, rust_paths, rustup_active_toolchain,
 };
+use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
 use envr_config::settings::{
-    Settings, bun_package_registry_env, deno_package_registry_env, settings_path_from_platform,
+    Settings, bun_package_registry_env, deno_package_registry_env,
 };
 use envr_domain::jvm_hosted;
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::paths::current_platform_paths;
 // Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …
 #[allow(unused_imports)]
 pub use envr_resolver::{
@@ -102,9 +102,7 @@ pub fn collect_run_verbose_lines(
 }
 
 fn load_settings() -> EnvrResult<Settings> {
-    let paths = current_platform_paths()?;
-    let sp = settings_path_from_platform(&paths);
-    Settings::load_or_default_from(&sp)
+    load_settings_cached()
 }
 
 pub(crate) fn base_env_with_project_env(cfg: Option<&ProjectConfig>) -> HashMap<String, String> {

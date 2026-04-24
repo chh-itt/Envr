@@ -14,12 +14,12 @@ pub use manager::{
     ZigManager, ZigPaths, list_installed_versions, promote_single_root_dir, read_current,
 };
 
+use envr_config::env_context::runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 pub struct ZigRuntimeProvider {
@@ -48,7 +48,7 @@ impl ZigRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 

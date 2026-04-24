@@ -7,8 +7,8 @@ use crate::index::{
 use envr_config::settings::PythonWindowsDistribution;
 use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
-    settings_path_from_platform,
 };
+use envr_config::env_context::load_settings_cached;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec};
 use envr_download::{checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -171,11 +171,7 @@ fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
 }
 
 fn load_settings_snapshot() -> Option<envr_config::settings::Settings> {
-    (|| {
-        let platform = envr_platform::paths::current_platform_paths().ok()?;
-        let path = settings_path_from_platform(&platform);
-        envr_config::settings::Settings::load_or_default_from(&path).ok()
-    })()
+    load_settings_cached().ok()
 }
 
 #[cfg(windows)]

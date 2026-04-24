@@ -6,7 +6,7 @@ use crate::commands::common::{emit_verbose_step, kind_label};
 use crate::commands::shim_cmd;
 use crate::output::{self, fmt_template};
 
-use envr_config::settings::Settings;
+use envr_config::env_context::load_settings_cached;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
@@ -98,11 +98,7 @@ fn load_use_auto_sync_behavior() -> UseAutoSyncBehavior {
         auto_sync_globals_on_use: false,
         auto_sync_windows_path_mirror_on_use: cfg!(windows),
     };
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return defaults;
-    };
-    let path = envr_config::settings::settings_path_from_platform(&platform);
-    let Ok(settings) = Settings::load_or_default_from(&path) else {
+    let Ok(settings) = load_settings_cached() else {
         return defaults;
     };
     UseAutoSyncBehavior {

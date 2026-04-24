@@ -1,52 +1,14 @@
-use envr_config::settings::{Settings, settings_path_from_platform};
+use envr_config::env_context::load_settings_cached as load_settings_from_context;
+use envr_config::settings::Settings;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use reqwest::Url;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
 
 use crate::registry::MirrorRegistry;
 use crate::strategy::{ResolvedMirror, join_url, mirror_base_url, resolve_mirror};
 
-#[derive(Debug, Clone)]
-struct CachedSettings {
-    loaded_at: Instant,
-    settings: Settings,
-}
-
-static SETTINGS_CACHE: OnceLock<Mutex<Option<CachedSettings>>> = OnceLock::new();
-
-fn settings_cache_ttl() -> Duration {
-    const DEFAULT_SECS: u64 = 5;
-    std::env::var("ENVR_MIRROR_SETTINGS_CACHE_TTL_SECS")
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .filter(|v| *v > 0)
-        .map(Duration::from_secs)
-        .unwrap_or(Duration::from_secs(DEFAULT_SECS))
-}
-
-fn load_settings_uncached() -> EnvrResult<Settings> {
-    let platform = envr_platform::paths::current_platform_paths()?;
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-}
-
-/// Load settings with a small in-process cache to avoid repeated disk IO in hot paths.
+/// Load settings via the process-level context cache.
 pub fn load_settings_cached() -> EnvrResult<Settings> {
-    let ttl = settings_cache_ttl();
-    let cell = SETTINGS_CACHE.get_or_init(|| Mutex::new(None));
-    let mut guard = cell.lock().expect("mirror settings cache mutex");
-    if let Some(cached) = guard.as_ref()
-        && cached.loaded_at.elapsed() <= ttl
-    {
-        return Ok(cached.settings.clone());
-    }
-    let settings = load_settings_uncached()?;
-    *guard = Some(CachedSettings {
-        loaded_at: Instant::now(),
-        settings: settings.clone(),
-    });
-    Ok(settings)
+    load_settings_from_context()
 }
 
 /// Resolve a URL according to mirror settings.

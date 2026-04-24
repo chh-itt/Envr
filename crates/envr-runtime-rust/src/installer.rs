@@ -1,8 +1,8 @@
 use crate::manager::{RustManager, RustPaths, RustupMode};
-use envr_config::settings::{Settings, settings_path_from_platform};
+use envr_config::env_context::load_settings_cached;
+use envr_config::settings::Settings;
 use envr_domain::runtime::{InstallRequest, VersionSpec};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -146,11 +146,7 @@ fn download_rustup_init_to(
 }
 
 fn load_settings_best_effort() -> Settings {
-    let Ok(platform) = current_platform_paths() else {
-        return Settings::default();
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path).unwrap_or_default()
+    load_settings_cached().unwrap_or_default()
 }
 
 fn rustup_env_from_settings(st: &Settings) -> Vec<(String, String)> {

@@ -14,15 +14,16 @@ pub use manager::{
     resolve_global_php_current_target,
 };
 
+use envr_config::env_context::{load_settings_cached, runtime_root};
+
 use envr_config::settings::{
-    PhpWindowsBuildFlavor, Settings, php_windows_releases_json_url, settings_path_from_platform,
+    PhpWindowsBuildFlavor, php_windows_releases_json_url,
 };
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 pub struct PhpRuntimeProvider {
@@ -44,7 +45,7 @@ impl PhpRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 
@@ -61,9 +62,7 @@ impl PhpRuntimeProvider {
     }
 
     fn resolved_remote_settings(&self) -> EnvrResult<(String, bool)> {
-        let platform = current_platform_paths()?;
-        let path = settings_path_from_platform(&platform);
-        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        let s = load_settings_cached().unwrap_or_default();
         let url = php_windows_releases_json_url(&s).to_string();
         let want_ts = matches!(s.runtime.php.windows_build, PhpWindowsBuildFlavor::Ts);
         Ok((url, want_ts))

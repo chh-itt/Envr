@@ -14,16 +14,16 @@ pub use manager::{
 };
 pub use vendor::JavaVendor;
 
+use envr_config::env_context::{load_settings_cached, runtime_root};
+
 use envr_config::settings::{
-    JavaDistro, JavaDownloadSource, Settings, prefer_china_mirrors,
-    settings_path_from_platform,
+    JavaDistro, JavaDownloadSource, prefer_china_mirrors,
 };
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 /// JDK runtime provider (Adoptium Temurin: index, download, `current`, `JAVA_HOME` marker file).
@@ -60,7 +60,7 @@ impl JavaRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 
@@ -86,9 +86,7 @@ impl JavaRuntimeProvider {
     }
 
     fn resolved_vendor(&self) -> EnvrResult<JavaVendor> {
-        let platform = current_platform_paths()?;
-        let path = settings_path_from_platform(&platform);
-        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        let s = load_settings_cached().unwrap_or_default();
         Ok(match s.runtime.java.current_distro {
             JavaDistro::Temurin => JavaVendor::EclipseTemurin,
             JavaDistro::OracleOpenJdk => JavaVendor::OracleOpenJdk,
@@ -106,9 +104,7 @@ impl JavaRuntimeProvider {
     }
 
     fn resolved_download_source(&self) -> EnvrResult<JavaDownloadSource> {
-        let platform = current_platform_paths()?;
-        let path = settings_path_from_platform(&platform);
-        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        let s = load_settings_cached().unwrap_or_default();
         let src = match s.runtime.java.download_source {
             JavaDownloadSource::Auto => {
                 if prefer_china_mirrors(&s) {

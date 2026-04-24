@@ -1129,6 +1129,7 @@ dependencies = [
 name = "envr-runtime-babashka"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1160,6 +1161,7 @@ dependencies = [
 name = "envr-runtime-c3"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1175,6 +1177,7 @@ dependencies = [
 name = "envr-runtime-clojure"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1191,6 +1194,7 @@ dependencies = [
 name = "envr-runtime-crystal"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1206,6 +1210,7 @@ dependencies = [
 name = "envr-runtime-dart"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1236,6 +1241,7 @@ dependencies = [
 name = "envr-runtime-dotnet"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1250,6 +1256,7 @@ dependencies = [
 name = "envr-runtime-elixir"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1263,6 +1270,7 @@ dependencies = [
 name = "envr-runtime-elm"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1279,6 +1287,7 @@ dependencies = [
 name = "envr-runtime-erlang"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1293,6 +1302,7 @@ dependencies = [
 name = "envr-runtime-flutter"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1307,6 +1317,7 @@ dependencies = [
 name = "envr-runtime-gleam"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1337,6 +1348,7 @@ dependencies = [
 name = "envr-runtime-groovy"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1353,6 +1365,7 @@ dependencies = [
 name = "envr-runtime-haxe"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1368,6 +1381,7 @@ dependencies = [
 name = "envr-runtime-janet"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1398,6 +1412,7 @@ dependencies = [
 name = "envr-runtime-julia"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1412,6 +1427,7 @@ dependencies = [
 name = "envr-runtime-kotlin"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1443,6 +1459,7 @@ dependencies = [
 name = "envr-runtime-nim"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1474,6 +1491,7 @@ dependencies = [
 name = "envr-runtime-odin"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1489,6 +1507,7 @@ dependencies = [
 name = "envr-runtime-perl"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1519,6 +1538,7 @@ dependencies = [
 name = "envr-runtime-purescript"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1550,6 +1570,7 @@ dependencies = [
 name = "envr-runtime-racket"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1565,6 +1586,7 @@ dependencies = [
 name = "envr-runtime-rlang"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1579,6 +1601,7 @@ dependencies = [
 name = "envr-runtime-ruby"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1605,6 +1628,7 @@ dependencies = [
 name = "envr-runtime-sbcl"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1620,6 +1644,7 @@ dependencies = [
 name = "envr-runtime-scala"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1636,6 +1661,7 @@ dependencies = [
 name = "envr-runtime-terraform"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1651,6 +1677,7 @@ dependencies = [
 name = "envr-runtime-unison"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1666,6 +1693,7 @@ dependencies = [
 name = "envr-runtime-v"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",
@@ -1681,6 +1709,7 @@ dependencies = [
 name = "envr-runtime-zig"
 version = "0.1.0"
 dependencies = [
+ "envr-config",
  "envr-domain",
  "envr-download",
  "envr-error",

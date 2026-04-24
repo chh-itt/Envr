@@ -9,6 +9,7 @@ pub use manager::{
     BunManager, BunPaths, bun_installation_valid, list_installed_versions, read_current,
 };
 
+use envr_config::env_context::runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
@@ -44,7 +45,7 @@ impl BunRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 

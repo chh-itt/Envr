@@ -2,6 +2,7 @@
 
 use std::sync::OnceLock;
 
+use envr_config::env_context::load_settings_cached;
 use envr_config::settings::LocaleMode;
 
 static PREFER_ZH: OnceLock<bool> = OnceLock::new();
@@ -20,11 +21,7 @@ pub fn bootstrap_with_locale(locale: LocaleMode) {
 
 fn prefer_zh() -> bool {
     *PREFER_ZH.get_or_init(|| {
-        let Ok(paths) = envr_platform::paths::current_platform_paths() else {
-            return false;
-        };
-        let p = envr_config::settings::settings_path_from_platform(&paths);
-        let Ok(st) = envr_config::settings::Settings::load_or_default_from(&p) else {
+        let Ok(st) = load_settings_cached() else {
             return false;
         };
         match st.i18n.locale {

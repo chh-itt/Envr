@@ -6,6 +6,7 @@ use crate::commands::child_env;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
+use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{load_project_config_profile, reset_project_config_load_cache};
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -314,11 +315,7 @@ fn install_pending_parallel(pending: Vec<(String, String)>) -> EnvrResult<Vec<(S
 }
 
 fn read_max_download_workers() -> u32 {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return 4;
-    };
-    let path = envr_config::settings::settings_path_from_platform(&platform);
-    envr_config::settings::Settings::load_or_default_from(&path)
+    load_settings_cached()
         .map(|s| s.download.max_concurrent_downloads)
         .unwrap_or(4)
 }

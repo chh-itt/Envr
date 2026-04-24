@@ -3,7 +3,8 @@
 mod node_engines_hint;
 mod shim_i18n;
 
-use envr_config::settings::{Settings, settings_path_from_platform};
+use envr_config::env_context::load_settings_cached;
+use envr_config::settings::Settings;
 use envr_error::EnvrError;
 use envr_shim_core::{
     CoreCommand, ResolvedShim, ShimContext, ShimSettingsSnapshot, parse_shim_invocation,
@@ -49,9 +50,7 @@ fn emit_timing_report(core_cmd: CoreCommand, timings: &ShimTimings) {
 }
 
 fn load_settings_for_invocation() -> Option<Settings> {
-    let platform = envr_platform::paths::current_platform_paths().ok()?;
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path).ok()
+    load_settings_cached().ok()
 }
 
 fn prepare(

@@ -12,6 +12,8 @@ pub use manager::{
     read_current,
 };
 
+use envr_config::env_context::{load_settings_cached, runtime_root};
+
 use envr_config::settings;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
@@ -26,7 +28,7 @@ use std::path::{Path, PathBuf};
 pub struct NodeRuntimeProvider {
     /// When set, bypasses `settings.toml` [`settings::node_index_json_url`] (tests / advanced).
     index_json_override: Option<String>,
-    /// When `None`, uses [`current_platform_paths`].
+    /// When `None`, uses the effective runtime root ([`envr_config::env_context::runtime_root`]).
     runtime_root_override: Option<std::path::PathBuf>,
 }
 
@@ -53,7 +55,7 @@ impl NodeRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 
@@ -61,9 +63,7 @@ impl NodeRuntimeProvider {
         if let Some(u) = &self.index_json_override {
             return Ok(u.clone());
         }
-        let platform = current_platform_paths()?;
-        let path = settings::settings_path_from_platform(&platform);
-        let s = settings::Settings::load_or_default_from(&path)?;
+        let s = load_settings_cached()?;
         Ok(settings::node_index_json_url(&s))
     }
 
@@ -120,8 +120,7 @@ impl NodeRuntimeProvider {
         }
 
         // Offline mode: do not attempt network fetch; require a cached index.
-        let settings_path = settings::settings_path_from_platform(&current_platform_paths()?);
-        let st = settings::Settings::load_or_default_from(&settings_path)?;
+        let st = load_settings_cached()?;
         if st.mirror.mode == settings::MirrorMode::Offline {
             return Err(EnvrError::Download(format!(
                 "offline mode: missing cached node index at {} (run `envr cache index sync`)",

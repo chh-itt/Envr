@@ -8,12 +8,12 @@ pub use index::{
 };
 pub use manager::{DartManager, DartPaths, list_installed_versions, read_current};
 
+use envr_config::env_context::runtime_root;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::EnvrResult;
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 pub struct DartRuntimeProvider {
@@ -42,7 +42,7 @@ impl DartRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 

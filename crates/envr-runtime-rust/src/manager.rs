@@ -1,3 +1,4 @@
+use envr_config::env_context::load_settings_cached;
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_error::{EnvrError, EnvrResult};
 use std::collections::HashMap;
@@ -71,11 +72,7 @@ pub enum RustupMode {
 }
 
 fn read_settings_rustup_env() -> HashMap<String, String> {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return HashMap::new();
-    };
-    let path = envr_config::settings::settings_path_from_platform(&platform);
-    let Ok(s) = envr_config::settings::Settings::load_or_default_from(&path) else {
+    let Ok(s) = load_settings_cached() else {
         return HashMap::new();
     };
     let mut out = HashMap::new();

@@ -33,13 +33,11 @@ pub use command_outcome::{CliExit, CommandOutcome, finish_cli_cmd};
 pub use presenter::{CliPresenter, CliUxPolicy};
 pub use run_context::{CliPathProfile, CliProjectContext, RunExecContext};
 pub use runtime_session::CliRuntimeSession;
+use envr_config::env_context::load_settings_cached;
 
 /// Resolve the effective locale for this process from `settings.toml` (no global mutation).
 pub fn bootstrap_locale() -> envr_core::i18n::Locale {
-    if let Ok(paths) = envr_platform::paths::current_platform_paths() {
-        let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-        let st = envr_config::settings::Settings::load_or_default_from(&settings_path)
-            .unwrap_or_default();
+    if let Ok(st) = load_settings_cached() {
         return envr_core::i18n::locale_from_settings(&st);
     }
     envr_core::i18n::Locale::EnUs
@@ -47,10 +45,7 @@ pub fn bootstrap_locale() -> envr_core::i18n::Locale {
 
 /// Match `settings.toml` / platform locale before parsing argv (same as the `envr` binary).
 pub fn bootstrap_i18n() {
-    if let Ok(paths) = envr_platform::paths::current_platform_paths() {
-        let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-        let st = envr_config::settings::Settings::load_or_default_from(&settings_path)
-            .unwrap_or_default();
+    if let Ok(st) = load_settings_cached() {
         envr_core::i18n::init_from_settings(&st);
     }
 }

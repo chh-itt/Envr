@@ -11,14 +11,15 @@ pub use manager::{
 };
 
 use envr_config::settings::{
-    GoDownloadSource, Settings, prefer_china_mirrors, settings_path_from_platform,
+    GoDownloadSource, prefer_china_mirrors,
 };
+use envr_config::env_context::{load_settings_cached, runtime_root};
+
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::current_platform_paths;
 use std::path::PathBuf;
 
 pub struct GoRuntimeProvider {
@@ -40,7 +41,7 @@ impl GoRuntimeProvider {
     fn runtime_root(&self) -> EnvrResult<std::path::PathBuf> {
         Ok(match &self.runtime_root_override {
             Some(p) => p.clone(),
-            None => current_platform_paths()?.runtime_root,
+            None => runtime_root()?,
         })
     }
 
@@ -74,9 +75,7 @@ impl GoRuntimeProvider {
     }
 
     fn resolved_dl_urls(&self) -> EnvrResult<(String, String)> {
-        let platform = current_platform_paths()?;
-        let path = settings_path_from_platform(&platform);
-        let s = Settings::load_or_default_from(&path).unwrap_or_default();
+        let s = load_settings_cached().unwrap_or_default();
         let src = match s.runtime.go.download_source {
             GoDownloadSource::Auto => {
                 if prefer_china_mirrors(&s) {
