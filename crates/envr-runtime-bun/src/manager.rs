@@ -5,18 +5,15 @@ use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::error::Error;
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::thread;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 fn error_chain_message(err: &dyn Error) -> String {
     let mut s = err.to_string();
@@ -164,72 +161,6 @@ fn remove_path_if_exists(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
-fn download_to_path_once(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    path: &Path,
-    progress_downloaded: Option<&Arc<AtomicU64>>,
-    progress_total: Option<&Arc<AtomicU64>>,
-    cancel: Option<&Arc<AtomicBool>>,
-) -> EnvrResult<()> {
-    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-        return Err(EnvrError::Download("download cancelled".to_string()));
-    }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::Download(error_chain_message(&e)))?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    if let Some(t) = progress_total {
-        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
-    }
-    if let Some(d) = progress_downloaded {
-        d.store(0, Ordering::Relaxed);
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".to_string()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        if let Some(d) = progress_downloaded {
-            d.fetch_add(n as u64, Ordering::Relaxed);
-        }
-    }
-    Ok(())
-}
-
-fn should_retry_download_error(msg: &str) -> bool {
-    let m = msg.to_ascii_lowercase();
-    m.contains("timed out")
-        || m.contains("timeout")
-        || m.contains("connection reset")
-        || m.contains("connection refused")
-        || m.contains("connection aborted")
-        || m.contains("error 10054")
-        || m.contains("error 10060")
-}
-
 fn download_to_path_with_retries(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -238,29 +169,14 @@ fn download_to_path_with_retries(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
-    const MAX_ATTEMPTS: usize = 3;
-    let mut last_err: Option<EnvrError> = None;
-    for attempt in 1..=MAX_ATTEMPTS {
-        match download_to_path_once(
-            client,
-            url,
-            path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        ) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                let msg = e.to_string();
-                last_err = Some(e);
-                if attempt >= MAX_ATTEMPTS || !should_retry_download_error(&msg) {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(300 * attempt as u64));
-            }
-        }
-    }
-    Err(last_err.unwrap_or_else(|| EnvrError::Download("download failed".into())))
+    download_url_to_path_resumable(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    )
 }
 
 /// If `fallback_url` differs from `url`, retries the download from `fallback_url` when the first attempt fails.

@@ -6,11 +6,10 @@ use crate::index::{
 use envr_domain::crystal_paths;
 use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable_with_headers, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -140,53 +139,20 @@ fn download_to_path(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
-    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-        return Err(EnvrError::Download("download cancelled".into()));
-    }
-    let mut response = client
-        .get(url)
-        .header("Accept", "application/octet-stream")
-        .send()
-        .map_err(|e| {
-            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-        })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {url} -> {}",
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    if let Some(t) = progress_total {
-        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
-    }
-    if let Some(d) = progress_downloaded {
-        d.store(0, Ordering::Relaxed);
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".into()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        if let Some(d) = progress_downloaded {
-            d.fetch_add(n as u64, Ordering::Relaxed);
-        }
-    }
-    Ok(())
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::ACCEPT,
+        reqwest::header::HeaderValue::from_static("application/octet-stream"),
+    );
+    download_url_to_path_resumable_with_headers(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+        Some(&headers),
+    )
 }
 
 fn collect_archive_root_directories(staging: &Path) -> EnvrResult<Vec<PathBuf>> {

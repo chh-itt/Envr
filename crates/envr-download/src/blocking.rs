@@ -72,6 +72,27 @@ pub fn download_url_to_path_resumable(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
+    download_url_to_path_resumable_with_headers(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+        None,
+    )
+}
+
+/// Same as [`download_url_to_path_resumable`] but allows additional fixed request headers.
+pub fn download_url_to_path_resumable_with_headers(
+    client: &Client,
+    url: &str,
+    path: &Path,
+    progress_downloaded: Option<&Arc<AtomicU64>>,
+    progress_total: Option<&Arc<AtomicU64>>,
+    cancel: Option<&Arc<AtomicBool>>,
+    headers: Option<&reqwest::header::HeaderMap>,
+) -> EnvrResult<()> {
     let mut last_err: Option<EnvrError> = None;
     let mut range_recovery = 0u8;
     for attempt in 1..=3 {
@@ -85,6 +106,11 @@ pub fn download_url_to_path_resumable(
         }
 
         let mut request = client.get(url);
+        if let Some(extra) = headers {
+            for (name, value) in extra {
+                request = request.header(name, value);
+            }
+        }
         if resumed_from > 0 {
             request = request.header(reqwest::header::RANGE, format!("bytes={}-", resumed_from));
         }

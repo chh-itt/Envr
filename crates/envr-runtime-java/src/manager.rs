@@ -8,17 +8,16 @@ use crate::vendor::JavaVendor;
 use envr_config::settings::JavaDownloadSource;
 use envr_domain::installer::{SpecDrivenInstaller, install_via_version_spec};
 use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
-use envr_download::{checksum, extract};
+use envr_download::{blocking::download_url_to_path_resumable_with_headers, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use serde::Deserialize;
 use std::{
     fs,
-    io::Read,
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64},
     },
 };
 
@@ -594,53 +593,22 @@ fn download_to_path(
     cancel: Option<&Arc<AtomicBool>>,
     referer: Option<&str>,
 ) -> EnvrResult<()> {
-    let mut req = client.get(url);
+    let mut headers = reqwest::header::HeaderMap::new();
     if let Some(r) = referer {
-        req = req.header("Referer", r);
-    }
-    let mut response = req.send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(EnvrError::from)?;
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    if let Some(total) = response.content_length()
-        && let Some(p) = progress_total
-    {
-        p.store(total, Ordering::Relaxed);
-    }
-    if let Some(p) = progress_downloaded {
-        p.store(0, Ordering::Relaxed);
-    }
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Runtime("download cancelled".into()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
+        let hv = reqwest::header::HeaderValue::from_str(r).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid Java referer header", e)
         })?;
-        if n == 0 {
-            break;
-        }
-        std::io::Write::write_all(&mut f, &buf[..n]).map_err(EnvrError::from)?;
-        if let Some(p) = progress_downloaded {
-            p.fetch_add(n as u64, Ordering::Relaxed);
-        }
+        headers.insert(reqwest::header::REFERER, hv);
     }
-    Ok(())
+    download_url_to_path_resumable_with_headers(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+        Some(&headers),
+    )
 }
 
 /// Temurin archives ship a single top-level `jdk-...` directory; promote it to `final_dir`.
