@@ -1,7 +1,7 @@
 use super::service::RuntimeService;
 use envr_domain::runtime::{
-    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
-    VersionSpec,
+    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeIndex, RuntimeInstaller, RuntimeKind,
+    RuntimeProvider, RuntimeVersion, VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult};
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ impl RuntimeProvider for StubProvider {
     }
 
     fn list_remote_installable(&self, _filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.list_remote(&RemoteFilter::default())
+        RuntimeProvider::list_remote(self, &RemoteFilter::default())
     }
 
     fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -47,7 +47,7 @@ impl RuntimeProvider for StubProvider {
     }
 
     fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.list_remote_latest_per_major()
+        RuntimeProvider::list_remote_latest_per_major(self)
     }
 
     fn try_load_remote_latest_installable_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
@@ -213,6 +213,37 @@ fn passthrough_methods_delegate_to_stub_provider() {
         .list_children_cached(RuntimeKind::Go, "27.3")
         .expect("after remove");
     assert!(empty.is_empty());
+}
+
+#[test]
+fn runtime_provider_blanket_impl_supports_split_ports() {
+    let provider = StubProvider {
+        kind: RuntimeKind::Node,
+    };
+    let index: &dyn RuntimeIndex = &provider;
+    let installer: &dyn RuntimeInstaller = &provider;
+
+    assert_eq!(index.kind(), RuntimeKind::Node);
+    assert_eq!(
+        index
+            .resolve(&VersionSpec("latest".to_string()))
+            .expect("resolve")
+            .version
+            .0,
+        "2.0.0"
+    );
+    assert_eq!(
+        installer
+            .install(&InstallRequest {
+                spec: VersionSpec("latest".to_string()),
+                progress_downloaded: None,
+                progress_total: None,
+                cancel: None,
+            })
+            .expect("install")
+            .0,
+        "3.0.0"
+    );
 }
 
 #[test]

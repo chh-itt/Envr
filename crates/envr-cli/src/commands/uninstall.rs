@@ -48,10 +48,12 @@ pub(crate) fn run_inner(
         ),
     );
 
-    let current = service.current(kind)?;
+    let index = service.index_port(kind)?;
+    let current = index.current()?;
     let is_active = current.as_ref().is_some_and(|c| c.0 == version.0);
 
-    let (paths, external) = service.uninstall_dry_run_targets(kind, &version)?;
+    let installer = service.installer_port(kind)?;
+    let (paths, external) = installer.uninstall_dry_run_targets(&version)?;
 
     if dry_run {
         let would_refuse = is_active && !force;
@@ -180,7 +182,7 @@ pub(crate) fn run_inner(
             &[("kind", kind_label(kind)), ("version", &version.0)],
         ),
     );
-    service.uninstall(kind, &version)?;
+    installer.uninstall(&version)?;
     Ok(print_success(g, kind, &version))
 }
 

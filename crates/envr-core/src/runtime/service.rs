@@ -1,13 +1,89 @@
 use envr_domain::runtime::{
     InstallRequest, MajorVersionRecord, RemoteFilter, ResolvedVersion, RuntimeKind,
-    RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec, major_line_remote_install_blocked,
-    runtime_descriptor, version_line_key_for_kind,
+    RuntimeIndex, RuntimeInstaller, RuntimeProvider, RuntimeVersion, VersionRecord, VersionSpec,
+    major_line_remote_install_blocked, runtime_descriptor, version_line_key_for_kind,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::cache_recovery;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+struct ProviderIndexRef<'a> {
+    inner: &'a dyn RuntimeProvider,
+}
+
+impl RuntimeIndex for ProviderIndexRef<'_> {
+    fn kind(&self) -> RuntimeKind {
+        self.inner.kind()
+    }
+
+    fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.inner.list_installed()
+    }
+
+    fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
+        self.inner.current()
+    }
+
+    fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.inner.list_remote(filter)
+    }
+
+    fn list_remote_installable(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.inner.list_remote_installable(filter)
+    }
+
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        self.inner.list_remote_majors()
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.inner.list_remote_latest_per_major()
+    }
+
+    fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.inner.list_remote_latest_installable_per_major()
+    }
+
+    fn try_load_remote_latest_installable_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        self.inner
+            .try_load_remote_latest_installable_per_major_from_disk()
+    }
+
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        self.inner.try_load_remote_latest_per_major_from_disk()
+    }
+
+    fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
+        self.inner.resolve(spec)
+    }
+}
+
+struct ProviderInstallerRef<'a> {
+    inner: &'a dyn RuntimeProvider,
+}
+
+impl RuntimeInstaller for ProviderInstallerRef<'_> {
+    fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.inner.set_current(version)
+    }
+
+    fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        self.inner.install(request)
+    }
+
+    fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        self.inner.uninstall(version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        self.inner.uninstall_dry_run_targets(version)
+    }
+}
 
 fn attach_runtime_root<T>(
     runtime_root: &Option<PathBuf>,
@@ -267,8 +343,26 @@ impl RuntimeService {
             .ok_or_else(|| EnvrError::Validation(format!("provider not registered: {kind:?}")))
     }
 
+    fn index_provider(&self, kind: RuntimeKind) -> EnvrResult<ProviderIndexRef<'_>> {
+        self.provider(kind).map(|p| ProviderIndexRef { inner: p })
+    }
+
+    fn installer_provider(&self, kind: RuntimeKind) -> EnvrResult<ProviderInstallerRef<'_>> {
+        self.provider(kind).map(|p| ProviderInstallerRef { inner: p })
+    }
+
+    pub fn index_port(&self, kind: RuntimeKind) -> EnvrResult<Box<dyn RuntimeIndex + '_>> {
+        self.index_provider(kind)
+            .map(|p| Box::new(p) as Box<dyn RuntimeIndex>)
+    }
+
+    pub fn installer_port(&self, kind: RuntimeKind) -> EnvrResult<Box<dyn RuntimeInstaller + '_>> {
+        self.installer_provider(kind)
+            .map(|p| Box::new(p) as Box<dyn RuntimeInstaller>)
+    }
+
     pub fn list_installed(&self, kind: RuntimeKind) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.provider(kind)?.list_installed()
+        self.index_provider(kind)?.list_installed()
     }
 
     /// Remote versions that [`RuntimeProvider::install`] is expected to satisfy (see
@@ -278,18 +372,18 @@ impl RuntimeService {
         kind: RuntimeKind,
         filter: &RemoteFilter,
     ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.provider(kind)?.list_remote_installable(filter)
+        self.index_provider(kind)?.list_remote_installable(filter)
     }
 
     pub fn list_remote_majors(&self, kind: RuntimeKind) -> EnvrResult<Vec<String>> {
-        self.provider(kind)?.list_remote_majors()
+        self.index_provider(kind)?.list_remote_majors()
     }
 
     pub fn list_remote_latest_per_major(
         &self,
         kind: RuntimeKind,
     ) -> EnvrResult<Vec<RuntimeVersion>> {
-        self.provider(kind)?
+        self.index_provider(kind)?
             .list_remote_latest_installable_per_major()
     }
 
@@ -524,7 +618,7 @@ impl RuntimeService {
     }
 
     pub fn resolve(&self, kind: RuntimeKind, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
-        self.provider(kind)?.resolve(spec)
+        self.index_provider(kind)?.resolve(spec)
     }
 
     pub fn install(
@@ -532,11 +626,11 @@ impl RuntimeService {
         kind: RuntimeKind,
         request: &InstallRequest,
     ) -> EnvrResult<RuntimeVersion> {
-        self.provider(kind)?.install(request)
+        self.installer_provider(kind)?.install(request)
     }
 
     pub fn uninstall(&self, kind: RuntimeKind, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.provider(kind)?.uninstall(version)
+        self.installer_provider(kind)?.uninstall(version)
     }
 
     pub fn uninstall_dry_run_targets(
@@ -544,11 +638,12 @@ impl RuntimeService {
         kind: RuntimeKind,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
-        self.provider(kind)?.uninstall_dry_run_targets(version)
+        self.installer_provider(kind)?
+            .uninstall_dry_run_targets(version)
     }
 
     pub fn current(&self, kind: RuntimeKind) -> EnvrResult<Option<RuntimeVersion>> {
-        self.provider(kind)?.current()
+        self.index_provider(kind)?.current()
     }
 
     /// `Some(true)` = global active PHP is TS, `Some(false)` = NTS/legacy; `None` = no global current.
@@ -559,7 +654,7 @@ impl RuntimeService {
     }
 
     pub fn set_current(&self, kind: RuntimeKind, version: &RuntimeVersion) -> EnvrResult<()> {
-        self.provider(kind)?.set_current(version)
+        self.installer_provider(kind)?.set_current(version)
     }
 
     fn cache_runtime_root(&self) -> EnvrResult<PathBuf> {

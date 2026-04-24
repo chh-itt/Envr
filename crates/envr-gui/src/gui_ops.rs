@@ -30,10 +30,14 @@ fn check_jvm_runtime_java_compat_sync(
     missing_java_msg: &'static str,
 ) -> Result<(), String> {
     let svc = open_runtime_service().map_err(|e| e.to_string())?;
-    let Some(runtime_cur) = svc.current(kind).map_err(|e| e.to_string())? else {
+    let runtime_index = svc.index_port(kind).map_err(|e| e.to_string())?;
+    let Some(runtime_cur) = runtime_index.current().map_err(|e| e.to_string())? else {
         return Ok(());
     };
-    let Some(java_cur) = svc.current(RuntimeKind::Java).map_err(|e| e.to_string())? else {
+    let java_index = svc
+        .index_port(RuntimeKind::Java)
+        .map_err(|e| e.to_string())?;
+    let Some(java_cur) = java_index.current().map_err(|e| e.to_string())? else {
         return Err(missing_java_msg.into());
     };
     let key = runtime_descriptor(kind).key;
@@ -102,10 +106,11 @@ pub fn refresh_runtimes(kind: RuntimeKind) -> Task<Message> {
         let res = handle
             .spawn_blocking(move || -> Result<RefreshRuntimesOk, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                let installed = svc
-                    .list_installed(kind)
+                let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                let installed = index
+                    .list_installed()
                     .map_err(|e: EnvrError| e.to_string())?;
-                let current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                let current = index.current().map_err(|e: EnvrError| e.to_string())?;
                 let php_global_ts = if matches!(kind, RuntimeKind::Php) {
                     svc.php_global_current_want_ts()
                         .map_err(|e: EnvrError| e.to_string())?
@@ -540,12 +545,15 @@ pub fn install_version_with_resolve_precheck(
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
                 let vs = VersionSpec(spec.clone());
-                svc.resolve(kind, &vs)
+                let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                index.resolve(&vs).map_err(|e: EnvrError| e.to_string())?;
+                let prev_current = index.current().map_err(|e: EnvrError| e.to_string())?;
+                let installer = svc
+                    .installer_port(kind)
                     .map_err(|e: EnvrError| e.to_string())?;
-                let prev_current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
-                svc.install(
-                    kind,
+                installer
+                    .install(
                     &InstallRequest {
                         spec: VersionSpec(spec),
                         progress_downloaded: Some(progress_downloaded),
@@ -554,9 +562,9 @@ pub fn install_version_with_resolve_precheck(
                     },
                 )
                 .map_err(|e: EnvrError| e.to_string())
-                .inspect(|_| {
+                    .inspect(|_| {
                     if let Some(prev) = prev_current.as_ref() {
-                        let _ = svc.set_current(kind, prev);
+                            let _ = installer.set_current(prev);
                     }
                 })
             })
@@ -595,10 +603,14 @@ pub fn install_version(
         let res = handle
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                let prev_current = svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                let prev_current = index.current().map_err(|e: EnvrError| e.to_string())?;
+                let installer = svc
+                    .installer_port(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
-                svc.install(
-                    kind,
+                installer
+                    .install(
                     &InstallRequest {
                         spec: VersionSpec(spec),
                         progress_downloaded: Some(progress_downloaded),
@@ -607,9 +619,9 @@ pub fn install_version(
                     },
                 )
                 .map_err(|e: EnvrError| e.to_string())
-                .inspect(|_| {
+                    .inspect(|_| {
                     if let Some(prev) = prev_current.as_ref() {
-                        let _ = svc.set_current(kind, prev);
+                            let _ = installer.set_current(prev);
                     }
                 })
             })
@@ -650,12 +662,14 @@ pub fn install_then_use_with_resolve_precheck(
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
                 let vs = VersionSpec(spec.clone());
-                svc.resolve(kind, &vs)
+                let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                index.resolve(&vs).map_err(|e: EnvrError| e.to_string())?;
+                let installer = svc
+                    .installer_port(kind)
                     .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
-                let installed = svc
+                let installed = installer
                     .install(
-                        kind,
                         &InstallRequest {
                             spec: VersionSpec(spec),
                             progress_downloaded: Some(progress_downloaded),
@@ -664,7 +678,8 @@ pub fn install_then_use_with_resolve_precheck(
                         },
                     )
                     .map_err(|e: EnvrError| e.to_string())?;
-                svc.set_current(kind, &installed)
+                installer
+                    .set_current(&installed)
                     .map_err(|e: EnvrError| e.to_string())?;
                 ensure_core_shims_for_kind(kind).map_err(|e| e.to_string())?;
                 Ok(installed)
@@ -704,10 +719,12 @@ pub fn install_then_use(
         let res = handle
             .spawn_blocking(move || -> Result<RuntimeVersion, String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                let installer = svc
+                    .installer_port(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
-                let installed = svc
+                let installed = installer
                     .install(
-                        kind,
                         &InstallRequest {
                             spec: VersionSpec(spec.clone()),
                             progress_downloaded: Some(progress_downloaded),
@@ -718,10 +735,12 @@ pub fn install_then_use(
                     .map_err(|e: EnvrError| e.to_string())?;
 
                 // Some providers set `current` during install; ensure current is set to resolved spec.
-                let resolved = svc
-                    .resolve(kind, &VersionSpec(spec))
+                let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                let resolved = index
+                    .resolve(&VersionSpec(spec))
                     .map_err(|e: EnvrError| e.to_string())?;
-                svc.set_current(kind, &resolved.version)
+                installer
+                    .set_current(&resolved.version)
                     .map_err(|e: EnvrError| e.to_string())?;
                 ensure_core_shims_for_kind(kind).map_err(|e| e.to_string())?;
 
@@ -760,7 +779,11 @@ pub fn use_version(kind: RuntimeKind, version_label: String) -> Task<Message> {
                 // avoid `resolve()` (can hit remote index/network and add multi-second latency).
                 let target = RuntimeVersion(version_label);
                 let t_set = Instant::now();
-                svc.set_current(kind, &target)
+                let installer = svc
+                    .installer_port(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                installer
+                    .set_current(&target)
                     .map_err(|e: EnvrError| e.to_string())?;
                 let set_ms = t_set.elapsed().as_millis();
 
@@ -794,7 +817,11 @@ pub fn uninstall_version(kind: RuntimeKind, version_label: String) -> Task<Messa
         let res = handle
             .spawn_blocking(move || -> Result<(), String> {
                 let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
-                svc.uninstall(kind, &RuntimeVersion(version_label))
+                let installer = svc
+                    .installer_port(kind)
+                    .map_err(|e: EnvrError| e.to_string())?;
+                installer
+                    .uninstall(&RuntimeVersion(version_label))
                     .map_err(|e: EnvrError| e.to_string())
             })
             .await;
@@ -864,11 +891,11 @@ pub fn refresh_dashboard() -> Task<Message> {
                     let (installed, current) = if kind == RuntimeKind::Rust {
                         (0usize, None)
                     } else {
-                    let installed = svc
-                        .list_installed(kind)
-                        .map_err(|e: EnvrError| e.to_string())?;
-                        let current =
-                            svc.current(kind).map_err(|e: EnvrError| e.to_string())?;
+                        let index = svc.index_port(kind).map_err(|e: EnvrError| e.to_string())?;
+                        let installed = index
+                            .list_installed()
+                            .map_err(|e: EnvrError| e.to_string())?;
+                        let current = index.current().map_err(|e: EnvrError| e.to_string())?;
                         (installed.len(), current.map(|v| v.0))
                     };
                     rows.push(crate::view::dashboard::RuntimeRow {

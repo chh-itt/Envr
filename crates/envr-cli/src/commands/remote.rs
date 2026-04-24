@@ -199,7 +199,8 @@ pub(crate) fn run_inner(
     let mut prefix_fallback = false;
     for kind in kinds {
         if update {
-            let full = service.list_remote(kind, &filter)?;
+            let index = service.index_port(kind)?;
+            let full = index.list_remote_installable(&filter)?;
             if filter.prefix.is_none() {
                 let _ = service.persist_full_remote_installable_snapshot(kind, &full);
             }
@@ -229,7 +230,8 @@ pub(crate) fn run_inner(
             // Single-runtime cold start: an empty on-disk snapshot should not print "(无)" —
             // block once on the same `list_remote` path as `-u` / update so the first run is useful.
             if single_runtime {
-                let full = service.list_remote(kind, &RemoteFilter::default())?;
+                let index = service.index_port(kind)?;
+                let full = index.list_remote_installable(&RemoteFilter::default())?;
                 let _ = service.persist_full_remote_installable_snapshot(kind, &full);
                 let vers = full.into_iter().map(|v| v.0).collect::<Vec<_>>();
                 let _ = service.list_remote_latest_per_major(kind);

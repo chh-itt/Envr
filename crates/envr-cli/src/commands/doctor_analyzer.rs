@@ -144,7 +144,7 @@ pub(crate) fn build_doctor_report(service: &RuntimeService) -> Result<DoctorRepo
     let mut kinds: Vec<(String, usize, Option<String>)> = Vec::new();
     for kind in all_kinds() {
         let label = kind_label(kind).to_string();
-        let installed = match service.list_installed(kind) {
+        let index = match service.index_port(kind) {
             Ok(v) => v,
             Err(e) => {
                 issues.push(fmt_template(
@@ -159,7 +159,22 @@ pub(crate) fn build_doctor_report(service: &RuntimeService) -> Result<DoctorRepo
                 continue;
             }
         };
-        let current = match service.current(kind) {
+        let installed = match index.list_installed() {
+            Ok(v) => v,
+            Err(e) => {
+                issues.push(fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.doctor.issue.list_failed",
+                        "{kind}：list_installed 失败：{detail}",
+                        "{kind}: list_installed failed: {detail}",
+                    ),
+                    &[("kind", kind_label(kind)), ("detail", &e.to_string())],
+                ));
+                kinds.push((label, 0, None));
+                continue;
+            }
+        };
+        let current = match index.current() {
             Ok(c) => c,
             Err(e) => {
                 issues.push(fmt_template(

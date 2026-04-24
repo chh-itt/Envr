@@ -288,7 +288,10 @@ fn install_pending_parallel(pending: Vec<(String, String)>) -> EnvrResult<Vec<(S
                 progress_total: None,
                 cancel: None,
             };
-            match service.install(kind, &request) {
+            match service
+                .installer_port(kind)
+                .and_then(|installer| installer.install(&request))
+            {
                 Ok(v) => {
                     if let Ok(mut out) = results.lock() {
                         out.push((lang, v.0));
@@ -379,13 +382,12 @@ fn validate_inner(
                 continue;
             }
             let prefix = spec.chars().take(32).collect::<String>();
-            match service.list_remote(
-                kind,
-                &RemoteFilter {
+            match service.index_port(kind).and_then(|index| {
+                index.list_remote_installable(&RemoteFilter {
                     prefix: Some(prefix),
                     ..Default::default()
-                },
-            ) {
+                })
+            }) {
                 Ok(vers) if vers.is_empty() => {
                     remote_warnings.push(format!(
                         "{key}@{spec}: remote index returned no rows (offline or empty cache?)"

@@ -85,10 +85,13 @@ pub(crate) fn apply_doctor_fixes(
     }
 
     for kind in all_kinds() {
-        let Ok(installed) = service.list_installed(kind) else {
+        let Ok(index) = service.index_port(kind) else {
             continue;
         };
-        let Ok(current) = service.current(kind) else {
+        let Ok(installed) = index.list_installed() else {
+            continue;
+        };
+        let Ok(current) = index.current() else {
             continue;
         };
         if installed.is_empty() {
@@ -114,7 +117,10 @@ pub(crate) fn apply_doctor_fixes(
                 &[("kind", kind_label(kind)), ("version", &best.0)],
             ),
         );
-        if let Err(e) = service.set_current(kind, &best) {
+        let Ok(installer) = service.installer_port(kind) else {
+            continue;
+        };
+        if let Err(e) = installer.set_current(&best) {
             applied.push(fmt_template(
                 &envr_core::i18n::tr_key(
                     "cli.doctor.fix.current_err",

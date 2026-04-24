@@ -16,8 +16,8 @@ pub use manager::{
 use envr_config::settings::resolve_runtime_root;
 use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
-    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
-    VersionSpec,
+    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeIndex, RuntimeInstaller, RuntimeKind,
+    RuntimeProvider, RuntimeVersion, VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::path::PathBuf;
@@ -87,6 +87,14 @@ impl PythonRuntimeProvider {
         Ok(paths
             .cache_dir()
             .join(format!("remote_latest_per_major_{os}_{arch}.json")))
+    }
+
+    pub fn index_port(&self) -> &dyn RuntimeIndex {
+        self
+    }
+
+    pub fn installer_port(&self) -> &dyn RuntimeInstaller {
+        self
     }
 }
 

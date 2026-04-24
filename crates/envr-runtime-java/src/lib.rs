@@ -21,8 +21,8 @@ use envr_config::settings::{
 };
 use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
-    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
-    VersionSpec,
+    InstallRequest, RemoteFilter, ResolvedVersion, RuntimeIndex, RuntimeInstaller, RuntimeKind,
+    RuntimeProvider, RuntimeVersion, VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::path::PathBuf;
@@ -145,6 +145,14 @@ impl JavaRuntimeProvider {
             .split(['.', '+', '-'])
             .next()
             .and_then(|s| s.parse::<u32>().ok())
+    }
+
+    pub fn index_port(&self) -> &dyn RuntimeIndex {
+        self
+    }
+
+    pub fn installer_port(&self) -> &dyn RuntimeInstaller {
+        self
     }
 }
 

@@ -34,7 +34,8 @@ pub(crate) fn run_inner(
 
     let mut rows: Vec<(RuntimeKind, Option<String>)> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        let cur = service.current(kind)?;
+        let index = service.index_port(kind)?;
+        let cur = index.current()?;
         rows.push((kind, cur.map(|v| v.0)));
     }
 

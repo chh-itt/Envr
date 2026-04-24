@@ -21,9 +21,11 @@ pub fn set_current(
     kind: RuntimeKind,
     spec: VersionSpec,
 ) -> EnvrResult<RuntimeVersion> {
-    let resolved = service.resolve(kind, &spec)?;
-    service
-        .set_current(kind, &resolved.version)
+    let index = service.index_port(kind)?;
+    let resolved = index.resolve(&spec)?;
+    let installer = service.installer_port(kind)?;
+    installer
+        .set_current(&resolved.version)
         .map_err(|e| enrich_not_installed_error(e, kind, &resolved.version.0))?;
     Ok(resolved.version)
 }

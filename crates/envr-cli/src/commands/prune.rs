@@ -23,12 +23,13 @@ pub(crate) fn run_inner(
 
     let mut plan: Vec<(RuntimeKind, Vec<String>)> = Vec::new();
     for kind in kinds {
-        let current = service.current(kind)?;
+        let index = service.index_port(kind)?;
+        let current = index.current()?;
         let Some(ref cur) = current else {
             plan.push((kind, vec![]));
             continue;
         };
-        let installed = service.list_installed(kind)?;
+        let installed = index.list_installed()?;
         let to_remove: Vec<String> = installed
             .into_iter()
             .filter(|v| v.0 != cur.0)
@@ -98,9 +99,10 @@ pub(crate) fn run_inner(
 
     let mut removed: Vec<serde_json::Value> = Vec::new();
     for (kind, vers) in plan {
+        let installer = service.installer_port(kind)?;
         for v in vers {
             let rv = RuntimeVersion(v.clone());
-            service.uninstall(kind, &rv)?;
+            installer.uninstall(&rv)?;
             removed.push(serde_json::json!({
                 "kind": kind_label(kind),
                 "version": v,

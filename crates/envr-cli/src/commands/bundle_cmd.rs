@@ -109,7 +109,8 @@ fn create_inner(
     let mut included_versions: Vec<(RuntimeKind, String)> = Vec::new();
     for (k, spec) in &pinned_specs {
         let kind = parse_runtime_kind(k)?;
-        let resolved = service.resolve(kind, &VersionSpec(spec.clone()))?.version.0;
+        let index = service.index_port(kind)?;
+        let resolved = index.resolve(&VersionSpec(spec.clone()))?.version.0;
         included_versions.push((kind, resolved));
     }
     included_versions.sort_by(|a, b| {
@@ -156,7 +157,9 @@ fn create_inner(
             RuntimeKind::Unison,
             RuntimeKind::RLang,
         ] {
-            if let Ok(Some(v)) = service.current(kind) {
+            if let Ok(index) = service.index_port(kind)
+                && let Ok(Some(v)) = index.current()
+            {
                 global_current.push((crate::commands::common::kind_label(kind).to_string(), v.0));
             }
         }

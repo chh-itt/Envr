@@ -375,7 +375,10 @@ fn install_missing_in_parallel(uniq: Vec<(String, String)>) -> EnvrResult<Vec<(S
                 progress_total: None,
                 cancel: None,
             };
-            match service.install(kind, &request) {
+            match service
+                .installer_port(kind)
+                .and_then(|installer| installer.install(&request))
+            {
                 Ok(RuntimeVersion(v)) => {
                     if let Ok(mut out) = results.lock() {
                         out.push((lang, v));

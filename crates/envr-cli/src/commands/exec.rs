@@ -59,7 +59,8 @@ fn collect_exec_env_maybe_install(
             if !use_prog && CliUxPolicy::from_global(g).human_text_decorated() {
                 eprintln!("{headline}");
             }
-            let installed = service.install(kind, &request)?;
+            let installer = service.installer_port(kind)?;
+            let installed = installer.install(&request)?;
             guard.finish();
             let meta = json!({
                 "kind": lang,

@@ -499,6 +499,76 @@ pub struct ResolvedVersion {
     pub version: RuntimeVersion,
 }
 
+pub trait RuntimeIndex: Send + Sync {
+    fn kind(&self) -> RuntimeKind;
+
+    fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>>;
+    fn current(&self) -> EnvrResult<Option<RuntimeVersion>>;
+
+    /// Remote versions for display and CLI listing.
+    ///
+    /// **Contract:** For runtimes where [`Self::install`] consumes the same index as this list,
+    /// implementations should only return versions that can actually be installed. When the
+    /// upstream “marketing” index is wider than installable artifacts, override
+    /// [`Self::list_remote_installable`] (and related installable helpers) instead of widening
+    /// what [`Self::install`] accepts without documentation.
+    fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>>;
+
+    /// Subset (or equal) of [`Self::list_remote`] that [`Self::install`] is guaranteed to satisfy.
+    ///
+    /// Defaults to forwarding to [`Self::list_remote`]. Override when remote discovery and install
+    /// artifacts diverge (e.g. language release page vs platform installer feed).
+    fn list_remote_installable(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.list_remote(filter)
+    }
+
+    /// Returns remote version `major` keys (e.g. `25` for `25.x.x`) without
+    /// materializing the full remote leaf version list.
+    /// Non-implemented providers may return an empty vec via the default impl.
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        Ok(Vec::new())
+    }
+
+    /// Latest patch per major line for GUI list rows (e.g. Node). Default: empty.
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        Ok(Vec::new())
+    }
+
+    /// Like [`Self::list_remote_latest_per_major`] but restricted to versions [`Self::install`] can use.
+    ///
+    /// Defaults to [`Self::list_remote_latest_per_major`].
+    fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        self.list_remote_latest_per_major()
+    }
+
+    /// Read cached [`Self::list_remote_latest_installable_per_major`] from disk without TTL (for instant UI paint).
+    ///
+    /// Defaults to [`Self::try_load_remote_latest_per_major_from_disk`].
+    fn try_load_remote_latest_installable_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        self.try_load_remote_latest_per_major_from_disk()
+    }
+
+    /// Read cached [`Self::list_remote_latest_per_major`] from disk without TTL (for instant UI paint).
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        Vec::new()
+    }
+
+    fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion>;
+}
+
+pub trait RuntimeInstaller: Send + Sync {
+    fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()>;
+
+    fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion>;
+    fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()>;
+
+    /// Directories envr would remove, plus an optional external command line (e.g. `rustup`).
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)>;
+}
+
 pub trait RuntimeProvider: Send + Sync {
     fn kind(&self) -> RuntimeKind;
 
@@ -564,6 +634,73 @@ pub trait RuntimeProvider: Send + Sync {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)>;
+}
+
+impl<T: RuntimeProvider + ?Sized> RuntimeIndex for T {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeProvider::kind(self)
+    }
+
+    fn list_installed(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        RuntimeProvider::list_installed(self)
+    }
+
+    fn current(&self) -> EnvrResult<Option<RuntimeVersion>> {
+        RuntimeProvider::current(self)
+    }
+
+    fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        RuntimeProvider::list_remote(self, filter)
+    }
+
+    fn list_remote_installable(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
+        RuntimeProvider::list_remote_installable(self, filter)
+    }
+
+    fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
+        RuntimeProvider::list_remote_majors(self)
+    }
+
+    fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        RuntimeProvider::list_remote_latest_per_major(self)
+    }
+
+    fn list_remote_latest_installable_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        RuntimeProvider::list_remote_latest_installable_per_major(self)
+    }
+
+    fn try_load_remote_latest_installable_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        RuntimeProvider::try_load_remote_latest_installable_per_major_from_disk(self)
+    }
+
+    fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {
+        RuntimeProvider::try_load_remote_latest_per_major_from_disk(self)
+    }
+
+    fn resolve(&self, spec: &VersionSpec) -> EnvrResult<ResolvedVersion> {
+        RuntimeProvider::resolve(self, spec)
+    }
+}
+
+impl<T: RuntimeProvider + ?Sized> RuntimeInstaller for T {
+    fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        RuntimeProvider::set_current(self, version)
+    }
+
+    fn install(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
+        RuntimeProvider::install(self, request)
+    }
+
+    fn uninstall(&self, version: &RuntimeVersion) -> EnvrResult<()> {
+        RuntimeProvider::uninstall(self, version)
+    }
+
+    fn uninstall_dry_run_targets(
+        &self,
+        version: &RuntimeVersion,
+    ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
+        RuntimeProvider::uninstall_dry_run_targets(self, version)
+    }
 }
 
 pub fn parse_runtime_kind(s: &str) -> EnvrResult<RuntimeKind> {

@@ -291,8 +291,9 @@ pub(crate) fn run_inner(
     let mut rows: Vec<(RuntimeKind, Vec<RuntimeVersion>)> = Vec::with_capacity(kinds.len());
     let mut currents: Vec<Option<RuntimeVersion>> = Vec::with_capacity(kinds.len());
     for kind in kinds {
-        let vers = service.list_installed(kind)?;
-        let cur = service.current(kind).ok().flatten();
+        let index = service.index_port(kind)?;
+        let vers = index.list_installed()?;
+        let cur = index.current().ok().flatten();
         currents.push(cur);
         rows.push((kind, vers));
     }

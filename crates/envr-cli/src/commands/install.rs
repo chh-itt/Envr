@@ -82,7 +82,8 @@ pub(crate) fn run_inner(
             &[("kind", kind_label(kind))],
         ),
     );
-    let res = service.install(kind, &request);
+    let installer = service.installer_port(kind)?;
+    let res = installer.install(&request);
     guard.finish();
     let v = res?;
     Ok(print_success(g, kind, &v))

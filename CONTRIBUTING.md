@@ -28,3 +28,14 @@ Use this one-pass checklist whenever you add a new command/subcommand that may b
 **Dispatch boundary:** [`commands::dispatch`](crates/envr-cli/src/commands/mod.rs) returns `(CommandOutcome, GlobalArgs)` so [`cli::run`](crates/envr-cli/src/cli/mod.rs) can call [`CommandOutcome::finish`](crates/envr-cli/src/command_outcome.rs) once without cloning globals. Handlers that are pure `EnvrResult<i32>` bodies should expose `pub(crate) fn run_inner` and use [`CommandOutcome::from_result`](crates/envr-cli/src/command_outcome.rs) in dispatch (see `which`, `resolve_cmd`, `check`, `config_cmd`, `deactivate_cmd`). Handlers that return a bare `i32` (e.g. completion emit) use [`CommandOutcome::from_exit_code`](crates/envr-cli/src/command_outcome.rs). Runtime commands go through [`with_runtime_service`](crates/envr-cli/src/commands/common.rs), which ends in `from_result` (connection errors → `CommandOutcome::Err`). Do not construct [`CommandOutcome::Done`](crates/envr-cli/src/command_outcome.rs) manually outside `command_outcome.rs`.
 
 Run `cargo test -p envr-cli` before submitting CLI-facing changes.
+
+## Runtime provider split policy (CQRS migration)
+
+- Runtime runtime-query logic should go through `RuntimeIndex`; runtime-mutation logic should go through `RuntimeInstaller`.
+- During migration, `RuntimeProvider` remains as a compatibility surface; do not add new read-path coupling to write APIs.
+- For CLI read-oriented commands (`current`, `list`, `remote`, `bundle create`), prefer `RuntimeService::index_port` over direct read calls on `RuntimeService`.
+- Run `python scripts/check_runtime_trait_split.py` before submitting runtime architecture changes.
+- Compatibility retirement criteria:
+  - All `envr-runtime-*` providers expose explicit split ports (`index_port`/`installer_port`) and pass split tests.
+  - CLI/GUI read paths no longer call legacy read methods through `RuntimeService`.
+  - CI keeps `check_runtime_trait_split.py` green for one full release cycle.
