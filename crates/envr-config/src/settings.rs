@@ -10,7 +10,9 @@ use std::{
     time::SystemTime,
 };
 
+mod defaults;
 mod general_config;
+mod runtime_disk_flags;
 mod runtime_js_py_go;
 mod runtime_jvm;
 mod runtime_lang_core;
@@ -20,6 +22,19 @@ mod ui_config;
 mod validation;
 pub use general_config::{
     BehaviorSettings, DownloadSettings, MirrorMode, MirrorSettings, PathSettings,
+};
+pub use runtime_disk_flags::{
+    bun_path_proxy_enabled_from_disk, crystal_path_proxy_enabled_from_disk,
+    dart_path_proxy_enabled_from_disk, deno_path_proxy_enabled_from_disk,
+    dotnet_path_proxy_enabled_from_disk, elixir_path_proxy_enabled_from_disk,
+    erlang_path_proxy_enabled_from_disk, flutter_path_proxy_enabled_from_disk,
+    go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
+    julia_path_proxy_enabled_from_disk, lua_path_proxy_enabled_from_disk,
+    nim_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
+    perl_path_proxy_enabled_from_disk, php_path_proxy_enabled_from_disk,
+    php_windows_build_want_ts_from_disk, python_path_proxy_enabled_from_disk,
+    rlang_path_proxy_enabled_from_disk, ruby_path_proxy_enabled_from_disk,
+    v_path_proxy_enabled_from_disk, zig_path_proxy_enabled_from_disk,
 };
 pub use runtime_js_py_go::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
@@ -47,7 +62,7 @@ pub use ui_config::{
     AppearanceSettings, DownloadsPanelSettings, FontMode, FontSettings, GuiSettings, I18nSettings,
     LocaleMode, RuntimeLayoutSettings, ThemeMode,
 };
-use validation::validate_runtime_settings;
+use validation::{validate_core_settings, validate_runtime_settings};
 
 /// Rust toolchain download source preference for `rustup` (`RUSTUP_DIST_SERVER` / `RUSTUP_UPDATE_ROOT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -394,70 +409,8 @@ pub struct Settings {
 
 impl Settings {
     pub fn validate(&self) -> EnvrResult<()> {
-        if let Some(ref root) = self.paths.runtime_root
-            && root.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "paths.runtime_root must not be whitespace-only".to_string(),
-            ));
-        }
-
-        if self.download.max_concurrent_downloads == 0 {
-            return Err(EnvrError::Validation(
-                "download.max_concurrent_downloads must be >= 1".to_string(),
-            ));
-        }
-
-        if self.mirror.mode == MirrorMode::Manual {
-            let id_ok = self
-                .mirror
-                .manual_id
-                .as_deref()
-                .is_some_and(|s| !s.trim().is_empty());
-            if !id_ok {
-                return Err(EnvrError::Validation(
-                    "mirror.manual_id is required when mirror.mode = manual".to_string(),
-                ));
-            }
-        }
-
-        if self.appearance.font.mode == FontMode::Custom {
-            let ok = self
-                .appearance
-                .font
-                .family
-                .as_deref()
-                .is_some_and(|s| !s.trim().is_empty());
-            if !ok {
-                return Err(EnvrError::Validation(
-                    "appearance.font.family is required when appearance.font.mode = custom"
-                        .to_string(),
-                ));
-            }
-        }
-
+        validate_core_settings(self)?;
         validate_runtime_settings(&self.runtime)?;
-
-        if self.gui.downloads_panel.x < 0 || self.gui.downloads_panel.y < 0 {
-            return Err(EnvrError::Validation(
-                "gui.downloads_panel x/y must be >= 0".to_string(),
-            ));
-        }
-
-        if let Some(xf) = self.gui.downloads_panel.x_frac
-            && (!xf.is_finite() || !(0.0..=1.0).contains(&xf))
-        {
-            return Err(EnvrError::Validation(
-                "gui.downloads_panel x_frac must be in [0, 1]".to_string(),
-            ));
-        }
-        if let Some(yf) = self.gui.downloads_panel.y_frac
-            && (!yf.is_finite() || !(0.0..=1.0).contains(&yf))
-        {
-            return Err(EnvrError::Validation(
-                "gui.downloads_panel y_frac must be in [0, 1]".to_string(),
-            ));
-        }
 
         Ok(())
     }
@@ -1087,248 +1040,6 @@ fn prefer_domestic_source(settings: &Settings, explicit_domestic: bool, is_auto:
     explicit_domestic || (is_auto && prefer_china_mirrors(settings))
 }
 
-/// Read [`NodeRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn node_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.node.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`PythonRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn python_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.python.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`JavaRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn java_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.java.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`GoRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn go_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.go.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`PhpRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn php_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.php.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`DenoRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn deno_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.deno.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`BunRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn bun_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.bun.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`DotnetRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn dotnet_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.dotnet.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`JuliaRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn julia_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.julia.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`LuaRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn lua_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.lua.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`PerlRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn perl_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.perl.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`CrystalRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn crystal_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.crystal.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`NimRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn nim_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.nim.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`RlangRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn rlang_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.r.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`ZigRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn zig_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.zig.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`VRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn v_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.v.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`DartRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn dart_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.dart.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`FlutterRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn flutter_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.flutter.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`RubyRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn ruby_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.ruby.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`ElixirRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn elixir_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.elixir.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`ErlangRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
-pub fn erlang_path_proxy_enabled_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return true;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| s.runtime.erlang.path_proxy_enabled)
-        .unwrap_or(true)
-}
-
-/// Read [`PhpRuntimeSettings::windows_build`] from disk: `true` = TS, `false` = NTS.
-pub fn php_windows_build_want_ts_from_disk() -> bool {
-    let Ok(platform) = envr_platform::paths::current_platform_paths() else {
-        return false;
-    };
-    let path = settings_path_from_platform(&platform);
-    Settings::load_or_default_from(&path)
-        .map(|s| matches!(s.runtime.php.windows_build, PhpWindowsBuildFlavor::Ts))
-        .unwrap_or(false)
-}
-
 fn file_mtime(path: &Path) -> EnvrResult<SystemTime> {
     let meta = fs::metadata(path).map_err(EnvrError::from)?;
     meta.modified()
@@ -1343,227 +1054,6 @@ fn backup_corrupted_file(path: &Path) -> EnvrResult<()> {
     let bad = path.with_extension(format!("toml.bad.{ts}"));
     let _ = fs::rename(path, bad);
     Ok(())
-}
-
-mod defaults {
-    use super::{FontMode, LocaleMode, MirrorMode, ThemeMode};
-
-    pub fn max_concurrent_downloads() -> u32 {
-        4
-    }
-
-    pub fn max_bytes_per_sec() -> u64 {
-        0
-    }
-
-    pub fn retry_max() -> u32 {
-        3
-    }
-
-    pub fn mirror_mode() -> MirrorMode {
-        MirrorMode::Auto
-    }
-
-    pub fn prefer_china_mirrors() -> bool {
-        false
-    }
-
-    pub fn font_mode() -> FontMode {
-        FontMode::Auto
-    }
-
-    pub fn theme_mode() -> ThemeMode {
-        ThemeMode::FollowSystem
-    }
-
-    pub fn locale_mode() -> LocaleMode {
-        LocaleMode::EnUs
-    }
-
-    pub fn auto_sync_shims_on_use() -> bool {
-        true
-    }
-
-    pub fn auto_sync_globals_on_use() -> bool {
-        false
-    }
-
-    pub fn auto_sync_windows_path_mirror_on_use() -> bool {
-        cfg!(windows)
-    }
-
-    pub fn cache_artifact_ttl_days() -> u32 {
-        30
-    }
-
-    pub fn cache_max_size_mb() -> u64 {
-        10 * 1024
-    }
-
-    pub fn cache_auto_prune_on_start() -> bool {
-        true
-    }
-
-    pub fn downloads_panel_visible() -> bool {
-        true
-    }
-
-    pub fn downloads_panel_expanded() -> bool {
-        true
-    }
-
-    pub fn downloads_panel_x() -> i32 {
-        12
-    }
-
-    pub fn downloads_panel_y() -> i32 {
-        12
-    }
-
-    pub fn node_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn python_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn java_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn kotlin_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn scala_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn clojure_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn groovy_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn terraform_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn v_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn odin_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn purescript_path_proxy_enabled() -> bool {
-        true
-    }
-    pub fn elm_path_proxy_enabled() -> bool {
-        true
-    }
-    pub fn gleam_path_proxy_enabled() -> bool {
-        true
-    }
-    pub fn racket_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn dart_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn flutter_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn go_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn php_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn deno_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn bun_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn dotnet_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn zig_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn julia_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn janet_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn c3_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn babashka_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn sbcl_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn haxe_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn lua_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn nim_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn crystal_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn perl_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn unison_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn rlang_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn ruby_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn elixir_path_proxy_enabled() -> bool {
-        true
-    }
-
-    pub fn erlang_path_proxy_enabled() -> bool {
-        true
-    }
 }
 
 #[cfg(test)]
