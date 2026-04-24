@@ -103,11 +103,12 @@ fn download_rustup_init_to(
         .timeout(std::time::Duration::from_secs(90))
         .user_agent(concat!("envr-runtime-rust/", env!("CARGO_PKG_VERSION")))
         .build()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, "build rustup init http client", e))?;
-    let mut resp = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "build rustup init http client", e)
+        })?;
+    let mut resp = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !resp.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -129,11 +130,13 @@ fn download_rustup_init_to(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".to_string()));
         }
-        let n = resp
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = resp.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }

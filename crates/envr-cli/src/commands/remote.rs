@@ -300,9 +300,10 @@ pub(crate) fn run_inner(
                         if let Ok(index) = svc.index_port(kind) {
                             let _ = index.list_remote_latest_installable_per_major();
                             if let Ok(full) = index.list_remote_installable(&filter_bg) {
-                            if filter_bg.prefix.is_none() {
-                                let _ = svc.persist_full_remote_installable_snapshot(kind, &full);
-                            }
+                                if filter_bg.prefix.is_none() {
+                                    let _ =
+                                        svc.persist_full_remote_installable_snapshot(kind, &full);
+                                }
                             }
                         }
                     }

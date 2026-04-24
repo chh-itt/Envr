@@ -30,10 +30,10 @@ pub mod run_context;
 mod runtime_session;
 
 pub use command_outcome::{CliExit, CommandOutcome, finish_cli_cmd};
+use envr_config::env_context::load_settings_cached;
 pub use presenter::{CliPresenter, CliUxPolicy};
 pub use run_context::{CliPathProfile, CliProjectContext, RunExecContext};
 pub use runtime_session::CliRuntimeSession;
-use envr_config::env_context::load_settings_cached;
 
 /// Resolve the effective locale for this process from `settings.toml` (no global mutation).
 pub fn bootstrap_locale() -> envr_core::i18n::Locale {

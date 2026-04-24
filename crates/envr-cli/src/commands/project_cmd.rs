@@ -256,52 +256,54 @@ fn install_pending_parallel(pending: Vec<(String, String)>) -> EnvrResult<Vec<(S
         let queue = Arc::clone(&queue);
         let results = Arc::clone(&results);
         let first_err = Arc::clone(&first_err);
-        joins.push(std::thread::spawn(move || loop {
-            if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
-                break;
-            }
-            let next = queue.lock().ok().and_then(|mut q| q.pop());
-            let Some((lang, spec)) = next else {
-                break;
-            };
-            let kind = match parse_runtime_kind(&lang) {
-                Ok(v) => v,
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
-                    }
+        joins.push(std::thread::spawn(move || {
+            loop {
+                if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
                     break;
                 }
-            };
-            let service = match common::runtime_service() {
-                Ok(v) => v,
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
-                    }
+                let next = queue.lock().ok().and_then(|mut q| q.pop());
+                let Some((lang, spec)) = next else {
                     break;
-                }
-            };
-            let request = envr_domain::runtime::InstallRequest {
-                spec: VersionSpec(spec),
-                progress_downloaded: None,
-                progress_total: None,
-                cancel: None,
-            };
-            match service
-                .installer_port(kind)
-                .and_then(|installer| installer.install(&request))
-            {
-                Ok(v) => {
-                    if let Ok(mut out) = results.lock() {
-                        out.push((lang, v.0));
+                };
+                let kind = match parse_runtime_kind(&lang) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
                     }
-                }
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
+                };
+                let service = match common::runtime_service() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
                     }
-                    break;
+                };
+                let request = envr_domain::runtime::InstallRequest {
+                    spec: VersionSpec(spec),
+                    progress_downloaded: None,
+                    progress_total: None,
+                    cancel: None,
+                };
+                match service
+                    .installer_port(kind)
+                    .and_then(|installer| installer.install(&request))
+                {
+                    Ok(v) => {
+                        if let Ok(mut out) = results.lock() {
+                            out.push((lang, v.0));
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
+                    }
                 }
             }
         }));

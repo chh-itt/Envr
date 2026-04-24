@@ -18,10 +18,9 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_release_page(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "release page request failed: {} {}",
@@ -29,9 +28,13 @@ pub fn fetch_release_page(client: &reqwest::blocking::Client, url: &str) -> Envr
             url
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,8 +113,9 @@ pub fn list_latest_per_major_from_installer_releases(
 }
 
 pub fn parse_ruby_releases(html: &str) -> EnvrResult<Vec<RubyRelease>> {
-    let re = Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)")
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid ruby version regex", e))?;
+    let re = Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)").map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid ruby version regex", e)
+    })?;
     let mut versions: Vec<RubyRelease> = re
         .captures_iter(html)
         .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))

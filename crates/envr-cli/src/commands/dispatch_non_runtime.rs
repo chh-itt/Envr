@@ -1,9 +1,9 @@
+use super::dispatch_macros::dispatch_match;
 use super::{
     alias_cmd, bundle_cmd, cache_cmd, check, completion_cmd, config_cmd, deactivate_cmd, debug_cmd,
     env_cmd, exec, help_cmd, hook_cmd, import_export, init, profile_cmd, resolve_cmd, run_cmd,
     rust_cmd, shell_cmd, shim_cmd, status_cmd, template_cmd, update, which, why_cmd,
 };
-use super::dispatch_macros::dispatch_match;
 use crate::CommandOutcome;
 use crate::cli::{Command, GlobalArgs};
 

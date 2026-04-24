@@ -1,4 +1,6 @@
-use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind};
+use envr_domain::runtime::{
+    RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
+};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -44,19 +46,22 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_semver_desc(a: &str, b: &str) -> Ordering {
@@ -92,23 +97,28 @@ pub fn releases_json_url_for_host() -> EnvrResult<&'static str> {
 
 fn release_matches_host_archive(archive: &str, host: &str) -> bool {
     match host {
-        "windows-x64" => archive.contains("stable/windows/flutter_windows_") && archive.ends_with(".zip"),
-        "linux-x64" => archive.contains("stable/linux/flutter_linux_") && archive.ends_with(".tar.xz"),
+        "windows-x64" => {
+            archive.contains("stable/windows/flutter_windows_") && archive.ends_with(".zip")
+        }
+        "linux-x64" => {
+            archive.contains("stable/linux/flutter_linux_") && archive.ends_with(".tar.xz")
+        }
         "macos-x64" => {
             archive.contains("stable/macos/flutter_macos_")
                 && !archive.contains("flutter_macos_arm64_")
                 && archive.ends_with(".zip")
         }
-        "macos-arm64" => archive.contains("stable/macos/flutter_macos_arm64_") && archive.ends_with(".zip"),
+        "macos-arm64" => {
+            archive.contains("stable/macos/flutter_macos_arm64_") && archive.ends_with(".zip")
+        }
         _ => false,
     }
 }
 
 pub fn parse_rows_from_releases_json(json: &str) -> EnvrResult<Vec<FlutterIndexRow>> {
-    let payload: FlutterReleasesJson =
-        serde_json::from_str(json).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Validation, "invalid flutter releases json", e)
-        })?;
+    let payload: FlutterReleasesJson = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid flutter releases json", e)
+    })?;
     let host = host_target()?;
     let mut out = Vec::<FlutterIndexRow>::new();
     let mut seen = HashSet::<String>::new();
@@ -145,7 +155,10 @@ pub fn parse_rows_from_releases_json(json: &str) -> EnvrResult<Vec<FlutterIndexR
     Ok(out)
 }
 
-pub fn list_remote_versions(rows: &[FlutterIndexRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[FlutterIndexRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut labels: Vec<String> = rows.iter().map(|r| r.version.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();

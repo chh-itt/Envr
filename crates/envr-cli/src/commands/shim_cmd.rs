@@ -208,8 +208,8 @@ fn ensure_windows_path_shim_mirror(
         let from_dir = runtime_root.join("shims");
         let to_core_stems = [
             "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
-            "bunx", "crystal", "perl", "ucm", "lua", "luac", "r", "rscript", "janet", "jpm",
-            "c3c", "bb", "sbcl", "haxe", "haxelib",
+            "bunx", "crystal", "perl", "ucm", "lua", "luac", "r", "rscript", "janet", "jpm", "c3c",
+            "bb", "sbcl", "haxe", "haxelib",
         ];
         for to_root in roots {
             if to_root == runtime_root {

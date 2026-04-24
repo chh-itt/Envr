@@ -11,7 +11,7 @@ use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
 pub struct HaxePaths {
@@ -99,8 +99,16 @@ pub fn read_current(paths: &HaxePaths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -111,8 +119,16 @@ pub fn read_current(paths: &HaxePaths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) }
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(RuntimeVersion(name)))
+    }
 }
 
 fn promote_haxe_extracted_tree(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
@@ -188,7 +204,10 @@ impl HaxeManager {
     fn load_cached_rows(&self) -> Option<Vec<HaxeInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -198,9 +217,9 @@ impl HaxeManager {
 
     fn save_cached_rows(&self, rows: &[HaxeInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text =
-            serde_json::to_string_pretty(rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize haxe rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize haxe rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -217,7 +236,10 @@ impl HaxeManager {
     }
 
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(list_remote_versions(&self.fetch_rows(filter.force_index_refresh)?, filter))
+        Ok(list_remote_versions(
+            &self.fetch_rows(filter.force_index_refresh)?,
+            filter,
+        ))
     }
 
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -227,7 +249,8 @@ impl HaxeManager {
 
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(cached) = serde_json::from_str::<Vec<String>>(&text)
@@ -240,9 +263,9 @@ impl HaxeManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize haxe latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize haxe latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -253,15 +276,17 @@ impl HaxeManager {
             return Ok(v);
         }
         let rows = self.fetch_rows(true)?;
-        resolve_haxe_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown haxe version spec: {spec}"))
-        })
+        resolve_haxe_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown haxe version spec: {spec}")))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !dir.is_dir() || !haxe_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!("haxe version not installed: {}", version.0)));
+            return Err(EnvrError::Validation(format!(
+                "haxe version not installed: {}",
+                version.0
+            )));
         }
         ensure_runtime_current_symlink_or_pointer(&dir, &self.paths.current_link())
     }
@@ -273,17 +298,15 @@ impl HaxeManager {
         }
         Ok(())
     }
-
 }
 
 impl SpecDrivenInstaller for HaxeManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("haxe version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("haxe version not found in index: {label}"))
+        })?;
 
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && haxe_installation_valid(&final_dir) {
@@ -313,9 +336,10 @@ impl SpecDrivenInstaller for HaxeManager {
         extract::extract_archive(&cache_file, staging.path())?;
         promote_haxe_extracted_tree(staging.path(), &final_dir)?;
         if !haxe_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("haxe install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "haxe install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }
 }
-

@@ -165,10 +165,9 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".to_string()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -191,11 +190,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".to_string()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -348,7 +349,13 @@ impl SpecDrivenInstaller for DotnetManager {
         let releases = self.load_releases()?;
         let version = resolve_dotnet_version(&releases, &request.spec.0)?;
         let (downloaded, total, cancel) = install_progress_handles(request);
-        self.install_resolved_version(&releases, &RuntimeVersion(version), downloaded, total, cancel)
+        self.install_resolved_version(
+            &releases,
+            &RuntimeVersion(version),
+            downloaded,
+            total,
+            cancel,
+        )
     }
 }
 

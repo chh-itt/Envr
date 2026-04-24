@@ -6,9 +6,7 @@ use super::run_env_builder::{
 };
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{ProjectConfig, load_project_config_profile};
-use envr_config::settings::{
-    Settings, bun_package_registry_env, deno_package_registry_env,
-};
+use envr_config::settings::{Settings, bun_package_registry_env, deno_package_registry_env};
 use envr_domain::jvm_hosted;
 use envr_error::{EnvrError, EnvrResult};
 // Re-export merge helpers for callers that used `child_env::path_sep` / `prepend_path` / …

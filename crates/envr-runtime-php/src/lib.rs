@@ -16,9 +16,7 @@ pub use manager::{
 
 use envr_config::env_context::{load_settings_cached, runtime_root};
 
-use envr_config::settings::{
-    PhpWindowsBuildFlavor, php_windows_releases_json_url,
-};
+use envr_config::settings::{PhpWindowsBuildFlavor, php_windows_releases_json_url};
 use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
@@ -178,8 +176,9 @@ impl RuntimeProvider for PhpRuntimeProvider {
             let paths = PhpPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-            let s = serde_json::to_string(&strings)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode php latest labels", e))?;
+            let s = serde_json::to_string(&strings).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode php latest labels", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

@@ -1,6 +1,4 @@
-use envr_domain::runtime::{
-    RemoteFilter, RuntimeVersion, numeric_version_segments,
-};
+use envr_domain::runtime::{RemoteFilter, RuntimeVersion, numeric_version_segments};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
@@ -65,27 +63,40 @@ fn github_api_auth_token() -> Option<String> {
         .find_map(|k| std::env::var(k).ok())
         .and_then(|s| {
             let t = s.trim();
-            if t.is_empty() { None } else { Some(t.to_string()) }
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
         })
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url.contains("api.github.com") {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn label_from_tag(tag: &str) -> Option<String> {
@@ -118,7 +129,9 @@ fn unison_asset_candidates() -> Vec<&'static str> {
 
 fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
     let cands = unison_asset_candidates();
-    assets.iter().find(|a| cands.iter().any(|name| a.name == *name))
+    assets
+        .iter()
+        .find(|a| cands.iter().any(|name| a.name == *name))
 }
 
 fn installable_rows_from_releases(releases: &[GhRelease]) -> Vec<UnisonInstallableRow> {
@@ -152,8 +165,9 @@ fn fetch_github_releases_index(
     loop {
         let url = format!("{releases_api_url}?per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&text)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+        let v: Value = serde_json::from_str(&text).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let Some(arr) = v.as_array() else {
             return Err(EnvrError::Download(
                 "unison releases API returned non-array payload".into(),
@@ -163,9 +177,9 @@ fn fetch_github_releases_index(
             break;
         }
         for item in arr {
-            let r: GhRelease =
-                serde_json::from_value(item.clone())
-                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e))?;
+            let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+            })?;
             out.push(r);
         }
         if arr.len() < 100 {
@@ -176,7 +190,9 @@ fn fetch_github_releases_index(
     Ok(out)
 }
 
-fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<UnisonInstallableRow>> {
+fn fetch_rows_via_html(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<UnisonInstallableRow>> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
     let cands = unison_asset_candidates();
@@ -221,7 +237,9 @@ fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Uni
     Ok(out)
 }
 
-fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<UnisonInstallableRow>> {
+fn fetch_rows_via_atom(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<UnisonInstallableRow>> {
     let text = fetch_text(client, UNISON_RELEASES_ATOM_URL)?;
     let cands = unison_asset_candidates();
     if cands.is_empty() {
@@ -265,7 +283,10 @@ pub fn fetch_unison_installable_rows_with_fallback(
     fetch_rows_via_atom(client)
 }
 
-pub fn list_remote_versions(rows: &[UnisonInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[UnisonInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
         .filter(|r| {
@@ -315,7 +336,10 @@ pub fn resolve_unison_version(rows: &[UnisonInstallableRow], spec: &str) -> Opti
         return None;
     }
     if s.eq_ignore_ascii_case("latest") {
-        return rows.iter().map(|r| r.version.clone()).max_by(|a, b| cmp_release_labels(a, b));
+        return rows
+            .iter()
+            .map(|r| r.version.clone())
+            .max_by(|a, b| cmp_release_labels(a, b));
     }
     // exact
     if rows.iter().any(|r| r.version == s) {
@@ -337,4 +361,3 @@ pub fn resolve_unison_version(rows: &[UnisonInstallableRow], spec: &str) -> Opti
     }
     best
 }
-

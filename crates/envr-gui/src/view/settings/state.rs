@@ -183,7 +183,6 @@ impl SettingsViewState {
             .map(|p| !p.trim().is_empty())
             .unwrap_or(false)
     }
-
 }
 
 impl Default for SettingsViewState {

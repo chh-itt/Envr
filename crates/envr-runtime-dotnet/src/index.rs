@@ -1,5 +1,5 @@
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_download::blocking::build_blocking_http_client;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use serde::de::Deserializer;
 use std::cmp::Ordering;
@@ -71,14 +71,19 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let r = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let r = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    r.text().map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    r.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn parse_triplet(v: &str) -> Option<(u64, u64, u64)> {
@@ -113,9 +118,9 @@ pub fn load_sdk_releases(
     releases_index_url: &str,
 ) -> EnvrResult<Vec<DotnetSdkRelease>> {
     let idx_body = fetch_text(client, releases_index_url)?;
-    let idx: ReleasesIndexDoc =
-        serde_json::from_str(&idx_body)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid releases-index json", e))?;
+    let idx: ReleasesIndexDoc = serde_json::from_str(&idx_body).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid releases-index json", e)
+    })?;
 
     let mut out = Vec::<DotnetSdkRelease>::new();
     for channel in idx.releases_index {
@@ -123,9 +128,9 @@ pub fn load_sdk_releases(
             continue;
         }
         let body = fetch_text(client, &channel.releases_json_url)?;
-        let rel: ChannelReleasesDoc =
-            serde_json::from_str(&body)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid channel releases json", e))?;
+        let rel: ChannelReleasesDoc = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid channel releases json", e)
+        })?;
         for r in rel.releases {
             if let Some(sdk) = r.sdk {
                 out.push(DotnetSdkRelease {

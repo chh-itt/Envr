@@ -3,8 +3,8 @@ mod manager;
 
 pub use index::{
     DEFAULT_GLEAM_RELEASES_API_URL, GleamInstallableRow, blocking_http_client,
-    fetch_gleam_installable_rows_with_fallback, list_remote_latest_per_major_lines, list_remote_versions,
-    resolve_gleam_version,
+    fetch_gleam_installable_rows_with_fallback, list_remote_latest_per_major_lines,
+    list_remote_versions, resolve_gleam_version,
 };
 pub use manager::{
     GleamManager, GleamPaths, gleam_installation_valid, list_installed_versions, read_current,
@@ -90,6 +90,9 @@ impl RuntimeProvider for GleamRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![GleamPaths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![GleamPaths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }

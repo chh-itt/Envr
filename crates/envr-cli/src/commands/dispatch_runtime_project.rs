@@ -1,5 +1,5 @@
-use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
 use super::dispatch_macros::dispatch_match;
+use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
 use super::{project_cmd, prune};
 use crate::CommandOutcome;
 use crate::cli::Command;

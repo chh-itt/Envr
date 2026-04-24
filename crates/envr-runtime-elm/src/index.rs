@@ -67,22 +67,31 @@ fn url_is_github_api(url: &str) -> bool {
     url.contains("api.github.com")
 }
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url_is_github_api(url) {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
     let u = url.trim();
@@ -183,10 +192,9 @@ pub fn fetch_elm_github_releases_index(
                 break;
             }
             for item in arr {
-                let r: GhRelease =
-                    serde_json::from_value(item.clone()).map_err(|e| {
-                        EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
-                    })?;
+                let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+                })?;
                 acc.push(r);
             }
             if arr.len() < 100 {
@@ -283,12 +291,17 @@ pub fn fetch_elm_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    if let Ok(rows) = fetch_rows_via_html(client) && !rows.is_empty() {
+    if let Ok(rows) = fetch_rows_via_html(client)
+        && !rows.is_empty()
+    {
         return Ok(rows);
     }
     fetch_rows_via_atom(client)
 }
-pub fn list_remote_versions(rows: &[ElmInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[ElmInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
         .filter(|r| {
@@ -350,4 +363,3 @@ pub fn resolve_elm_version(rows: &[ElmInstallableRow], spec: &str) -> Option<Str
     }
     None
 }
-

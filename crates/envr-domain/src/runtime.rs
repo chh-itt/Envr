@@ -66,8 +66,12 @@ pub enum WindowsPrereq {
 impl WindowsPrereq {
     pub fn as_label(self) -> &'static str {
         match self {
-            WindowsPrereq::VcRedist2015To2022X64 => "Microsoft Visual C++ Redistributable 2015-2022 (x64)",
-            WindowsPrereq::VcRedist2015To2022X86 => "Microsoft Visual C++ Redistributable 2015-2022 (x86)",
+            WindowsPrereq::VcRedist2015To2022X64 => {
+                "Microsoft Visual C++ Redistributable 2015-2022 (x64)"
+            }
+            WindowsPrereq::VcRedist2015To2022X86 => {
+                "Microsoft Visual C++ Redistributable 2015-2022 (x86)"
+            }
         }
     }
 }
@@ -809,10 +813,19 @@ mod tests {
             RuntimeKind::Purescript
         );
         assert_eq!(parse_runtime_kind("ELM").expect("elm"), RuntimeKind::Elm);
-        assert_eq!(parse_runtime_kind("GLEAM").expect("gleam"), RuntimeKind::Gleam);
-        assert_eq!(parse_runtime_kind("RACKET").expect("racket"), RuntimeKind::Racket);
+        assert_eq!(
+            parse_runtime_kind("GLEAM").expect("gleam"),
+            RuntimeKind::Gleam
+        );
+        assert_eq!(
+            parse_runtime_kind("RACKET").expect("racket"),
+            RuntimeKind::Racket
+        );
         assert_eq!(parse_runtime_kind("lua").expect("lua"), RuntimeKind::Lua);
-        assert_eq!(parse_runtime_kind("JANET").expect("janet"), RuntimeKind::Janet);
+        assert_eq!(
+            parse_runtime_kind("JANET").expect("janet"),
+            RuntimeKind::Janet
+        );
         assert_eq!(parse_runtime_kind("C3").expect("c3"), RuntimeKind::C3);
         assert_eq!(
             parse_runtime_kind("BABASHKA").expect("babashka"),

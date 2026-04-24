@@ -132,10 +132,9 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".into()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -154,11 +153,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -270,8 +271,9 @@ impl FlutterManager {
         }
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
-            let s = serde_json::to_string(&rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode flutter rows", e))?;
+            let s = serde_json::to_string(&rows).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode flutter rows", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_path, s.as_bytes())?;
             Ok(())
         })();

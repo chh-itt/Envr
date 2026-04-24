@@ -1,6 +1,4 @@
-use envr_config::settings::{
-    FontMode, LocaleMode, ThemeMode,
-};
+use envr_config::settings::{FontMode, LocaleMode, ThemeMode};
 use envr_ui::font;
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Vertical;
@@ -350,7 +348,11 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             ))
             .size(ty.caption),
             text_input(
-                &envr_core::i18n::tr_key("gui.settings.max_bps_example", "例如 10485760", "e.g. 10485760"),
+                &envr_core::i18n::tr_key(
+                    "gui.settings.max_bps_example",
+                    "例如 10485760",
+                    "e.g. 10485760"
+                ),
                 &state.max_bps_text,
             )
             .on_input(|s| Message::Settings(SettingsMsg::MaxBpsEdit(s)))

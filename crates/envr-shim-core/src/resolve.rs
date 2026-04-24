@@ -325,7 +325,10 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "sbcl" => vec![("SBCL_HOME".into(), home_env)],
         "haxe" => vec![
             ("HAXE_HOME".into(), home_env.clone()),
-            ("HAXE_STD_PATH".into(), home.join("std").display().to_string()),
+            (
+                "HAXE_STD_PATH".into(),
+                home.join("std").display().to_string(),
+            ),
         ],
         "perl" => vec![("PERL_HOME".into(), home_env)],
         "unison" => vec![("UNISON_HOME".into(), home_env)],
@@ -1432,9 +1435,8 @@ fn crystal_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
 
 fn perl_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
-        CoreCommand::Perl => bin_tool_layout::resolve_perl_exe(home).ok_or_else(|| {
-            EnvrError::Runtime(format!("perl missing under {}", home.display()))
-        }),
+        CoreCommand::Perl => bin_tool_layout::resolve_perl_exe(home)
+            .ok_or_else(|| EnvrError::Runtime(format!("perl missing under {}", home.display()))),
         _ => Err(EnvrError::Runtime("internal: not a perl tool".into())),
     }
 }

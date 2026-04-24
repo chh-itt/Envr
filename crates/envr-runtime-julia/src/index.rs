@@ -19,24 +19,28 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_versions_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 pub fn parse_versions_root(json: &str) -> EnvrResult<Map<String, Value>> {
-    let v: Value = serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid julia versions json", e))?;
+    let v: Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid julia versions json", e)
+    })?;
     match v {
         Value::Object(m) => Ok(m),
         _ => Err(EnvrError::Validation(

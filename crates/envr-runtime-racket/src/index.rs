@@ -9,7 +9,8 @@ use std::cmp::Ordering;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-pub const DEFAULT_RACKET_ALL_VERSIONS_URL: &str = "https://download.racket-lang.org/all-versions.html";
+pub const DEFAULT_RACKET_ALL_VERSIONS_URL: &str =
+    "https://download.racket-lang.org/all-versions.html";
 static VERSION_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Version\s+(\d+(?:\.\d+){0,2})").expect("racket version regex"));
 
@@ -67,7 +68,10 @@ pub fn fetch_racket_installable_rows(
         })?;
     let mut out = Vec::new();
     for cap in VERSION_RE.captures_iter(&text) {
-        let version = cap.get(1).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+        let version = cap
+            .get(1)
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
         if version.is_empty() {
             continue;
         }
@@ -84,7 +88,10 @@ pub fn fetch_racket_installable_rows(
     Ok(out)
 }
 
-pub fn list_remote_versions(rows: &[RacketInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[RacketInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
         .filter(|r| {
@@ -145,4 +152,3 @@ pub fn resolve_racket_version(rows: &[RacketInstallableRow], spec: &str) -> Opti
     }
     None
 }
-

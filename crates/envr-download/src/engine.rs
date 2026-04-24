@@ -75,11 +75,7 @@ impl DownloadEngine {
             .connect_timeout(http_connect_timeout_from_env())
             .build()
             .map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Download,
-                    "reqwest client build failed",
-                    e,
-                )
+                EnvrError::with_source(ErrorCode::Download, "reqwest client build failed", e)
             })
     }
 
@@ -112,16 +108,9 @@ impl DownloadEngine {
                 request = request.header(header::RANGE, format!("bytes={resumed_from}-"));
             }
 
-            let response = request
-                .send()
-                .await
-                .map_err(|e| {
-                    EnvrError::with_source(
-                        ErrorCode::Download,
-                        format!("request failed for {url}"),
-                        e,
-                    )
-                })?;
+            let response = request.send().await.map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+            })?;
 
             let status = response.status();
             let (append, effective_resumed_from) = match status {
@@ -203,14 +192,13 @@ impl DownloadEngine {
                 if cancel.is_cancelled() {
                     return Err(EnvrError::Download("download cancelled".to_string()));
                 }
-                let chunk =
-                    chunk.map_err(|e| {
-                        EnvrError::with_source(
-                            ErrorCode::Download,
-                            format!("read chunk failed for {url}"),
-                            e,
-                        )
-                    })?;
+                let chunk = chunk.map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Download,
+                        format!("read chunk failed for {url}"),
+                        e,
+                    )
+                })?;
 
                 if let Some(gl) = global_limiter.as_ref() {
                     gl.throttle_async(chunk.len() as u64).await?;

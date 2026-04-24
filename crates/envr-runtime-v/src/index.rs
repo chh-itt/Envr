@@ -67,18 +67,22 @@ fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<Strin
     if let Some(tok) = github_api_auth_token() {
         req = req.header("Authorization", format!("Bearer {tok}"));
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_semver_release_labels(a: &str, b: &str) -> Ordering {
@@ -198,9 +202,9 @@ fn fetch_v_releases_via_github_api(
                 break;
             }
         };
-        let page_releases: Vec<GhRelease> =
-            serde_json::from_str(&body)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+        let page_releases: Vec<GhRelease> = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let page_len = page_releases.len();
         if page_len == 0 {
             break;
@@ -217,7 +221,9 @@ fn fetch_v_releases_via_github_api(
     Ok(merged)
 }
 
-fn fetch_v_releases_via_releases_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<GhRelease>> {
+fn fetch_v_releases_via_releases_atom(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<GhRelease>> {
     let mut seen_tags = HashSet::new();
     let mut tags_in_order = Vec::new();
     for page in 1_u32..=50 {
@@ -302,7 +308,10 @@ pub fn installable_rows_from_releases(releases: &[GhRelease]) -> Vec<VInstallabl
     out
 }
 
-pub fn list_remote_versions(rows: &[VInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[VInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut labels: Vec<String> = rows.iter().map(|r| r.version.clone()).collect();
     if let Some(prefix) = filter.prefix.as_deref() {
         let p = prefix.trim();
@@ -370,7 +379,8 @@ mod tests {
 
     #[test]
     fn candidate_api_bases_include_default_and_strip_proxy_wrappers() {
-        let wrapped = "https://ghproxy.net/https://api.github.com/repos/vlang/v/releases?per_page=100";
+        let wrapped =
+            "https://ghproxy.net/https://api.github.com/repos/vlang/v/releases?per_page=100";
         let bases = candidate_v_releases_api_bases(wrapped);
         assert!(bases.iter().any(|b| b == DEFAULT_V_RELEASES_API_URL));
         assert!(

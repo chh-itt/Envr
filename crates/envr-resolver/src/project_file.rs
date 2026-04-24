@@ -9,14 +9,9 @@ use std::path::{Path, PathBuf};
 pub fn upsert_runtime_pin(dir: &Path, pin: &RuntimePinSpec) -> EnvrResult<PathBuf> {
     let path = dir.join(PROJECT_CONFIG_FILE);
     let mut cfg = if path.exists() {
-        parse_project_config(&path)
-            .map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Config,
-                    format!("read {}", path.display()),
-                    e,
-                )
-            })?
+        parse_project_config(&path).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Config, format!("read {}", path.display()), e)
+        })?
     } else {
         ProjectConfig::default()
     };

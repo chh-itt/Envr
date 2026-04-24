@@ -1,8 +1,8 @@
 //! JDK version discovery via the Eclipse Adoptium v3 API.
 
 use crate::vendor::JavaVendor;
-use envr_download::blocking::blocking_http_client_builder;
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
+use envr_download::blocking::blocking_http_client_builder;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::cmp::Reverse;
@@ -93,19 +93,29 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
         .http1_only()
         .connect_timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, "reqwest blocking client build failed", e))
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                "reqwest blocking client build failed",
+                e,
+            )
+        })
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let r = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let r = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    r.text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    r.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 #[allow(dead_code)]
@@ -251,9 +261,9 @@ pub fn fetch_available_lts_majors(
         api_base.trim_end_matches('/')
     );
     let body = fetch_text(client, &url)?;
-    let parsed: AvailableReleasesBody =
-        serde_json::from_str(&body)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid available_releases json", e))?;
+    let parsed: AvailableReleasesBody = serde_json::from_str(&body).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid available_releases json", e)
+    })?;
     Ok(parsed.available_lts_releases)
 }
 
@@ -277,9 +287,9 @@ pub fn fetch_release_versions(
          &page_size=1000"
     );
     let body = fetch_text(client, &url)?;
-    let parsed: ReleaseVersionsBody =
-        serde_json::from_str(&body)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid release_versions json", e))?;
+    let parsed: ReleaseVersionsBody = serde_json::from_str(&body).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid release_versions json", e)
+    })?;
     Ok(parsed.versions)
 }
 
@@ -318,16 +328,15 @@ fn fetch_latest_lts_versions_via_assets_latest(
                 continue;
             }
         };
-        let parsed: Vec<LatestAssetsRelease> =
-            match serde_json::from_str(&body)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid latest assets json", e))
-            {
-                Ok(p) => p,
-                Err(e) => {
-                    last_err = Some(e);
-                    continue;
-                }
-            };
+        let parsed: Vec<LatestAssetsRelease> = match serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid latest assets json", e)
+        }) {
+            Ok(p) => p,
+            Err(e) => {
+                last_err = Some(e);
+                continue;
+            }
+        };
         let Some(first) = parsed.first() else {
             continue;
         };

@@ -104,7 +104,9 @@ fn load_use_auto_sync_behavior() -> UseAutoSyncBehavior {
     UseAutoSyncBehavior {
         auto_sync_shims_on_use: settings.behavior.auto_sync_shims_on_use,
         auto_sync_globals_on_use: settings.behavior.auto_sync_globals_on_use,
-        auto_sync_windows_path_mirror_on_use: settings.behavior.auto_sync_windows_path_mirror_on_use,
+        auto_sync_windows_path_mirror_on_use: settings
+            .behavior
+            .auto_sync_windows_path_mirror_on_use,
     }
 }
 

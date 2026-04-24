@@ -6,7 +6,9 @@ pub use index::{
     fetch_haxe_installable_rows_with_fallback, list_remote_latest_per_major_lines,
     list_remote_versions, resolve_haxe_version,
 };
-pub use manager::{HaxeManager, HaxePaths, haxe_installation_valid, list_installed_versions, read_current};
+pub use manager::{
+    HaxeManager, HaxePaths, haxe_installation_valid, list_installed_versions, read_current,
+};
 
 use envr_config::env_context::runtime_root;
 use envr_domain::installer::install_via_manager;
@@ -101,7 +103,9 @@ impl RuntimeProvider for HaxeRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![HaxePaths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![HaxePaths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }
-

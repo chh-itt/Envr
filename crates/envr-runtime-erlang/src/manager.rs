@@ -184,10 +184,7 @@ fn validate_erlang_installation(home: &Path) -> EnvrResult<()> {
         ) {
             return Err(EnvrError::Runtime(diag));
         }
-        return Err(EnvrError::Runtime(format!(
-            "erl probe failed: {}",
-            stderr
-        )));
+        return Err(EnvrError::Runtime(format!("erl probe failed: {}", stderr)));
     }
     Ok(())
 }
@@ -301,7 +298,13 @@ impl SpecDrivenInstaller for ErlangManager {
         let releases = self.load_releases()?;
         let version = resolve_erlang_version(&releases, &request.spec.0)?;
         let (downloaded, total, cancel) = install_progress_handles(request);
-        self.install_resolved_version(&releases, &RuntimeVersion(version), downloaded, total, cancel)
+        self.install_resolved_version(
+            &releases,
+            &RuntimeVersion(version),
+            downloaded,
+            total,
+            cancel,
+        )
     }
 }
 

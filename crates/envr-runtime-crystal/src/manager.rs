@@ -147,7 +147,9 @@ fn download_to_path(
         .get(url)
         .header("Accept", "application/octet-stream")
         .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -169,11 +171,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -319,9 +323,9 @@ impl CrystalManager {
         let rows =
             fetch_all_crystal_release_rows(&self.client, &self.releases_url, self.host_slug)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let body =
-            serde_json::to_string(&rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode crystal rows", e))?;
+        let body = serde_json::to_string(&rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "json encode crystal rows", e)
+        })?;
         envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())
             .map_err(EnvrError::from)?;
         Ok(rows)

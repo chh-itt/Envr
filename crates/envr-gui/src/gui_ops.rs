@@ -553,20 +553,18 @@ pub fn install_version_with_resolve_precheck(
                     .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
                 installer
-                    .install(
-                    &InstallRequest {
+                    .install(&InstallRequest {
                         spec: VersionSpec(spec),
                         progress_downloaded: Some(progress_downloaded),
                         progress_total: Some(progress_total),
                         cancel: Some(cancel_flag),
-                    },
-                )
-                .map_err(|e: EnvrError| e.to_string())
+                    })
+                    .map_err(|e: EnvrError| e.to_string())
                     .inspect(|_| {
-                    if let Some(prev) = prev_current.as_ref() {
+                        if let Some(prev) = prev_current.as_ref() {
                             let _ = installer.set_current(prev);
-                    }
-                })
+                        }
+                    })
             })
             .await;
         let msg = match res {
@@ -610,20 +608,18 @@ pub fn install_version(
                     .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
                 installer
-                    .install(
-                    &InstallRequest {
+                    .install(&InstallRequest {
                         spec: VersionSpec(spec),
                         progress_downloaded: Some(progress_downloaded),
                         progress_total: Some(progress_total),
                         cancel: Some(cancel_flag),
-                    },
-                )
-                .map_err(|e: EnvrError| e.to_string())
+                    })
+                    .map_err(|e: EnvrError| e.to_string())
                     .inspect(|_| {
-                    if let Some(prev) = prev_current.as_ref() {
+                        if let Some(prev) = prev_current.as_ref() {
                             let _ = installer.set_current(prev);
-                    }
-                })
+                        }
+                    })
             })
             .await;
         let msg = match res {
@@ -669,14 +665,12 @@ pub fn install_then_use_with_resolve_precheck(
                     .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
                 let installed = installer
-                    .install(
-                        &InstallRequest {
-                            spec: VersionSpec(spec),
-                            progress_downloaded: Some(progress_downloaded),
-                            progress_total: Some(progress_total),
-                            cancel: Some(cancel_flag),
-                        },
-                    )
+                    .install(&InstallRequest {
+                        spec: VersionSpec(spec),
+                        progress_downloaded: Some(progress_downloaded),
+                        progress_total: Some(progress_total),
+                        cancel: Some(cancel_flag),
+                    })
                     .map_err(|e: EnvrError| e.to_string())?;
                 installer
                     .set_current(&installed)
@@ -724,14 +718,12 @@ pub fn install_then_use(
                     .map_err(|e: EnvrError| e.to_string())?;
                 let cancel_flag = cancel.shared_atomic();
                 let installed = installer
-                    .install(
-                        &InstallRequest {
-                            spec: VersionSpec(spec.clone()),
-                            progress_downloaded: Some(progress_downloaded),
-                            progress_total: Some(progress_total),
-                            cancel: Some(cancel_flag),
-                        },
-                    )
+                    .install(&InstallRequest {
+                        spec: VersionSpec(spec.clone()),
+                        progress_downloaded: Some(progress_downloaded),
+                        progress_total: Some(progress_total),
+                        cancel: Some(cancel_flag),
+                    })
                     .map_err(|e: EnvrError| e.to_string())?;
 
                 // Some providers set `current` during install; ensure current is set to resolved spec.
@@ -1052,8 +1044,8 @@ fn ensure_core_shims_for_kind(kind: RuntimeKind) -> EnvrResult<()> {
             let from_dir = runtime_root.join("shims");
             let to_core_stems = [
                 "node", "npm", "npx", "python", "python3", "pip", "pip3", "java", "javac", "bun",
-                "bunx", "crystal", "perl", "ucm", "lua", "luac", "r", "rscript", "janet", "jpm", "c3c",
-                "bb", "sbcl", "haxe", "haxelib",
+                "bunx", "crystal", "perl", "ucm", "lua", "luac", "r", "rscript", "janet", "jpm",
+                "c3c", "bb", "sbcl", "haxe", "haxelib",
             ];
 
             for to_root in roots {

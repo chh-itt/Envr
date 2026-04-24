@@ -295,9 +295,8 @@ pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrR
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
     }
-    let content = toml::to_string_pretty(cfg).map_err(|e| {
-        EnvrError::with_source(ErrorCode::Runtime, "toml encode project config", e)
-    })?;
+    let content = toml::to_string_pretty(cfg)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode project config", e))?;
     fs::write(path, content).map_err(EnvrError::from)?;
     Ok(())
 }

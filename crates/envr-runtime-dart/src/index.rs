@@ -1,4 +1,6 @@
-use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind};
+use envr_domain::runtime::{
+    RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
+};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::{Deserialize, Serialize};
@@ -6,8 +8,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::time::Duration;
 
-pub const DEFAULT_DART_BUCKET_LIST_API_URL: &str =
-    "https://storage.googleapis.com/storage/v1/b/dart-archive/o?prefix=channels/stable/release/&delimiter=/";
+pub const DEFAULT_DART_BUCKET_LIST_API_URL: &str = "https://storage.googleapis.com/storage/v1/b/dart-archive/o?prefix=channels/stable/release/&delimiter=/";
 pub const DEFAULT_DART_LATEST_VERSION_URL: &str =
     "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/VERSION";
 
@@ -31,19 +32,22 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_semver_desc(a: &str, b: &str) -> Ordering {
@@ -94,10 +98,13 @@ pub fn artifact_url(version: &str, platform_tuple: &str) -> String {
     )
 }
 
-pub fn parse_rows_from_bucket_list_json(json: &str, platform_tuple: &str) -> EnvrResult<Vec<DartIndexRow>> {
-    let payload: DartBucketListResponse =
-        serde_json::from_str(json)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid dart bucket list json", e))?;
+pub fn parse_rows_from_bucket_list_json(
+    json: &str,
+    platform_tuple: &str,
+) -> EnvrResult<Vec<DartIndexRow>> {
+    let payload: DartBucketListResponse = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid dart bucket list json", e)
+    })?;
     let mut out = Vec::<DartIndexRow>::new();
     let mut seen = HashSet::<String>::new();
     for prefix in payload.prefixes {

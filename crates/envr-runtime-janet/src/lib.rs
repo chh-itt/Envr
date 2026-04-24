@@ -3,8 +3,8 @@ mod manager;
 
 pub use index::{
     DEFAULT_JANET_RELEASES_API_URL, JanetInstallableRow, blocking_http_client,
-    fetch_janet_installable_rows_with_fallback, list_remote_latest_per_major_lines, list_remote_versions,
-    resolve_janet_version,
+    fetch_janet_installable_rows_with_fallback, list_remote_latest_per_major_lines,
+    list_remote_versions, resolve_janet_version,
 };
 pub use manager::{
     JanetManager, JanetPaths, janet_installation_valid, list_installed_versions, read_current,

@@ -136,10 +136,9 @@ pub fn fetch_all_tags(
             break;
         }
         pages += 1;
-        let response = client
-            .get(&url)
-            .send()
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+        let response = client.get(&url).send().map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        })?;
         if !response.status().is_success() {
             return Err(EnvrError::Download(format!(
                 "GET {url} -> {}",
@@ -147,12 +146,16 @@ pub fn fetch_all_tags(
             )));
         }
         let headers = response.headers().clone();
-        let body = response
-            .text()
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
-        let mut page: Vec<GithubTag> =
-            serde_json::from_str(&body)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github tags json", e))?;
+        let body = response.text().map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read body failed for {url}"),
+                e,
+            )
+        })?;
+        let mut page: Vec<GithubTag> = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github tags json", e)
+        })?;
         out.append(&mut page);
         next = parse_github_next_link(headers.get("link"));
     }

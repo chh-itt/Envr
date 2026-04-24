@@ -4,8 +4,8 @@ use crate::cli::GlobalArgs;
 use crate::command_outcome::CliExit;
 use crate::runtime_session::CliRuntimeSession;
 
-use envr_config::project_config::{ProjectConfig, RustEnforceMode};
 use envr_config::env_context::load_settings_cached;
+use envr_config::project_config::{ProjectConfig, RustEnforceMode};
 use envr_config::settings::resolve_runtime_root;
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RuntimeKind, runtime_descriptor};
@@ -205,11 +205,7 @@ fn prune_dir_by_mtime(path: &Path, cutoff: SystemTime) -> EnvrResult<()> {
         let p = ent.path();
         if p.is_dir() {
             let _ = prune_dir_by_mtime(&p, cutoff);
-            if fs::read_dir(&p)
-                .map_err(EnvrError::from)?
-                .next()
-                .is_none()
-            {
+            if fs::read_dir(&p).map_err(EnvrError::from)?.next().is_none() {
                 let _ = fs::remove_dir(&p);
             }
             continue;

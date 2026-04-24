@@ -73,18 +73,22 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 pub fn fetch_releases_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
@@ -296,10 +300,9 @@ fn fetch_clojure_releases_via_github_api(
                 break;
             }
         };
-        let page_releases: Vec<GhRelease> =
-            serde_json::from_str(&body).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
-            })?;
+        let page_releases: Vec<GhRelease> = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let page_len = page_releases.len();
         if page_len == 0 {
             break;

@@ -1,5 +1,5 @@
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use bzip2::read::BzDecoder;
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use flate2::read::GzDecoder;
 use std::{
     fs, io,
@@ -89,14 +89,13 @@ pub fn extract_archive_atomic(
 
 fn extract_zip(path: &Path, dest: &Path) -> EnvrResult<()> {
     let f = fs::File::open(path).map_err(EnvrError::from)?;
-    let mut zip = ZipArchive::new(f).map_err(|e| {
-        EnvrError::with_source(ErrorCode::Validation, "invalid zip archive", e)
-    })?;
+    let mut zip = ZipArchive::new(f)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid zip archive", e))?;
 
     for i in 0..zip.len() {
-        let mut file = zip
-            .by_index(i)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "zip entry read failed", e))?;
+        let mut file = zip.by_index(i).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "zip entry read failed", e)
+        })?;
         let name = file.name().to_string();
         let out_path = safe_join(dest, Path::new(&name))?;
 
@@ -148,11 +147,12 @@ fn unpack_tar<R: io::Read>(ar: &mut TarArchive<R>, dest: &Path) -> EnvrResult<()
         .entries()
         .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar entries read failed", e))?
     {
-        let mut entry =
-            entry.map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar entry read failed", e))?;
-        let path = entry
-            .path()
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "tar path decode failed", e))?;
+        let mut entry = entry.map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "tar entry read failed", e)
+        })?;
+        let path = entry.path().map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "tar path decode failed", e)
+        })?;
         let out_path = safe_join(dest, &path)?;
 
         if let Some(parent) = out_path.parent() {

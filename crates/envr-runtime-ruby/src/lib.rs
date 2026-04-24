@@ -145,10 +145,13 @@ impl RuntimeProvider for RubyRuntimeProvider {
                 let paths = RubyPaths::new(root);
                 std::fs::create_dir_all(paths.cache_dir())?;
                 let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-                let s = serde_json::to_string(&strings)
-                    .map_err(|e| {
-                        EnvrError::with_source(ErrorCode::Validation, "json encode ruby latest labels", e)
-                    })?;
+                let s = serde_json::to_string(&strings).map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Validation,
+                        "json encode ruby latest labels",
+                        e,
+                    )
+                })?;
                 let cache_file = paths
                     .cache_dir()
                     .join("remote_latest_per_major_installer.json");
@@ -166,10 +169,13 @@ impl RuntimeProvider for RubyRuntimeProvider {
                 let paths = RubyPaths::new(root);
                 std::fs::create_dir_all(paths.cache_dir())?;
                 let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-                let s = serde_json::to_string(&strings)
-                    .map_err(|e| {
-                        EnvrError::with_source(ErrorCode::Validation, "json encode ruby latest labels", e)
-                    })?;
+                let s = serde_json::to_string(&strings).map_err(|e| {
+                    EnvrError::with_source(
+                        ErrorCode::Validation,
+                        "json encode ruby latest labels",
+                        e,
+                    )
+                })?;
                 let cache_file = paths
                     .cache_dir()
                     .join("remote_latest_per_major_installer.json");

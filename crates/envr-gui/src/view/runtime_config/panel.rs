@@ -7,9 +7,7 @@ use crate::app::Message;
 use crate::theme as gui_theme;
 use crate::view::env_center::kind_label;
 use crate::view::settings::{SettingsMsg, SettingsViewState};
-use crate::widget_styles::{
-    ButtonVariant, button_content_centered, button_style, section_card,
-};
+use crate::widget_styles::{ButtonVariant, button_content_centered, button_style, section_card};
 
 pub fn runtime_config_view(
     state: &SettingsViewState,
@@ -66,7 +64,11 @@ pub fn runtime_config_view(
         tokens,
         format!(
             "{} · {}",
-            envr_core::i18n::tr_key("gui.runtime.config.title", "运行时配置", "Runtime configuration"),
+            envr_core::i18n::tr_key(
+                "gui.runtime.config.title",
+                "运行时配置",
+                "Runtime configuration"
+            ),
             kind_label(active_kind)
         ),
         column![
@@ -81,4 +83,3 @@ pub fn runtime_config_view(
     );
     container(card).width(Length::Fill).into()
 }
-

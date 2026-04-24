@@ -74,25 +74,31 @@ fn url_is_github_api(url: &str) -> bool {
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url_is_github_api(url) {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
@@ -194,10 +200,9 @@ pub fn fetch_purescript_github_releases_index(
                     break;
                 }
             };
-            let v: Value =
-                serde_json::from_str(&text).map_err(|e| {
-                    EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
-                })?;
+            let v: Value = serde_json::from_str(&text).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+            })?;
             let Some(arr) = v.as_array() else {
                 ok = false;
                 break;
@@ -206,10 +211,9 @@ pub fn fetch_purescript_github_releases_index(
                 break;
             }
             for item in arr {
-                let r: GhRelease = serde_json::from_value(item.clone())
-                    .map_err(|e| {
-                        EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
-                    })?;
+                let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+                })?;
                 acc.push(r);
             }
             if arr.len() < 100 {
@@ -231,7 +235,9 @@ pub fn fetch_purescript_github_releases_index(
     }
 }
 
-fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<PurescriptInstallableRow>> {
+fn fetch_rows_via_atom(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<PurescriptInstallableRow>> {
     let text = fetch_text(client, PURESCRIPT_RELEASES_ATOM_URL)?;
     let asset = purescript_asset_candidates().first().copied().unwrap_or("");
     if asset.is_empty() {
@@ -344,7 +350,9 @@ pub fn list_remote_versions(
     out
 }
 
-pub fn list_remote_latest_per_major_lines(rows: &[PurescriptInstallableRow]) -> Vec<RuntimeVersion> {
+pub fn list_remote_latest_per_major_lines(
+    rows: &[PurescriptInstallableRow],
+) -> Vec<RuntimeVersion> {
     let mut best: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for r in rows {
         let Some(line) = version_line_key_for_kind(RuntimeKind::Purescript, &r.version) else {
@@ -391,4 +399,3 @@ pub fn resolve_purescript_version(rows: &[PurescriptInstallableRow], spec: &str)
     }
     None
 }
-

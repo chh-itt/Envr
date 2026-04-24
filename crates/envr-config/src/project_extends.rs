@@ -175,14 +175,13 @@ fn resolve_extends_inner(
             )));
         }
         let body = fetch_extend_body(&norm)?;
-        let mut remote =
-            crate::project_config::parse_project_config_str(&body).map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Config,
-                    format!("failed to parse extended config {norm}"),
-                    e,
-                )
-            })?;
+        let mut remote = crate::project_config::parse_project_config_str(&body).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Config,
+                format!("failed to parse extended config {norm}"),
+                e,
+            )
+        })?;
         remote = resolve_extends_inner(remote, depth + 1, visited)?;
         visited.remove(&norm);
         acc = remote.merge_over(acc);
@@ -229,14 +228,13 @@ where
             )));
         }
         let body = fetch(&norm)?;
-        let mut remote =
-            crate::project_config::parse_project_config_str(&body).map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Config,
-                    format!("failed to parse extended config {norm}"),
-                    e,
-                )
-            })?;
+        let mut remote = crate::project_config::parse_project_config_str(&body).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Config,
+                format!("failed to parse extended config {norm}"),
+                e,
+            )
+        })?;
         remote = resolve_extends_inner_with_fetch(remote, depth + 1, visited, fetch)?;
         visited.remove(&norm);
         acc = remote.merge_over(acc);

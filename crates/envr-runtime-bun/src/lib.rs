@@ -16,8 +16,8 @@ use envr_domain::runtime::{
     VersionSpec,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
+use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use std::path::{Path, PathBuf};
 
 pub struct BunRuntimeProvider {
@@ -86,8 +86,9 @@ impl BunRuntimeProvider {
         let tags = fetch_all_tags(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(&base)?;
-            let s = serde_json::to_string(&tags)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode bun tags cache", e))?;
+            let s = serde_json::to_string(&tags).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode bun tags cache", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -202,8 +203,9 @@ impl RuntimeProvider for BunRuntimeProvider {
         let _ = (|| -> EnvrResult<()> {
             let paths = BunPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
-            let s = serde_json::to_string(&list)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode bun latest cache", e))?;
+            let s = serde_json::to_string(&list).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode bun latest cache", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

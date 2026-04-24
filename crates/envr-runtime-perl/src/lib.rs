@@ -69,9 +69,10 @@ impl PerlRuntimeProvider {
         let slug = match perl_upstream()? {
             PerlUpstream::StrawberryWindows64 => "strawberry_win64",
             PerlUpstream::RelocatableUnix => {
-                return Ok(paths
-                    .cache_dir()
-                    .join(format!("remote_latest_per_major_{}.json", relocatable_archive_stem()?)));
+                return Ok(paths.cache_dir().join(format!(
+                    "remote_latest_per_major_{}.json",
+                    relocatable_archive_stem()?
+                )));
             }
         };
         Ok(paths
@@ -147,8 +148,9 @@ impl RuntimeProvider for PerlRuntimeProvider {
             let paths = PerlPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-            let s = serde_json::to_string(&strings)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode perl latest labels", e))?;
+            let s = serde_json::to_string(&strings).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode perl latest labels", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

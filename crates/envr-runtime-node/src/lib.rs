@@ -268,8 +268,9 @@ impl RuntimeProvider for NodeRuntimeProvider {
         // Best-effort cache write (don't fail the whole operation if disk write fails).
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(paths.cache_dir())?;
-            let s = serde_json::to_string(&majors)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode node major list", e))?;
+            let s = serde_json::to_string(&majors).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode node major list", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -313,8 +314,9 @@ impl RuntimeProvider for NodeRuntimeProvider {
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(paths.cache_dir())?;
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-            let s = serde_json::to_string(&strings)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode node latest list", e))?;
+            let s = serde_json::to_string(&strings).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode node latest list", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

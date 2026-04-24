@@ -91,4 +91,3 @@ pub fn set_global_download_limit(max_bytes_per_sec: Option<u64>) -> EnvrResult<(
 pub fn global_download_limiter() -> Option<Arc<GlobalRateLimiter>> {
     global_cell().read().ok().and_then(|g| g.clone())
 }
-

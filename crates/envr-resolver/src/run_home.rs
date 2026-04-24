@@ -147,10 +147,9 @@ pub fn resolve_run_lang_home(
         "ruby" => resolve_ruby_home(ctx, cfg, None),
         "go" => resolve_go_home(ctx, cfg, None),
         "node" | "python" | "java" | "kotlin" | "scala" | "clojure" | "groovy" | "terraform"
-        | "v" | "odin" | "purescript" | "elm" | "gleam" | "racket" | "dart" | "flutter"
-        | "zig" | "julia" | "janet" | "c3" | "babashka" | "sbcl" | "haxe" | "lua" | "nim" | "crystal" | "perl"
-        | "unison" | "r" | "elixir"
-        | "erlang" => {
+        | "v" | "odin" | "purescript" | "elm" | "gleam" | "racket" | "dart" | "flutter" | "zig"
+        | "julia" | "janet" | "c3" | "babashka" | "sbcl" | "haxe" | "lua" | "nim" | "crystal"
+        | "perl" | "unison" | "r" | "elixir" | "erlang" => {
             resolve_runtime_home_for_lang(ctx, lang, None)
         }
         _ => Err(EnvrError::Validation(format!(

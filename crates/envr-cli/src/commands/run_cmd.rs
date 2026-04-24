@@ -7,8 +7,8 @@ use crate::commands::env_overrides;
 use crate::output::fmt_template;
 use crate::run_context::CliPathProfile;
 
-use envr_config::project_config::ProjectConfig;
 use envr_config::env_context::load_settings_cached;
+use envr_config::project_config::ProjectConfig;
 use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
@@ -343,52 +343,54 @@ fn install_missing_in_parallel(uniq: Vec<(String, String)>) -> EnvrResult<Vec<(S
         let queue = Arc::clone(&queue);
         let results = Arc::clone(&results);
         let first_err = Arc::clone(&first_err);
-        joins.push(std::thread::spawn(move || loop {
-            if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
-                break;
-            }
-            let next = queue.lock().ok().and_then(|mut q| q.pop());
-            let Some((lang, spec)) = next else {
-                break;
-            };
-            let kind = match parse_runtime_kind(&lang) {
-                Ok(v) => v,
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
-                    }
+        joins.push(std::thread::spawn(move || {
+            loop {
+                if first_err.lock().map(|e| e.is_some()).unwrap_or(false) {
                     break;
                 }
-            };
-            let service = match crate::commands::common::runtime_service() {
-                Ok(v) => v,
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
-                    }
+                let next = queue.lock().ok().and_then(|mut q| q.pop());
+                let Some((lang, spec)) = next else {
                     break;
-                }
-            };
-            let request = envr_domain::runtime::InstallRequest {
-                spec: VersionSpec(spec),
-                progress_downloaded: None,
-                progress_total: None,
-                cancel: None,
-            };
-            match service
-                .installer_port(kind)
-                .and_then(|installer| installer.install(&request))
-            {
-                Ok(RuntimeVersion(v)) => {
-                    if let Ok(mut out) = results.lock() {
-                        out.push((lang, v));
+                };
+                let kind = match parse_runtime_kind(&lang) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
                     }
-                }
-                Err(e) => {
-                    if let Ok(mut slot) = first_err.lock() {
-                        *slot = Some(e);
+                };
+                let service = match crate::commands::common::runtime_service() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
                     }
-                    break;
+                };
+                let request = envr_domain::runtime::InstallRequest {
+                    spec: VersionSpec(spec),
+                    progress_downloaded: None,
+                    progress_total: None,
+                    cancel: None,
+                };
+                match service
+                    .installer_port(kind)
+                    .and_then(|installer| installer.install(&request))
+                {
+                    Ok(RuntimeVersion(v)) => {
+                        if let Ok(mut out) = results.lock() {
+                            out.push((lang, v));
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(mut slot) = first_err.lock() {
+                            *slot = Some(e);
+                        }
+                        break;
+                    }
                 }
             }
         }));

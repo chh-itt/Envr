@@ -213,12 +213,9 @@ fn validate_ruby_installation(home: &Path) -> EnvrResult<()> {
         ));
     }
     let ruby = ruby_executable(home);
-    let out = Command::new(&ruby)
-        .arg("--version")
-        .output()
-        .map_err(|e| {
-            EnvrError::with_source(ErrorCode::Runtime, "ruby --version failed to start", e)
-        })?;
+    let out = Command::new(&ruby).arg("--version").output().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Runtime, "ruby --version failed to start", e)
+    })?;
     if !out.status.success() {
         return Err(EnvrError::Runtime(format!(
             "ruby --version failed: {}",

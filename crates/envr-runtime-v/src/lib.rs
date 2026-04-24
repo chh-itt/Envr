@@ -3,8 +3,9 @@ mod manager;
 
 pub use index::{
     DEFAULT_V_RELEASES_API_URL, GhAsset, GhRelease, VInstallableRow, blocking_http_client,
-    fetch_v_github_releases_index, installable_rows_from_releases, list_remote_latest_per_major_lines,
-    list_remote_versions, resolve_v_version, v_asset_candidates,
+    fetch_v_github_releases_index, installable_rows_from_releases,
+    list_remote_latest_per_major_lines, list_remote_versions, resolve_v_version,
+    v_asset_candidates,
 };
 pub use manager::{VManager, VPaths, list_installed_versions, read_current, v_installation_valid};
 

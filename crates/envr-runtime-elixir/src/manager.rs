@@ -244,15 +244,13 @@ fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<
         cmd.env("ERLANG_HOME", &eh);
         cmd.env("ERTS_BIN", &erts);
     }
-    let out = cmd
-        .output()
-        .map_err(|e| {
-            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
-                Some(envr_domain::runtime::RuntimeKind::Elixir),
-                "elixir --version",
-                &e,
-            ))
-        })?;
+    let out = cmd.output().map_err(|e| {
+        EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+            Some(envr_domain::runtime::RuntimeKind::Elixir),
+            "elixir --version",
+            &e,
+        ))
+    })?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).to_string();
         if let Some(diag) = envr_platform::process::classify_exit_failure_message(
@@ -368,9 +366,7 @@ impl ElixirManager {
         extract::extract_archive(&cache_file, &staging_final)?;
         patch_windows_elixir_batch(&staging_final)?;
 
-        if let Err(e) =
-            validate_elixir_installation(&staging_final, &self.paths.runtime_root)
-        {
+        if let Err(e) = validate_elixir_installation(&staging_final, &self.paths.runtime_root) {
             let _ = fs::remove_dir_all(&staging_final);
             return Err(e);
         }

@@ -55,9 +55,8 @@ impl TryFrom<NodeReleaseJson> for NodeRelease {
 
 /// Parse the JSON body returned by `index.json`.
 pub fn parse_node_index(json: &str) -> EnvrResult<Vec<NodeRelease>> {
-    let raw: Vec<NodeReleaseJson> =
-        serde_json::from_str(json)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
+    let raw: Vec<NodeReleaseJson> = serde_json::from_str(json)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
     raw.into_iter()
         .map(NodeRelease::try_from)
         .collect::<EnvrResult<Vec<_>>>()
@@ -72,8 +71,9 @@ pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec
 
     let iter = serde_json::Deserializer::from_str(json).into_iter::<NodeReleaseMajorsJson>();
     for item in iter {
-        let r = item
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
+        let r = item.map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e)
+        })?;
         if !release_has_platform(&r.files, os, arch) {
             continue;
         }
@@ -127,10 +127,9 @@ pub fn list_latest_patch_per_major(
 }
 
 pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "index request failed: {} {}",
@@ -138,9 +137,13 @@ pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrRe
             url
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
@@ -513,8 +516,8 @@ mod tests {
         let rel = parsed();
         let plain = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter::default())
             .expect("list_remote_versions");
-        let rows = list_node_remote_rows(&rel, "linux", "x86_64", &RemoteFilter::default())
-            .expect("rows");
+        let rows =
+            list_node_remote_rows(&rel, "linux", "x86_64", &RemoteFilter::default()).expect("rows");
         assert_eq!(plain.len(), rows.len());
         for (p, r) in plain.iter().zip(rows.iter()) {
             assert_eq!(p.0, r.version);
@@ -550,8 +553,8 @@ mod tests {
     #[test]
     fn list_remote_orders_newest_first_and_prefix() {
         let rel = parsed();
-        let all = list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter::default())
-            .expect("list");
+        let all =
+            list_remote_versions(&rel, "linux", "x86_64", &RemoteFilter::default()).expect("list");
         assert_eq!(all[0].0, "30.0.0");
         assert_eq!(all.last().unwrap().0, "22.8.0");
 

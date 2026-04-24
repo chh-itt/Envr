@@ -24,12 +24,8 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
         }
         JobState::Running => {
             if job.cancel.is_cancelled() {
-                return envr_core::i18n::tr_key(
-                    "gui.job.cancelling",
-                    "取消中…",
-                    "Cancelling…",
-                )
-                .to_string();
+                return envr_core::i18n::tr_key("gui.job.cancelling", "取消中…", "Cancelling…")
+                    .to_string();
             }
             if job.is_runtime_install_row() {
                 let d = job.downloaded_display();

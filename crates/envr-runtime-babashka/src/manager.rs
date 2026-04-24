@@ -213,9 +213,9 @@ impl BabashkaManager {
 
     fn save_cached_rows(&self, rows: &[BabashkaInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text =
-            serde_json::to_string_pretty(rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize babashka rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize babashka rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -259,9 +259,9 @@ impl BabashkaManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize babashka latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize babashka latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -294,7 +294,6 @@ impl BabashkaManager {
         }
         Ok(())
     }
-
 }
 
 impl SpecDrivenInstaller for BabashkaManager {
@@ -332,9 +331,10 @@ impl SpecDrivenInstaller for BabashkaManager {
         extract::extract_archive(&cache_file, staging.path())?;
         promote_bb_extracted_tree(staging.path(), &final_dir)?;
         if !babashka_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("babashka install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "babashka install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }
 }
-

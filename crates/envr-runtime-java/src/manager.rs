@@ -133,16 +133,19 @@ fn zulu_fetch_packages_json(
         "https://api.azul.com/metadata/v1/zulu/packages/?java_version={major}&os={azul_os}&arch={azul_arch}\
          &archive_type=zip&java_package_type=jdk&release_status=ga&availability_types=ca&page_size={page_size}"
     );
-    let r = client
-        .get(&url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let r = client.get(&url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    let body = r
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
+    let body = r.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })?;
     serde_json::from_str(&body)
         .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid zulu packages json", e))
 }
@@ -240,19 +243,33 @@ fn dragonwell_latest_download_url(
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {api_url}"), e))?;
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("request failed for {api_url}"),
+                e,
+            )
+        })?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {api_url} -> {}",
             r.status()
         )));
     }
-    let body = r
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {api_url}"), e))?;
-    let parsed: GhRelease =
-        serde_json::from_str(&body)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid dragonwell latest release json", e))?;
+    let body = r.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {api_url}"),
+            e,
+        )
+    })?;
+    let parsed: GhRelease = serde_json::from_str(&body).map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Validation,
+            "invalid dragonwell latest release json",
+            e,
+        )
+    })?;
 
     let mut candidates: Vec<&GhAsset> = parsed
         .assets
@@ -502,16 +519,19 @@ fn fetch_json<T: serde::de::DeserializeOwned>(
     client: &reqwest::blocking::Client,
     url: &str,
 ) -> EnvrResult<T> {
-    let r = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let r = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !r.status().is_success() {
         return Err(EnvrError::Download(format!("GET {url} -> {}", r.status())));
     }
-    let body = r
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))?;
+    let body = r.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })?;
     serde_json::from_str(&body)
         .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid json response", e))
 }
@@ -579,9 +599,9 @@ fn download_to_path(
     if let Some(r) = referer {
         req = req.header("Referer", r);
     }
-    let mut response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -606,15 +626,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Runtime("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Download,
-                    format!("read response body failed for {url}"),
-                    e,
-                )
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }

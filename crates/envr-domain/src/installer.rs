@@ -37,7 +37,10 @@ pub trait SpecDrivenInstaller: Send + Sync {
 }
 
 #[inline]
-pub fn install_via_manager<M>(manager: EnvrResult<M>, request: &InstallRequest) -> EnvrResult<RuntimeVersion>
+pub fn install_via_manager<M>(
+    manager: EnvrResult<M>,
+    request: &InstallRequest,
+) -> EnvrResult<RuntimeVersion>
 where
     M: SpecDrivenInstaller,
 {

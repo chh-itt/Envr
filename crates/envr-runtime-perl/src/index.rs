@@ -30,10 +30,8 @@ static RELOCATABLE_ATOM_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static STRAWBERRY_ATOM_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r#"https://github\.com/StrawberryPerl/Perl-Dist-Strawberry/releases/tag/([^"<>]+)"#,
-    )
-    .expect("strawberry atom tag regex")
+    Regex::new(r#"https://github\.com/StrawberryPerl/Perl-Dist-Strawberry/releases/tag/([^"<>]+)"#)
+        .expect("strawberry atom tag regex")
 });
 
 /// Stable release tags like `SP_54221_64bit` / `SP_54021_64bit_UCRT` (five digits encode x.y.z.w).
@@ -85,18 +83,22 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
@@ -135,10 +137,9 @@ pub fn perl_upstream() -> EnvrResult<PerlUpstream> {
     use std::env::consts::{ARCH, OS};
     match (OS, ARCH) {
         ("windows", "x86_64") => Ok(PerlUpstream::StrawberryWindows64),
-        ("linux", "x86_64")
-        | ("linux", "aarch64")
-        | ("macos", "x86_64")
-        | ("macos", "aarch64") => Ok(PerlUpstream::RelocatableUnix),
+        ("linux", "x86_64") | ("linux", "aarch64") | ("macos", "x86_64") | ("macos", "aarch64") => {
+            Ok(PerlUpstream::RelocatableUnix)
+        }
         _ => Err(EnvrError::Validation(format!(
             "no managed Perl distribution mapping for host {OS}-{ARCH}; see docs/runtime/perl-integration-plan.md"
         ))),
@@ -197,23 +198,21 @@ fn fetch_release_pages(client: &reqwest::blocking::Client, base_url: &str) -> En
         if page_len == 0 {
             break;
         }
-        let arr = v.as_array().ok_or_else(|| {
-            EnvrError::Validation("GitHub releases JSON must be an array".into())
-        })?;
+        let arr = v
+            .as_array()
+            .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
         for rel in arr {
             if !first {
                 merged.push(',');
             }
             first = false;
-            merged.push_str(
-                &serde_json::to_string(rel).map_err(|e| {
-                    EnvrError::with_source(
-                        ErrorCode::Validation,
-                        "serialize github release page entry",
-                        e,
-                    )
-                })?,
-            );
+            merged.push_str(&serde_json::to_string(rel).map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    "serialize github release page entry",
+                    e,
+                )
+            })?);
         }
         if page_len < 100 {
             break;
@@ -224,8 +223,9 @@ fn fetch_release_pages(client: &reqwest::blocking::Client, base_url: &str) -> En
 }
 
 fn parse_strawberry_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    let v: Value = serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+    let v: Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+    })?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
@@ -265,7 +265,13 @@ fn parse_strawberry_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
             let sha = a
                 .get("digest")
                 .and_then(|x| x.as_str())
-                .map(|d| d.trim().strip_prefix("sha256:").unwrap_or(d).trim().to_string())
+                .map(|d| {
+                    d.trim()
+                        .strip_prefix("sha256:")
+                        .unwrap_or(d)
+                        .trim()
+                        .to_string()
+                })
                 .filter(|s| !s.is_empty());
             out.push(PerlReleaseRow {
                 version: ver,
@@ -281,7 +287,13 @@ fn parse_strawberry_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
 fn asset_sha256(a: &Value) -> Option<String> {
     a.get("digest")
         .and_then(|x| x.as_str())
-        .map(|d| d.trim().strip_prefix("sha256:").unwrap_or(d).trim().to_string())
+        .map(|d| {
+            d.trim()
+                .strip_prefix("sha256:")
+                .unwrap_or(d)
+                .trim()
+                .to_string()
+        })
         .filter(|s| !s.is_empty())
 }
 
@@ -314,8 +326,9 @@ fn pick_skaji_asset_url(assets: &[Value], stem: &str) -> Option<(String, Option<
 }
 
 fn parse_skaji_rows(json: &str, stem: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    let v: Value = serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+    let v: Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+    })?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;
@@ -394,7 +407,9 @@ fn synthetic_strawberry_portable_zip_url(tag: &str, version_label: &str) -> Stri
     )
 }
 
-fn fetch_strawberry_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<PerlReleaseRow>> {
+fn fetch_strawberry_via_atom(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<PerlReleaseRow>> {
     let mut seen_tags = HashSet::new();
     let mut tags_in_order = Vec::new();
     for page in 1_u32..=50 {
@@ -495,7 +510,9 @@ fn fetch_relocatable_via_atom(
             .to_string();
         let download_url = synthetic_skaji_download_url(&tag, stem, true)
             .or_else(|| synthetic_skaji_download_url(&tag, stem, false))
-            .ok_or_else(|| EnvrError::Download("perl: could not build skaji download URL".into()))?;
+            .ok_or_else(|| {
+                EnvrError::Download("perl: could not build skaji download URL".into())
+            })?;
         rows.push(PerlReleaseRow {
             version,
             download_url,
@@ -557,8 +574,9 @@ pub struct PerlReleaseRow {
 }
 
 pub fn parse_cached_install_rows(json: &str) -> EnvrResult<Vec<PerlReleaseRow>> {
-    serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid cached install rows json", e))
+    serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid cached install rows json", e)
+    })
 }
 
 pub fn list_remote_versions(rows: &[PerlReleaseRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
@@ -731,8 +749,14 @@ mod tests {
                 sha256_hex: None,
             },
         ];
-        assert_eq!(resolve_perl_version(&rows, "5.40").expect("maj"), "5.40.2.1");
-        assert_eq!(resolve_perl_version(&rows, "5.40.2").expect("line"), "5.40.2.1");
+        assert_eq!(
+            resolve_perl_version(&rows, "5.40").expect("maj"),
+            "5.40.2.1"
+        );
+        assert_eq!(
+            resolve_perl_version(&rows, "5.40.2").expect("line"),
+            "5.40.2.1"
+        );
         assert_eq!(
             resolve_perl_version(&rows, "5.40.2.1").expect("exact"),
             "5.40.2.1"

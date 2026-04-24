@@ -193,8 +193,16 @@ pub fn read_current(paths: &GleamPaths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -205,8 +213,16 @@ pub fn read_current(paths: &GleamPaths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) }
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(RuntimeVersion(name)))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -237,7 +253,10 @@ impl GleamManager {
     fn load_cached_rows(&self) -> Option<Vec<GleamInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -246,8 +265,9 @@ impl GleamManager {
     }
     fn save_cached_rows(&self, rows: &[GleamInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize gleam rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize gleam rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         // `latest_per_major` must always agree with the installable index; never reuse it across
         // a refreshed releases cache (different TTLs caused GUI to offer labels not in `rows`).
@@ -276,7 +296,8 @@ impl GleamManager {
 
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(cached) = serde_json::from_str::<Vec<String>>(&text)
@@ -289,8 +310,9 @@ impl GleamManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text = serde_json::to_string_pretty(&labels)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize gleam latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize gleam latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -300,14 +322,16 @@ impl GleamManager {
             return Ok(v);
         }
         let rows = self.fetch_rows(true)?;
-        resolve_gleam_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown gleam version spec: {spec}"))
-        })
+        resolve_gleam_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown gleam version spec: {spec}")))
     }
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !dir.is_dir() || !gleam_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!("gleam version not installed: {}", version.0)));
+            return Err(EnvrError::Validation(format!(
+                "gleam version not installed: {}",
+                version.0
+            )));
         }
         ensure_runtime_current_symlink_or_pointer(&dir, &self.paths.current_link())
     }
@@ -325,22 +349,19 @@ impl SpecDrivenInstaller for GleamManager {
         ensure_erlang_runtime_available()?;
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("gleam version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("gleam version not found in index: {label}"))
+        })?;
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && gleam_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
         }
         fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
-        let cache_file = self.paths.cache_dir().join(
-            row.url
-                .split('/')
-                .next_back()
-                .unwrap_or("gleam-archive"),
-        );
+        let cache_file = self
+            .paths
+            .cache_dir()
+            .join(row.url.split('/').next_back().unwrap_or("gleam-archive"));
         let (downloaded, total, cancel) = install_progress_handles(request);
         envr_download::blocking::download_url_to_path_resumable(
             &client,
@@ -356,7 +377,9 @@ impl SpecDrivenInstaller for GleamManager {
         extract::extract_archive(&cache_file, staging.path())?;
         promote_gleam_extract(staging.path(), &final_dir)?;
         if !gleam_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("gleam install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "gleam install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }

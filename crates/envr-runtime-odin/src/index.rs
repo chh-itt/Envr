@@ -1,6 +1,8 @@
 //! Odin: prebuilt monthly toolchains from `odin-lang/Odin` GitHub releases.
 
-use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind};
+use envr_domain::runtime::{
+    RemoteFilter, RuntimeKind, RuntimeVersion, numeric_version_segments, version_line_key_for_kind,
+};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use regex::Regex;
@@ -11,7 +13,8 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-pub const DEFAULT_ODIN_RELEASES_API_URL: &str = "https://api.github.com/repos/odin-lang/Odin/releases";
+pub const DEFAULT_ODIN_RELEASES_API_URL: &str =
+    "https://api.github.com/repos/odin-lang/Odin/releases";
 const ODIN_RELEASES_ATOM_URL: &str = "https://github.com/odin-lang/Odin/releases.atom";
 
 static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -19,9 +22,8 @@ static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("odin atom release tag regex")
 });
 
-static ODIN_DEV_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^dev-(\d{4})-(\d{2})([a-z])?$").expect("odin dev tag regex")
-});
+static ODIN_DEV_TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^dev-(\d{4})-(\d{2})([a-z])?$").expect("odin dev tag regex"));
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GhAsset {
@@ -80,18 +82,22 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
@@ -152,9 +158,17 @@ pub fn odin_asset_prefix_candidates() -> Vec<&'static str> {
     match (OS, ARCH) {
         ("windows", "x86_64") => vec!["odin-windows-amd64-"],
         ("linux", "x86_64") => vec!["odin-linux-amd64-"],
-        ("linux", "aarch64") => vec!["odin-linux-arm64-", "odin-linux-aarch64-", "odin-linux-amd64-"],
+        ("linux", "aarch64") => vec![
+            "odin-linux-arm64-",
+            "odin-linux-aarch64-",
+            "odin-linux-amd64-",
+        ],
         ("macos", "x86_64") => vec!["odin-macos-amd64-"],
-        ("macos", "aarch64") => vec!["odin-macos-arm64-", "odin-macos-aarch64-", "odin-macos-amd64-"],
+        ("macos", "aarch64") => vec![
+            "odin-macos-arm64-",
+            "odin-macos-aarch64-",
+            "odin-macos-amd64-",
+        ],
         _ => vec![],
     }
 }
@@ -221,8 +235,9 @@ pub fn fetch_odin_github_releases_index(
                     break;
                 }
             };
-            let v: Value = serde_json::from_str(&text)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+            let v: Value = serde_json::from_str(&text).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+            })?;
             let Some(arr) = v.as_array() else {
                 ok = false;
                 break;
@@ -231,8 +246,9 @@ pub fn fetch_odin_github_releases_index(
                 break;
             }
             for item in arr {
-                let r: GhRelease = serde_json::from_value(item.clone())
-                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e))?;
+                let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+                })?;
                 acc.push(r);
             }
             if arr.len() < 100 {
@@ -298,10 +314,11 @@ pub fn fetch_odin_installable_rows_with_fallback(
         let Some(asset) = synthetic_asset_name(&tag) else {
             continue;
         };
-        let url = format!(
-            "https://github.com/odin-lang/Odin/releases/download/{tag}/{asset}"
-        );
-        out.push(OdinInstallableRow { version: label, url });
+        let url = format!("https://github.com/odin-lang/Odin/releases/download/{tag}/{asset}");
+        out.push(OdinInstallableRow {
+            version: label,
+            url,
+        });
     }
     out.sort_by(|a, b| cmp_release_labels(&a.version, &b.version));
     out.dedup_by(|a, b| a.version == b.version);
@@ -372,15 +389,26 @@ mod tests {
 
     #[test]
     fn odin_dev_tag_maps_to_numeric_label() {
-        assert_eq!(label_from_dev_tag("dev-2026-04").as_deref(), Some("2026.04"));
-        assert_eq!(label_from_dev_tag("dev-2025-12a").as_deref(), Some("2025.12.1"));
-        assert_eq!(label_from_dev_tag("DEV-2025-12B").as_deref(), Some("2025.12.2"));
+        assert_eq!(
+            label_from_dev_tag("dev-2026-04").as_deref(),
+            Some("2026.04")
+        );
+        assert_eq!(
+            label_from_dev_tag("dev-2025-12a").as_deref(),
+            Some("2025.12.1")
+        );
+        assert_eq!(
+            label_from_dev_tag("DEV-2025-12B").as_deref(),
+            Some("2025.12.2")
+        );
     }
 
     #[test]
     fn odin_label_is_numeric_segments() {
         assert_eq!(numeric_version_segments("2026.04").unwrap(), vec![2026, 4]);
-        assert_eq!(numeric_version_segments("2025.12.1").unwrap(), vec![2025, 12, 1]);
+        assert_eq!(
+            numeric_version_segments("2025.12.1").unwrap(),
+            vec![2025, 12, 1]
+        );
     }
 }
-

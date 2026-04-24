@@ -108,4 +108,3 @@ impl RuntimeProvider for UnisonRuntimeProvider {
         Ok((vec![paths.version_dir(&version.0)], None))
     }
 }
-

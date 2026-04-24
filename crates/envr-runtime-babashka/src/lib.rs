@@ -2,7 +2,7 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_BABASHKA_RELEASES_API_URL, BabashkaInstallableRow, blocking_http_client,
+    BabashkaInstallableRow, DEFAULT_BABASHKA_RELEASES_API_URL, blocking_http_client,
     fetch_babashka_installable_rows_with_fallback, list_remote_latest_per_major_lines,
     list_remote_versions, resolve_babashka_version,
 };
@@ -110,4 +110,3 @@ impl RuntimeProvider for BabashkaRuntimeProvider {
         ))
     }
 }
-

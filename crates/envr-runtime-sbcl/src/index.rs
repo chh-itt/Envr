@@ -70,22 +70,31 @@ fn github_api_auth_token() -> Option<String> {
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url.contains("api.github.com") {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -201,10 +210,9 @@ fn fetch_github_releases_index(
     loop {
         let url = format!("{releases_api_url}?per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
-        let v: Value =
-            serde_json::from_str(&text).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
-            })?;
+        let v: Value = serde_json::from_str(&text).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let Some(arr) = v.as_array() else {
             return Err(EnvrError::Download(
                 "sbcl_bin releases API returned non-array payload".into(),
@@ -214,10 +222,9 @@ fn fetch_github_releases_index(
             break;
         }
         for item in arr {
-            let r: GhRelease =
-                serde_json::from_value(item.clone()).map_err(|e| {
-                    EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
-                })?;
+            let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+            })?;
             out.push(r);
         }
         if arr.len() < 100 {
@@ -315,16 +322,27 @@ pub fn fetch_sbcl_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    if let Ok(rows) = fetch_rows_via_html(client) && !rows.is_empty() {
+    if let Ok(rows) = fetch_rows_via_html(client)
+        && !rows.is_empty()
+    {
         return Ok(rows);
     }
     fetch_rows_via_atom(client)
 }
 
-pub fn list_remote_versions(rows: &[SbclInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[SbclInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
-        .filter(|r| filter.prefix.as_ref().map(|p| r.version.starts_with(p)).unwrap_or(true))
+        .filter(|r| {
+            filter
+                .prefix
+                .as_ref()
+                .map(|p| r.version.starts_with(p))
+                .unwrap_or(true)
+        })
         .map(|r| RuntimeVersion(r.version.clone()))
         .collect();
     out.sort_by(|a, b| cmp_release_labels(&a.0, &b.0));
@@ -335,9 +353,13 @@ pub fn list_remote_versions(rows: &[SbclInstallableRow], filter: &RemoteFilter) 
 pub fn list_remote_latest_per_major_lines(rows: &[SbclInstallableRow]) -> Vec<RuntimeVersion> {
     let mut best: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for r in rows {
-        let Some(line) = version_line_key_for_kind(RuntimeKind::Sbcl, &r.version) else { continue; };
+        let Some(line) = version_line_key_for_kind(RuntimeKind::Sbcl, &r.version) else {
+            continue;
+        };
         match best.get(&line) {
-            None => { best.insert(line, r.version.clone()); }
+            None => {
+                best.insert(line, r.version.clone());
+            }
             Some(prev) => {
                 if cmp_release_labels(prev, &r.version) == Ordering::Less {
                     best.insert(line, r.version.clone());
@@ -372,4 +394,3 @@ pub fn resolve_sbcl_version(rows: &[SbclInstallableRow], spec: &str) -> Option<S
     }
     None
 }
-

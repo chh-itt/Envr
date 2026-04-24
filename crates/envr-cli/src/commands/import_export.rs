@@ -85,8 +85,9 @@ pub(crate) fn export_run_inner(
         )));
     };
 
-    let toml = toml::to_string_pretty(&cfg)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e))?;
+    let toml = toml::to_string_pretty(&cfg).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
+    })?;
 
     if let Some(out_path) = output {
         fs::write(&out_path, &toml)?;

@@ -62,18 +62,22 @@ pub fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 /// If `url` is wrapped by a third-party mirror (`…/https://api.github.com/…`), return the inner API URL.
@@ -129,10 +133,9 @@ fn fetch_release_index_via_github_api(
             format!("{base_url}?per_page=100&page={page}")
         };
         let body = fetch_text(client, &url)?;
-        let v: Value =
-            serde_json::from_str(&body).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
-            })?;
+        let v: Value = serde_json::from_str(&body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let page_len = v.as_array().map(|a| a.len()).unwrap_or(0);
         if page_len == 0 {
             break;
@@ -309,8 +312,13 @@ pub struct CrystalReleaseRow {
 
 /// Deserialize rows written to disk cache (not GitHub API shape).
 pub fn parse_cached_install_rows(json: &str) -> EnvrResult<Vec<CrystalReleaseRow>> {
-    serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid crystal release rows json", e))
+    serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Validation,
+            "invalid crystal release rows json",
+            e,
+        )
+    })
 }
 
 /// Parse GitHub releases **array** JSON into installable rows for `host_slug` (newest first).
@@ -318,8 +326,9 @@ pub fn parse_github_releases_for_host(
     json: &str,
     host_slug: &str,
 ) -> EnvrResult<Vec<CrystalReleaseRow>> {
-    let v: Value = serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid crystal releases json", e))?;
+    let v: Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid crystal releases json", e)
+    })?;
     let arr = v
         .as_array()
         .ok_or_else(|| EnvrError::Validation("GitHub releases JSON must be an array".into()))?;

@@ -20,7 +20,8 @@ static ATOM_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("janet atom release tag regex")
 });
 static HTML_RELEASE_TAG_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"/janet-lang/janet/releases/tag/([^"<>/]+)"#).expect("janet html release tag regex")
+    Regex::new(r#"/janet-lang/janet/releases/tag/([^"<>/]+)"#)
+        .expect("janet html release tag regex")
 });
 static TAG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^v(\d+\.\d+\.\d+)$").expect("janet tag regex"));
@@ -68,22 +69,31 @@ fn github_api_auth_token() -> Option<String> {
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url.contains("api.github.com") {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -150,8 +160,9 @@ fn fetch_github_releases_index(
     loop {
         let url = format!("{releases_api_url}?per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&text)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+        let v: Value = serde_json::from_str(&text).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let Some(arr) = v.as_array() else {
             return Err(EnvrError::Download(
                 "janet releases API returned non-array payload".into(),
@@ -161,9 +172,9 @@ fn fetch_github_releases_index(
             break;
         }
         for item in arr {
-            let r: GhRelease =
-                serde_json::from_value(item.clone())
-                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e))?;
+            let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+            })?;
             out.push(r);
         }
         if arr.len() < 100 {
@@ -197,9 +208,8 @@ fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Jan
             let Some(fname) = janet_primary_asset_filename(&version) else {
                 continue;
             };
-            let url = format!(
-                "https://github.com/janet-lang/janet/releases/download/{tag}/{fname}"
-            );
+            let url =
+                format!("https://github.com/janet-lang/janet/releases/download/{tag}/{fname}");
             out.push(JanetInstallableRow { version, url });
         }
         if found == 0 {
@@ -248,13 +258,18 @@ pub fn fetch_janet_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    if let Ok(rows) = fetch_rows_via_html(client) && !rows.is_empty() {
+    if let Ok(rows) = fetch_rows_via_html(client)
+        && !rows.is_empty()
+    {
         return Ok(rows);
     }
     fetch_rows_via_atom(client)
 }
 
-pub fn list_remote_versions(rows: &[JanetInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[JanetInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
         .filter(|r| {

@@ -63,15 +63,24 @@ pub fn racket_installation_valid(home: &Path) -> bool {
     racket_tool_candidate(home).is_some()
 }
 
-fn download_file_atomic(client: &reqwest::blocking::Client, url: &str, dst: &Path) -> EnvrResult<()> {
+fn download_file_atomic(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    dst: &Path,
+) -> EnvrResult<()> {
     let mut response = client
         .get(url)
         // Keep archive bytes as-is; do not let HTTP layer transparently decompress.
         .header(reqwest::header::ACCEPT_ENCODING, "identity")
         .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+        .map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent).map_err(EnvrError::from)?;
@@ -227,8 +236,16 @@ pub fn read_current(paths: &RacketPaths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -239,8 +256,16 @@ pub fn read_current(paths: &RacketPaths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) }
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(RuntimeVersion(name)))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -270,7 +295,10 @@ impl RacketManager {
     fn load_cached_rows(&self) -> Option<Vec<RacketInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -279,8 +307,9 @@ impl RacketManager {
     }
     fn save_cached_rows(&self, rows: &[RacketInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize racket rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize racket rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -299,7 +328,8 @@ impl RacketManager {
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
@@ -309,8 +339,9 @@ impl RacketManager {
         let latest = list_remote_latest_per_major_lines(&self.fetch_rows(false)?);
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
-        let text = serde_json::to_string_pretty(&labels)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize racket latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize racket latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }
@@ -321,7 +352,10 @@ impl RacketManager {
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !dir.is_dir() || !racket_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!("racket version not installed: {}", version.0)));
+            return Err(EnvrError::Validation(format!(
+                "racket version not installed: {}",
+                version.0
+            )));
         }
         ensure_runtime_current_symlink_or_pointer(&dir, &self.paths.current_link())
     }
@@ -338,10 +372,9 @@ impl SpecDrivenInstaller for RacketManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("racket version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("racket version not found in index: {label}"))
+        })?;
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && racket_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
@@ -399,9 +432,10 @@ impl SpecDrivenInstaller for RacketManager {
         promote_racket_extract(staging.path(), &final_dir)?;
 
         if !racket_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("racket install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "racket install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }
 }
-

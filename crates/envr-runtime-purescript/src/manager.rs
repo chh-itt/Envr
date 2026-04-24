@@ -1,6 +1,7 @@
 use crate::index::{
-    PurescriptInstallableRow, blocking_http_client, fetch_purescript_installable_rows_with_fallback,
-    list_remote_latest_per_major_lines, list_remote_versions, resolve_purescript_version,
+    PurescriptInstallableRow, blocking_http_client,
+    fetch_purescript_installable_rows_with_fallback, list_remote_latest_per_major_lines,
+    list_remote_versions, resolve_purescript_version,
 };
 use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
@@ -137,10 +138,9 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".into()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -159,11 +159,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -254,8 +256,9 @@ impl PurescriptManager {
     }
     fn save_cached_rows(&self, rows: &[PurescriptInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize purescript rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize purescript rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -264,7 +267,8 @@ impl PurescriptManager {
             return Ok(rows);
         }
         let client = blocking_http_client()?;
-        let rows = fetch_purescript_installable_rows_with_fallback(&client, &self.releases_api_url)?;
+        let rows =
+            fetch_purescript_installable_rows_with_fallback(&client, &self.releases_api_url)?;
         self.save_cached_rows(&rows)?;
         Ok(rows)
     }
@@ -275,7 +279,8 @@ impl PurescriptManager {
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
@@ -286,17 +291,17 @@ impl PurescriptManager {
         let latest = list_remote_latest_per_major_lines(&rows);
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, "serialize purescript latest cache", e)
-            })?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize purescript latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }
     pub fn resolve_label(&self, spec: &str) -> EnvrResult<String> {
         let rows = self.fetch_rows(false)?;
-        resolve_purescript_version(&rows, spec)
-            .ok_or_else(|| EnvrError::Validation(format!("unknown purescript version spec: {spec}")))
+        resolve_purescript_version(&rows, spec).ok_or_else(|| {
+            EnvrError::Validation(format!("unknown purescript version spec: {spec}"))
+        })
     }
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
@@ -321,27 +326,23 @@ impl SpecDrivenInstaller for PurescriptManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("purescript version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("purescript version not found in index: {label}"))
+        })?;
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && purescript_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
         }
         let client = blocking_http_client()?;
         let tmp = tempfile::tempdir().map_err(EnvrError::from)?;
-        let archive_name = row.url.split('/').next_back().unwrap_or("purescript-archive.tar.gz");
+        let archive_name = row
+            .url
+            .split('/')
+            .next_back()
+            .unwrap_or("purescript-archive.tar.gz");
         let archive_path = tmp.path().join(archive_name);
         let (downloaded, total, cancel) = install_progress_handles(request);
-        download_to_path(
-            &client,
-            &row.url,
-            &archive_path,
-            downloaded,
-            total,
-            cancel,
-        )?;
+        download_to_path(&client, &row.url, &archive_path, downloaded, total, cancel)?;
         let staging = tmp.path().join("staging");
         fs::create_dir_all(&staging).map_err(EnvrError::from)?;
         extract::extract_archive(&archive_path, &staging)?;
@@ -349,4 +350,3 @@ impl SpecDrivenInstaller for PurescriptManager {
         Ok(RuntimeVersion(label))
     }
 }
-

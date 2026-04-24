@@ -10,10 +10,8 @@ pub use manager::{
     GoManager, GoPaths, go_installation_valid, list_installed_versions, read_current,
 };
 
-use envr_config::settings::{
-    GoDownloadSource, prefer_china_mirrors,
-};
 use envr_config::env_context::{load_settings_cached, runtime_root};
+use envr_config::settings::{GoDownloadSource, prefer_china_mirrors};
 
 use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
@@ -160,8 +158,9 @@ impl RuntimeProvider for GoRuntimeProvider {
             let paths = GoPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
             let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-            let s = serde_json::to_string(&strings)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode go latest labels", e))?;
+            let s = serde_json::to_string(&strings).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode go latest labels", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

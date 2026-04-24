@@ -86,8 +86,9 @@ impl DenoRuntimeProvider {
         let tags = fetch_all_tags(&client, &url)?;
         let _ = (|| -> EnvrResult<()> {
             std::fs::create_dir_all(&base)?;
-            let s = serde_json::to_string(&tags)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode deno tags cache", e))?;
+            let s = serde_json::to_string(&tags).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode deno tags cache", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();
@@ -203,8 +204,9 @@ impl RuntimeProvider for DenoRuntimeProvider {
         let _ = (|| -> EnvrResult<()> {
             let paths = DenoPaths::new(self.runtime_root()?);
             std::fs::create_dir_all(paths.cache_dir())?;
-            let s = serde_json::to_string(&list)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode deno latest cache", e))?;
+            let s = serde_json::to_string(&list).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode deno latest cache", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
             Ok(())
         })();

@@ -148,15 +148,7 @@ fn npm_is_package_mutation(args: &[OsString]) -> bool {
         }
         if matches!(
             t,
-            "install"
-                | "i"
-                | "add"
-                | "uninstall"
-                | "remove"
-                | "rm"
-                | "update"
-                | "up"
-                | "link"
+            "install" | "i" | "add" | "uninstall" | "remove" | "rm" | "update" | "up" | "link"
         ) {
             saw_mutating_subcommand = true;
         }
@@ -164,7 +156,11 @@ fn npm_is_package_mutation(args: &[OsString]) -> bool {
     saw_mutating_subcommand
 }
 
-fn maybe_print_npm_local_install_hint(core_cmd: CoreCommand, forward: &[OsString], status_ok: bool) {
+fn maybe_print_npm_local_install_hint(
+    core_cmd: CoreCommand,
+    forward: &[OsString],
+    status_ok: bool,
+) {
     if !status_ok || !matches!(core_cmd, CoreCommand::Npm) {
         return;
     }
@@ -192,7 +188,9 @@ fn sync_globals_via_envr_cli_best_effort(runtime_root: &Path) {
     let candidates = [dir.join("er"), dir.join("envr"), dir.join("er.cmd")];
 
     let Some(cli_exe) = candidates.iter().find(|p| p.is_file()) else {
-        warn("skip auto global shim refresh: envr CLI executable not found beside envr-shim".into());
+        warn(
+            "skip auto global shim refresh: envr CLI executable not found beside envr-shim".into(),
+        );
         return;
     };
     let status = Command::new(cli_exe)
@@ -445,7 +443,8 @@ fn main() {
         sync_python_script_shims_best_effort(&ctx.runtime_root, &resolved.executable);
         timings.pip_sync = pip_sync_started.elapsed();
     }
-    if status.success() && matches!(core_cmd, CoreCommand::Npm) && npm_is_package_mutation(&forward) {
+    if status.success() && matches!(core_cmd, CoreCommand::Npm) && npm_is_package_mutation(&forward)
+    {
         let npm_sync_started = Instant::now();
         sync_globals_via_envr_cli_best_effort(&ctx.runtime_root);
         timings.npm_sync = npm_sync_started.elapsed();
@@ -483,18 +482,22 @@ mod tests {
             "@anthropic-ai/claude-code@2.1.110",
         ])));
         assert!(!npm_install_is_local_without_global(&os_args(&[
-            "add",
-            "--global",
-            "pnpm",
+            "add", "--global", "pnpm",
         ])));
     }
 
     #[test]
     fn npm_package_mutation_detection() {
-        assert!(npm_is_package_mutation(&os_args(&["install", "-g", "pnpm"])));
+        assert!(npm_is_package_mutation(&os_args(&[
+            "install", "-g", "pnpm"
+        ])));
         assert!(npm_is_package_mutation(&os_args(&["install", "pnpm"])));
-        assert!(npm_is_package_mutation(&os_args(&["remove", "--global", "pnpm"])));
-        assert!(!npm_is_package_mutation(&os_args(&["--global", "config", "get", "prefix"])));
+        assert!(npm_is_package_mutation(&os_args(&[
+            "remove", "--global", "pnpm"
+        ])));
+        assert!(!npm_is_package_mutation(&os_args(&[
+            "--global", "config", "get", "prefix"
+        ])));
     }
 
     #[cfg(windows)]

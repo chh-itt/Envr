@@ -91,4 +91,3 @@ pub fn downloads_page_view(
 
     scrollable(list).width(Length::Fill).into()
 }
-

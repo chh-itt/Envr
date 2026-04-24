@@ -32,9 +32,8 @@ impl AliasesFile {
 
     pub fn save_to(&self, path: impl AsRef<Path>) -> EnvrResult<()> {
         let path = path.as_ref();
-        let content = toml::to_string_pretty(self).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Runtime, "toml encode aliases", e)
-        })?;
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode aliases", e))?;
         envr_platform::fs_atomic::write_atomic(path, content.as_bytes())
             .map_err(EnvrError::from)?;
         Ok(())

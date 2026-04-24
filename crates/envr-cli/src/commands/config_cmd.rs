@@ -111,14 +111,9 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
         crate::cli::ConfigCmd::Get { key } => {
             match Settings::load_or_default_from(&settings_path) {
                 Ok(st) => {
-                    let v = serde_json::to_value(&st)
-                        .map_err(|e| {
-                            EnvrError::with_source(
-                                ErrorCode::Runtime,
-                                "json encode settings",
-                                e,
-                            )
-                        })?;
+                    let v = serde_json::to_value(&st).map_err(|e| {
+                        EnvrError::with_source(ErrorCode::Runtime, "json encode settings", e)
+                    })?;
                     let got = get_json_dotted(&v, &key);
                     let data = serde_json::json!({
                         "path": settings_path.to_string_lossy(),
@@ -150,10 +145,9 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
             value_type,
         } => {
             let mut st = Settings::load_or_default_from(&settings_path)?;
-            let mut as_json = serde_json::to_value(&st)
-                .map_err(|e| {
-                    EnvrError::with_source(ErrorCode::Runtime, "json encode settings", e)
-                })?;
+            let mut as_json = serde_json::to_value(&st).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Runtime, "json encode settings", e)
+            })?;
             if get_json_dotted(&as_json, &key).is_none() {
                 let hint = suggest_key_hint(&key);
                 let msg = if let Some(h) = hint {
@@ -165,14 +159,13 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
             }
             let parsed = parse_user_value(&value, value_type)?;
             set_json_dotted(&mut as_json, &key, parsed.clone()).map_err(EnvrError::Validation)?;
-            st = serde_json::from_value(as_json)
-                .map_err(|e| {
-                    EnvrError::with_source(
-                        ErrorCode::Validation,
-                        format!("invalid value for `{key}`"),
-                        e,
-                    )
-                })?;
+            st = serde_json::from_value(as_json).map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    format!("invalid value for `{key}`"),
+                    e,
+                )
+            })?;
             st.validate()?;
             st.save_to(&settings_path)?;
             let data = serde_json::json!({

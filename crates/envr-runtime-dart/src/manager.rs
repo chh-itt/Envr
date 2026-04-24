@@ -1,6 +1,6 @@
 use crate::index::{
-    DartIndexRow, blocking_http_client, dart_platform_tuple,
-    fetch_text, list_remote_latest_per_major_lines, list_remote_versions, parse_rows_from_bucket_list_json,
+    DartIndexRow, blocking_http_client, dart_platform_tuple, fetch_text,
+    list_remote_latest_per_major_lines, list_remote_versions, parse_rows_from_bucket_list_json,
     resolve_dart_version,
 };
 use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
@@ -132,10 +132,9 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".into()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -154,11 +153,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -248,7 +249,10 @@ impl DartManager {
             return Ok(rows);
         }
         let body = fetch_text(&self.client, &self.bucket_list_api_url)?;
-        let rows = normalize_rows(parse_rows_from_bucket_list_json(&body, dart_platform_tuple()?)?);
+        let rows = normalize_rows(parse_rows_from_bucket_list_json(
+            &body,
+            dart_platform_tuple()?,
+        )?);
         if rows.is_empty() {
             return Err(EnvrError::Validation(
                 "dart: no installable stable versions for this host".into(),
@@ -256,8 +260,9 @@ impl DartManager {
         }
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
-            let s = serde_json::to_string(&rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode dart rows", e))?;
+            let s = serde_json::to_string(&rows).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode dart rows", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_path, s.as_bytes())?;
             Ok(())
         })();

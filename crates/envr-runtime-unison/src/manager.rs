@@ -197,8 +197,16 @@ pub fn read_current(paths: &UnisonPaths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -209,8 +217,16 @@ pub fn read_current(paths: &UnisonPaths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) }
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(RuntimeVersion(name)))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -245,7 +261,10 @@ impl UnisonManager {
     fn load_cached_rows(&self) -> Option<Vec<UnisonInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -255,9 +274,9 @@ impl UnisonManager {
 
     fn save_cached_rows(&self, rows: &[UnisonInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text =
-            serde_json::to_string_pretty(rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize unison rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize unison rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -301,9 +320,9 @@ impl UnisonManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize unison latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize unison latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -314,9 +333,8 @@ impl UnisonManager {
             return Ok(v);
         }
         let rows = self.fetch_rows(true)?;
-        resolve_unison_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown unison version spec: {spec}"))
-        })
+        resolve_unison_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown unison version spec: {spec}")))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
@@ -337,17 +355,15 @@ impl UnisonManager {
         }
         Ok(())
     }
-
 }
 
 impl SpecDrivenInstaller for UnisonManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("unison version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("unison version not found in index: {label}"))
+        })?;
 
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && unison_installation_valid(&final_dir) {
@@ -357,7 +373,11 @@ impl SpecDrivenInstaller for UnisonManager {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
 
-        let archive_ext = if row.url.ends_with(".zip") { "zip" } else { "tar.gz" };
+        let archive_ext = if row.url.ends_with(".zip") {
+            "zip"
+        } else {
+            "tar.gz"
+        };
         let cache = self.paths.cache_dir().join(format!(
             "ucm-{}.{}",
             label.replace(['/', '\\'], "_"),
@@ -365,12 +385,7 @@ impl SpecDrivenInstaller for UnisonManager {
         ));
         let (downloaded, total, cancel) = install_progress_handles(request);
         envr_download::blocking::download_url_to_path_resumable(
-            &client,
-            &row.url,
-            &cache,
-            downloaded,
-            total,
-            cancel,
+            &client, &row.url, &cache, downloaded, total, cancel,
         )?;
 
         let staging_parent = self.paths.cache_dir().join("extract_staging");
@@ -380,10 +395,11 @@ impl SpecDrivenInstaller for UnisonManager {
         promote_ucm_extract(staging.path(), &final_dir)?;
 
         if !unison_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("unison install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "unison install validation failed".into(),
+            ));
         }
 
         Ok(RuntimeVersion(label))
     }
 }
-

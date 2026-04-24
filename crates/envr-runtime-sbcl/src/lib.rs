@@ -6,7 +6,9 @@ pub use index::{
     fetch_sbcl_installable_rows_with_fallback, list_remote_latest_per_major_lines,
     list_remote_versions, resolve_sbcl_version,
 };
-pub use manager::{SbclManager, SbclPaths, list_installed_versions, read_current, sbcl_installation_valid};
+pub use manager::{
+    SbclManager, SbclPaths, list_installed_versions, read_current, sbcl_installation_valid,
+};
 
 use envr_config::env_context::runtime_root;
 use envr_domain::installer::install_via_manager;
@@ -101,7 +103,9 @@ impl RuntimeProvider for SbclRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![SbclPaths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![SbclPaths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }
-

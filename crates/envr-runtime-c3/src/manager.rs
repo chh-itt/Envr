@@ -95,8 +95,16 @@ pub fn read_current(paths: &C3Paths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -107,8 +115,16 @@ pub fn read_current(paths: &C3Paths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
-    if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) }
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(RuntimeVersion(name)))
+    }
 }
 
 fn promote_c3_extracted_tree(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
@@ -184,7 +200,10 @@ impl C3Manager {
     fn load_cached_rows(&self) -> Option<Vec<C3InstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -194,9 +213,9 @@ impl C3Manager {
 
     fn save_cached_rows(&self, rows: &[C3InstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text =
-            serde_json::to_string_pretty(rows)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize c3 rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize c3 rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -213,7 +232,10 @@ impl C3Manager {
     }
 
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(list_remote_versions(&self.fetch_rows(filter.force_index_refresh)?, filter))
+        Ok(list_remote_versions(
+            &self.fetch_rows(filter.force_index_refresh)?,
+            filter,
+        ))
     }
 
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -223,7 +245,8 @@ impl C3Manager {
 
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(cached) = serde_json::from_str::<Vec<String>>(&text)
@@ -236,9 +259,9 @@ impl C3Manager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize c3 latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize c3 latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -249,15 +272,17 @@ impl C3Manager {
             return Ok(v);
         }
         let rows = self.fetch_rows(true)?;
-        resolve_c3_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown c3 version spec: {spec}"))
-        })
+        resolve_c3_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown c3 version spec: {spec}")))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !dir.is_dir() || !c3_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!("c3 version not installed: {}", version.0)));
+            return Err(EnvrError::Validation(format!(
+                "c3 version not installed: {}",
+                version.0
+            )));
         }
         ensure_runtime_current_symlink_or_pointer(&dir, &self.paths.current_link())
     }
@@ -275,10 +300,9 @@ impl SpecDrivenInstaller for C3Manager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("c3 version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("c3 version not found in index: {label}"))
+        })?;
 
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && c3_installation_valid(&final_dir) {
@@ -287,9 +311,10 @@ impl SpecDrivenInstaller for C3Manager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
-        let cache_file = self.paths.cache_dir().join(
-            row.url.split('/').next_back().unwrap_or("c3-archive"),
-        );
+        let cache_file = self
+            .paths
+            .cache_dir()
+            .join(row.url.split('/').next_back().unwrap_or("c3-archive"));
         let (downloaded, total, cancel) = install_progress_handles(request);
         envr_download::blocking::download_url_to_path_resumable(
             &client,
@@ -311,4 +336,3 @@ impl SpecDrivenInstaller for C3Manager {
         Ok(RuntimeVersion(label))
     }
 }
-

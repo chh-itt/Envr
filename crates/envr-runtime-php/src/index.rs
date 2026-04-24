@@ -40,10 +40,9 @@ pub fn fetch_php_windows_releases_json(
     client: &reqwest::blocking::Client,
     url: &str,
 ) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -51,14 +50,19 @@ pub fn fetch_php_windows_releases_json(
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 pub fn parse_php_windows_index(json: &str) -> EnvrResult<PhpReleasesIndex> {
-    serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid php windows index json", e))
+    serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid php windows index json", e)
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -212,10 +216,9 @@ pub fn pick_windows_zip(
                 .get(*k)
                 .cloned()
                 .unwrap_or(serde_json::Value::Null);
-            let entry: BuildEntry =
-                serde_json::from_value(v).map_err(|e| {
-                    EnvrError::with_source(ErrorCode::Validation, "invalid php build entry json", e)
-                })?;
+            let entry: BuildEntry = serde_json::from_value(v).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid php build entry json", e)
+            })?;
             if let Some(z) = entry.zip
                 && !z.path.is_empty()
             {

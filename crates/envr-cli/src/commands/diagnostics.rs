@@ -238,10 +238,9 @@ fn append_recent_logs(
         let mut limited = f.take(MAX_LOG_BYTES_PER_FILE as u64);
         limited.read_to_end(&mut body).map_err(EnvrError::from)?;
 
-        zip.start_file(zip_name, opts)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Runtime, format!("zip log {name}"), e)
-            })?;
+        zip.start_file(zip_name, opts).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, format!("zip log {name}"), e)
+        })?;
         zip.write_all(&body).map_err(EnvrError::from)?;
     }
 

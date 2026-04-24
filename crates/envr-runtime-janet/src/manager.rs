@@ -302,7 +302,10 @@ impl JanetManager {
     fn load_cached_rows(&self) -> Option<Vec<JanetInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -312,8 +315,9 @@ impl JanetManager {
 
     fn save_cached_rows(&self, rows: &[JanetInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize janet rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize janet rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         let _ = fs::remove_file(self.paths.latest_cache_path());
         Ok(())
@@ -343,7 +347,8 @@ impl JanetManager {
 
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(cached) = serde_json::from_str::<Vec<String>>(&text)
@@ -356,8 +361,9 @@ impl JanetManager {
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = fresh.iter().map(|v| v.0.clone()).collect();
-        let text = serde_json::to_string_pretty(&labels)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize janet latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize janet latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(fresh)
     }
@@ -368,9 +374,8 @@ impl JanetManager {
             return Ok(v);
         }
         let rows = self.fetch_rows(true)?;
-        resolve_janet_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown janet version spec: {spec}"))
-        })
+        resolve_janet_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown janet version spec: {spec}")))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
@@ -391,17 +396,15 @@ impl JanetManager {
         }
         Ok(())
     }
-
 }
 
 impl SpecDrivenInstaller for JanetManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("janet version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("janet version not found in index: {label}"))
+        })?;
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && janet_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
@@ -409,12 +412,10 @@ impl SpecDrivenInstaller for JanetManager {
 
         fs::create_dir_all(&final_dir).map_err(EnvrError::from)?;
         let client = blocking_http_client()?;
-        let cache_file = self.paths.cache_dir().join(
-            row.url
-                .split('/')
-                .next_back()
-                .unwrap_or("janet-artifact"),
-        );
+        let cache_file = self
+            .paths
+            .cache_dir()
+            .join(row.url.split('/').next_back().unwrap_or("janet-artifact"));
         let (downloaded, total, cancel) = install_progress_handles(request);
         envr_download::blocking::download_url_to_path_resumable(
             &client,
@@ -430,7 +431,9 @@ impl SpecDrivenInstaller for JanetManager {
         if is_msi {
             install_from_msi_admin_unpack(&cache_file, &final_dir)?;
             if !janet_installation_valid(&final_dir) {
-                return Err(EnvrError::Validation("janet MSI install validation failed".into()));
+                return Err(EnvrError::Validation(
+                    "janet MSI install validation failed".into(),
+                ));
             }
             return Ok(RuntimeVersion(label));
         }
@@ -441,7 +444,9 @@ impl SpecDrivenInstaller for JanetManager {
         extract::extract_archive(&cache_file, staging.path())?;
         promote_janet_extracted_tree(staging.path(), &final_dir)?;
         if !janet_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("janet install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "janet install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }

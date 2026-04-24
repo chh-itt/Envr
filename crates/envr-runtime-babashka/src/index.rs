@@ -69,22 +69,31 @@ fn github_api_auth_token() -> Option<String> {
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let mut req = client.get(url).header("Accept", "application/vnd.github+json");
+    let mut req = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
     if url.contains("api.github.com") {
         req = req.header("X-GitHub-Api-Version", "2022-11-28");
         if let Some(tok) = github_api_auth_token() {
             req = req.header("Authorization", format!("Bearer {tok}"));
         }
     }
-    let response = req
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = req.send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 fn cmp_release_labels(a: &str, b: &str) -> Ordering {
@@ -186,8 +195,9 @@ fn fetch_github_releases_index(
     loop {
         let url = format!("{releases_api_url}?per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
-        let v: Value = serde_json::from_str(&text)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e))?;
+        let v: Value = serde_json::from_str(&text).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
+        })?;
         let Some(arr) = v.as_array() else {
             return Err(EnvrError::Download(
                 "babashka releases API returned non-array payload".into(),
@@ -197,9 +207,9 @@ fn fetch_github_releases_index(
             break;
         }
         for item in arr {
-            let r: GhRelease =
-                serde_json::from_value(item.clone())
-                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e))?;
+            let r: GhRelease = serde_json::from_value(item.clone()).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "invalid github release entry", e)
+            })?;
             out.push(r);
         }
         if arr.len() < 100 {
@@ -225,7 +235,9 @@ fn make_synthetic_url(tag: &str, version: &str) -> Option<String> {
     ))
 }
 
-fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<BabashkaInstallableRow>> {
+fn fetch_rows_via_html(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<BabashkaInstallableRow>> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
     let mut empty_pages = 0usize;
@@ -264,7 +276,9 @@ fn fetch_rows_via_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Bab
     Ok(out)
 }
 
-fn fetch_rows_via_atom(client: &reqwest::blocking::Client) -> EnvrResult<Vec<BabashkaInstallableRow>> {
+fn fetch_rows_via_atom(
+    client: &reqwest::blocking::Client,
+) -> EnvrResult<Vec<BabashkaInstallableRow>> {
     let mut out = Vec::new();
     let text = fetch_text(client, BABASHKA_RELEASES_ATOM_URL)?;
     let mut seen = HashSet::new();
@@ -295,7 +309,9 @@ pub fn fetch_babashka_installable_rows_with_fallback(
             return Ok(rows);
         }
     }
-    if let Ok(rows) = fetch_rows_via_html(client) && !rows.is_empty() {
+    if let Ok(rows) = fetch_rows_via_html(client)
+        && !rows.is_empty()
+    {
         return Ok(rows);
     }
     fetch_rows_via_atom(client)
@@ -365,4 +381,3 @@ pub fn resolve_babashka_version(rows: &[BabashkaInstallableRow], spec: &str) -> 
     }
     None
 }
-

@@ -59,11 +59,9 @@ impl Route {
                 envr_core::i18n::tr_key("gui.route.dashboard", "仪表盘", "Dashboard")
             }
             Route::Runtime => envr_core::i18n::tr_key("gui.route.runtime", "运行时", "Runtimes"),
-            Route::RuntimeConfig => envr_core::i18n::tr_key(
-                "gui.route.runtime_config",
-                "运行时配置",
-                "Runtime Config",
-            ),
+            Route::RuntimeConfig => {
+                envr_core::i18n::tr_key("gui.route.runtime_config", "运行时配置", "Runtime Config")
+            }
             Route::Downloads => envr_core::i18n::tr_key("gui.route.downloads", "下载", "Downloads"),
             Route::Settings => envr_core::i18n::tr_key("gui.route.settings", "设置", "Settings"),
             Route::About => envr_core::i18n::tr_key("gui.route.about", "关于", "About"),
@@ -798,7 +796,6 @@ fn persist_settings_draft_task(state: &AppState) -> Task<Message> {
     )
 }
 
-
 /// Save a full [`Settings`] snapshot (e.g. runtime.node edits from the env center) and mirror [`SettingsMsg::DiskSaved`].
 fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
     let path = settings_path();
@@ -1133,15 +1130,15 @@ fn retry_download(state: &mut AppState, url_str: &str, label: &str) -> Task<Mess
     }
     // Validate URL early so queued jobs don't fail later with a generic message.
     if let Err(e) = reqwest::Url::parse(url_str) {
-            state.error = Some(format!(
-                "{}: {e}",
-                envr_core::i18n::tr_key(
-                    "gui.error.url_parse_failed",
-                    "URL 解析失败",
-                    "URL parse failed",
-                )
-            ));
-            return Task::none();
+        state.error = Some(format!(
+            "{}: {e}",
+            envr_core::i18n::tr_key(
+                "gui.error.url_parse_failed",
+                "URL 解析失败",
+                "URL parse failed",
+            )
+        ));
+        return Task::none();
     }
     let id = state.downloads.next_id;
     state.downloads.next_id += 1;
@@ -1237,7 +1234,13 @@ fn enqueue_op_job_running(
 }
 
 fn maybe_start_queued_jobs(state: &mut AppState) -> Task<Message> {
-    let max = state.settings.cache.snapshot().download.max_concurrent_downloads.max(1) as usize;
+    let max = state
+        .settings
+        .cache
+        .snapshot()
+        .download
+        .max_concurrent_downloads
+        .max(1) as usize;
     let running = state
         .downloads
         .jobs
@@ -1297,21 +1300,11 @@ fn maybe_start_queued_jobs(state: &mut AppState) -> Task<Message> {
                 let total = j.total.clone();
                 let task = if resolve_precheck && install_and_use {
                     gui_ops::install_then_use_with_resolve_precheck(
-                        id,
-                        kind,
-                        spec,
-                        downloaded,
-                        total,
-                        cancel,
+                        id, kind, spec, downloaded, total, cancel,
                     )
                 } else if resolve_precheck {
                     gui_ops::install_version_with_resolve_precheck(
-                        id,
-                        kind,
-                        spec,
-                        downloaded,
-                        total,
-                        cancel,
+                        id, kind, spec, downloaded, total, cancel,
                     )
                 } else if install_and_use {
                     gui_ops::install_then_use(id, kind, spec, downloaded, total, cancel)
@@ -1380,7 +1373,9 @@ fn duplicate_runtime_install_blocked(
         }
         match j.payload.as_ref() {
             Some(crate::view::downloads::DownloadJobPayload::RuntimeInstall {
-                kind: k, spec: s, ..
+                kind: k,
+                spec: s,
+                ..
             }) => *k == kind && s.trim() == spec_trimmed,
             _ => false,
         }
@@ -1866,7 +1861,10 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
                     tasks.push(maybe_start_queued_jobs(state));
                     Task::batch(tasks)
                 }
-                Err(_) => Task::batch([gui_ops::refresh_runtimes(kind), maybe_start_queued_jobs(state)]),
+                Err(_) => Task::batch([
+                    gui_ops::refresh_runtimes(kind),
+                    maybe_start_queued_jobs(state),
+                ]),
             }
         }
         EnvCenterMsg::SubmitUse(v) => {
@@ -1965,12 +1963,11 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             on,
             |st, on| st.runtime.terraform.path_proxy_enabled = on,
         ),
-        EnvCenterMsg::SetVPathProxy(on) => persist_path_proxy_toggle(
-            state,
-            envr_domain::runtime::RuntimeKind::V,
-            on,
-            |st, on| st.runtime.v.path_proxy_enabled = on,
-        ),
+        EnvCenterMsg::SetVPathProxy(on) => {
+            persist_path_proxy_toggle(state, envr_domain::runtime::RuntimeKind::V, on, |st, on| {
+                st.runtime.v.path_proxy_enabled = on
+            })
+        }
         EnvCenterMsg::SetOdinPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Odin,
@@ -2282,8 +2279,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("channel", &channel);
-            let (id, _downloaded, _total, _cancel) =
-                enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_channel_install_or_switch(channel)
         }
@@ -2294,8 +2290,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("update", "");
-            let (id, _downloaded, _total, _cancel) =
-                enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_update_current()
         }
@@ -2321,8 +2316,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("managed_uninstall", "");
-            let (id, _downloaded, _total, _cancel) =
-                enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_uninstall()
         }
@@ -2337,8 +2331,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             } else {
                 rust_runtime_task_label("component_uninstall", &name)
             };
-            let (id, _downloaded, _total, _cancel) =
-                enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_component_toggle(name, install)
         }
@@ -2353,8 +2346,7 @@ fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task<Message> {
             } else {
                 rust_runtime_task_label("target_uninstall", &name)
             };
-            let (id, _downloaded, _total, _cancel) =
-                enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_target_toggle(name, install)
         }

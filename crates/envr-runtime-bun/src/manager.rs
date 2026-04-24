@@ -199,15 +199,13 @@ fn download_to_path_once(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".to_string()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(
-                    ErrorCode::Download,
-                    format!("read response body failed for {url}"),
-                    e,
-                )
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -315,9 +313,13 @@ fn get_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String>
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 /// Tries `primary` first; if it differs from `official`, retries `official` on failure (broken mirror / proxy).

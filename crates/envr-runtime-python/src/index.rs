@@ -88,10 +88,9 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {} -> {}",
@@ -99,25 +98,30 @@ pub fn fetch_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<S
             response.status()
         )));
     }
-    response
-        .text()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e))
+    response.text().map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Download,
+            format!("read body failed for {url}"),
+            e,
+        )
+    })
 }
 
 pub fn parse_release_list(json: &str) -> EnvrResult<Vec<PyRelease>> {
     // python.org may return either:
     // 1) root array: `[ { ...release... }, ... ]`
     // 2) object with `value`: `{ "value": [ ... ] }`
-    let v: serde_json::Value =
-        serde_json::from_str(json)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))?;
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e)
+    })?;
     if v.is_array() {
-        serde_json::from_value::<Vec<PyRelease>>(v)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))
+        serde_json::from_value::<Vec<PyRelease>>(v).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e)
+        })
     } else if v.get("value").is_some() {
-        let list: ApiList<PyRelease> =
-            serde_json::from_value(v)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e))?;
+        let list: ApiList<PyRelease> = serde_json::from_value(v).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid python releases json", e)
+        })?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(
@@ -130,19 +134,29 @@ pub fn parse_release_file_list(json: &str) -> EnvrResult<Vec<PyReleaseFile>> {
     // python.org may return either:
     // 1) root array
     // 2) object with `value`
-    let v: serde_json::Value =
-        serde_json::from_str(json)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e))?;
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Validation,
+            "invalid python release_files json",
+            e,
+        )
+    })?;
     if v.is_array() {
-        serde_json::from_value::<Vec<PyReleaseFile>>(v)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e)
-            })
+        serde_json::from_value::<Vec<PyReleaseFile>>(v).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Validation,
+                "invalid python release_files json",
+                e,
+            )
+        })
     } else if v.get("value").is_some() {
-        let list: ApiList<PyReleaseFile> =
-            serde_json::from_value(v).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid python release_files json", e)
-            })?;
+        let list: ApiList<PyReleaseFile> = serde_json::from_value(v).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Validation,
+                "invalid python release_files json",
+                e,
+            )
+        })?;
         Ok(list.value)
     } else {
         Err(EnvrError::Validation(

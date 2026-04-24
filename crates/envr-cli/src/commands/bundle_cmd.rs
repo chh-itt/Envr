@@ -384,10 +384,9 @@ fn write_bundle_zip(
             "working_dir": working_dir.to_string_lossy(),
             "profile": profile,
         });
-        let loc_text = serde_json::to_string_pretty(&loc_json)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Runtime, "serialize bundle location", e)
-            })?;
+        let loc_text = serde_json::to_string_pretty(&loc_json).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Runtime, "serialize bundle location", e)
+        })?;
         zip.start_file("envr-bundle/project/location.json", opts)
             .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip location.json", e))?;
         zip.write_all(loc_text.as_bytes())
@@ -502,9 +501,8 @@ fn bundle_zip_entry_name_unsafe(name: &str) -> bool {
 
 fn extract_bundle_zip(zip_path: &Path, dest: &Path) -> Result<(), EnvrError> {
     let file = File::open(zip_path).map_err(EnvrError::from)?;
-    let mut zip =
-        ZipArchive::new(file)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "open bundle zip", e))?;
+    let mut zip = ZipArchive::new(file)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "open bundle zip", e))?;
     for i in 0..zip.len() {
         let mut f = zip
             .by_index(i)

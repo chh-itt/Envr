@@ -93,8 +93,16 @@ pub fn read_current(paths: &ElmPaths) -> EnvrResult<Option<RuntimeVersion>> {
         }
         let target = PathBuf::from(t);
         let resolved = fs::canonicalize(&target).unwrap_or(target);
-        let name = resolved.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        return if name.is_empty() { Ok(None) } else { Ok(Some(RuntimeVersion(name))) };
+        let name = resolved
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        return if name.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(RuntimeVersion(name)))
+        };
     }
     let Ok(target) = fs::read_link(&cur) else {
         return Ok(None);
@@ -105,7 +113,11 @@ pub fn read_current(paths: &ElmPaths) -> EnvrResult<Option<RuntimeVersion>> {
         target
     };
     let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
-    let name = resolved.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
     if name.is_empty() {
         Ok(None)
     } else {
@@ -124,12 +136,14 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".into()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!("GET {url} -> {}", response.status())));
+        return Err(EnvrError::Download(format!(
+            "GET {url} -> {}",
+            response.status()
+        )));
     }
     if let Some(t) = progress_total {
         t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
@@ -144,7 +158,11 @@ fn download_to_path(
             return Err(EnvrError::Download("download cancelled".into()));
         }
         let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
         })?;
         if n == 0 {
             break;
@@ -200,7 +218,10 @@ impl ElmManager {
     fn load_cached_rows(&self) -> Option<Vec<ElmInstallableRow>> {
         let path = self.paths.releases_cache_path();
         let meta = fs::metadata(&path).ok()?;
-        let age = SystemTime::now().duration_since(meta.modified().ok()?).ok()?.as_secs();
+        let age = SystemTime::now()
+            .duration_since(meta.modified().ok()?)
+            .ok()?
+            .as_secs();
         if age > Self::index_cache_ttl_secs() {
             return None;
         }
@@ -209,8 +230,9 @@ impl ElmManager {
     }
     fn save_cached_rows(&self, rows: &[ElmInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize elm rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize elm rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -229,7 +251,8 @@ impl ElmManager {
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {
         let path = self.paths.latest_cache_path();
         if let Ok(meta) = fs::metadata(&path)
-            && let Ok(age) = SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
+            && let Ok(age) =
+                SystemTime::now().duration_since(meta.modified().map_err(EnvrError::from)?)
             && age.as_secs() <= Self::latest_cache_ttl_secs()
             && let Ok(text) = fs::read_to_string(&path)
             && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
@@ -239,8 +262,9 @@ impl ElmManager {
         let latest = list_remote_latest_per_major_lines(&self.fetch_rows(false)?);
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
-        let text = serde_json::to_string_pretty(&labels)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize elm latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize elm latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }
@@ -251,7 +275,10 @@ impl ElmManager {
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !dir.is_dir() || !elm_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!("elm version not installed: {}", version.0)));
+            return Err(EnvrError::Validation(format!(
+                "elm version not installed: {}",
+                version.0
+            )));
         }
         ensure_runtime_current_symlink_or_pointer(&dir, &self.paths.current_link())
     }
@@ -268,10 +295,9 @@ impl SpecDrivenInstaller for ElmManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("elm version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("elm version not found in index: {label}"))
+        })?;
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && elm_installation_valid(&final_dir) {
             return Ok(RuntimeVersion(label));
@@ -282,14 +308,7 @@ impl SpecDrivenInstaller for ElmManager {
         let archive_name = row.url.split('/').next_back().unwrap_or("elm.gz");
         let archive_path = tmp.path().join(archive_name);
         let (downloaded, total, cancel) = install_progress_handles(request);
-        download_to_path(
-            &client,
-            &row.url,
-            &archive_path,
-            downloaded,
-            total,
-            cancel,
-        )?;
+        download_to_path(&client, &row.url, &archive_path, downloaded, total, cancel)?;
         #[cfg(windows)]
         let exe_name = "elm.exe";
         #[cfg(not(windows))]
@@ -297,9 +316,10 @@ impl SpecDrivenInstaller for ElmManager {
         let out_exe = final_dir.join(exe_name);
         inflate_gz_to_executable(&archive_path, &out_exe)?;
         if !elm_installation_valid(&final_dir) {
-            return Err(EnvrError::Validation("elm install validation failed".into()));
+            return Err(EnvrError::Validation(
+                "elm install validation failed".into(),
+            ));
         }
         Ok(RuntimeVersion(label))
     }
 }
-

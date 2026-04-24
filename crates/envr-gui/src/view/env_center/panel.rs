@@ -1,16 +1,19 @@
 //! Node / Python / Java / Go env center: lists, install, use, uninstall via `RuntimeService`.
 
 use envr_config::settings::{
-    BunRuntimeSettings, ClojureRuntimeSettings, CrystalRuntimeSettings, DenoDownloadSource,
-    DenoRuntimeSettings, DartRuntimeSettings, DotnetRuntimeSettings, ElixirRuntimeSettings, ErlangRuntimeSettings,
-    FlutterRuntimeSettings,
-    GoDownloadSource, GoProxyMode, GoRuntimeSettings, GroovyRuntimeSettings, JavaDistro,
-    JavaDownloadSource, JavaRuntimeSettings, JanetRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
-    C3RuntimeSettings, BabashkaRuntimeSettings, SbclRuntimeSettings, HaxeRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
-    NpmRegistryMode, PerlRuntimeSettings, PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
-    PythonDownloadSource, PythonRuntimeSettings, RlangRuntimeSettings, RubyRuntimeSettings,
-    RuntimeSettings, RustDownloadSource, RustRuntimeSettings, ScalaRuntimeSettings,
-    TerraformRuntimeSettings, UnisonRuntimeSettings, VRuntimeSettings, OdinRuntimeSettings, PurescriptRuntimeSettings, ElmRuntimeSettings, GleamRuntimeSettings, RacketRuntimeSettings, ZigRuntimeSettings,
+    BabashkaRuntimeSettings, BunRuntimeSettings, C3RuntimeSettings, ClojureRuntimeSettings,
+    CrystalRuntimeSettings, DartRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings,
+    DotnetRuntimeSettings, ElixirRuntimeSettings, ElmRuntimeSettings, ErlangRuntimeSettings,
+    FlutterRuntimeSettings, GleamRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings,
+    GroovyRuntimeSettings, HaxeRuntimeSettings, JanetRuntimeSettings, JavaDistro,
+    JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
+    LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    NpmRegistryMode, OdinRuntimeSettings, PerlRuntimeSettings, PhpDownloadSource,
+    PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode, PurescriptRuntimeSettings,
+    PythonDownloadSource, PythonRuntimeSettings, RacketRuntimeSettings, RlangRuntimeSettings,
+    RubyRuntimeSettings, RuntimeSettings, RustDownloadSource, RustRuntimeSettings,
+    SbclRuntimeSettings, ScalaRuntimeSettings, TerraformRuntimeSettings, UnisonRuntimeSettings,
+    VRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -1842,7 +1845,10 @@ fn terraform_runtime_settings_section(
     .into()
 }
 
-fn v_runtime_settings_section(v: &VRuntimeSettings, tokens: ThemeTokens) -> Element<'static, Message> {
+fn v_runtime_settings_section(
+    v: &VRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -1926,7 +1932,11 @@ fn purescript_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.purescript.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.purescript.path_proxy",
+            "PATH 代理",
+            "PATH proxy",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.purescript.path_proxy.hint",
             "开启时由 envr 接管 purs；关闭时 shim 透传到系统 PATH。",
@@ -1956,7 +1966,10 @@ fn purescript_runtime_settings_section(
     .into()
 }
 
-fn elm_runtime_settings_section(elm: &ElmRuntimeSettings, tokens: ThemeTokens) -> Element<'static, Message> {
+fn elm_runtime_settings_section(
+    elm: &ElmRuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -2148,7 +2161,10 @@ fn flutter_runtime_settings_section(
     .into()
 }
 
-fn c3_runtime_settings_section(c3: &C3RuntimeSettings, tokens: ThemeTokens) -> Element<'static, Message> {
+fn c3_runtime_settings_section(
+    c3: &C3RuntimeSettings,
+    tokens: ThemeTokens,
+) -> Element<'static, Message> {
     let ty = tokens.typography();
     let sp = tokens.space();
     let muted = gui_theme::to_color(tokens.colors.text_muted);
@@ -2774,12 +2790,14 @@ pub fn env_center_view(
             text("").into()
         };
 
-    let runtime_entry_block = container(column![
-        row![path_proxy_row]
-            .spacing(sp.md as f32)
-            .align_y(Alignment::Center),
-    ]
-    .spacing(sp.xs as f32))
+    let runtime_entry_block = container(
+        column![
+            row![path_proxy_row]
+                .spacing(sp.md as f32)
+                .align_y(Alignment::Center),
+        ]
+        .spacing(sp.xs as f32),
+    )
     .padding(Padding::from([sp.sm as f32, sp.md as f32]))
     .style(card_container_style(tokens, 1));
 
@@ -3742,20 +3760,47 @@ pub fn env_center_view(
     };
     let mut col = if state.kind == RuntimeKind::Java {
         if let Some(distro_row) = java_distro_row {
-            column![header, runtime_entry_block, runtime_settings_block, distro_row]
+            column![
+                header,
+                runtime_entry_block,
+                runtime_settings_block,
+                distro_row
+            ]
         } else {
             column![header, runtime_entry_block, runtime_settings_block]
         }
     } else if state.kind == RuntimeKind::Php {
         if let Some(build_row) = php_build_row {
-            column![header, runtime_entry_block, runtime_settings_block, build_row, filter_row]
+            column![
+                header,
+                runtime_entry_block,
+                runtime_settings_block,
+                build_row,
+                filter_row
+            ]
         } else {
-            column![header, runtime_entry_block, runtime_settings_block, filter_row]
+            column![
+                header,
+                runtime_entry_block,
+                runtime_settings_block,
+                filter_row
+            ]
         }
     } else if let Some(hint) = bun_direct_spec_hint {
-        column![header, runtime_entry_block, runtime_settings_block, filter_row, hint]
+        column![
+            header,
+            runtime_entry_block,
+            runtime_settings_block,
+            filter_row,
+            hint
+        ]
     } else {
-        column![header, runtime_entry_block, runtime_settings_block, filter_row]
+        column![
+            header,
+            runtime_entry_block,
+            runtime_settings_block,
+            filter_row
+        ]
     }
     .spacing(sp.sm as f32)
     .width(Length::Fill);

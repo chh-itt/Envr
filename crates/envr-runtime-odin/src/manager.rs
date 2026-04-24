@@ -137,10 +137,9 @@ fn download_to_path(
     if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
         return Err(EnvrError::Download("download cancelled".into()));
     }
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e))?;
+    let mut response = client.get(url).send().map_err(|e| {
+        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+    })?;
     if !response.status().is_success() {
         return Err(EnvrError::Download(format!(
             "GET {url} -> {}",
@@ -159,11 +158,13 @@ fn download_to_path(
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             return Err(EnvrError::Download("download cancelled".into()));
         }
-        let n = response
-            .read(&mut buf)
-            .map_err(|e| {
-                EnvrError::with_source(ErrorCode::Download, format!("read response body failed for {url}"), e)
-            })?;
+        let n = response.read(&mut buf).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                format!("read response body failed for {url}"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
@@ -264,8 +265,9 @@ impl OdinManager {
 
     fn save_cached_rows(&self, rows: &[OdinInstallableRow]) -> EnvrResult<()> {
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let text = serde_json::to_string_pretty(rows)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize odin rows cache", e))?;
+        let text = serde_json::to_string_pretty(rows).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize odin rows cache", e)
+        })?;
         fs::write(self.paths.releases_cache_path(), text).map_err(EnvrError::from)?;
         Ok(())
     }
@@ -307,18 +309,17 @@ impl OdinManager {
         let latest = list_remote_latest_per_major_lines(&rows);
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let labels: Vec<String> = latest.iter().map(|v| v.0.clone()).collect();
-        let text =
-            serde_json::to_string_pretty(&labels)
-                .map_err(|e| EnvrError::with_source(ErrorCode::Download, "serialize odin latest cache", e))?;
+        let text = serde_json::to_string_pretty(&labels).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, "serialize odin latest cache", e)
+        })?;
         fs::write(&path, text).map_err(EnvrError::from)?;
         Ok(latest)
     }
 
     pub fn resolve_label(&self, spec: &str) -> EnvrResult<String> {
         let rows = self.fetch_rows(false)?;
-        resolve_odin_version(&rows, spec).ok_or_else(|| {
-            EnvrError::Validation(format!("unknown odin version spec: {spec}"))
-        })
+        resolve_odin_version(&rows, spec)
+            .ok_or_else(|| EnvrError::Validation(format!("unknown odin version spec: {spec}")))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
@@ -340,17 +341,15 @@ impl OdinManager {
         }
         Ok(())
     }
-
 }
 
 impl SpecDrivenInstaller for OdinManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
         let label = self.resolve_label(&request.spec.0)?;
         let rows = self.fetch_rows(false)?;
-        let row = rows
-            .iter()
-            .find(|r| r.version == label)
-            .ok_or_else(|| EnvrError::Validation(format!("odin version not found in index: {label}")))?;
+        let row = rows.iter().find(|r| r.version == label).ok_or_else(|| {
+            EnvrError::Validation(format!("odin version not found in index: {label}"))
+        })?;
 
         let final_dir = self.paths.version_dir(&label);
         if final_dir.is_dir() && odin_installation_valid(&final_dir) {
@@ -367,14 +366,7 @@ impl SpecDrivenInstaller for OdinManager {
             .unwrap_or("odin-archive");
         let archive_path = tmp.path().join(archive_name);
         let (downloaded, total, cancel) = install_progress_handles(request);
-        download_to_path(
-            &client,
-            &row.url,
-            &archive_path,
-            downloaded,
-            total,
-            cancel,
-        )?;
+        download_to_path(&client, &row.url, &archive_path, downloaded, total, cancel)?;
 
         let staging = tmp.path().join("staging");
         fs::create_dir_all(&staging).map_err(EnvrError::from)?;
@@ -384,4 +376,3 @@ impl SpecDrivenInstaller for OdinManager {
         Ok(RuntimeVersion(label))
     }
 }
-

@@ -2,9 +2,9 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_C3_RELEASES_API_URL, C3InstallableRow, blocking_http_client,
-    fetch_c3_installable_rows_with_fallback, list_remote_latest_per_major_lines, list_remote_versions,
-    resolve_c3_version,
+    C3InstallableRow, DEFAULT_C3_RELEASES_API_URL, blocking_http_client,
+    fetch_c3_installable_rows_with_fallback, list_remote_latest_per_major_lines,
+    list_remote_versions, resolve_c3_version,
 };
 pub use manager::{
     C3Manager, C3Paths, c3_installation_valid, list_installed_versions, read_current,
@@ -103,7 +103,9 @@ impl RuntimeProvider for C3RuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![C3Paths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![C3Paths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }
-

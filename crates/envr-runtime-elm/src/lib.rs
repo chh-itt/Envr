@@ -3,10 +3,12 @@ mod manager;
 
 pub use index::{
     DEFAULT_ELM_RELEASES_API_URL, ElmInstallableRow, GhAsset, GhRelease, blocking_http_client,
-    fetch_elm_github_releases_index, installable_rows_from_releases, list_remote_latest_per_major_lines,
-    list_remote_versions, resolve_elm_version,
+    fetch_elm_github_releases_index, installable_rows_from_releases,
+    list_remote_latest_per_major_lines, list_remote_versions, resolve_elm_version,
 };
-pub use manager::{ElmManager, ElmPaths, elm_installation_valid, list_installed_versions, read_current};
+pub use manager::{
+    ElmManager, ElmPaths, elm_installation_valid, list_installed_versions, read_current,
+};
 
 use envr_config::env_context::runtime_root;
 use envr_domain::installer::install_via_manager;
@@ -88,7 +90,9 @@ impl RuntimeProvider for ElmRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![ElmPaths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![ElmPaths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }
-

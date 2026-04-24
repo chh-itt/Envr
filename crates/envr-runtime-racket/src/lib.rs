@@ -90,7 +90,9 @@ impl RuntimeProvider for RacketRuntimeProvider {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<std::path::PathBuf>, Option<String>)> {
-        Ok((vec![RacketPaths::new(self.runtime_root()?).version_dir(&version.0)], None))
+        Ok((
+            vec![RacketPaths::new(self.runtime_root()?).version_dir(&version.0)],
+            None,
+        ))
     }
 }
-
