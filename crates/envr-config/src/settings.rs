@@ -10,6 +10,34 @@ use std::{
     time::SystemTime,
 };
 
+mod runtime_js_py_go;
+mod runtime_jvm;
+mod runtime_lang_core;
+mod runtime_long_tail;
+mod runtime_web_tooling;
+pub use runtime_js_py_go::{
+    GoDownloadSource, GoProxyMode, GoRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    NpmRegistryMode, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
+    PythonWindowsDistribution,
+};
+pub use runtime_jvm::{
+    ClojureRuntimeSettings, GroovyRuntimeSettings, JavaRuntimeSettings, KotlinRuntimeSettings,
+    ScalaRuntimeSettings,
+};
+pub use runtime_lang_core::{
+    ElixirRuntimeSettings, ErlangRuntimeSettings, RubyRuntimeSettings, RustRuntimeSettings,
+};
+pub use runtime_long_tail::{
+    BabashkaRuntimeSettings, C3RuntimeSettings, CrystalRuntimeSettings, HaxeRuntimeSettings,
+    JanetRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings,
+    PerlRuntimeSettings, RlangRuntimeSettings, SbclRuntimeSettings, UnisonRuntimeSettings,
+    ZigRuntimeSettings,
+};
+pub use runtime_web_tooling::{
+    BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
+    PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MirrorMode {
@@ -257,67 +285,6 @@ impl Default for DownloadsPanelSettings {
     }
 }
 
-/// Node.js distribution index (`index.json`) selection for installs / remote lists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum NodeDownloadSource {
-    /// Prefer npmmirror when UI locale suggests China, else nodejs.org.
-    #[default]
-    Auto,
-    /// npmmirror.com mirror (China).
-    Domestic,
-    /// nodejs.org official.
-    Official,
-}
-
-/// How GUI manages `npm config registry` (Restore leaves user `.npmrc` untouched).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum NpmRegistryMode {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-    /// Use a user-provided URL in `runtime.node.npm_registry_url_custom`.
-    Custom,
-    /// Do not run `npm config set`; user may use a custom registry.
-    Restore,
-}
-
-/// Python bootstrap source choice for `get-pip.py` retrieval.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PythonDownloadSource {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-}
-
-/// How `pip` bootstrap should resolve package index during `get-pip.py`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PipRegistryMode {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-    /// Use a user-provided URL in `runtime.python.pip_index_url_custom`.
-    Custom,
-    /// Do not force `--index-url` during bootstrap.
-    Restore,
-}
-
-/// Go toolchain download source preference (go.dev vs China mirror).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum GoDownloadSource {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-}
-
 /// Rust toolchain download source preference for `rustup` (`RUSTUP_DIST_SERVER` / `RUSTUP_UPDATE_ROOT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -327,50 +294,6 @@ pub enum RustDownloadSource {
     Auto,
     Domestic,
     Official,
-}
-
-/// PHP download source preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PhpDownloadSource {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-}
-
-/// Deno binary zip source (`dl.deno.land` vs npmmirror binary mirror).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum DenoDownloadSource {
-    /// Prefer npmmirror when UI locale suggests China, else official.
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-}
-
-/// Windows PHP build flavor preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PhpWindowsBuildFlavor {
-    #[default]
-    Nts,
-    Ts,
-}
-
-/// How `GOPROXY` should be injected in `envr env`/`run`/`exec` when Go is in scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum GoProxyMode {
-    #[default]
-    Auto,
-    Domestic,
-    Official,
-    /// Disable module proxy (`GOPROXY=direct`).
-    Direct,
-    /// Use user-provided `runtime.go.proxy_custom`.
-    Custom,
 }
 
 /// Java distribution choice for runtime installation and listing.
@@ -420,154 +343,6 @@ pub enum JavaDownloadSource {
     Auto,
     Domestic,
     Official,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeRuntimeSettings {
-    #[serde(default)]
-    pub download_source: NodeDownloadSource,
-    #[serde(default)]
-    pub npm_registry_mode: NpmRegistryMode,
-    /// Used when `npm_registry_mode = "custom"`.
-    #[serde(default)]
-    pub npm_registry_url_custom: Option<String>,
-    /// When false, Node/npm/npx shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::node_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for NodeRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: NodeDownloadSource::default(),
-            npm_registry_mode: NpmRegistryMode::default(),
-            npm_registry_url_custom: None,
-            path_proxy_enabled: defaults::node_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PythonRuntimeSettings {
-    #[serde(default)]
-    pub download_source: PythonDownloadSource,
-    /// Windows distribution choice: `auto` (prefer full NuGet), `nuget`, or `embeddable`.
-    #[serde(default)]
-    pub windows_distribution: PythonWindowsDistribution,
-    #[serde(default)]
-    pub pip_registry_mode: PipRegistryMode,
-    /// Used when `pip_registry_mode = "custom"`.
-    #[serde(default)]
-    pub pip_index_url_custom: Option<String>,
-    /// When false, python/pip shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::python_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for PythonRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: PythonDownloadSource::default(),
-            windows_distribution: PythonWindowsDistribution::default(),
-            pip_registry_mode: PipRegistryMode::default(),
-            pip_index_url_custom: None,
-            path_proxy_enabled: defaults::python_path_proxy_enabled(),
-        }
-    }
-}
-
-/// Windows distribution for CPython installs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PythonWindowsDistribution {
-    /// Prefer full NuGet packages on Windows, fall back to embeddable zip when needed.
-    #[default]
-    Auto,
-    /// Full Python from NuGet (`python`, `pythonx86`, `pythonarm64`).
-    Nuget,
-    /// python.org embeddable zip (may lack some stdlib modules such as `venv`).
-    Embeddable,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JavaRuntimeSettings {
-    #[serde(default)]
-    pub current_distro: JavaDistro,
-    #[serde(default)]
-    pub download_source: JavaDownloadSource,
-    /// When false, java/javac shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::java_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for JavaRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            current_distro: JavaDistro::default(),
-            download_source: JavaDownloadSource::default(),
-            path_proxy_enabled: defaults::java_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KotlinRuntimeSettings {
-    /// When false, kotlin/kotlinc shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::kotlin_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for KotlinRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::kotlin_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScalaRuntimeSettings {
-    /// When false, scala/scalac shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::scala_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for ScalaRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::scala_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ClojureRuntimeSettings {
-    /// When false, clojure/clj shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::clojure_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for ClojureRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::clojure_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GroovyRuntimeSettings {
-    /// When false, groovy/groovyc shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::groovy_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for GroovyRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::groovy_path_proxy_enabled(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -826,380 +601,6 @@ pub struct RuntimeSettings {
     pub r: RlangRuntimeSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct RustRuntimeSettings {
-    /// Rust toolchain download source choice (used for `rustup` env injection).
-    #[serde(default)]
-    pub download_source: RustDownloadSource,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RubyRuntimeSettings {
-    /// When false, ruby/gem/bundle/irb shims resolve to the next matching binary on PATH
-    /// outside envr shims.
-    #[serde(default = "defaults::ruby_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for RubyRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::ruby_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ElixirRuntimeSettings {
-    /// When false, elixir/mix/iex shims resolve to the next matching binary on PATH
-    /// outside envr shims.
-    #[serde(default = "defaults::elixir_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for ElixirRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::elixir_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ErlangRuntimeSettings {
-    /// When false, erl/erlc/escript shims resolve to the next matching binary on PATH
-    /// outside envr shims.
-    #[serde(default = "defaults::erlang_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for ErlangRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::erlang_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PhpRuntimeSettings {
-    #[serde(default)]
-    pub download_source: PhpDownloadSource,
-    #[serde(default)]
-    pub windows_build: PhpWindowsBuildFlavor,
-    /// When false, php shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::php_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for PhpRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: PhpDownloadSource::default(),
-            windows_build: PhpWindowsBuildFlavor::default(),
-            path_proxy_enabled: defaults::php_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DenoRuntimeSettings {
-    #[serde(default)]
-    pub download_source: DenoDownloadSource,
-    /// Single preset for both `NPM_CONFIG_REGISTRY` and `JSR_URL` (see `deno_package_registry_env`).
-    #[serde(default)]
-    pub package_source: NpmRegistryMode,
-    /// When false, `deno` shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::deno_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for DenoRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: DenoDownloadSource::default(),
-            package_source: NpmRegistryMode::default(),
-            path_proxy_enabled: defaults::deno_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GoRuntimeSettings {
-    /// Go toolchain download source choice.
-    #[serde(default)]
-    pub download_source: GoDownloadSource,
-    /// `GOPROXY` injection mode.
-    #[serde(default)]
-    pub proxy_mode: GoProxyMode,
-    /// Custom `GOPROXY` value (only when `proxy_mode = custom`).
-    #[serde(default)]
-    pub proxy_custom: Option<String>,
-    /// Optional private module patterns (comma-separated). When set, envr injects:
-    /// - `GOPRIVATE`
-    /// - `GONOSUMDB`
-    /// - `GONOPROXY`
-    #[serde(default)]
-    pub private_patterns: Option<String>,
-    /// When false, go/gofmt shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::go_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-    /// Backward compatibility: older settings used a direct `goproxy` value.
-    ///
-    /// When `proxy_mode` is `auto` and this is set, it takes precedence.
-    /// When `proxy_mode` is `custom` and `proxy_custom` is empty, this is used as fallback.
-    #[serde(default)]
-    pub goproxy: Option<String>,
-}
-
-impl Default for GoRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            download_source: GoDownloadSource::default(),
-            proxy_mode: GoProxyMode::default(),
-            proxy_custom: None,
-            private_patterns: None,
-            path_proxy_enabled: defaults::go_path_proxy_enabled(),
-            goproxy: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BunRuntimeSettings {
-    /// Single preset for Bun package source env injection.
-    #[serde(default)]
-    pub package_source: NpmRegistryMode,
-    /// When false, bun/bunx shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::bun_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-    /// Optional override for Bun global bin directory (defaults to `bun pm bin -g`).
-    ///
-    /// This affects shim sync for global Bun executables.
-    #[serde(default)]
-    pub global_bin_dir: Option<String>,
-}
-
-impl Default for BunRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            package_source: NpmRegistryMode::default(),
-            path_proxy_enabled: defaults::bun_path_proxy_enabled(),
-            global_bin_dir: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DotnetRuntimeSettings {
-    /// When false, dotnet shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::dotnet_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for DotnetRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::dotnet_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ZigRuntimeSettings {
-    /// When false, the zig shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::zig_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for ZigRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::zig_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JuliaRuntimeSettings {
-    /// When false, the julia shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::julia_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for JuliaRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::julia_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JanetRuntimeSettings {
-    /// When false, janet/jpm shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::janet_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for JanetRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::janet_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct C3RuntimeSettings {
-    /// When false, c3c shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::c3_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for C3RuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::c3_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BabashkaRuntimeSettings {
-    /// When false, bb shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::babashka_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for BabashkaRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::babashka_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SbclRuntimeSettings {
-    /// When false, sbcl shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::sbcl_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for SbclRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::sbcl_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HaxeRuntimeSettings {
-    /// When false, haxe/haxelib shims resolve to the next matching binaries on PATH outside envr shims.
-    #[serde(default = "defaults::haxe_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for HaxeRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::haxe_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LuaRuntimeSettings {
-    /// When false, lua/luac shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::lua_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for LuaRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::lua_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NimRuntimeSettings {
-    /// When false, the nim shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::nim_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for NimRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::nim_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CrystalRuntimeSettings {
-    /// When false, the crystal shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::crystal_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for CrystalRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::crystal_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PerlRuntimeSettings {
-    /// When false, the perl shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::perl_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for PerlRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::perl_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UnisonRuntimeSettings {
-    /// When false, the ucm shim resolves to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::unison_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for UnisonRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::unison_path_proxy_enabled(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RlangRuntimeSettings {
-    /// When false, the `R` / `Rscript` shims resolve to the next matching binary on PATH outside envr shims.
-    #[serde(default = "defaults::rlang_path_proxy_enabled")]
-    pub path_proxy_enabled: bool,
-}
-
-impl Default for RlangRuntimeSettings {
-    fn default() -> Self {
-        Self {
-            path_proxy_enabled: defaults::rlang_path_proxy_enabled(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
@@ -1277,95 +678,7 @@ impl Settings {
             }
         }
 
-        if let Some(ref gp) = self.runtime.go.goproxy
-            && gp.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.go.goproxy must not be whitespace-only".to_string(),
-            ));
-        }
-
-        if let Some(ref v) = self.runtime.go.proxy_custom
-            && v.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.go.proxy_custom must not be whitespace-only".to_string(),
-            ));
-        }
-        if let Some(ref v) = self.runtime.node.npm_registry_url_custom
-            && v.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.node.npm_registry_url_custom must not be whitespace-only".to_string(),
-            ));
-        }
-        if let Some(ref v) = self.runtime.python.pip_index_url_custom
-            && v.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.python.pip_index_url_custom must not be whitespace-only".to_string(),
-            ));
-        }
-        if self.runtime.go.proxy_mode == GoProxyMode::Custom
-            && self
-                .runtime
-                .go
-                .proxy_custom
-                .as_deref()
-                .is_none_or(|s| s.trim().is_empty())
-            && self
-                .runtime
-                .go
-                .goproxy
-                .as_deref()
-                .is_none_or(|s| s.trim().is_empty())
-        {
-            return Err(EnvrError::Validation(
-                "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom"
-                    .to_string(),
-            ));
-        }
-        if self.runtime.node.npm_registry_mode == NpmRegistryMode::Custom
-            && self
-                .runtime
-                .node
-                .npm_registry_url_custom
-                .as_deref()
-                .is_none_or(|s| s.trim().is_empty())
-        {
-            return Err(EnvrError::Validation(
-                "runtime.node.npm_registry_url_custom is required when runtime.node.npm_registry_mode = custom"
-                    .to_string(),
-            ));
-        }
-        if self.runtime.python.pip_registry_mode == PipRegistryMode::Custom
-            && self
-                .runtime
-                .python
-                .pip_index_url_custom
-                .as_deref()
-                .is_none_or(|s| s.trim().is_empty())
-        {
-            return Err(EnvrError::Validation(
-                "runtime.python.pip_index_url_custom is required when runtime.python.pip_registry_mode = custom"
-                    .to_string(),
-            ));
-        }
-        if let Some(ref v) = self.runtime.go.private_patterns
-            && v.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.go.private_patterns must not be whitespace-only".to_string(),
-            ));
-        }
-
-        if let Some(ref dir) = self.runtime.bun.global_bin_dir
-            && dir.trim().is_empty()
-        {
-            return Err(EnvrError::Validation(
-                "runtime.bun.global_bin_dir must not be whitespace-only".to_string(),
-            ));
-        }
+        validate_runtime_settings(&self.runtime)?;
 
         if self.gui.downloads_panel.x < 0 || self.gui.downloads_panel.y < 0 {
             return Err(EnvrError::Validation(
@@ -1452,6 +765,102 @@ impl Settings {
         RESOLVE_RUNTIME_ROOT_CACHE.with(|c| *c.borrow_mut() = None);
         Ok(())
     }
+}
+
+fn validate_runtime_settings(runtime: &RuntimeSettings) -> EnvrResult<()> {
+    validate_runtime_non_empty_strings(runtime)?;
+    validate_runtime_required_custom_values(runtime)?;
+    Ok(())
+}
+
+fn validate_runtime_non_empty_strings(runtime: &RuntimeSettings) -> EnvrResult<()> {
+    if let Some(ref gp) = runtime.go.goproxy
+        && gp.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.go.goproxy must not be whitespace-only".to_string(),
+        ));
+    }
+    if let Some(ref v) = runtime.go.proxy_custom
+        && v.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.go.proxy_custom must not be whitespace-only".to_string(),
+        ));
+    }
+    if let Some(ref v) = runtime.node.npm_registry_url_custom
+        && v.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.node.npm_registry_url_custom must not be whitespace-only".to_string(),
+        ));
+    }
+    if let Some(ref v) = runtime.python.pip_index_url_custom
+        && v.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.python.pip_index_url_custom must not be whitespace-only".to_string(),
+        ));
+    }
+    if let Some(ref v) = runtime.go.private_patterns
+        && v.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.go.private_patterns must not be whitespace-only".to_string(),
+        ));
+    }
+    if let Some(ref dir) = runtime.bun.global_bin_dir
+        && dir.trim().is_empty()
+    {
+        return Err(EnvrError::Validation(
+            "runtime.bun.global_bin_dir must not be whitespace-only".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_runtime_required_custom_values(runtime: &RuntimeSettings) -> EnvrResult<()> {
+    if runtime.go.proxy_mode == GoProxyMode::Custom
+        && runtime
+            .go
+            .proxy_custom
+            .as_deref()
+            .is_none_or(|s| s.trim().is_empty())
+        && runtime
+            .go
+            .goproxy
+            .as_deref()
+            .is_none_or(|s| s.trim().is_empty())
+    {
+        return Err(EnvrError::Validation(
+            "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom".to_string(),
+        ));
+    }
+    if runtime.node.npm_registry_mode == NpmRegistryMode::Custom
+        && runtime
+            .node
+            .npm_registry_url_custom
+            .as_deref()
+            .is_none_or(|s| s.trim().is_empty())
+    {
+        return Err(EnvrError::Validation(
+            "runtime.node.npm_registry_url_custom is required when runtime.node.npm_registry_mode = custom"
+                .to_string(),
+        ));
+    }
+    if runtime.python.pip_registry_mode == PipRegistryMode::Custom
+        && runtime
+            .python
+            .pip_index_url_custom
+            .as_deref()
+            .is_none_or(|s| s.trim().is_empty())
+    {
+        return Err(EnvrError::Validation(
+            "runtime.python.pip_index_url_custom is required when runtime.python.pip_registry_mode = custom"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 thread_local! {
