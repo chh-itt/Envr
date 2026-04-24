@@ -10,11 +10,17 @@ use std::{
     time::SystemTime,
 };
 
+mod general_config;
 mod runtime_js_py_go;
 mod runtime_jvm;
 mod runtime_lang_core;
 mod runtime_long_tail;
 mod runtime_web_tooling;
+mod ui_config;
+mod validation;
+pub use general_config::{
+    BehaviorSettings, DownloadSettings, MirrorMode, MirrorSettings, PathSettings,
+};
 pub use runtime_js_py_go::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
     NpmRegistryMode, PipRegistryMode, PythonDownloadSource, PythonRuntimeSettings,
@@ -37,253 +43,11 @@ pub use runtime_web_tooling::{
     BunRuntimeSettings, DenoDownloadSource, DenoRuntimeSettings, DotnetRuntimeSettings,
     PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MirrorMode {
-    Official,
-    Auto,
-    Manual,
-    Offline,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DownloadSettings {
-    #[serde(default = "defaults::max_concurrent_downloads")]
-    pub max_concurrent_downloads: u32,
-
-    /// Global total download bandwidth cap in bytes/sec. `0` means unlimited.
-    #[serde(default = "defaults::max_bytes_per_sec")]
-    pub max_bytes_per_sec: u64,
-
-    #[serde(default = "defaults::retry_max")]
-    pub retry_max: u32,
-}
-
-impl Default for DownloadSettings {
-    fn default() -> Self {
-        Self {
-            max_concurrent_downloads: defaults::max_concurrent_downloads(),
-            max_bytes_per_sec: defaults::max_bytes_per_sec(),
-            retry_max: defaults::retry_max(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MirrorSettings {
-    #[serde(default = "defaults::mirror_mode")]
-    pub mode: MirrorMode,
-
-    #[serde(default)]
-    pub manual_id: Option<String>,
-
-    /// Global preference switch: when true, runtimes that support a China mirror
-    /// choose domestic sources for `auto` modes; unsupported runtimes remain official.
-    #[serde(default = "defaults::prefer_china_mirrors")]
-    pub prefer_china_mirrors: bool,
-}
-
-impl Default for MirrorSettings {
-    fn default() -> Self {
-        Self {
-            mode: defaults::mirror_mode(),
-            manual_id: None,
-            prefer_china_mirrors: defaults::prefer_china_mirrors(),
-        }
-    }
-}
-
-/// Persistent overrides for install layout (GUI + CLI read the same file).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct PathSettings {
-    /// If set (non-empty after trim), used as runtime root unless `ENVR_RUNTIME_ROOT` is set.
-    #[serde(default)]
-    pub runtime_root: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct BehaviorSettings {
-    /// Remove staging/temp artifacts after a successful install (providers may adopt later).
-    #[serde(default)]
-    pub cleanup_downloads_after_install: bool,
-    #[serde(default = "defaults::auto_sync_shims_on_use")]
-    pub auto_sync_shims_on_use: bool,
-    #[serde(default = "defaults::auto_sync_globals_on_use")]
-    pub auto_sync_globals_on_use: bool,
-    #[serde(default = "defaults::auto_sync_windows_path_mirror_on_use")]
-    pub auto_sync_windows_path_mirror_on_use: bool,
-    #[serde(default = "defaults::cache_artifact_ttl_days")]
-    pub cache_artifact_ttl_days: u32,
-    #[serde(default = "defaults::cache_max_size_mb")]
-    pub cache_max_size_mb: u64,
-    #[serde(default = "defaults::cache_auto_prune_on_start")]
-    pub cache_auto_prune_on_start: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum FontMode {
-    Auto,
-    Custom,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ThemeMode {
-    FollowSystem,
-    Light,
-    Dark,
-}
-
-impl Default for ThemeMode {
-    fn default() -> Self {
-        defaults::theme_mode()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LocaleMode {
-    FollowSystem,
-    ZhCn,
-    EnUs,
-}
-
-impl Default for LocaleMode {
-    fn default() -> Self {
-        defaults::locale_mode()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FontSettings {
-    #[serde(default = "defaults::font_mode")]
-    pub mode: FontMode,
-
-    /// Used only when `mode = "custom"`.
-    #[serde(default)]
-    pub family: Option<String>,
-}
-
-impl Default for FontSettings {
-    fn default() -> Self {
-        Self {
-            mode: defaults::font_mode(),
-            family: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct AppearanceSettings {
-    #[serde(default)]
-    pub font: FontSettings,
-
-    #[serde(default = "defaults::theme_mode")]
-    pub theme_mode: ThemeMode,
-
-    /// Optional brand accent `#RGB` / `#RRGGBB`; merged into theme primary when valid (GUI-003).
-    #[serde(default)]
-    pub accent_color: Option<String>,
-}
-
-/// Order and visibility for runtime hub + dashboard overview (string keys = `RuntimeDescriptor::key`).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct RuntimeLayoutSettings {
-    /// Permutation of runtime keys; empty means built-in default order at resolve time.
-    #[serde(default)]
-    pub order: Vec<String>,
-    /// Keys hidden from the runtime hub and shown only in the dashboard “hidden” region.
-    #[serde(default)]
-    pub hidden: Vec<String>,
-}
-
-/// GUI-only state persisted in `settings.toml` so window layout/UX preferences survive restarts.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct GuiSettings {
-    #[serde(default)]
-    pub downloads_panel: DownloadsPanelSettings,
-
-    #[serde(default)]
-    pub runtime_layout: RuntimeLayoutSettings,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DownloadsPanelSettings {
-    /// Whether the floating downloads panel is visible.
-    #[serde(default = "defaults::downloads_panel_visible")]
-    pub visible: bool,
-    /// Whether the panel is expanded (shows job list).
-    #[serde(default = "defaults::downloads_panel_expanded")]
-    pub expanded: bool,
-    /// Left offset in pixels from the window's left edge.
-    #[serde(default = "defaults::downloads_panel_x")]
-    pub x: i32,
-    /// Bottom offset in pixels from the window's bottom edge.
-    #[serde(default = "defaults::downloads_panel_y")]
-    pub y: i32,
-    /// Normalized horizontal inset: `x ≈ x_frac * (client_w - 2*pad - panel_w)` (`tasks_gui.md` GUI-061).
-    #[serde(default)]
-    pub x_frac: Option<f32>,
-    /// Normalized bottom inset: `y ≈ y_frac * (client_h - 2*pad)` (`tasks_gui.md` GUI-061).
-    #[serde(default)]
-    pub y_frac: Option<f32>,
-}
-
-impl DownloadsPanelSettings {
-    /// Pixel insets for the panel, using fractional coords when present (DPI / resize stable).
-    pub fn pixel_insets(
-        &self,
-        client_w: f32,
-        client_h: f32,
-        content_pad: f32,
-        panel_w: f32,
-    ) -> (i32, i32) {
-        let inner_w = (client_w - 2.0 * content_pad).max(1.0);
-        let inner_h = (client_h - 2.0 * content_pad).max(1.0);
-        let avail_x = (inner_w - panel_w).max(1.0);
-        if let (Some(xf), Some(yf)) = (self.x_frac, self.y_frac) {
-            let x = (xf.clamp(0.0, 1.0) * avail_x).round() as i32;
-            let y = (yf.clamp(0.0, 1.0) * inner_h).round() as i32;
-            (x.max(0), y.max(0))
-        } else {
-            (self.x.max(0), self.y.max(0))
-        }
-    }
-
-    /// Writes [`Self::x_frac`] / [`Self::y_frac`] from current pixel offsets (for persistence).
-    pub fn sync_frac_from_pixels(
-        &mut self,
-        x: i32,
-        y: i32,
-        client_w: f32,
-        client_h: f32,
-        content_pad: f32,
-        panel_w: f32,
-    ) {
-        let inner_w = (client_w - 2.0 * content_pad).max(1.0);
-        let inner_h = (client_h - 2.0 * content_pad).max(1.0);
-        let avail_x = (inner_w - panel_w).max(1.0);
-        self.x = x.max(0);
-        self.y = y.max(0);
-        self.x_frac = Some((self.x as f32 / avail_x).clamp(0.0, 1.0));
-        self.y_frac = Some((self.y as f32 / inner_h).clamp(0.0, 1.0));
-    }
-}
-
-impl Default for DownloadsPanelSettings {
-    fn default() -> Self {
-        Self {
-            visible: defaults::downloads_panel_visible(),
-            expanded: defaults::downloads_panel_expanded(),
-            x: defaults::downloads_panel_x(),
-            y: defaults::downloads_panel_y(),
-            x_frac: None,
-            y_frac: None,
-        }
-    }
-}
+pub use ui_config::{
+    AppearanceSettings, DownloadsPanelSettings, FontMode, FontSettings, GuiSettings, I18nSettings,
+    LocaleMode, RuntimeLayoutSettings, ThemeMode,
+};
+use validation::validate_runtime_settings;
 
 /// Rust toolchain download source preference for `rustup` (`RUSTUP_DIST_SERVER` / `RUSTUP_UPDATE_ROOT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -628,12 +392,6 @@ pub struct Settings {
     pub runtime: RuntimeSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct I18nSettings {
-    #[serde(default = "defaults::locale_mode")]
-    pub locale: LocaleMode,
-}
-
 impl Settings {
     pub fn validate(&self) -> EnvrResult<()> {
         if let Some(ref root) = self.paths.runtime_root
@@ -765,102 +523,6 @@ impl Settings {
         RESOLVE_RUNTIME_ROOT_CACHE.with(|c| *c.borrow_mut() = None);
         Ok(())
     }
-}
-
-fn validate_runtime_settings(runtime: &RuntimeSettings) -> EnvrResult<()> {
-    validate_runtime_non_empty_strings(runtime)?;
-    validate_runtime_required_custom_values(runtime)?;
-    Ok(())
-}
-
-fn validate_runtime_non_empty_strings(runtime: &RuntimeSettings) -> EnvrResult<()> {
-    if let Some(ref gp) = runtime.go.goproxy
-        && gp.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.go.goproxy must not be whitespace-only".to_string(),
-        ));
-    }
-    if let Some(ref v) = runtime.go.proxy_custom
-        && v.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.go.proxy_custom must not be whitespace-only".to_string(),
-        ));
-    }
-    if let Some(ref v) = runtime.node.npm_registry_url_custom
-        && v.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.node.npm_registry_url_custom must not be whitespace-only".to_string(),
-        ));
-    }
-    if let Some(ref v) = runtime.python.pip_index_url_custom
-        && v.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.python.pip_index_url_custom must not be whitespace-only".to_string(),
-        ));
-    }
-    if let Some(ref v) = runtime.go.private_patterns
-        && v.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.go.private_patterns must not be whitespace-only".to_string(),
-        ));
-    }
-    if let Some(ref dir) = runtime.bun.global_bin_dir
-        && dir.trim().is_empty()
-    {
-        return Err(EnvrError::Validation(
-            "runtime.bun.global_bin_dir must not be whitespace-only".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_runtime_required_custom_values(runtime: &RuntimeSettings) -> EnvrResult<()> {
-    if runtime.go.proxy_mode == GoProxyMode::Custom
-        && runtime
-            .go
-            .proxy_custom
-            .as_deref()
-            .is_none_or(|s| s.trim().is_empty())
-        && runtime
-            .go
-            .goproxy
-            .as_deref()
-            .is_none_or(|s| s.trim().is_empty())
-    {
-        return Err(EnvrError::Validation(
-            "runtime.go.proxy_custom is required when runtime.go.proxy_mode = custom".to_string(),
-        ));
-    }
-    if runtime.node.npm_registry_mode == NpmRegistryMode::Custom
-        && runtime
-            .node
-            .npm_registry_url_custom
-            .as_deref()
-            .is_none_or(|s| s.trim().is_empty())
-    {
-        return Err(EnvrError::Validation(
-            "runtime.node.npm_registry_url_custom is required when runtime.node.npm_registry_mode = custom"
-                .to_string(),
-        ));
-    }
-    if runtime.python.pip_registry_mode == PipRegistryMode::Custom
-        && runtime
-            .python
-            .pip_index_url_custom
-            .as_deref()
-            .is_none_or(|s| s.trim().is_empty())
-    {
-        return Err(EnvrError::Validation(
-            "runtime.python.pip_index_url_custom is required when runtime.python.pip_registry_mode = custom"
-                .to_string(),
-        ));
-    }
-    Ok(())
 }
 
 thread_local! {
