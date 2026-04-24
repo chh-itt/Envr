@@ -12,6 +12,7 @@ use std::{
 
 mod defaults;
 mod general_config;
+mod locale_mirror;
 mod runtime_disk_flags;
 mod runtime_js_py_go;
 mod runtime_jvm;
@@ -22,6 +23,9 @@ mod ui_config;
 mod validation;
 pub use general_config::{
     BehaviorSettings, DownloadSettings, MirrorMode, MirrorSettings, PathSettings,
+};
+pub use locale_mirror::{
+    prefer_china_mirror_locale, prefer_china_mirrors, system_locale_suggests_chinese,
 };
 pub use runtime_disk_flags::{
     bun_path_proxy_enabled_from_disk, crystal_path_proxy_enabled_from_disk,
@@ -690,57 +694,6 @@ pub fn resolve_runtime_root() -> EnvrResult<PathBuf> {
     Ok(root)
 }
 
-/// True when the primary language subtag of a BCP-47–style tag is `zh` (e.g. `zh-CN`, `zh_TW.UTF-8`).
-fn bcp47_primary_language_is_zh(tag: &str) -> bool {
-    let t = tag.trim();
-    let first = t
-        .split(['-', '_'])
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    first == "zh"
-}
-
-/// POSIX `LANG` / `LC_*` hints (Unix shells, CI, WSL); secondary to [`sys_locale::get_locale`].
-fn env_locale_vars_suggest_chinese() -> bool {
-    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
-        if let Ok(v) = std::env::var(key) {
-            let l = v.to_ascii_lowercase();
-            if l.contains("zh_cn")
-                || l.contains("zh-cn")
-                || l.contains("zh_hans")
-                || l.starts_with("zh.")
-                || bcp47_primary_language_is_zh(&v)
-            {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Heuristic: OS or environment suggests a Chinese locale (used for i18n `follow_system`).
-///
-/// Order: [`sys_locale::get_locale`] (cross-platform OS API), then `LC_*` / `LANG` / `LANGUAGE`.
-pub fn system_locale_suggests_chinese() -> bool {
-    if let Some(tag) = sys_locale::get_locale()
-        && bcp47_primary_language_is_zh(&tag)
-    {
-        return true;
-    }
-    env_locale_vars_suggest_chinese()
-}
-
-/// Global China mirror preference switch (explicit user-controlled behavior).
-pub fn prefer_china_mirrors(settings: &Settings) -> bool {
-    settings.mirror.prefer_china_mirrors
-}
-
-/// Backward-compatible alias; keep during transition to explicit naming.
-pub fn prefer_china_mirror_locale(settings: &Settings) -> bool {
-    prefer_china_mirrors(settings)
-}
-
 pub fn node_index_json_url(settings: &Settings) -> String {
     if prefer_domestic_source(
         settings,
@@ -1239,10 +1192,12 @@ retry_max = -1
 
     #[test]
     fn bcp47_primary_language_zh() {
-        assert!(super::bcp47_primary_language_is_zh("zh-CN"));
-        assert!(super::bcp47_primary_language_is_zh("zh_TW.UTF-8"));
-        assert!(!super::bcp47_primary_language_is_zh("en-US"));
-        assert!(!super::bcp47_primary_language_is_zh(""));
+        assert!(super::locale_mirror::bcp47_primary_language_is_zh("zh-CN"));
+        assert!(super::locale_mirror::bcp47_primary_language_is_zh(
+            "zh_TW.UTF-8"
+        ));
+        assert!(!super::locale_mirror::bcp47_primary_language_is_zh("en-US"));
+        assert!(!super::locale_mirror::bcp47_primary_language_is_zh(""));
     }
 
     #[test]
