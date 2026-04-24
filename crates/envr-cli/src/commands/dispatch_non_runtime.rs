@@ -3,6 +3,7 @@ use super::{
     env_cmd, exec, help_cmd, hook_cmd, import_export, init, profile_cmd, resolve_cmd, run_cmd,
     rust_cmd, shell_cmd, shim_cmd, status_cmd, template_cmd, update, which, why_cmd,
 };
+use super::dispatch_macros::dispatch_match;
 use crate::CommandOutcome;
 use crate::cli::{Command, GlobalArgs};
 
@@ -21,7 +22,12 @@ macro_rules! cli {
 /// Route commands that do not require a live runtime service.
 pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
     debug_assert!(command.runtime_handler_group().is_none());
-    match command {
+    dispatch_match!(
+        command,
+        _ => unreachable!(
+            "non-runtime dispatch received runtime-classified command: {:?}",
+            command
+        );
         Command::Completion { shell } => ok!(completion_cmd::run(shell)),
         Command::Help(sub) => route_help(sub, global),
         Command::Init {
@@ -33,7 +39,7 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         Command::Check { path } => ok!(check::run_inner(global, path)),
         Command::Status { project } => {
             ok!(status_cmd::run_inner(global, project))
-        }
+        },
         Command::Why {
             runtime,
             spec,
@@ -61,7 +67,7 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         } => ok!(run_cmd::run_inner(global, shared, command, args)),
         Command::Env { project, shell } => {
             ok!(env_cmd::run_inner(global, project, shell))
-        }
+        },
         Command::Template {
             file,
             project,
@@ -72,14 +78,14 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         )),
         Command::Shell { project, shell } => {
             ok!(shell_cmd::run_inner(global, project, shell))
-        }
+        },
         Command::Hook(sub) => route_hook(sub, global),
         Command::Import { file, path } => {
             ok!(import_export::import_run_inner(global, file, path))
-        }
+        },
         Command::Export { path, output } => {
             ok!(import_export::export_run_inner(global, path, output))
-        }
+        },
         Command::Profile(sub) => route_profile(sub, global),
         Command::Config(sub) => ok!(config_cmd::run_inner(global, sub)),
         Command::Alias(sub) => ok!(alias_cmd::run_inner(global, sub)),
@@ -91,23 +97,21 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         Command::Deactivate => ok!(deactivate_cmd::run_inner(global)),
         Command::Debug(sub) => route_debug(sub, global),
         Command::Which { name } => ok!(which::run_inner(global, name)),
-        other => unreachable!(
-            "non-runtime dispatch received runtime-classified command: {:?}",
-            other
-        ),
-    }
+    )
 }
 
 fn route_help(sub: crate::cli::HelpCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::HelpCmd::Shortcuts => {
             CommandOutcome::from_result(help_cmd::shortcuts_inner(global))
-        }
-    }
+        },
+    )
 }
 
 fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::HookCmd::Bash => cli!(hook_cmd::emit_hook_script(
             global,
             "bash",
@@ -120,34 +124,37 @@ fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
         )),
         crate::cli::HookCmd::Keys { path } => {
             ok!(hook_cmd::run_keys_inner(global, path))
-        }
+        },
         crate::cli::HookCmd::Prompt { project } => {
             ok!(status_cmd::run_hook_prompt_inner(global, project))
-        }
-    }
+        },
+    )
 }
 
 fn route_profile(sub: crate::cli::ProfileCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::ProfileCmd::List { path } => {
             ok!(profile_cmd::list_inner(global, path))
-        }
+        },
         crate::cli::ProfileCmd::Show { name, path } => {
             ok!(profile_cmd::show_inner(global, path, name))
-        }
-    }
+        },
+    )
 }
 
 fn route_shim(sub: crate::cli::ShimCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::ShimCmd::Sync { globals } => {
             ok!(shim_cmd::sync_inner(global, globals))
-        }
-    }
+        },
+    )
 }
 
 fn route_cache(sub: crate::cli::CacheCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::CacheCmd::Clean {
             kind,
             all,
@@ -159,25 +166,27 @@ fn route_cache(sub: crate::cli::CacheCmd, global: &GlobalArgs) -> CommandOutcome
         )),
         crate::cli::CacheCmd::Index(sub) => {
             ok!(cache_cmd::index_inner(global, sub))
-        }
+        },
         crate::cli::CacheCmd::Runtime(sub) => {
             ok!(cache_cmd::runtime_inner(global, sub))
-        }
-    }
+        },
+    )
 }
 
 fn route_rust(sub: crate::cli::RustCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::RustCmd::InstallManaged => {
             ok!(rust_cmd::install_managed_inner(global))
-        }
-    }
+        },
+    )
 }
 
 fn route_debug(sub: crate::cli::DebugCmd, global: &GlobalArgs) -> CommandOutcome {
-    match sub {
+    dispatch_match!(
+        sub;
         crate::cli::DebugCmd::Info => ok!(debug_cmd::info_inner(global)),
-    }
+    )
 }
 
 #[cfg(test)]

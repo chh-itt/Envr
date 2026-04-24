@@ -14,6 +14,7 @@ mod deactivate_cmd;
 mod debug_cmd;
 mod diagnostics;
 mod dispatch;
+mod dispatch_macros;
 mod dispatch_non_runtime;
 mod dispatch_runtime;
 mod dispatch_runtime_installation;

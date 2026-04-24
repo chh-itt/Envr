@@ -1,11 +1,17 @@
 use super::diagnostics;
+use super::dispatch_macros::dispatch_match;
 use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
 use super::{doctor, remote};
 use crate::CommandOutcome;
 use crate::cli::Command;
 
 pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
-    match command {
+    dispatch_match!(
+        command,
+        _ => unreachable!(
+            "misc runtime route received unsupported command: {:?}",
+            command
+        );
         Command::Doctor {
             fix,
             fix_path,
@@ -26,9 +32,5 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
                 diagnostics::export_zip_inner(g, service, output)
             }
         }),
-        other => unreachable!(
-            "misc runtime route received unsupported command: {:?}",
-            other
-        ),
-    }
+    )
 }

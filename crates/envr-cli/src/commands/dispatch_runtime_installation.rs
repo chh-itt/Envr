@@ -1,10 +1,16 @@
 use super::dispatch_runtime::{DispatchCtx, dispatch_runtime_result};
+use super::dispatch_macros::dispatch_match;
 use super::{current, install, list, uninstall, use_cmd};
 use crate::CommandOutcome;
 use crate::cli::Command;
 
 pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
-    match command {
+    dispatch_match!(
+        command,
+        _ => unreachable!(
+            "installation runtime route received unsupported command: {:?}",
+            command
+        );
         Command::Install {
             runtime,
             runtime_version,
@@ -22,7 +28,7 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         }),
         Command::Current { runtime } => {
             dispatch_runtime_result(ctx, |g, service| current::run_inner(g, service, runtime))
-        }
+        },
         Command::Uninstall {
             runtime,
             runtime_version,
@@ -32,9 +38,5 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
         } => dispatch_runtime_result(ctx, |g, service| {
             uninstall::run_inner(g, service, runtime, runtime_version, dry_run, force, yes)
         }),
-        other => unreachable!(
-            "installation runtime route received unsupported command: {:?}",
-            other
-        ),
-    }
+    )
 }

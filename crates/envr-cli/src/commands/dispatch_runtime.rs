@@ -1,3 +1,4 @@
+use super::dispatch_macros::dispatch_match;
 use crate::CommandOutcome;
 use crate::cli::{Command, GlobalArgs, RuntimeHandlerGroup};
 use crate::command_outcome::CliExit;
@@ -10,17 +11,18 @@ pub(super) struct DispatchCtx<'a> {
 /// Route commands that require a live runtime service.
 pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
     debug_assert!(command.runtime_handler_group().is_some());
-    match command.runtime_handler_group() {
-        Some(RuntimeHandlerGroup::Installation) => {
-            super::dispatch_runtime_installation::route(command, ctx)
-        }
-        Some(RuntimeHandlerGroup::Project) => super::dispatch_runtime_project::route(command, ctx),
-        Some(RuntimeHandlerGroup::Misc) => super::dispatch_runtime_misc::route(command, ctx),
-        None => unreachable!(
+    dispatch_match!(
+        command.runtime_handler_group(),
+        _ => unreachable!(
             "runtime dispatch received non-runtime command key: {:?}",
             command.key()
-        ),
-    }
+        );
+        Some(RuntimeHandlerGroup::Installation) => {
+            super::dispatch_runtime_installation::route(command, ctx)
+        },
+        Some(RuntimeHandlerGroup::Project) => super::dispatch_runtime_project::route(command, ctx),
+        Some(RuntimeHandlerGroup::Misc) => super::dispatch_runtime_misc::route(command, ctx),
+    )
 }
 
 pub(super) fn dispatch_runtime_result<F>(ctx: &DispatchCtx<'_>, f: F) -> CommandOutcome
