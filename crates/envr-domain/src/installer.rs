@@ -12,7 +12,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64},
 };
 
-use crate::runtime::{InstallRequest, RuntimeVersion};
+use crate::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
 use envr_error::EnvrResult;
 
 /// Optional download progress and cooperative cancellation from [`InstallRequest`].
@@ -43,4 +43,18 @@ where
 {
     let mgr = manager?;
     SpecDrivenInstaller::install_from_spec(&mgr, request)
+}
+
+#[inline]
+pub fn install_via_version_spec<F>(request: &InstallRequest, f: F) -> EnvrResult<RuntimeVersion>
+where
+    F: FnOnce(
+        &VersionSpec,
+        Option<&Arc<AtomicU64>>,
+        Option<&Arc<AtomicU64>>,
+        Option<&Arc<AtomicBool>>,
+    ) -> EnvrResult<RuntimeVersion>,
+{
+    let (downloaded, total, cancel) = install_progress_handles(request);
+    f(&request.spec, downloaded, total, cancel)
 }
