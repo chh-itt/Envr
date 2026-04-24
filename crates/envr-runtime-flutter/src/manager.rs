@@ -7,15 +7,14 @@ use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
 };
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
-use envr_download::extract;
+use envr_download::{blocking::download_url_to_path_resumable, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::bin_tool_layout::flutter_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -131,46 +130,14 @@ fn download_to_path(
     progress_total: Option<&Arc<AtomicU64>>,
     cancel: Option<&Arc<AtomicBool>>,
 ) -> EnvrResult<()> {
-    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-        return Err(EnvrError::Download("download cancelled".into()));
-    }
-    let mut response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {url} -> {}",
-            response.status()
-        )));
-    }
-    if let Some(t) = progress_total {
-        t.store(response.content_length().unwrap_or(0), Ordering::Relaxed);
-    }
-    if let Some(d) = progress_downloaded {
-        d.store(0, Ordering::Relaxed);
-    }
-    let mut f = fs::File::create(path).map_err(EnvrError::from)?;
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
-            return Err(EnvrError::Download("download cancelled".into()));
-        }
-        let n = response.read(&mut buf).map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read response body failed for {url}"),
-                e,
-            )
-        })?;
-        if n == 0 {
-            break;
-        }
-        f.write_all(&buf[..n]).map_err(EnvrError::from)?;
-        if let Some(d) = progress_downloaded {
-            d.fetch_add(n as u64, Ordering::Relaxed);
-        }
-    }
-    Ok(())
+    download_url_to_path_resumable(
+        client,
+        url,
+        path,
+        progress_downloaded,
+        progress_total,
+        cancel,
+    )
 }
 
 fn should_strip_flutter_git() -> bool {
@@ -193,39 +160,24 @@ fn delete_flutter_git_dir(install_root: &Path) -> EnvrResult<()> {
 
 fn promote_single_root_dir(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     use envr_platform::install_layout;
-    let mut iter = fs::read_dir(staging).map_err(EnvrError::from)?;
-    let first = iter
-        .next()
-        .transpose()
-        .map_err(EnvrError::from)?
-        .ok_or_else(|| EnvrError::Validation("empty flutter archive".into()))?;
-    if iter.next().transpose().map_err(EnvrError::from)?.is_some() {
-        return Err(EnvrError::Validation(
-            "expected exactly one root directory in flutter archive".into(),
-        ));
-    }
-    let inner = first.path();
-    if !inner.is_dir() {
-        return Err(EnvrError::Validation(
-            "expected flutter archive root to be a directory".into(),
-        ));
-    }
-    install_layout::ensure_final_parent(final_dir)?;
-    let staging_final = install_layout::sibling_staging_path(final_dir)?;
-    install_layout::remove_if_exists(&staging_final)?;
-    fs::rename(&inner, &staging_final).map_err(EnvrError::from)?;
-    if !flutter_installation_valid(&staging_final) {
-        let _ = fs::remove_dir_all(&staging_final);
-        return Err(EnvrError::Validation(
-            "extracted flutter layout missing flutter executable".into(),
-        ));
-    }
-    // Flutter tooling expects repo metadata for normal operation; keep `.git` by default.
-    if should_strip_flutter_git() {
-        delete_flutter_git_dir(&staging_final)?;
-    }
-    install_layout::commit_staging_dir(&staging_final, final_dir)?;
-    Ok(())
+    install_layout::commit_single_root_dir(
+        staging,
+        final_dir,
+        |root| {
+            if !flutter_installation_valid(root) {
+                return false;
+            }
+            // Flutter tooling expects repo metadata for normal operation; keep `.git` by default.
+            if should_strip_flutter_git() {
+                let _ = delete_flutter_git_dir(root);
+            }
+            true
+        },
+        "empty flutter archive",
+        "expected exactly one root directory in flutter archive",
+        "expected flutter archive root to be a directory",
+        "extracted flutter layout missing flutter executable",
+    )
 }
 
 pub struct FlutterManager {
