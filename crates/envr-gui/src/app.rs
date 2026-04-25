@@ -12,23 +12,32 @@ use envr_ui::theme::{
 use iced::font::Family;
 use iced::window;
 use iced::{Element, Size, Subscription, Task, application};
-use std::path::PathBuf;
-use std::sync::OnceLock;
 
 use crate::gui_ops;
 use crate::theme as gui_theme;
 use crate::view::dashboard::{DashboardMsg, DashboardState};
-use crate::view::downloads::{
-    DOWNLOAD_PANEL_SHELL_W, DownloadMsg, DownloadPanelState, JobState, TITLE_DRAG_HOLD,
-};
-use crate::view::env_center::{
-    EnvCenterMsg, EnvCenterState, env_center_clear_unified_list_render_state,
-};
+use crate::view::downloads::{DownloadMsg, DownloadPanelState};
+use crate::view::env_center::{EnvCenterMsg, EnvCenterState};
 use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
 
+mod download_chrome;
+mod env_center_ops;
+mod navigation;
 mod pages;
+mod persist_settings;
+
+pub(crate) use download_chrome::{
+    clamp_download_panel_to_window, handle_motion_tick, on_main_window_resized,
+    persist_download_panel_settings,
+};
+pub(crate) use env_center_ops::*;
+pub(crate) use persist_settings::{
+    STARTUP_SETTINGS, load_gui_downloads_panel_settings_cached, load_startup_settings,
+    persist_path_proxy_toggle, persist_runtime_settings_update, persist_settings_draft_task,
+    settings_path,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -119,20 +128,6 @@ impl Default for AppState {
             dashboard: DashboardState::default(),
         }
     }
-}
-
-fn load_gui_downloads_panel_settings_cached() -> (bool, bool, i32, i32) {
-    let st = STARTUP_SETTINGS.get().cloned().unwrap_or_default();
-    let p = &st.gui.downloads_panel;
-    // Matches `envr_ui::theme` 8pt grid `md` (12px) used as shell `content_spacing`.
-    let pad = 12.0_f32;
-    let (x, y) = p.pixel_insets(
-        layout_shell::WINDOW_DEFAULT_W,
-        layout_shell::WINDOW_DEFAULT_H,
-        pad,
-        DOWNLOAD_PANEL_SHELL_W,
-    );
-    (p.visible, p.expanded, x, y)
 }
 
 fn ui_text_scale_from_env() -> f32 {
@@ -304,19 +299,6 @@ pub fn run() -> iced::Result {
     .run()
 }
 
-static STARTUP_SETTINGS: OnceLock<Settings> = OnceLock::new();
-
-fn load_startup_settings() -> Settings {
-    let paths = match envr_platform::paths::current_platform_paths() {
-        Ok(v) => v,
-        Err(_) => return Settings::default(),
-    };
-    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-    let st = Settings::load_or_default_from(&settings_path).unwrap_or_default();
-    let _ = STARTUP_SETTINGS.set(st.clone());
-    st
-}
-
 fn configured_default_font(st: &Settings) -> iced::Font {
     match st.appearance.font.mode {
         FontMode::Auto => iced::Font::with_name(font::preferred_system_sans_family()),
@@ -352,38 +334,7 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MotionTick => handle_motion_tick(state),
-        Message::Navigate(route) => {
-            tracing::debug!(?route, "navigate");
-            let leaving_runtime = state.route() == Route::Runtime && route != Route::Runtime;
-            state.route = route;
-            if leaving_runtime {
-                env_center_clear_unified_list_render_state(&mut state.env_center);
-            }
-            if route == Route::Runtime {
-                return runtime_page_enter_tasks(state);
-            }
-            if route == Route::Dashboard {
-                state.dashboard.busy = true;
-                state.dashboard.last_error = None;
-                return gui_ops::refresh_dashboard();
-            }
-            if matches!(route, Route::Settings | Route::RuntimeConfig) {
-                state.settings.last_message = Some(envr_core::i18n::tr_key(
-                    "gui.app.loading",
-                    "正在加载…",
-                    "Loading…",
-                ));
-                let path = settings_path();
-                return Task::perform(
-                    async move {
-                        envr_config::settings::Settings::load_or_default_from(&path)
-                            .map_err(|e| e.to_string())
-                    },
-                    |res| Message::Settings(SettingsMsg::DiskLoaded(res)),
-                );
-            }
-            Task::none()
-        }
+        Message::Navigate(route) => navigation::handle_navigate(state, route),
         Message::DismissError => {
             state.error = None;
             Task::none()
@@ -403,437 +354,6 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::Settings(msg) => pages::settings::handle_settings(state, msg),
         Message::RuntimeLayout(msg) => pages::runtime_layout::handle_runtime_layout(state, msg),
     })
-}
-
-fn settings_path() -> PathBuf {
-    let paths =
-        envr_platform::paths::current_platform_paths().expect("platform paths for settings");
-    envr_config::settings::settings_path_from_platform(&paths)
-}
-
-/// Write [`SettingsViewState::build_settings`] to `settings.toml` and finish with [`SettingsMsg::DiskSaved`].
-fn persist_settings_draft_task(state: &AppState) -> Task<Message> {
-    let path = settings_path();
-    let next = state.settings.build_settings().map_err(|e| e.to_string());
-    Task::perform(
-        async move {
-            let next = next?;
-            next.save_to(&path).map_err(|e| e.to_string())?;
-            Ok(next)
-        },
-        |res| Message::Settings(SettingsMsg::DiskSaved(res)),
-    )
-}
-
-/// Save a full [`Settings`] snapshot (e.g. runtime.node edits from the env center) and mirror [`SettingsMsg::DiskSaved`].
-fn persist_settings_clone_task(settings: Settings) -> Task<Message> {
-    let path = settings_path();
-    Task::perform(
-        async move {
-            settings.validate().map_err(|e| e.to_string())?;
-            settings.save_to(&path).map_err(|e| e.to_string())?;
-            Ok(settings)
-        },
-        |res| Message::Settings(SettingsMsg::DiskSaved(res)),
-    )
-}
-
-fn persist_runtime_settings_update<F>(state: &mut AppState, update: F) -> Task<Message>
-where
-    F: FnOnce(&mut Settings),
-{
-    let mut st = state.settings.cache.snapshot().clone();
-    update(&mut st);
-    if let Err(e) = st.validate() {
-        state.error = Some(e.to_string());
-        return Task::none();
-    }
-    persist_settings_clone_task(st)
-}
-
-fn persist_path_proxy_toggle<F>(
-    state: &mut AppState,
-    kind: envr_domain::runtime::RuntimeKind,
-    on: bool,
-    update: F,
-) -> Task<Message>
-where
-    F: FnOnce(&mut Settings, bool),
-{
-    let mut st = state.settings.cache.snapshot().clone();
-    update(&mut st, on);
-    if let Err(e) = st.validate() {
-        state.error = Some(e.to_string());
-        return Task::none();
-    }
-    if on {
-        Task::batch([
-            persist_settings_clone_task(st),
-            gui_ops::sync_shims_for_kind(kind),
-        ])
-    } else {
-        persist_settings_clone_task(st)
-    }
-}
-
-fn mark_unified_major_rows_dirty_for_kind(
-    state: &mut AppState,
-    kind: envr_domain::runtime::RuntimeKind,
-) {
-    state.env_center.unified_major_rows_by_kind.remove(&kind);
-    state
-        .env_center
-        .unified_children_rows_by_kind_major
-        .retain(|(k, _), _| *k != kind);
-}
-
-fn runtime_path_proxy_blocks_use(state: &AppState) -> bool {
-    envr_config::runtime_path_proxy::path_proxy_blocks_managed_use(
-        state.env_center.kind,
-        &state.settings.cache.snapshot().runtime,
-    )
-}
-
-fn handle_motion_tick(state: &mut AppState) -> Task<Message> {
-    if let Some(since) = state.downloads.title_drag_armed_since
-        && !state.downloads.dragging
-        && since.elapsed() >= TITLE_DRAG_HOLD
-    {
-        state.downloads.dragging = true;
-        state.downloads.drag_from_cursor = None;
-        state.downloads.drag_from_pos = Some((state.downloads.x, state.downloads.y));
-        state.downloads.title_drag_armed_since = None;
-    }
-    let tokens = state.tokens();
-    state.downloads.advance_reveal(tokens);
-    if state.downloads.take_persist_after_hide() {
-        let _ = persist_download_panel_settings(state);
-    }
-    state.downloads.maybe_progress_tick_on_motion_frame();
-    let waiting_installed_list = state.env_center.busy && state.env_center.installed.is_empty();
-    let waiting_remote = envr_domain::runtime::runtime_descriptor(state.env_center.kind)
-        .supports_remote_latest
-        && state.env_center.installed.is_empty()
-        && state
-            .env_center
-            .unified_major_rows_by_kind
-            .get(&state.env_center.kind)
-            .is_none_or(|rows| rows.is_empty());
-    if !state.reduce_motion
-        && !state.disable_runtime_skeleton_shimmer
-        && matches!(state.route(), Route::Runtime)
-        && (waiting_installed_list || waiting_remote)
-    {
-        state.env_center.skeleton_phase = (state.env_center.skeleton_phase + 0.045) % 1.0;
-    }
-    Task::none()
-}
-
-fn persist_download_panel_settings(state: &mut AppState) -> Result<(), envr_error::EnvrError> {
-    let paths = envr_platform::paths::current_platform_paths()?;
-    let settings_path = envr_config::settings::settings_path_from_platform(&paths);
-    let mut st = Settings::load_or_default_from(&settings_path)?;
-
-    // `paths.runtime_root` is edited on the Settings page and lives in `state.settings.cache`.
-    // If we only round-trip what `load_or_default_from` returns, a sparse `[paths]` on disk (or a
-    // failed parse that fell back to defaults earlier in the session) can drop the in-memory
-    // runtime root when we rewrite the whole file for the download panel.
-    let mem = state.settings.cache.snapshot();
-    let disk_rr_empty = st
-        .paths
-        .runtime_root
-        .as_deref()
-        .is_none_or(|s| s.trim().is_empty());
-    if disk_rr_empty && let Some(ref r) = mem.paths.runtime_root {
-        let t = r.trim();
-        if !t.is_empty() {
-            st.paths.runtime_root = Some(t.to_string());
-        }
-    }
-
-    let panel = &state.downloads;
-    st.gui.downloads_panel.visible = panel.visible;
-    st.gui.downloads_panel.expanded = panel.expanded;
-    let (cw, ch) = state.window_inner_px.unwrap_or((
-        layout_shell::WINDOW_DEFAULT_W,
-        layout_shell::WINDOW_DEFAULT_H,
-    ));
-    let pad = state.tokens().content_spacing();
-    st.gui.downloads_panel.sync_frac_from_pixels(
-        panel.x,
-        panel.y,
-        cw,
-        ch,
-        pad,
-        DOWNLOAD_PANEL_SHELL_W,
-    );
-    st.save_to(&settings_path)?;
-    state.settings.cache.set_cached(st.clone());
-    let _ = state.settings.sync_from_cache();
-    Ok(())
-}
-
-fn on_main_window_resized(state: &mut AppState, new: Size) {
-    let pad = state.tokens().content_spacing();
-    if let Some((old_w, old_h)) = state.window_inner_px {
-        let inner_w_old = (old_w - 2.0 * pad).max(1.0);
-        let inner_h_old = (old_h - 2.0 * pad).max(1.0);
-        let avail_x_old = (inner_w_old - DOWNLOAD_PANEL_SHELL_W).max(1.0);
-        let xf = state.downloads.x as f32 / avail_x_old;
-        let yf = state.downloads.y as f32 / inner_h_old;
-        let inner_w = (new.width - 2.0 * pad).max(1.0);
-        let inner_h = (new.height - 2.0 * pad).max(1.0);
-        let avail_x = (inner_w - DOWNLOAD_PANEL_SHELL_W).max(1.0);
-        state.downloads.x = (xf.clamp(0.0, 1.0) * avail_x).round() as i32;
-        state.downloads.y = (yf.clamp(0.0, 1.0) * inner_h).round() as i32;
-    }
-    state.window_inner_px = Some((new.width, new.height));
-    clamp_download_panel_to_window(state);
-}
-
-fn clamp_download_panel_to_window(state: &mut AppState) {
-    let Some((ww, wh)) = state.window_inner_px else {
-        return;
-    };
-    let pad = state.tokens().content_spacing();
-    let inner_w = (ww - 2.0 * pad).max(1.0);
-    let inner_h = (wh - 2.0 * pad).max(1.0);
-    let max_x = (inner_w - DOWNLOAD_PANEL_SHELL_W).max(0.0).round() as i32;
-    let max_y = inner_h.max(0.0).round() as i32;
-    state.downloads.x = state.downloads.x.clamp(0, max_x);
-    state.downloads.y = state.downloads.y.clamp(0, max_y);
-}
-
-fn looks_like_user_cancelled(err: &str) -> bool {
-    let l = err.to_ascii_lowercase();
-    l.contains("cancelled") || l.contains("canceled") || l.contains("download cancel")
-}
-
-fn runtime_install_task_label(
-    kind: envr_domain::runtime::RuntimeKind,
-    spec: &str,
-    install_and_use: bool,
-) -> String {
-    let k = crate::view::env_center::kind_label_zh(kind);
-    if install_and_use {
-        format!("正在安装并切换为 {k} {spec}")
-    } else {
-        format!("正在安装 {k} {spec}")
-    }
-}
-
-fn duplicate_runtime_install_blocked(
-    state: &mut AppState,
-    kind: envr_domain::runtime::RuntimeKind,
-    spec: &str,
-) -> bool {
-    let spec_trimmed = spec.trim();
-    if spec_trimmed.is_empty() {
-        return false;
-    }
-    if state
-        .env_center
-        .installed
-        .iter()
-        .any(|v| v.0.trim() == spec_trimmed)
-    {
-        state.error = Some(format!(
-            "{}: {}",
-            envr_core::i18n::tr_key(
-                "gui.runtime.install.duplicate_installed",
-                "该版本已安装",
-                "Version is already installed",
-            ),
-            spec_trimmed
-        ));
-        return true;
-    }
-
-    let inflight = state.downloads.jobs.iter().any(|j| {
-        if !matches!(j.state, JobState::Queued | JobState::Running) {
-            return false;
-        }
-        match j.payload.as_ref() {
-            Some(crate::view::downloads::DownloadJobPayload::RuntimeInstall {
-                kind: k,
-                spec: s,
-                ..
-            }) => *k == kind && s.trim() == spec_trimmed,
-            _ => false,
-        }
-    });
-    if inflight {
-        state.error = Some(format!(
-            "{}: {}",
-            envr_core::i18n::tr_key(
-                "gui.runtime.install.duplicate_inflight",
-                "该版本已在安装队列或进行中",
-                "Version is already queued or installing",
-            ),
-            spec_trimmed
-        ));
-        return true;
-    }
-    false
-}
-
-fn rust_runtime_task_label(action: &str, detail: &str) -> String {
-    match action {
-        "channel" => format!("Rust 正在安装/切换工具链 {detail}"),
-        "update" => "Rust 正在更新当前工具链".to_string(),
-        "managed_uninstall" => "Rust 正在卸载托管 rustup".to_string(),
-        "component_install" => format!("Rust 正在安装组件 {detail}"),
-        "component_uninstall" => format!("Rust 正在卸载组件 {detail}"),
-        "target_install" => format!("Rust 正在安装目标 {detail}"),
-        "target_uninstall" => format!("Rust 正在卸载目标 {detail}"),
-        _ => "Rust 正在执行任务".to_string(),
-    }
-}
-
-fn runtime_page_enter_tasks(state: &mut AppState) -> Task<Message> {
-    let layout = &state.settings.cache.snapshot().gui.runtime_layout;
-    let vis = crate::view::runtime_layout::visible_kinds(layout);
-    if !vis.is_empty() && !vis.contains(&state.env_center.kind) {
-        state.env_center.kind = vis[0];
-    }
-    let kind = state.env_center.kind;
-    if kind == envr_domain::runtime::RuntimeKind::Rust {
-        state.env_center.busy = true;
-        return Task::batch([
-            gui_ops::rust_refresh(),
-            gui_ops::rust_load_components(),
-            gui_ops::rust_load_targets(),
-        ]);
-    }
-    if envr_domain::runtime::runtime_descriptor(kind).supports_remote_latest {
-        return Task::batch([
-            gui_ops::refresh_runtimes(kind),
-            envr_domain::runtime::unified_major_list_rollout_enabled(kind)
-                .then_some(gui_ops::load_unified_major_rows_cached(kind))
-                .unwrap_or_else(Task::none),
-            envr_domain::runtime::unified_major_list_rollout_enabled(kind)
-                .then_some(gui_ops::refresh_unified_major_rows(kind))
-                .unwrap_or_else(Task::none),
-        ]);
-    }
-    gui_ops::refresh_runtimes(kind)
-}
-
-fn sync_go_env_center_drafts_from_settings(state: &mut AppState) {
-    let g = &state.settings.cache.snapshot().runtime.go;
-    state.env_center.go_proxy_custom_draft = g
-        .proxy_custom
-        .clone()
-        .or_else(|| g.goproxy.clone())
-        .unwrap_or_default();
-    state.env_center.go_private_patterns_draft = g.private_patterns.clone().unwrap_or_default();
-}
-
-fn sync_bun_env_center_drafts_from_settings(state: &mut AppState) {
-    let b = &state.settings.cache.snapshot().runtime.bun;
-    state.env_center.bun_global_bin_dir_draft = b.global_bin_dir.clone().unwrap_or_default();
-}
-
-fn recompute_env_center_derived(state: &mut AppState) {
-    let _ = state;
-}
-
-fn env_center_jvm_check_task(kind: envr_domain::runtime::RuntimeKind) -> Task<Message> {
-    let key = envr_domain::runtime::runtime_descriptor(kind).key;
-    if envr_domain::jvm_hosted::is_jvm_hosted_runtime(key) {
-        gui_ops::check_jvm_runtime_java_compat(kind)
-    } else {
-        Task::none()
-    }
-}
-
-fn set_jvm_java_hint(
-    state: &mut AppState,
-    kind: envr_domain::runtime::RuntimeKind,
-    res: Result<(), String>,
-) {
-    match res {
-        Ok(()) => {
-            state.env_center.jvm_java_hints.remove(&kind);
-        }
-        Err(msg) => {
-            state.env_center.jvm_java_hints.insert(kind, msg);
-        }
-    }
-}
-
-fn direct_install_spec_ok(spec: &str) -> bool {
-    let t = spec.trim();
-    if t.is_empty() || t.len() > 80 {
-        return false;
-    }
-    if t.chars().any(|c| c.is_control()) {
-        return false;
-    }
-    true
-}
-
-fn bun_direct_spec_blocked_on_windows(kind: envr_domain::runtime::RuntimeKind, spec: &str) -> bool {
-    if !cfg!(windows) || kind != envr_domain::runtime::RuntimeKind::Bun {
-        return false;
-    }
-    let t = spec.trim().trim_start_matches('v');
-    t.starts_with("0.")
-}
-
-fn deno_direct_spec_blocked(kind: envr_domain::runtime::RuntimeKind, spec: &str) -> bool {
-    if kind != envr_domain::runtime::RuntimeKind::Deno {
-        return false;
-    }
-    let t = spec.trim().trim_start_matches('v');
-    t.starts_with("0.")
-}
-
-fn sanitize_runtime_filter_input(kind: envr_domain::runtime::RuntimeKind, raw: &str) -> String {
-    let t = raw.trim();
-    match kind {
-        // Node filter supports major only.
-        envr_domain::runtime::RuntimeKind::Node => {
-            t.chars().filter(|c| c.is_ascii_digit()).take(4).collect()
-        }
-        // Python filter supports major.minor.
-        envr_domain::runtime::RuntimeKind::Python => {
-            let mut out = String::new();
-            let mut dot_seen = false;
-            for ch in t.chars() {
-                if ch.is_ascii_digit() {
-                    out.push(ch);
-                } else if ch == '.' && !dot_seen {
-                    out.push(ch);
-                    dot_seen = true;
-                }
-                if out.len() >= 8 {
-                    break;
-                }
-            }
-            out
-        }
-        envr_domain::runtime::RuntimeKind::Java => {
-            t.chars().filter(|c| c.is_ascii_digit()).take(3).collect()
-        }
-        envr_domain::runtime::RuntimeKind::Go => {
-            let mut out = String::new();
-            let mut dot_seen = false;
-            for ch in t.chars() {
-                if ch.is_ascii_digit() {
-                    out.push(ch);
-                } else if ch == '.' && !dot_seen {
-                    out.push(ch);
-                    dot_seen = true;
-                }
-                if out.len() >= 12 {
-                    break;
-                }
-            }
-            out
-        }
-        _ => t.chars().take(32).collect(),
-    }
 }
 
 fn view(state: &AppState) -> Element<'_, Message> {
