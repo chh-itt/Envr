@@ -182,16 +182,6 @@ pub enum Message {
 }
 
 pub fn run() -> iced::Result {
-    // Prefer native Windows GPU APIs first, keep GL as final fallback.
-    // This avoids forcing software OpenGL paths on some VM drivers.
-    #[cfg(target_os = "windows")]
-    {
-        if std::env::var_os("WGPU_BACKEND").is_none() {
-            // Safe to do early during startup, before wgpu/iced are initialized.
-            unsafe { std::env::set_var("WGPU_BACKEND", "dx12,dx11,vulkan,gl") };
-        }
-    }
-
     let startup = load_startup_settings();
     let locale = envr_core::i18n::locale_from_settings(&startup);
     application(

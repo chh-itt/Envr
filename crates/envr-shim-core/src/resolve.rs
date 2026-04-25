@@ -1818,10 +1818,10 @@ pub fn resolve_core_shim(invoked_as: &str, ctx: &ShimContext) -> EnvrResult<Reso
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::OsString;
     use std::fs;
     use std::path::Path;
     use std::sync::Mutex;
+    use temp_env::with_vars;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -2217,60 +2217,41 @@ version = "20"
         fs::create_dir_all(&cfg_dir).expect("config dir");
         let cfg = cfg_dir.join("settings.toml");
 
-        let old = std::env::var_os("ENVR_ROOT");
-        unsafe { std::env::set_var("ENVR_ROOT", tmp.path()) };
+        with_vars(vec![("ENVR_ROOT", Some(tmp.path().as_os_str()))], || {
+            fs::write(
+                &cfg,
+                "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n[runtime.erlang]\npath_proxy_enabled = false\n",
+            )
+            .expect("write");
+            envr_config::env_context::clear_settings_cache();
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Irb));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Mix));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Iex));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erl));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
+            assert!(core_command_uses_path_proxy_bypass(CoreCommand::Escript));
 
-        // Restore even if assertions fail.
-        struct RestoreEnv {
-            key: &'static str,
-            prev: Option<std::ffi::OsString>,
-        }
-        impl Drop for RestoreEnv {
-            fn drop(&mut self) {
-                match self.prev.take() {
-                    Some(v) => unsafe { std::env::set_var(self.key, v) },
-                    None => unsafe { std::env::remove_var(self.key) },
-                }
-            }
-        }
-        let _restore = RestoreEnv {
-            key: "ENVR_ROOT",
-            prev: old,
-        };
-
-        fs::write(
-            &cfg,
-            "[runtime.ruby]\npath_proxy_enabled = false\n[runtime.elixir]\npath_proxy_enabled = false\n[runtime.erlang]\npath_proxy_enabled = false\n",
-        )
-        .expect("write");
-        envr_config::env_context::clear_settings_cache();
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Irb));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Mix));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Iex));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erl));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
-        assert!(core_command_uses_path_proxy_bypass(CoreCommand::Escript));
-
-        fs::write(
-            &cfg,
-            "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n[runtime.erlang]\npath_proxy_enabled = true\n",
-        )
-        .expect("write");
-        envr_config::env_context::clear_settings_cache();
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Irb));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Mix));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Iex));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erl));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
-        assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Escript));
+            fs::write(
+                &cfg,
+                "[runtime.ruby]\npath_proxy_enabled = true\n[runtime.elixir]\npath_proxy_enabled = true\n[runtime.erlang]\npath_proxy_enabled = true\n",
+            )
+            .expect("write");
+            envr_config::env_context::clear_settings_cache();
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Irb));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Elixir));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Mix));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Iex));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erl));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Erlc));
+            assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Escript));
+        });
     }
 
     /// When PATH lists envr `shims` before a real `julia.exe`, bypass must not pick `julia.cmd`
@@ -2290,25 +2271,6 @@ version = "20"
         )
         .expect("settings");
 
-        let old_root = std::env::var_os("ENVR_ROOT");
-        unsafe { std::env::set_var("ENVR_ROOT", root) };
-        struct RestoreRoot {
-            key: &'static str,
-            prev: Option<std::ffi::OsString>,
-        }
-        impl Drop for RestoreRoot {
-            fn drop(&mut self) {
-                match self.prev.take() {
-                    Some(v) => unsafe { std::env::set_var(self.key, v) },
-                    None => unsafe { std::env::remove_var(self.key) },
-                }
-            }
-        }
-        let _restore_root = RestoreRoot {
-            key: "ENVR_ROOT",
-            prev: old_root,
-        };
-
         let runtime_root = root.join("plaindata").join("runtimes");
         let shims = runtime_root.join("shims");
         let system_bin = root.join("system_bin");
@@ -2317,40 +2279,35 @@ version = "20"
         fs::create_dir_all(&system_bin).expect("system_bin");
         fs::write(system_bin.join("julia.exe"), []).expect("julia.exe");
 
-        let old_path = std::env::var_os("PATH");
         let path_joined = format!("{};{}", shims.display(), system_bin.display());
-        unsafe { std::env::set_var("PATH", &path_joined) };
-        struct RestorePath(Option<std::ffi::OsString>);
-        impl Drop for RestorePath {
-            fn drop(&mut self) {
-                match &self.0 {
-                    Some(v) => unsafe { std::env::set_var("PATH", v) },
-                    None => unsafe { std::env::remove_var("PATH") },
-                }
-            }
-        }
-        let _restore_path = RestorePath(old_path);
+        with_vars(
+            vec![
+                ("ENVR_ROOT", Some(root.as_os_str())),
+                ("PATH", Some(std::ffi::OsStr::new(&path_joined))),
+            ],
+            || {
+                let paths = envr_platform::paths::current_platform_paths().expect("paths");
+                let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+                let snap = ShimSettingsSnapshot::from_settings(&settings);
 
-        let paths = envr_platform::paths::current_platform_paths().expect("paths");
-        let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
-        let snap = ShimSettingsSnapshot::from_settings(&settings);
+                let ctx = ShimContext {
+                    runtime_root,
+                    working_dir: root.join("prj"),
+                    profile: None,
+                };
 
-        let ctx = ShimContext {
-            runtime_root,
-            working_dir: root.join("prj"),
-            profile: None,
-        };
-
-        let resolved = resolve_core_shim_command_with_settings(CoreCommand::Julia, &ctx, &snap)
-            .expect("resolve");
-        assert!(
-            resolved
-                .executable
-                .to_string_lossy()
-                .to_ascii_lowercase()
-                .ends_with("julia.exe"),
-            "expected system julia.exe, got {:?}",
-            resolved.executable
+                let resolved = resolve_core_shim_command_with_settings(CoreCommand::Julia, &ctx, &snap)
+                    .expect("resolve");
+                assert!(
+                    resolved
+                        .executable
+                        .to_string_lossy()
+                        .to_ascii_lowercase()
+                        .ends_with("julia.exe"),
+                    "expected system julia.exe, got {:?}",
+                    resolved.executable
+                );
+            },
         );
     }
 
@@ -2369,25 +2326,6 @@ version = "20"
         )
         .expect("settings");
 
-        let old_root = std::env::var_os("ENVR_ROOT");
-        unsafe { std::env::set_var("ENVR_ROOT", root) };
-        struct RestoreRoot {
-            key: &'static str,
-            prev: Option<std::ffi::OsString>,
-        }
-        impl Drop for RestoreRoot {
-            fn drop(&mut self) {
-                match self.prev.take() {
-                    Some(v) => unsafe { std::env::set_var(self.key, v) },
-                    None => unsafe { std::env::remove_var(self.key) },
-                }
-            }
-        }
-        let _restore_root = RestoreRoot {
-            key: "ENVR_ROOT",
-            prev: old_root,
-        };
-
         let runtime_root = root.join("plaindata").join("runtimes");
         let shims = runtime_root.join("shims");
         let system_bin = root.join("system_bin");
@@ -2396,40 +2334,35 @@ version = "20"
         fs::create_dir_all(&system_bin).expect("system_bin");
         fs::write(system_bin.join("nim.exe"), []).expect("nim.exe");
 
-        let old_path = std::env::var_os("PATH");
         let path_joined = format!("{};{}", shims.display(), system_bin.display());
-        unsafe { std::env::set_var("PATH", &path_joined) };
-        struct RestorePath(Option<std::ffi::OsString>);
-        impl Drop for RestorePath {
-            fn drop(&mut self) {
-                match &self.0 {
-                    Some(v) => unsafe { std::env::set_var("PATH", v) },
-                    None => unsafe { std::env::remove_var("PATH") },
-                }
-            }
-        }
-        let _restore_path = RestorePath(old_path);
+        with_vars(
+            vec![
+                ("ENVR_ROOT", Some(root.as_os_str())),
+                ("PATH", Some(std::ffi::OsStr::new(&path_joined))),
+            ],
+            || {
+                let paths = envr_platform::paths::current_platform_paths().expect("paths");
+                let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+                let snap = ShimSettingsSnapshot::from_settings(&settings);
 
-        let paths = envr_platform::paths::current_platform_paths().expect("paths");
-        let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
-        let snap = ShimSettingsSnapshot::from_settings(&settings);
+                let ctx = ShimContext {
+                    runtime_root,
+                    working_dir: root.join("prj"),
+                    profile: None,
+                };
 
-        let ctx = ShimContext {
-            runtime_root,
-            working_dir: root.join("prj"),
-            profile: None,
-        };
-
-        let resolved = resolve_core_shim_command_with_settings(CoreCommand::Nim, &ctx, &snap)
-            .expect("resolve");
-        assert!(
-            resolved
-                .executable
-                .to_string_lossy()
-                .to_ascii_lowercase()
-                .ends_with("nim.exe"),
-            "expected system nim.exe, got {:?}",
-            resolved.executable
+                let resolved = resolve_core_shim_command_with_settings(CoreCommand::Nim, &ctx, &snap)
+                    .expect("resolve");
+                assert!(
+                    resolved
+                        .executable
+                        .to_string_lossy()
+                        .to_ascii_lowercase()
+                        .ends_with("nim.exe"),
+                    "expected system nim.exe, got {:?}",
+                    resolved.executable
+                );
+            },
         );
     }
 }

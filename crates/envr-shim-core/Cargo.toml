@@ -13,6 +13,7 @@ tempfile = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+temp-env = "0.3"
 
 [[bench]]
 name = "resolve_runtime_home"
