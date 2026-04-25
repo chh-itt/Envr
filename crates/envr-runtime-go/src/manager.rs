@@ -3,7 +3,7 @@ use envr_domain::installer::{
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use reqwest::blocking::Client;
 use std::sync::Arc;
@@ -17,6 +17,14 @@ use crate::index::{
     GoDistFile, GoRelease, blocking_http_client, fetch_go_index, go_dl_arch_for_rust,
     go_dl_os_for_rust, normalize_go_version, parse_go_index, resolve_go_version,
 };
+
+fn err_version_not_found(msg: impl Into<String>) -> EnvrError {
+    EnvrError::Context {
+        code: ErrorCode::RuntimeVersionNotFound,
+        message: msg.into(),
+        source: Box::new(std::io::Error::other("runtime-version-not-found")),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct GoPaths {
@@ -148,7 +156,7 @@ impl GoManager {
                     && f.filename.ends_with(want_ext)
             })
             .ok_or_else(|| {
-                EnvrError::Validation(format!(
+                err_version_not_found(format!(
                     "no Go archive for {} on {}-{}",
                     release.version, os, arch
                 ))
@@ -185,7 +193,7 @@ impl GoManager {
         let release = releases
             .iter()
             .find(|r| r.version.eq_ignore_ascii_case(&want))
-            .ok_or_else(|| EnvrError::Validation(format!("Go release not found: {}", version.0)))?;
+            .ok_or_else(|| err_version_not_found(format!("Go release not found: {}", version.0)))?;
         let dist = self.pick_dist_file(release)?;
 
         let cache_file = self
@@ -243,7 +251,7 @@ impl GoManager {
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !go_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!(
+            return Err(err_version_not_found(format!(
                 "Go version {} is not installed under {}",
                 version.0,
                 dir.display()

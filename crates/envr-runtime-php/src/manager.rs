@@ -8,13 +8,21 @@ use envr_domain::installer::{
 };
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
 use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
-use envr_error::{EnvrError, EnvrResult};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use reqwest::header::HeaderMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+fn err_version_not_found(msg: impl Into<String>) -> EnvrError {
+    EnvrError::Context {
+        code: ErrorCode::RuntimeVersionNotFound,
+        message: msg.into(),
+        source: Box::new(std::io::Error::other("runtime-version-not-found")),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PhpPaths {
@@ -256,9 +264,7 @@ fn promote_archive_layout(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     install_layout::hoist_directory_children(staging, &staging_final)?;
     if !php_installation_valid(&staging_final) {
         let _ = fs::remove_dir_all(&staging_final);
-        return Err(EnvrError::Validation(
-            "extracted php layout missing php executable".into(),
-        ));
+        return Err(err_version_not_found("extracted php layout missing php executable"));
     }
     install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
@@ -312,9 +318,7 @@ impl PhpManager {
         let line = idx
             .values()
             .find(|l| l.version == version.0)
-            .ok_or_else(|| {
-                EnvrError::Validation(format!("php version not found: {}", version.0))
-            })?;
+            .ok_or_else(|| err_version_not_found(format!("php version not found: {}", version.0)))?;
 
         let (zip_name, sha) = pick_windows_zip(line, Some(self.want_ts), std::env::consts::ARCH)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
@@ -373,7 +377,7 @@ impl PhpManager {
                 return Ok(legacy);
             }
         }
-        Err(EnvrError::Validation(format!(
+        Err(err_version_not_found(format!(
             "php {} is not installed ({})",
             display_semver,
             if self.want_ts { "TS" } else { "NTS" }
@@ -470,5 +474,16 @@ mod download_tests {
         let mut h = HeaderMap::new();
         h.insert(CONTENT_LENGTH, "12345".parse().unwrap());
         assert_eq!(content_length_from_headers(&h), Some(12345));
+    }
+
+    #[test]
+    fn promote_layout_missing_php_binary_has_structured_code() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let staging = tmp.path().join("staging");
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(&staging).expect("mkdir");
+        std::fs::write(staging.join("README.txt"), b"no php exe").expect("write");
+        let err = promote_archive_layout(&staging, &out).expect_err("should fail");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionNotFound);
     }
 }

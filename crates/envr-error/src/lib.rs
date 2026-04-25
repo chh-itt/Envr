@@ -15,6 +15,10 @@ pub enum ErrorCode {
     Platform,
     Download,
     Mirror,
+    RuntimeVersionSpecInvalid,
+    RuntimeVersionNotFound,
+    RemoteIndexFetchFailed,
+    RemoteIndexParseFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

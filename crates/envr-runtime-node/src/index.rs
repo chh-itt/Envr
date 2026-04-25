@@ -6,6 +6,7 @@ use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
+use std::fmt;
 use std::time::Duration;
 
 /// Official Node distribution index (JSON array of releases).
@@ -35,6 +36,70 @@ struct NodeReleaseMajorsJson {
     files: Vec<String>,
 }
 
+#[derive(Debug)]
+enum NodeIndexError {
+    FetchRequest { url: String },
+    FetchStatus { url: String, status: u16 },
+    ReadBody { url: String },
+    InvalidJson,
+    InvalidSemver { version: String },
+    EmptyVersionSpec,
+    NoPlatformReleases { os: String, arch: String },
+    NoLtsForCodename { codename: Option<String> },
+    NoMatchForSpec { spec: String },
+    NoMatchForMajor { major: u64 },
+    NoMatchForMinorLine { major: u64, minor: u64 },
+}
+
+impl fmt::Display for NodeIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FetchRequest { url } => write!(f, "node index request failed: {url}"),
+            Self::FetchStatus { url, status } => write!(f, "node index http status {status} for {url}"),
+            Self::ReadBody { url } => write!(f, "node index body read failed: {url}"),
+            Self::InvalidJson => write!(f, "invalid node index json"),
+            Self::InvalidSemver { version } => write!(f, "invalid node semver: {version}"),
+            Self::EmptyVersionSpec => write!(f, "empty node version spec"),
+            Self::NoPlatformReleases { os, arch } => write!(f, "no node releases for platform {os}-{arch}"),
+            Self::NoLtsForCodename { codename } => match codename {
+                Some(c) => write!(f, "no LTS node releases for codename {c}"),
+                None => write!(f, "no LTS node releases for this platform"),
+            },
+            Self::NoMatchForSpec { spec } => write!(f, "no node release matches spec {spec}"),
+            Self::NoMatchForMajor { major } => write!(f, "no node release for major {major}"),
+            Self::NoMatchForMinorLine { major, minor } => {
+                write!(f, "no node release for {major}.{minor}.x")
+            }
+        }
+    }
+}
+
+impl std::error::Error for NodeIndexError {}
+
+impl From<NodeIndexError> for EnvrError {
+    fn from(value: NodeIndexError) -> Self {
+        let code = match value {
+            NodeIndexError::FetchRequest { .. }
+            | NodeIndexError::FetchStatus { .. }
+            | NodeIndexError::ReadBody { .. } => ErrorCode::RemoteIndexFetchFailed,
+            NodeIndexError::InvalidJson => ErrorCode::RemoteIndexParseFailed,
+            NodeIndexError::InvalidSemver { .. } | NodeIndexError::EmptyVersionSpec => {
+                ErrorCode::RuntimeVersionSpecInvalid
+            }
+            NodeIndexError::NoPlatformReleases { .. }
+            | NodeIndexError::NoLtsForCodename { .. }
+            | NodeIndexError::NoMatchForSpec { .. }
+            | NodeIndexError::NoMatchForMajor { .. }
+            | NodeIndexError::NoMatchForMinorLine { .. } => ErrorCode::RuntimeVersionNotFound,
+        };
+        EnvrError::Context {
+            code,
+            message: value.to_string(),
+            source: Box::new(value),
+        }
+    }
+}
+
 impl TryFrom<NodeReleaseJson> for NodeRelease {
     type Error = EnvrError;
 
@@ -55,8 +120,13 @@ impl TryFrom<NodeReleaseJson> for NodeRelease {
 
 /// Parse the JSON body returned by `index.json`.
 pub fn parse_node_index(json: &str) -> EnvrResult<Vec<NodeRelease>> {
-    let raw: Vec<NodeReleaseJson> = serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e))?;
+    let raw: Vec<NodeReleaseJson> = serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexParseFailed,
+            NodeIndexError::InvalidJson.to_string(),
+            e,
+        )
+    })?;
     raw.into_iter()
         .map(NodeRelease::try_from)
         .collect::<EnvrResult<Vec<_>>>()
@@ -72,7 +142,11 @@ pub fn parse_node_major_keys(json: &str, os: &str, arch: &str) -> EnvrResult<Vec
     let iter = serde_json::Deserializer::from_str(json).into_iter::<NodeReleaseMajorsJson>();
     for item in iter {
         let r = item.map_err(|e| {
-            EnvrError::with_source(ErrorCode::Validation, "invalid node index json", e)
+            EnvrError::with_source(
+                ErrorCode::RemoteIndexParseFailed,
+                NodeIndexError::InvalidJson.to_string(),
+                e,
+            )
         })?;
         if !release_has_platform(&r.files, os, arch) {
             continue;
@@ -128,19 +202,29 @@ pub fn list_latest_patch_per_major(
 
 pub fn fetch_node_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexFetchFailed,
+            NodeIndexError::FetchRequest {
+                url: url.to_string(),
+            }
+            .to_string(),
+            e,
+        )
     })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "index request failed: {} {}",
-            response.status(),
-            url
-        )));
+        return Err(NodeIndexError::FetchStatus {
+            url: url.to_string(),
+            status: response.status().as_u16(),
+        }
+        .into());
     }
     response.text().map_err(|e| {
         EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
+            ErrorCode::RemoteIndexFetchFailed,
+            NodeIndexError::ReadBody {
+                url: url.to_string(),
+            }
+            .to_string(),
             e,
         )
     })
@@ -189,19 +273,27 @@ fn semver_key(version: &str) -> EnvrResult<SemVerKey> {
     let mut parts = base.split('.');
     let major: u64 = parts
         .next()
-        .ok_or_else(|| EnvrError::Validation(format!("invalid node semver: {version}")))?
+        .ok_or_else(|| NodeIndexError::InvalidSemver {
+            version: version.to_string(),
+        })?
         .parse()
-        .map_err(|_| EnvrError::Validation(format!("invalid node semver: {version}")))?;
+        .map_err(|_| NodeIndexError::InvalidSemver {
+            version: version.to_string(),
+        })?;
     let minor: u64 = parts
         .next()
         .unwrap_or("0")
         .parse()
-        .map_err(|_| EnvrError::Validation(format!("invalid node semver: {version}")))?;
+        .map_err(|_| NodeIndexError::InvalidSemver {
+            version: version.to_string(),
+        })?;
     let patch: u64 = parts
         .next()
         .unwrap_or("0")
         .parse()
-        .map_err(|_| EnvrError::Validation(format!("invalid node semver: {version}")))?;
+        .map_err(|_| NodeIndexError::InvalidSemver {
+            version: version.to_string(),
+        })?;
     Ok(SemVerKey(major, minor, patch))
 }
 
@@ -317,7 +409,7 @@ pub fn resolve_node_version(
 ) -> EnvrResult<String> {
     let spec_trim = spec.trim();
     if spec_trim.is_empty() {
-        return Err(EnvrError::Validation("empty node version spec".into()));
+        return Err(NodeIndexError::EmptyVersionSpec.into());
     }
 
     let candidates: Vec<&NodeRelease> = releases
@@ -326,9 +418,11 @@ pub fn resolve_node_version(
         .collect();
 
     if candidates.is_empty() {
-        return Err(EnvrError::Validation(format!(
-            "no node releases for platform {os}-{arch}"
-        )));
+        return Err(NodeIndexError::NoPlatformReleases {
+            os: os.to_string(),
+            arch: arch.to_string(),
+        }
+        .into());
     }
 
     let lower = spec_trim.to_ascii_lowercase();
@@ -362,7 +456,10 @@ fn pick_highest_semver(candidates: &[&NodeRelease]) -> EnvrResult<String> {
         };
     }
     let Some((r, _)) = best else {
-        return Err(EnvrError::Validation("no matching node releases".into()));
+        return Err(NodeIndexError::NoMatchForSpec {
+            spec: "latest".to_string(),
+        }
+        .into());
     };
     Ok(normalize_node_version(&r.version))
 }
@@ -383,10 +480,10 @@ fn pick_highest_lts(candidates: &[&NodeRelease], codename: Option<&str>) -> Envr
         .collect();
 
     if pool.is_empty() {
-        return Err(EnvrError::Validation(match wanted {
-            Some(w) => format!("no LTS node releases for codename {w:?} on this platform"),
-            None => "no LTS node releases on this platform".into(),
-        }));
+        return Err(NodeIndexError::NoLtsForCodename {
+            codename: wanted.clone(),
+        }
+        .into());
     }
 
     pick_highest_semver(&pool)
@@ -412,9 +509,10 @@ fn pick_from_spec(candidates: &[&NodeRelease], spec: &str) -> EnvrResult<String>
         return pick_highest_minor_line(candidates, major, minor);
     }
 
-    Err(EnvrError::Validation(format!(
-        "no node release matches spec {spec:?} for this platform"
-    )))
+    Err(NodeIndexError::NoMatchForSpec {
+        spec: spec.to_string(),
+    }
+    .into())
 }
 
 fn parse_major_only(spec: &str) -> Option<u64> {
@@ -452,9 +550,7 @@ fn pick_highest_major(candidates: &[&NodeRelease], major: u64) -> EnvrResult<Str
         };
     }
     let Some((r, _)) = best else {
-        return Err(EnvrError::Validation(format!(
-            "no node release for major {major} on this platform"
-        )));
+        return Err(NodeIndexError::NoMatchForMajor { major }.into());
     };
     Ok(normalize_node_version(&r.version))
 }
@@ -477,9 +573,7 @@ fn pick_highest_minor_line(
         };
     }
     let Some((r, _)) = best else {
-        return Err(EnvrError::Validation(format!(
-            "no node release for {major}.{minor}.x on this platform"
-        )));
+        return Err(NodeIndexError::NoMatchForMinorLine { major, minor }.into());
     };
     Ok(normalize_node_version(&r.version))
 }
@@ -618,6 +712,13 @@ mod tests {
             resolve_node_version(&rel, "linux", "x86_64", "v22.9.0").expect("r"),
             "22.9.0"
         );
+    }
+
+    #[test]
+    fn resolve_empty_spec_uses_structured_code() {
+        let rel = parsed();
+        let err = resolve_node_version(&rel, "linux", "x86_64", "   ").expect_err("empty spec");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionSpecInvalid);
     }
 
     proptest! {

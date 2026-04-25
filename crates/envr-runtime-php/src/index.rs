@@ -3,6 +3,7 @@ use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -41,19 +42,29 @@ pub fn fetch_php_windows_releases_json(
     url: &str,
 ) -> EnvrResult<String> {
     let response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexFetchFailed,
+            PhpIndexError::FetchRequest {
+                url: url.to_string(),
+            }
+            .to_string(),
+            e,
+        )
     })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
+        return Err(PhpIndexError::FetchStatus {
+            url: url.to_string(),
+            status: response.status().as_u16(),
+        }
+        .into());
     }
     response.text().map_err(|e| {
         EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
+            ErrorCode::RemoteIndexFetchFailed,
+            PhpIndexError::ReadBody {
+                url: url.to_string(),
+            }
+            .to_string(),
             e,
         )
     })
@@ -61,12 +72,71 @@ pub fn fetch_php_windows_releases_json(
 
 pub fn parse_php_windows_index(json: &str) -> EnvrResult<PhpReleasesIndex> {
     serde_json::from_str(json).map_err(|e| {
-        EnvrError::with_source(ErrorCode::Validation, "invalid php windows index json", e)
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexParseFailed,
+            PhpIndexError::InvalidIndexJson.to_string(),
+            e,
+        )
     })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct SemKey(u64, u64, u64);
+
+#[derive(Debug)]
+enum PhpIndexError {
+    FetchRequest { url: String },
+    FetchStatus { url: String, status: u16 },
+    ReadBody { url: String },
+    InvalidIndexJson,
+    InvalidBuildEntryJson,
+    EmptySpec,
+    NoVersionsInIndex,
+    NoMatchForSpec { spec: String },
+    NoWindowsZip { version: String, arch: String },
+}
+
+impl fmt::Display for PhpIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FetchRequest { url } => write!(f, "php index request failed: {url}"),
+            Self::FetchStatus { url, status } => write!(f, "php index http status {status} for {url}"),
+            Self::ReadBody { url } => write!(f, "php index body read failed: {url}"),
+            Self::InvalidIndexJson => write!(f, "invalid php windows index json"),
+            Self::InvalidBuildEntryJson => write!(f, "invalid php build entry json"),
+            Self::EmptySpec => write!(f, "empty php version spec"),
+            Self::NoVersionsInIndex => write!(f, "no php versions in index"),
+            Self::NoMatchForSpec { spec } => write!(f, "no php release matches spec {spec}"),
+            Self::NoWindowsZip { version, arch } => {
+                write!(f, "no suitable windows zip for php {version} on arch {arch}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PhpIndexError {}
+
+impl From<PhpIndexError> for EnvrError {
+    fn from(value: PhpIndexError) -> Self {
+        let code = match value {
+            PhpIndexError::FetchRequest { .. }
+            | PhpIndexError::FetchStatus { .. }
+            | PhpIndexError::ReadBody { .. } => ErrorCode::RemoteIndexFetchFailed,
+            PhpIndexError::InvalidIndexJson | PhpIndexError::InvalidBuildEntryJson => {
+                ErrorCode::RemoteIndexParseFailed
+            }
+            PhpIndexError::EmptySpec => ErrorCode::RuntimeVersionSpecInvalid,
+            PhpIndexError::NoVersionsInIndex
+            | PhpIndexError::NoMatchForSpec { .. }
+            | PhpIndexError::NoWindowsZip { .. } => ErrorCode::RuntimeVersionNotFound,
+        };
+        EnvrError::Context {
+            code,
+            message: value.to_string(),
+            source: Box::new(value),
+        }
+    }
+}
 
 fn semver_key(s: &str) -> Option<SemKey> {
     let s = s.trim().trim_start_matches('v');
@@ -111,14 +181,14 @@ pub fn list_remote_versions(
 pub fn resolve_php_version(idx: &PhpReleasesIndex, spec: &str) -> EnvrResult<String> {
     let s = spec.trim().trim_start_matches('v').to_ascii_lowercase();
     if s.is_empty() {
-        return Err(EnvrError::Validation("empty php version spec".into()));
+        return Err(PhpIndexError::EmptySpec.into());
     }
     let mut items: Vec<(SemKey, String)> = idx
         .values()
         .filter_map(|line| semver_key(&line.version).map(|k| (k, line.version.clone())))
         .collect();
     if items.is_empty() {
-        return Err(EnvrError::Validation("no php versions in index".into()));
+        return Err(PhpIndexError::NoVersionsInIndex.into());
     }
     items.sort_by(|a, b| b.0.cmp(&a.0));
 
@@ -133,9 +203,10 @@ pub fn resolve_php_version(idx: &PhpReleasesIndex, spec: &str) -> EnvrResult<Str
     {
         return Ok(v.clone());
     }
-    Err(EnvrError::Validation(format!(
-        "no PHP release matches spec {spec:?}"
-    )))
+    Err(PhpIndexError::NoMatchForSpec {
+        spec: spec.to_string(),
+    }
+    .into())
 }
 
 /// Latest stable patch per `major.minor` line, **only for rows that have an installable zip**
@@ -217,7 +288,11 @@ pub fn pick_windows_zip(
                 .cloned()
                 .unwrap_or(serde_json::Value::Null);
             let entry: BuildEntry = serde_json::from_value(v).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "invalid php build entry json", e)
+                EnvrError::with_source(
+                    ErrorCode::RemoteIndexParseFailed,
+                    PhpIndexError::InvalidBuildEntryJson.to_string(),
+                    e,
+                )
             })?;
             if let Some(z) = entry.zip
                 && !z.path.is_empty()
@@ -226,10 +301,11 @@ pub fn pick_windows_zip(
             }
         }
     }
-    Err(EnvrError::Validation(format!(
-        "no suitable windows zip for php {} on arch {arch}",
-        line.version
-    )))
+    Err(PhpIndexError::NoWindowsZip {
+        version: line.version.clone(),
+        arch: arch.to_string(),
+    }
+    .into())
 }
 
 #[cfg(test)]
@@ -305,5 +381,12 @@ mod tests {
             list_latest_stable_per_minor_line_for_build(&idx, true, "x86_64").expect("ts");
         assert!(!ts_list.iter().any(|v| v.0 == "8.3.0"));
         assert!(ts_list.iter().any(|v| v.0 == "8.4.0"));
+    }
+
+    #[test]
+    fn resolve_empty_spec_uses_structured_code() {
+        let idx: PhpReleasesIndex = HashMap::new();
+        let err = resolve_php_version(&idx, " ").expect_err("empty");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionSpecInvalid);
     }
 }

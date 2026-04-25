@@ -82,6 +82,10 @@ pub fn error_code_token(code: ErrorCode) -> &'static str {
         ErrorCode::Platform => "platform",
         ErrorCode::Download => "download",
         ErrorCode::Mirror => "mirror",
+        ErrorCode::RuntimeVersionSpecInvalid => "runtime_version_spec_invalid",
+        ErrorCode::RuntimeVersionNotFound => "runtime_version_not_found",
+        ErrorCode::RemoteIndexFetchFailed => "remote_index_fetch_failed",
+        ErrorCode::RemoteIndexParseFailed => "remote_index_parse_failed",
     }
 }
 
@@ -234,7 +238,10 @@ pub fn emit_failure_envelope(
 #[inline]
 pub fn exit_code_for_error_code(code: ErrorCode) -> i32 {
     match code {
-        ErrorCode::Io | ErrorCode::Download | ErrorCode::Mirror => 2,
+        ErrorCode::Io
+        | ErrorCode::Download
+        | ErrorCode::Mirror
+        | ErrorCode::RemoteIndexFetchFailed => 2,
         _ => 1,
     }
 }
@@ -768,9 +775,36 @@ mod tests {
         assert_eq!(exit_code_for_error_code(ErrorCode::Validation), 1);
         assert_eq!(exit_code_for_error_code(ErrorCode::Runtime), 1);
         assert_eq!(exit_code_for_error_code(ErrorCode::Platform), 1);
+        assert_eq!(
+            exit_code_for_error_code(ErrorCode::RuntimeVersionSpecInvalid),
+            1
+        );
+        assert_eq!(exit_code_for_error_code(ErrorCode::RuntimeVersionNotFound), 1);
+        assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexParseFailed), 1);
         assert_eq!(exit_code_for_error_code(ErrorCode::Io), 2);
         assert_eq!(exit_code_for_error_code(ErrorCode::Download), 2);
         assert_eq!(exit_code_for_error_code(ErrorCode::Mirror), 2);
+        assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexFetchFailed), 2);
+    }
+
+    #[test]
+    fn structured_error_code_tokens_are_stable() {
+        assert_eq!(
+            error_code_token(ErrorCode::RuntimeVersionSpecInvalid),
+            "runtime_version_spec_invalid"
+        );
+        assert_eq!(
+            error_code_token(ErrorCode::RuntimeVersionNotFound),
+            "runtime_version_not_found"
+        );
+        assert_eq!(
+            error_code_token(ErrorCode::RemoteIndexFetchFailed),
+            "remote_index_fetch_failed"
+        );
+        assert_eq!(
+            error_code_token(ErrorCode::RemoteIndexParseFailed),
+            "remote_index_parse_failed"
+        );
     }
 
     #[test]

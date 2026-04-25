@@ -3,6 +3,7 @@ use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::time::Duration;
 
 pub const DEFAULT_GO_DL_JSON_URL: &str = "https://go.dev/dl/?mode=json&include=all";
@@ -32,6 +33,55 @@ pub struct GoDistFile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct SemKey(u64, u64, u64);
 
+#[derive(Debug)]
+enum GoIndexError {
+    FetchRequest { url: String },
+    FetchStatus { url: String, status: u16 },
+    ReadBody { url: String },
+    InvalidJson,
+    EmptySpec,
+    NoVersionsInIndex,
+    NoMatchForSpec { spec: String },
+    NoStablePlatformReleases,
+}
+
+impl fmt::Display for GoIndexError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FetchRequest { url } => write!(f, "go index request failed: {url}"),
+            Self::FetchStatus { url, status } => write!(f, "go index http status {status} for {url}"),
+            Self::ReadBody { url } => write!(f, "go index body read failed: {url}"),
+            Self::InvalidJson => write!(f, "invalid go releases json"),
+            Self::EmptySpec => write!(f, "empty go version spec"),
+            Self::NoVersionsInIndex => write!(f, "no go versions in index"),
+            Self::NoMatchForSpec { spec } => write!(f, "no go release matches spec {spec}"),
+            Self::NoStablePlatformReleases => write!(f, "no stable go releases for this platform in index"),
+        }
+    }
+}
+
+impl std::error::Error for GoIndexError {}
+
+impl From<GoIndexError> for EnvrError {
+    fn from(value: GoIndexError) -> Self {
+        let code = match value {
+            GoIndexError::FetchRequest { .. }
+            | GoIndexError::FetchStatus { .. }
+            | GoIndexError::ReadBody { .. } => ErrorCode::RemoteIndexFetchFailed,
+            GoIndexError::InvalidJson => ErrorCode::RemoteIndexParseFailed,
+            GoIndexError::EmptySpec => ErrorCode::RuntimeVersionSpecInvalid,
+            GoIndexError::NoVersionsInIndex
+            | GoIndexError::NoMatchForSpec { .. }
+            | GoIndexError::NoStablePlatformReleases => ErrorCode::RuntimeVersionNotFound,
+        };
+        EnvrError::Context {
+            code,
+            message: value.to_string(),
+            source: Box::new(value),
+        }
+    }
+}
+
 fn semver_key_from_go_label(version: &str) -> Option<SemKey> {
     let s = version.trim().strip_prefix("go")?;
     let base = s.split('-').next().unwrap_or(s);
@@ -59,27 +109,38 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 
 pub fn fetch_go_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
     let response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexFetchFailed,
+            GoIndexError::FetchRequest {
+                url: url.to_string(),
+            }
+            .to_string(),
+            e,
+        )
     })?;
     if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
+        return Err(GoIndexError::FetchStatus {
+            url: url.to_string(),
+            status: response.status().as_u16(),
+        }
+        .into());
     }
     response.text().map_err(|e| {
         EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
+            ErrorCode::RemoteIndexFetchFailed,
+            GoIndexError::ReadBody {
+                url: url.to_string(),
+            }
+            .to_string(),
             e,
         )
     })
 }
 
 pub fn parse_go_index(json: &str) -> EnvrResult<Vec<GoRelease>> {
-    serde_json::from_str(json)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid go releases json", e))
+    serde_json::from_str(json).map_err(|e| {
+        EnvrError::with_source(ErrorCode::RemoteIndexParseFailed, GoIndexError::InvalidJson.to_string(), e)
+    })
 }
 
 /// Map Rust `std::env::consts::OS` to Go download JSON `os` field (`macos` → `darwin`).
@@ -147,9 +208,7 @@ pub fn list_latest_stable_per_minor_line(
             .or_insert((k, label));
     }
     if best.is_empty() {
-        return Err(EnvrError::Validation(
-            "no stable go releases for this platform in index".into(),
-        ));
+        return Err(GoIndexError::NoStablePlatformReleases.into());
     }
     let mut items: Vec<(SemKey, String)> = best.into_values().collect();
     items.sort_by(|a, b| b.0.cmp(&a.0));
@@ -186,13 +245,13 @@ pub fn resolve_go_version(releases: &[GoRelease], spec: &str) -> EnvrResult<Stri
         })
         .collect();
     if items.is_empty() {
-        return Err(EnvrError::Validation("no go versions in index".into()));
+        return Err(GoIndexError::NoVersionsInIndex.into());
     }
     items.sort_by(|a, b| b.0.cmp(&a.0));
 
     let s = spec.trim().trim_start_matches('v').to_ascii_lowercase();
     if s.is_empty() {
-        return Err(EnvrError::Validation("empty go version spec".into()));
+        return Err(GoIndexError::EmptySpec.into());
     }
     if s == "latest" || s == "stable" {
         if let Some((_, v, _)) = items.iter().find(|(_, _, stable)| *stable) {
@@ -208,9 +267,10 @@ pub fn resolve_go_version(releases: &[GoRelease], spec: &str) -> EnvrResult<Stri
     {
         return Ok(v.clone());
     }
-    Err(EnvrError::Validation(format!(
-        "no Go release matches spec {spec:?}"
-    )))
+    Err(GoIndexError::NoMatchForSpec {
+        spec: spec.to_string(),
+    }
+    .into())
 }
 
 #[cfg(test)]
@@ -281,5 +341,16 @@ mod tests {
         assert_eq!(got.len(), 2);
         assert_eq!(got[0].0, "1.23.0");
         assert_eq!(got[1].0, "1.22.6");
+    }
+
+    #[test]
+    fn resolve_empty_spec_uses_structured_code() {
+        let rel = vec![GoRelease {
+            version: "go1.22.6".into(),
+            stable: true,
+            files: vec![],
+        }];
+        let err = resolve_go_version(&rel, " ").expect_err("empty spec");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionSpecInvalid);
     }
 }

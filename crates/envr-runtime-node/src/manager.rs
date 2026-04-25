@@ -65,6 +65,22 @@ fn join_url_path(dist_root: &str, rel: &str) -> String {
     format!("{root}/{rel}")
 }
 
+fn err_version_spec_invalid(msg: impl Into<String>) -> EnvrError {
+    EnvrError::Context {
+        code: ErrorCode::RuntimeVersionSpecInvalid,
+        message: msg.into(),
+        source: Box::new(std::io::Error::other("runtime-version-spec-invalid")),
+    }
+}
+
+fn err_version_not_found(msg: impl Into<String>) -> EnvrError {
+    EnvrError::Context {
+        code: ErrorCode::RuntimeVersionNotFound,
+        message: msg.into(),
+        source: Box::new(std::io::Error::other("runtime-version-not-found")),
+    }
+}
+
 /// Parse `SHASUMS256.txt` lines into `(hex, filename)`.
 pub fn parse_shasums256(text: &str) -> EnvrResult<Vec<(String, String)>> {
     let mut out = Vec::new();
@@ -78,10 +94,10 @@ pub fn parse_shasums256(text: &str) -> EnvrResult<Vec<(String, String)>> {
         } else {
             let mut parts = line.split_whitespace();
             let h = parts.next().ok_or_else(|| {
-                EnvrError::Validation("malformed SHASUMS256 line (missing hash)".into())
+                err_version_spec_invalid("malformed SHASUMS256 line (missing hash)")
             })?;
             let n = parts.next().ok_or_else(|| {
-                EnvrError::Validation("malformed SHASUMS256 line (missing name)".into())
+                err_version_spec_invalid("malformed SHASUMS256 line (missing name)")
             })?;
             (h, n)
         };
@@ -104,7 +120,7 @@ fn preferred_suffixes(os: &str, arch: &str) -> EnvrResult<&'static [&'static str
         }
         ("macos", "x86_64") => Ok(&["-darwin-x64.tar.gz"]),
         ("macos", "aarch64") => Ok(&["-darwin-arm64.tar.gz"]),
-        _ => Err(EnvrError::Platform(format!(
+        _ => Err(err_version_not_found(format!(
             "unsupported host for node install: {os}-{arch}"
         ))),
     }
@@ -159,7 +175,7 @@ pub fn pick_node_dist_artifact(
             return Ok((h.clone(), n.clone()));
         }
     }
-    Err(EnvrError::Validation(format!(
+    Err(err_version_not_found(format!(
         "no node dist file for {version_v} on {os}-{arch} (check SHASUMS256)"
     )))
 }
@@ -209,7 +225,7 @@ pub fn read_current(paths: &NodePaths) -> EnvrResult<Option<RuntimeVersion>> {
         };
         let name = resolved
             .file_name()
-            .ok_or_else(|| EnvrError::Runtime("invalid node current link".into()))?
+            .ok_or_else(|| err_version_not_found("invalid node current link"))?
             .to_string_lossy()
             .into_owned();
         return Ok(Some(RuntimeVersion(name)));
@@ -227,7 +243,7 @@ pub fn read_current(paths: &NodePaths) -> EnvrResult<Option<RuntimeVersion>> {
     }
     let name = target
         .file_name()
-        .ok_or_else(|| EnvrError::Runtime("invalid node current pointer".into()))?
+        .ok_or_else(|| err_version_not_found("invalid node current pointer"))?
         .to_string_lossy()
         .into_owned();
     Ok(Some(RuntimeVersion(name)))
@@ -275,22 +291,26 @@ impl NodeManager {
             .send()
             .map_err(|e| {
                 EnvrError::with_source(
-                    ErrorCode::Download,
+                    ErrorCode::RemoteIndexFetchFailed,
                     format!("request failed for {shasums_url}"),
                     e,
                 )
             })
             .and_then(|r| {
                 if !r.status().is_success() {
-                    return Err(EnvrError::Download(format!(
+                    return Err(EnvrError::Context {
+                        code: ErrorCode::RemoteIndexFetchFailed,
+                        message: format!(
                         "GET {} -> {}",
                         shasums_url,
                         r.status()
-                    )));
+                    ),
+                        source: Box::new(std::io::Error::other("remote-index-fetch-failed")),
+                    });
                 }
                 r.text().map_err(|e| {
                     EnvrError::with_source(
-                        ErrorCode::Download,
+                        ErrorCode::RemoteIndexFetchFailed,
                         format!("read body failed for {shasums_url}"),
                         e,
                     )
@@ -334,9 +354,7 @@ impl NodeManager {
             },
             || {
                 if !node_installation_valid(&final_dir) {
-                    return Err(EnvrError::Validation(
-                        "extracted node layout missing node binary".into(),
-                    ));
+                    return Err(err_version_not_found("extracted node layout missing node binary"));
                 }
                 self.set_current(version)?;
                 Ok(RuntimeVersion(normalize_node_version(&version.0)))
@@ -347,10 +365,7 @@ impl NodeManager {
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !node_installation_valid(&dir) {
-            return Err(EnvrError::Validation(format!(
-                "node {} is not installed",
-                version.0
-            )));
+            return Err(err_version_not_found(format!("node {} is not installed", version.0)));
         }
         let abs = fs::canonicalize(&dir).map_err(EnvrError::from)?;
         let cur = self.paths.current_link();
@@ -421,6 +436,20 @@ mod tests {
         ];
         let (_, n) = pick_node_dist_artifact(&entries, "linux", "x86_64", "v10.0.0").expect("pick");
         assert_eq!(n, "node-v10.0.0-linux-x64.tar.xz");
+    }
+
+    #[test]
+    fn pick_artifact_not_found_has_structured_code() {
+        let entries = vec![("x".repeat(64), "node-v10.0.0-win-x64.zip".to_string())];
+        let err =
+            pick_node_dist_artifact(&entries, "linux", "x86_64", "v10.0.0").expect_err("no dist");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionNotFound);
+    }
+
+    #[test]
+    fn parse_shasums_malformed_has_structured_code() {
+        let err = parse_shasums256("only_hash_without_name").expect_err("malformed");
+        assert_eq!(err.code(), ErrorCode::RuntimeVersionSpecInvalid);
     }
 
     #[test]
