@@ -1,17 +1,11 @@
 //! Main-window shell: left navigation, routed content, global error banner.
 
-use std::time::Duration;
-
-use envr_config::settings::{FontMode, Settings, ThemeMode};
-use envr_ui::font;
-use envr_ui::theme::Srgb;
+use envr_config::settings::Settings;
 use envr_ui::theme::{
     ThemeTokens, UiFlavor, default_flavor_for_target, scheme_for_mode, shell as layout_shell,
     tokens_for_appearance,
 };
-use iced::font::Family;
-use iced::window;
-use iced::{Element, Size, Subscription, Task, application};
+use iced::{Element, Size, Task, application};
 
 use crate::gui_ops;
 use crate::theme as gui_theme;
@@ -22,11 +16,13 @@ use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::settings::{SettingsMsg, SettingsViewState};
 use crate::view::shell;
 
+mod bootstrap;
 mod download_chrome;
 mod env_center_ops;
 mod navigation;
 mod pages;
 mod persist_settings;
+mod subscription;
 
 pub(crate) use download_chrome::{
     clamp_download_panel_to_window, handle_motion_tick, on_main_window_resized,
@@ -38,6 +34,8 @@ pub(crate) use persist_settings::{
     persist_path_proxy_toggle, persist_runtime_settings_update, persist_settings_draft_task,
     settings_path,
 };
+
+use bootstrap::{accent_from_settings, configured_default_font, env_flag, ui_text_scale_from_env};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Route {
@@ -130,35 +128,6 @@ impl Default for AppState {
     }
 }
 
-fn ui_text_scale_from_env() -> f32 {
-    std::env::var("ENVR_UI_SCALE")
-        .ok()
-        .and_then(|s| s.trim().parse::<f32>().ok())
-        .unwrap_or(1.0)
-        .clamp(0.85, 1.35)
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var(name)
-        .ok()
-        .map(|s| {
-            let t = s.trim().to_ascii_lowercase();
-            t == "1" || t == "true" || t == "yes" || t == "on"
-        })
-        .unwrap_or(false)
-}
-
-fn accent_from_settings(st: &Settings) -> Option<Srgb> {
-    st.appearance.accent_color.as_deref().and_then(|s| {
-        let t = s.trim();
-        if t.is_empty() {
-            None
-        } else {
-            Srgb::from_hex(t).ok()
-        }
-    })
-}
-
 impl AppState {
     pub(crate) fn tokens(&self) -> ThemeTokens {
         let scheme = scheme_for_mode(self.settings.draft.appearance.theme_mode);
@@ -235,55 +204,7 @@ pub fn run() -> iced::Result {
     .title("Envr")
     .default_font(configured_default_font(&startup))
     .theme(|state: &AppState| gui_theme::iced_theme(state.tokens()))
-    .subscription(|state| {
-        let runtime_skeleton = matches!(state.route(), Route::Runtime)
-            && state.env_center.installed.is_empty()
-            && (state.env_center.busy
-                || (envr_domain::runtime::runtime_descriptor(state.env_center.kind)
-                    .supports_remote_latest
-                    && state
-                        .env_center
-                        .unified_major_rows_by_kind
-                        .get(&state.env_center.kind)
-                        .is_none_or(|rows| rows.is_empty())));
-        let need_motion = state.downloads.needs_motion_tick()
-            || state.downloads.title_drag_armed_since.is_some()
-            || runtime_skeleton;
-        let maybe_motion = need_motion
-            .then(|| iced::time::every(Duration::from_millis(32)))
-            .map(|s| s.map(|_| Message::MotionTick));
-
-        let progress_only = state.downloads.needs_tick() && !need_motion;
-        let maybe_tick = progress_only
-            .then(|| iced::time::every(Duration::from_millis(400)))
-            .map(|s| s.map(|_| Message::Download(DownloadMsg::Tick)));
-
-        let need_pointer_events =
-            state.downloads.dragging || state.downloads.title_drag_armed_since.is_some();
-        let maybe_events = need_pointer_events
-            .then(|| iced::event::listen().map(|e| Message::Download(DownloadMsg::Event(e))));
-
-        let theme_poll = (state.settings.draft.appearance.theme_mode == ThemeMode::FollowSystem)
-            .then(|| iced::time::every(Duration::from_secs(1)))
-            .map(|s| s.map(|_| Message::ThemePollTick));
-
-        let mut subs = Vec::new();
-        if let Some(t) = maybe_motion {
-            subs.push(t);
-        }
-        if let Some(t) = maybe_tick {
-            subs.push(t);
-        }
-        if let Some(e) = maybe_events {
-            subs.push(e);
-        }
-        if let Some(t) = theme_poll {
-            subs.push(t);
-        }
-        subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::A11yPollTick));
-        subs.push(window::resize_events().map(|(_id, s)| Message::WindowResized(s)));
-        Subscription::batch(subs)
-    })
+    .subscription(subscription::shell_subscription)
     .window(iced::window::Settings {
         size: Size::new(
             layout_shell::WINDOW_DEFAULT_W,
@@ -297,26 +218,6 @@ pub fn run() -> iced::Result {
         ..iced::window::Settings::default()
     })
     .run()
-}
-
-fn configured_default_font(st: &Settings) -> iced::Font {
-    match st.appearance.font.mode {
-        FontMode::Auto => iced::Font::with_name(font::preferred_system_sans_family()),
-        FontMode::Custom => {
-            let fam = st
-                .appearance
-                .font
-                .family
-                .as_deref()
-                .unwrap_or(font::preferred_system_sans_family())
-                .to_string();
-            let leaked: &'static str = Box::leak(fam.into_boxed_str());
-            iced::Font {
-                family: Family::Name(leaked),
-                ..iced::Font::default()
-            }
-        }
-    }
 }
 
 fn update(state: &mut AppState, message: Message) -> Task<Message> {
