@@ -315,11 +315,16 @@ impl VersionListAdapter for BunRuntimeProvider {
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
         let url = maybe_mirror_url(&st, &self.tags_api)?;
         idx.refresh_major_rows_remote(url.as_str(), ttl, mode, |u| {
-            let client = index::blocking_http_client()?;
-            let tags = index::fetch_all_tags(&client, u)?;
-            serde_json::to_string(&tags).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
-            })
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = index::blocking_http_client()?;
+                    let tags = index::fetch_all_tags(&client, u)?;
+                    serde_json::to_string(&tags).map_err(|e| {
+                        EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
+                    })
+                },
+            )
         })
     }
 
@@ -335,11 +340,16 @@ impl VersionListAdapter for BunRuntimeProvider {
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
         let url = maybe_mirror_url(&st, &self.tags_api)?;
         idx.refresh_children_remote(url.as_str(), ttl, mode, major_key, |u| {
-            let client = index::blocking_http_client()?;
-            let tags = index::fetch_all_tags(&client, u)?;
-            serde_json::to_string(&tags).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
-            })
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = index::blocking_http_client()?;
+                    let tags = index::fetch_all_tags(&client, u)?;
+                    serde_json::to_string(&tags).map_err(|e| {
+                        EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
+                    })
+                },
+            )
         })
     }
 

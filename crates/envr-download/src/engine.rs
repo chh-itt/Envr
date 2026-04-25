@@ -1,12 +1,19 @@
 use crate::task::CancelToken;
-use crate::{GlobalRateLimiter, global_download_limiter};
+use crate::{
+    DownloadPriority, GlobalRateLimiter, global_download_concurrency_limiter,
+    global_download_limiter,
+};
+use crate::stats::{
+    record_async_pool_hit, record_async_pool_miss,
+};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use futures::StreamExt;
 use reqwest::{Client, StatusCode, Url, header};
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock, RwLock,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
@@ -40,6 +47,8 @@ pub struct DownloadOptions {
     pub max_bytes_per_sec: Option<u64>,
     /// Optional shared global limiter for a group of downloads.
     pub global_limiter: Option<Arc<GlobalRateLimiter>>,
+    /// Queue priority for global concurrency control. `Artifact` is default runtime install behavior.
+    pub priority: DownloadPriority,
 }
 
 impl Default for DownloadOptions {
@@ -48,6 +57,7 @@ impl Default for DownloadOptions {
             timeout: Duration::from_secs(60),
             max_bytes_per_sec: None,
             global_limiter: None,
+            priority: DownloadPriority::Artifact,
         }
     }
 }
@@ -70,13 +80,28 @@ impl DownloadEngine {
     }
 
     pub fn default_client() -> EnvrResult<Client> {
-        Client::builder()
+        static POOL: OnceLock<RwLock<HashMap<String, Client>>> = OnceLock::new();
+        let pool = POOL.get_or_init(|| RwLock::new(HashMap::new()));
+        let connect_timeout = http_connect_timeout_from_env().as_secs();
+        let key = format!("ua=envr/0.1|connect={connect_timeout}|profile=default");
+        if let Ok(g) = pool.read()
+            && let Some(client) = g.get(&key)
+        {
+            record_async_pool_hit();
+            return Ok(client.clone());
+        }
+        record_async_pool_miss();
+        let built = Client::builder()
             .user_agent("envr/0.1")
             .connect_timeout(http_connect_timeout_from_env())
             .build()
             .map_err(|e| {
                 EnvrError::with_source(ErrorCode::Download, "reqwest client build failed", e)
-            })
+            })?;
+        if let Ok(mut g) = pool.write() {
+            g.insert(key, built.clone());
+        }
+        Ok(built)
     }
 
     /// Optional `progress_downloaded` / `progress_total` are updated for GUI observability.
@@ -95,6 +120,11 @@ impl DownloadEngine {
         progress_total: Option<Arc<AtomicU64>>,
         on_progress: Option<DownloadProgressFn>,
     ) -> EnvrResult<DownloadOutcome> {
+        let _concurrency_permit = if let Some(lim) = global_download_concurrency_limiter() {
+            Some(lim.acquire_async(options.priority).await?)
+        } else {
+            None
+        };
         let dest_path = dest_path.as_ref().to_path_buf();
         let mut range_recovery = 0u8;
         loop {
@@ -380,6 +410,7 @@ mod tests {
             timeout: Duration::from_secs(10),
             max_bytes_per_sec: None,
             global_limiter: None,
+            priority: DownloadPriority::Artifact,
         };
         let out = DownloadEngine::new(Client::new())
             .download_to_file(url, &dest, &cancel, &opts, None, None, None)
@@ -415,6 +446,7 @@ mod tests {
             timeout: Duration::from_secs(10),
             max_bytes_per_sec: None,
             global_limiter: None,
+            priority: DownloadPriority::Artifact,
         };
         let out = DownloadEngine::new(Client::new())
             .download_to_file(url, &dest, &cancel, &opts, None, None, None)

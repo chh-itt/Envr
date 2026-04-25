@@ -322,8 +322,13 @@ impl VersionListAdapter for PhpRuntimeProvider {
         };
 
         let items = idx.load_items(&url, ttl, mode, |u| {
-            let client = crate::index::blocking_http_client()?;
-            crate::index::fetch_php_windows_releases_json(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = crate::index::blocking_http_client()?;
+                    crate::index::fetch_php_windows_releases_json(&client, u)
+                },
+            )
         })?;
         // Major rows should be stable-only for PHP (matches current provider behavior).
         let latest = idx.latest_installable_per_major_labels(&items, |it| {
@@ -370,8 +375,13 @@ impl VersionListAdapter for PhpRuntimeProvider {
             CacheMode::StaleOk
         };
         idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
-            let client = crate::index::blocking_http_client()?;
-            crate::index::fetch_php_windows_releases_json(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = crate::index::blocking_http_client()?;
+                    crate::index::fetch_php_windows_releases_json(&client, u)
+                },
+            )
         })
     }
 

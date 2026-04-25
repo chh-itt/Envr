@@ -254,8 +254,13 @@ impl VersionListAdapter for ElixirRuntimeProvider {
         let idx = self.cached_index()?;
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
         idx.refresh_major_rows_remote(&self.builds_index_url, ttl, envr_platform::remote_index_cache::CacheMode::StaleOk, |u| {
-            let client = index::blocking_http_client()?;
-            index::fetch_builds_index(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = index::blocking_http_client()?;
+                    index::fetch_builds_index(&client, u)
+                },
+            )
         })
     }
 
@@ -272,8 +277,13 @@ impl VersionListAdapter for ElixirRuntimeProvider {
             envr_platform::remote_index_cache::CacheMode::StaleOk,
             major_key,
             |u| {
-                let client = index::blocking_http_client()?;
-                index::fetch_builds_index(&client, u)
+                envr_download::blocking::with_download_priority_blocking(
+                    envr_download::DownloadPriority::Index,
+                    || {
+                        let client = index::blocking_http_client()?;
+                        index::fetch_builds_index(&client, u)
+                    },
+                )
             },
         )
     }

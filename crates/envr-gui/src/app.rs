@@ -102,6 +102,9 @@ impl Default for AppState {
         let locale = envr_core::i18n::locale_from_settings(&startup);
         // Best-effort: configure global download bandwidth cap for this GUI process.
         let _ = envr_download::set_global_download_limit(Some(startup.download.max_bytes_per_sec));
+        let _ = envr_download::set_global_download_concurrency_limit(Some(
+            startup.download.max_concurrent_downloads as usize,
+        ));
         Self {
             locale,
             route: Route::default(),

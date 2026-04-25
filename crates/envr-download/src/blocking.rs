@@ -5,14 +5,18 @@
 
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use reqwest::blocking::Client;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, RwLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use crate::global_limit::global_download_limiter;
+use crate::global_limit::{
+    DownloadPriority, global_download_concurrency_limiter, global_download_limiter,
+};
+use crate::stats::{record_blocking_pool_hit, record_blocking_pool_miss};
 
 fn remove_path_if_exists(path: &Path) {
     if fs::symlink_metadata(path).is_err() {
@@ -52,7 +56,25 @@ pub fn build_blocking_http_client(
     user_agent: &str,
     request_timeout: Option<Duration>,
 ) -> EnvrResult<Client> {
-    blocking_http_client_builder(user_agent, request_timeout)
+    static POOL: OnceLock<RwLock<HashMap<String, Client>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| RwLock::new(HashMap::new()));
+    let connect_timeout = std::env::var("ENVR_HTTP_CONNECT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(30);
+    let timeout = request_timeout.unwrap_or(Duration::from_secs(60)).as_secs();
+    let key = format!("ua={user_agent}|timeout={timeout}|connect={connect_timeout}|profile=default");
+
+    if let Ok(g) = pool.read()
+        && let Some(client) = g.get(&key)
+    {
+        record_blocking_pool_hit();
+        return Ok(client.clone());
+    }
+    record_blocking_pool_miss();
+
+    let built = blocking_http_client_builder(user_agent, request_timeout)
         .build()
         .map_err(|e| {
             EnvrError::with_source(
@@ -60,7 +82,50 @@ pub fn build_blocking_http_client(
                 "reqwest blocking client build failed",
                 e,
             )
-        })
+        })?;
+    if let Ok(mut g) = pool.write() {
+        g.insert(key, built.clone());
+    }
+    Ok(built)
+}
+
+/// Shared blocking HTTP client builder for runtime index fetches that require HTTP/1 only.
+pub fn build_blocking_http1_only_client(
+    user_agent: &str,
+    request_timeout: Option<Duration>,
+) -> EnvrResult<Client> {
+    static POOL: OnceLock<RwLock<HashMap<String, Client>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| RwLock::new(HashMap::new()));
+    let connect_timeout = std::env::var("ENVR_HTTP_CONNECT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(30);
+    let timeout = request_timeout.unwrap_or(Duration::from_secs(60)).as_secs();
+    let key = format!("ua={user_agent}|timeout={timeout}|connect={connect_timeout}|profile=http1");
+
+    if let Ok(g) = pool.read()
+        && let Some(client) = g.get(&key)
+    {
+        record_blocking_pool_hit();
+        return Ok(client.clone());
+    }
+    record_blocking_pool_miss();
+
+    let built = blocking_http_client_builder(user_agent, request_timeout)
+        .http1_only()
+        .build()
+        .map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Download,
+                "reqwest blocking client build failed",
+                e,
+            )
+        })?;
+    if let Ok(mut g) = pool.write() {
+        g.insert(key, built.clone());
+    }
+    Ok(built)
 }
 
 /// GET `url` to `path`, optionally resuming from existing partial file length, with bounded retries.
@@ -93,6 +158,8 @@ pub fn download_url_to_path_resumable_with_headers(
     cancel: Option<&Arc<AtomicBool>>,
     headers: Option<&reqwest::header::HeaderMap>,
 ) -> EnvrResult<()> {
+    let _permit = global_download_concurrency_limiter()
+        .map(|lim| lim.acquire_blocking(DownloadPriority::Artifact));
     let mut last_err: Option<EnvrError> = None;
     let mut range_recovery = 0u8;
     for attempt in 1..=3 {
@@ -238,4 +305,19 @@ pub fn download_url_to_path_resumable_with_headers(
 
     Err(last_err
         .unwrap_or_else(|| EnvrError::Download("download failed (unknown error)".to_string())))
+}
+
+/// Execute a blocking network section under the global download concurrency scheduler.
+///
+/// Useful for index/tag fetches that should use `Index` priority while reusing the same
+/// process-wide queue as artifact downloads.
+pub fn with_download_priority_blocking<T, F>(
+    priority: DownloadPriority,
+    f: F,
+) -> EnvrResult<T>
+where
+    F: FnOnce() -> EnvrResult<T>,
+{
+    let _permit = global_download_concurrency_limiter().map(|lim| lim.acquire_blocking(priority));
+    f()
 }

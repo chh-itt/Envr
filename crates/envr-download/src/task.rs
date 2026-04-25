@@ -1,4 +1,5 @@
 use envr_error::{EnvrError, EnvrResult};
+use crate::stats::record_retry_scheduled;
 use std::{
     fmt,
     sync::{
@@ -169,6 +170,7 @@ impl DownloadTask {
 
                 if self.attempts <= self.retry_policy.max_retries {
                     self.state = TaskState::Queued;
+                    record_retry_scheduled();
                     Ok(Some(self.retry_policy.backoff_delay(self.attempts)))
                 } else {
                     self.state = TaskState::Failed;

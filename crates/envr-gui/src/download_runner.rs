@@ -6,6 +6,7 @@ use std::sync::atomic::AtomicU64;
 
 use envr_download::engine::{DownloadEngine, DownloadOptions};
 use envr_download::task::CancelToken;
+use envr_download::DownloadPriority;
 use iced::Task;
 use reqwest::Url;
 
@@ -34,12 +35,16 @@ pub fn start_http_job(
             }
         };
         let engine = DownloadEngine::new(client);
+        let opts = DownloadOptions {
+            priority: DownloadPriority::Prefetch,
+            ..DownloadOptions::default()
+        };
         match engine
             .download_to_file(
                 url,
                 &dest,
                 &cancel,
-                &DownloadOptions::default(),
+                &opts,
                 Some(downloaded),
                 Some(total),
                 None,

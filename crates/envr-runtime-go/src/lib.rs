@@ -300,8 +300,13 @@ impl VersionListAdapter for GoRuntimeProvider {
         };
         // Go major rows should prefer stable releases (matches current provider behavior).
         let items = idx.load_items(&url, ttl, mode, |u| {
-            let client = crate::index::blocking_http_client()?;
-            crate::index::fetch_go_index(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = crate::index::blocking_http_client()?;
+                    crate::index::fetch_go_index(&client, u)
+                },
+            )
         })?;
         let latest = idx.latest_installable_per_major_labels(&items, |it| it.stable);
         let rows: Vec<MajorVersionRecord> = latest
@@ -364,8 +369,13 @@ impl VersionListAdapter for GoRuntimeProvider {
             CacheMode::StaleOk
         };
         idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
-            let client = crate::index::blocking_http_client()?;
-            crate::index::fetch_go_index(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = crate::index::blocking_http_client()?;
+                    crate::index::fetch_go_index(&client, u)
+                },
+            )
         })
     }
 

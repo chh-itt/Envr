@@ -2,7 +2,7 @@
 
 use crate::vendor::JavaVendor;
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
-use envr_download::blocking::blocking_http_client_builder;
+use envr_download::blocking::build_blocking_http1_only_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde::Deserialize;
 use std::cmp::Reverse;
@@ -89,17 +89,7 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 envr-runtime-java/{}",
         env!("CARGO_PKG_VERSION")
     );
-    blocking_http_client_builder(&ua, Some(Duration::from_secs(900)))
-        .http1_only()
-        .connect_timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                "reqwest blocking client build failed",
-                e,
-            )
-        })
+    build_blocking_http1_only_client(&ua, Some(Duration::from_secs(900)))
 }
 
 fn fetch_text(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {

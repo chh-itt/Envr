@@ -9,6 +9,7 @@ use crate::output;
 use envr_config::settings::{settings_path_from_platform, validate_settings_file};
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
+use envr_download::snapshot_download_control_plane_stats;
 use serde_json::json;
 
 fn summarize_dir(path: &std::path::Path, max_entries: usize) -> Vec<String> {
@@ -50,6 +51,7 @@ pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     let log_dir = envr_core::logging::resolve_log_dir()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "(unknown)".into());
+    let dl = snapshot_download_control_plane_stats();
 
     let data = json!({
         "cwd": cwd,
@@ -60,6 +62,21 @@ pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
         "envr_env": envr_vars.iter().map(|(k,v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
         "rust_log": std::env::var("RUST_LOG").unwrap_or_default(),
         "log_dir": log_dir,
+        "download_control_plane": {
+            "blocking_pool_hits": dl.blocking_pool_hits,
+            "blocking_pool_misses": dl.blocking_pool_misses,
+            "async_pool_hits": dl.async_pool_hits,
+            "async_pool_misses": dl.async_pool_misses,
+            "retry_scheduled": dl.retry_scheduled,
+            "blocking_queue_wait_events": dl.blocking_queue_wait_events,
+            "blocking_queue_wait_total_micros": dl.blocking_queue_wait_total_micros,
+            "async_queue_wait_events": dl.async_queue_wait_events,
+            "async_queue_wait_total_micros": dl.async_queue_wait_total_micros,
+            "blocking_in_flight": dl.blocking_in_flight,
+            "blocking_in_flight_peak": dl.blocking_in_flight_peak,
+            "async_in_flight": dl.async_in_flight,
+            "async_in_flight_peak": dl.async_in_flight_peak,
+        },
     });
 
     Ok(output::emit_ok(
@@ -86,6 +103,17 @@ pub(crate) fn info_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
                 }
             }
             println!("log dir: {log_dir}");
+            println!(
+                "download cp: pool(b hit/miss={} / {} ; a hit/miss={} / {}), queue_wait(events b/a={} / {}), in_flight(peak b/a={} / {})",
+                dl.blocking_pool_hits,
+                dl.blocking_pool_misses,
+                dl.async_pool_hits,
+                dl.async_pool_misses,
+                dl.blocking_queue_wait_events,
+                dl.async_queue_wait_events,
+                dl.blocking_in_flight_peak,
+                dl.async_in_flight_peak
+            );
             let rl = std::env::var("RUST_LOG").unwrap_or_default();
             if !rl.is_empty() {
                 println!("RUST_LOG: {rl}");

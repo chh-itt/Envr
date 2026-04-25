@@ -181,6 +181,9 @@ fn maybe_prune_artifact_cache_on_start() {
     };
     // Best-effort: configure global download bandwidth cap for this CLI process.
     let _ = envr_download::set_global_download_limit(Some(settings.download.max_bytes_per_sec));
+    let _ = envr_download::set_global_download_concurrency_limit(Some(
+        settings.download.max_concurrent_downloads as usize,
+    ));
     if !settings.behavior.cache_auto_prune_on_start {
         return;
     }

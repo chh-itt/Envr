@@ -432,8 +432,13 @@ impl VersionListAdapter for NodeRuntimeProvider {
             CacheMode::StaleOk
         };
         idx.refresh_major_rows_remote(&url, ttl, mode, |u| {
-            let client = index::blocking_http_client()?;
-            index::fetch_node_index(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = index::blocking_http_client()?;
+                    index::fetch_node_index(&client, u)
+                },
+            )
         })
     }
 
@@ -452,8 +457,13 @@ impl VersionListAdapter for NodeRuntimeProvider {
             CacheMode::StaleOk
         };
         idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
-            let client = index::blocking_http_client()?;
-            index::fetch_node_index(&client, u)
+            envr_download::blocking::with_download_priority_blocking(
+                envr_download::DownloadPriority::Index,
+                || {
+                    let client = index::blocking_http_client()?;
+                    index::fetch_node_index(&client, u)
+                },
+            )
         })
     }
 
