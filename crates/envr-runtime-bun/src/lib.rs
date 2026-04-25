@@ -15,14 +15,50 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
+use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 pub struct BunRuntimeProvider {
     tags_api: String,
     runtime_root_override: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct BunTagItem {
+    name: String,
+}
+
+#[derive(Debug, Clone)]
+struct BunTagParser;
+
+impl RemoteIndexParser for BunTagParser {
+    type Item = BunTagItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let tags = index::parse_tags(body)?;
+        Ok(tags
+            .into_iter()
+            .map(|t| BunTagItem { name: t.name })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.name.as_str()
+    }
+
+    fn is_installable_on_host(&self, item: &Self::Item) -> bool {
+        index::normalize_bun_version(&item.name).is_some_and(|v| {
+            v.split('.')
+                .next()
+                .and_then(|s| s.parse::<u64>().ok())
+                .is_some_and(|m| m >= 1)
+        })
+    }
 }
 
 impl BunRuntimeProvider {
@@ -142,6 +178,21 @@ impl BunRuntimeProvider {
         }
         None
     }
+
+    fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("bun").join("unified_version_list"))
+    }
+
+    fn cached_index(&self) -> EnvrResult<CachedRemoteIndex<BunTagParser>> {
+        let unified_dir = self.unified_list_dir()?;
+        Ok(CachedRemoteIndex::new(
+            RuntimeKind::Bun,
+            unified_dir.clone(),
+            RemoteSourceCache::new(unified_dir, "bun_github_tags"),
+            BunTagParser,
+        ))
+    }
 }
 
 impl Default for BunRuntimeProvider {
@@ -240,5 +291,59 @@ impl RuntimeProvider for BunRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = BunPaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for BunRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Bun
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let st = load_settings_cached()?;
+        let offline = st.mirror.mode == envr_config::settings::MirrorMode::Offline;
+        let mode = if offline { CacheMode::Offline } else { CacheMode::StaleOk };
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let url = maybe_mirror_url(&st, &self.tags_api)?;
+        idx.refresh_major_rows_remote(url.as_str(), ttl, mode, |u| {
+            let client = index::blocking_http_client()?;
+            let tags = index::fetch_all_tags(&client, u)?;
+            serde_json::to_string(&tags).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
+            })
+        })
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let st = load_settings_cached()?;
+        let offline = st.mirror.mode == envr_config::settings::MirrorMode::Offline;
+        let mode = if offline { CacheMode::Offline } else { CacheMode::StaleOk };
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let url = maybe_mirror_url(&st, &self.tags_api)?;
+        idx.refresh_children_remote(url.as_str(), ttl, mode, major_key, |u| {
+            let client = index::blocking_http_client()?;
+            let tags = index::fetch_all_tags(&client, u)?;
+            serde_json::to_string(&tags).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode bun tags", e)
+            })
+        })
+    }
+
+    fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {
+        true
     }
 }

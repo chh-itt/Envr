@@ -638,6 +638,30 @@ pub trait RuntimeProvider: Send + Sync {
         &self,
         version: &RuntimeVersion,
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)>;
+
+    /// Optional unified major/children list adapter for GUI/CLI.
+    ///
+    /// When provided, higher layers should prefer this over `envr-core::RuntimeService`'s legacy
+    /// unified list cache to avoid duplicated caching layers and data divergence.
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        None
+    }
+}
+
+/// Runtime-agnostic adapter contract for the unified major/children version list UI.
+///
+/// This mirrors the draft in `docs/architecture/unified-version-list-interface-draft.md`.
+pub trait VersionListAdapter: Send + Sync {
+    fn kind(&self) -> RuntimeKind;
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>>;
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>>;
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>>;
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>>;
+
+    /// Installability filter to avoid "shown but cannot install" rows.
+    fn is_installable_on_host(&self, version: &VersionRecord) -> bool;
 }
 
 impl<T: RuntimeProvider + ?Sized> RuntimeIndex for T {

@@ -15,13 +15,47 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub struct ElixirRuntimeProvider {
     builds_index_url: String,
     runtime_root_override: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ElixirBuildItem {
+    version: String,
+    otp: String,
+}
+
+#[derive(Debug, Clone)]
+struct ElixirBuildParser {
+    builds_base_url: String,
+    preferred_otp: String,
+}
+
+impl envr_platform::remote_index_cache::RemoteIndexParser for ElixirBuildParser {
+    type Item = ElixirBuildItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let builds = index::parse_elixir_builds(body, &self.builds_base_url)?;
+        let selected = index::select_builds_prefer_otp(&builds, &self.preferred_otp);
+        Ok(selected
+            .into_iter()
+            .map(|b| ElixirBuildItem {
+                version: b.version,
+                otp: b.otp,
+            })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.version.as_str()
+    }
 }
 
 impl ElixirRuntimeProvider {
@@ -65,6 +99,26 @@ impl ElixirRuntimeProvider {
         let root = self.runtime_root().ok()?;
         let paths = ElixirPaths::new(root);
         Some(paths.cache_dir().join("remote_latest_per_major.json"))
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("elixir").join("unified_version_list"))
+    }
+
+    fn cached_index(
+        &self,
+    ) -> EnvrResult<envr_platform::remote_index_cache::CachedRemoteIndex<ElixirBuildParser>> {
+        let unified_dir = self.unified_list_dir()?;
+        Ok(envr_platform::remote_index_cache::CachedRemoteIndex::new(
+            RuntimeKind::Elixir,
+            unified_dir.clone(),
+            envr_platform::remote_index_cache::RemoteSourceCache::new(unified_dir, "elixir_builds_index"),
+            ElixirBuildParser {
+                builds_base_url: DEFAULT_BUILDS_BASE_URL.to_string(),
+                preferred_otp: DEFAULT_OTP_SERIES.to_string(),
+            },
+        ))
     }
 }
 
@@ -180,5 +234,51 @@ impl RuntimeProvider for ElixirRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = ElixirPaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for ElixirRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Elixir
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        idx.refresh_major_rows_remote(&self.builds_index_url, ttl, envr_platform::remote_index_cache::CacheMode::StaleOk, |u| {
+            let client = index::blocking_http_client()?;
+            index::fetch_builds_index(&client, u)
+        })
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        idx.refresh_children_remote(
+            &self.builds_index_url,
+            ttl,
+            envr_platform::remote_index_cache::CacheMode::StaleOk,
+            major_key,
+            |u| {
+                let client = index::blocking_http_client()?;
+                index::fetch_builds_index(&client, u)
+            },
+        )
+    }
+
+    fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {
+        true
     }
 }

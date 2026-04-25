@@ -22,11 +22,53 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub struct PhpRuntimeProvider {
     runtime_root_override: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct PhpIndexItem {
+    version: String,
+    builds: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+struct PhpIndexParser {
+    want_ts: bool,
+    arch: &'static str,
+}
+
+impl RemoteIndexParser for PhpIndexParser {
+    type Item = PhpIndexItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let idx = crate::index::parse_php_windows_index(body)?;
+        Ok(idx
+            .into_values()
+            .map(|line| PhpIndexItem {
+                version: line.version,
+                builds: line.builds,
+            })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.version.as_str()
+    }
+
+    fn is_installable_on_host(&self, item: &Self::Item) -> bool {
+        let line = crate::index::ReleaseLine {
+            version: item.version.clone(),
+            builds: item.builds.clone(),
+        };
+        crate::index::pick_windows_zip(&line, Some(self.want_ts), self.arch).is_ok()
+    }
 }
 
 impl PhpRuntimeProvider {
@@ -84,6 +126,23 @@ impl PhpRuntimeProvider {
         Ok(paths
             .cache_dir()
             .join(format!("remote_latest_per_major_{os}_{arch}_{flavor}.json")))
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<std::path::PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("php").join("unified_version_list"))
+    }
+
+    fn cached_index(&self) -> EnvrResult<CachedRemoteIndex<PhpIndexParser>> {
+        let (_, want_ts) = self.resolved_remote_settings()?;
+        let arch = std::env::consts::ARCH;
+        let unified_dir = self.unified_list_dir()?;
+        Ok(CachedRemoteIndex::new(
+            RuntimeKind::Php,
+            unified_dir.clone(),
+            RemoteSourceCache::new(unified_dir, if want_ts { "php_releases_ts" } else { "php_releases_nts" }),
+            PhpIndexParser { want_ts, arch },
+        ))
     }
 }
 
@@ -231,5 +290,93 @@ impl RuntimeProvider for PhpRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = PhpPaths::new(self.runtime_root()?);
         Ok((vec![paths.versions_dir().join(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        if cfg!(windows) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+}
+
+impl VersionListAdapter for PhpRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Php
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let (url, _want_ts) = self.resolved_remote_settings()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == envr_config::settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+
+        let items = idx.load_items(&url, ttl, mode, |u| {
+            let client = crate::index::blocking_http_client()?;
+            crate::index::fetch_php_windows_releases_json(&client, u)
+        })?;
+        // Major rows should be stable-only for PHP (matches current provider behavior).
+        let latest = idx.latest_installable_per_major_labels(&items, |it| {
+            let t = it.version.trim().trim_start_matches('v');
+            !t.contains('-')
+        });
+        let rows: Vec<MajorVersionRecord> = latest
+            .into_iter()
+            .filter_map(|v| {
+                let major = envr_domain::runtime::version_line_key_for_kind(RuntimeKind::Php, &v)?;
+                Some(MajorVersionRecord {
+                    major_key: major,
+                    latest_installable: Some(RuntimeVersion(v)),
+                })
+            })
+            .collect();
+        let data: Vec<String> = rows
+            .iter()
+            .filter_map(|r| r.latest_installable.as_ref().map(|v| v.0.clone()))
+            .collect();
+        let _ = (|| -> EnvrResult<()> {
+            std::fs::create_dir_all(&idx.unified_dir).map_err(EnvrError::from)?;
+            let s = serde_json::to_string(&data).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode php major rows", e)
+            })?;
+            envr_platform::fs_atomic::write_atomic(&idx.unified_dir.join("major_rows.json"), s.as_bytes())?;
+            Ok(())
+        })();
+        Ok(rows)
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let (url, _want_ts) = self.resolved_remote_settings()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == envr_config::settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+        idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
+            let client = crate::index::blocking_http_client()?;
+            crate::index::fetch_php_windows_releases_json(&client, u)
+        })
+    }
+
+    fn is_installable_on_host(&self, version: &VersionRecord) -> bool {
+        let _ = version;
+        true
     }
 }

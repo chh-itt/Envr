@@ -167,6 +167,12 @@ impl RuntimeService {
     }
 
     pub fn list_major_rows_cached(&self, kind: RuntimeKind) -> EnvrResult<Vec<MajorVersionRecord>> {
+        if let Ok(p) = self.provider(kind)
+            && let Some(ad) = p.version_list_adapter()
+        {
+            let rows = ad.load_major_rows_cached()?;
+            return Ok(Self::filter_major_rows_remote_install_lines(kind, rows));
+        }
         let rows = if let Some(rows) = self.try_read_cached_major_rows(kind)? {
             rows
         } else {
@@ -188,6 +194,12 @@ impl RuntimeService {
         &self,
         kind: RuntimeKind,
     ) -> EnvrResult<Vec<MajorVersionRecord>> {
+        if let Ok(p) = self.provider(kind)
+            && let Some(ad) = p.version_list_adapter()
+        {
+            let rows = ad.refresh_major_rows_remote()?;
+            return Ok(Self::filter_major_rows_remote_install_lines(kind, rows));
+        }
         let latest = self
             .index_provider(kind)?
             .list_remote_latest_installable_per_major()?;
@@ -220,6 +232,11 @@ impl RuntimeService {
         kind: RuntimeKind,
         major_key: &str,
     ) -> EnvrResult<Vec<VersionRecord>> {
+        if let Ok(p) = self.provider(kind)
+            && let Some(ad) = p.version_list_adapter()
+        {
+            return ad.load_children_cached(major_key);
+        }
         if major_line_remote_install_blocked(kind, major_key) {
             return Ok(Vec::new());
         }
@@ -250,6 +267,11 @@ impl RuntimeService {
         kind: RuntimeKind,
         major_key: &str,
     ) -> EnvrResult<Vec<VersionRecord>> {
+        if let Ok(p) = self.provider(kind)
+            && let Some(ad) = p.version_list_adapter()
+        {
+            return ad.refresh_children_remote(major_key);
+        }
         if major_line_remote_install_blocked(kind, major_key) {
             return Ok(Vec::new());
         }

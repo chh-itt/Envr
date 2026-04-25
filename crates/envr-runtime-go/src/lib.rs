@@ -18,11 +18,76 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub struct GoRuntimeProvider {
     runtime_root_override: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GoIndexFile {
+    filename: String,
+    os: String,
+    arch: String,
+    kind: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GoIndexItem {
+    version: String,
+    stable: bool,
+    files: Vec<GoIndexFile>,
+}
+
+#[derive(Debug, Clone)]
+struct GoIndexParser {
+    os: &'static str,
+    arch: &'static str,
+}
+
+impl RemoteIndexParser for GoIndexParser {
+    type Item = GoIndexItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let releases = crate::index::parse_go_index(body)?;
+        Ok(releases
+            .into_iter()
+            .map(|r| GoIndexItem {
+                version: crate::index::normalize_go_version(&r.version),
+                stable: r.stable,
+                files: r
+                    .files
+                    .into_iter()
+                    .map(|f| GoIndexFile {
+                        filename: f.filename,
+                        os: f.os,
+                        arch: f.arch,
+                        kind: f.kind,
+                    })
+                    .collect(),
+            })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.version.as_str()
+    }
+
+    fn is_installable_on_host(&self, item: &Self::Item) -> bool {
+        let go_os = crate::index::go_dl_os_for_rust(self.os);
+        let go_arch = crate::index::go_dl_arch_for_rust(self.arch);
+        let want_ext = if go_os == "windows" { ".zip" } else { ".tar.gz" };
+        item.files.iter().any(|f| {
+            f.os == go_os
+                && f.arch == go_arch
+                && (f.kind == "archive" || f.kind.is_empty())
+                && f.filename.ends_with(want_ext)
+        })
+    }
 }
 
 impl GoRuntimeProvider {
@@ -92,6 +157,23 @@ impl GoRuntimeProvider {
         // Keep the include=all behavior aligned with the existing index default.
         let json = format!("{base}/dl/?mode=json&include=all");
         Ok((json, base.to_string()))
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<std::path::PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("go").join("unified_version_list"))
+    }
+
+    fn cached_index(&self) -> EnvrResult<CachedRemoteIndex<GoIndexParser>> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let unified_dir = self.unified_list_dir()?;
+        Ok(CachedRemoteIndex::new(
+            RuntimeKind::Go,
+            unified_dir.clone(),
+            RemoteSourceCache::new(unified_dir, "go_dl_json"),
+            GoIndexParser { os, arch },
+        ))
     }
 }
 
@@ -190,5 +272,105 @@ impl RuntimeProvider for GoRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = GoPaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for GoRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Go
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let (url, _base) = self.resolved_dl_urls()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == envr_config::settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+        // Go major rows should prefer stable releases (matches current provider behavior).
+        let items = idx.load_items(&url, ttl, mode, |u| {
+            let client = crate::index::blocking_http_client()?;
+            crate::index::fetch_go_index(&client, u)
+        })?;
+        let latest = idx.latest_installable_per_major_labels(&items, |it| it.stable);
+        let rows: Vec<MajorVersionRecord> = latest
+            .into_iter()
+            .filter_map(|v| {
+                let major = envr_domain::runtime::version_line_key_for_kind(RuntimeKind::Go, &v)?;
+                Some(MajorVersionRecord {
+                    major_key: major,
+                    latest_installable: Some(RuntimeVersion(v)),
+                })
+            })
+            .collect();
+        // Persist in the same format as legacy unified cache (list of latest labels).
+        let data: Vec<String> = rows
+            .iter()
+            .filter_map(|r| r.latest_installable.as_ref().map(|v| v.0.clone()))
+            .collect();
+        let _ = (|| -> EnvrResult<()> {
+            std::fs::create_dir_all(&idx.unified_dir).map_err(EnvrError::from)?;
+            let s = serde_json::to_string(&data).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode go major rows", e)
+            })?;
+            envr_platform::fs_atomic::write_atomic(&idx.unified_dir.join("major_rows.json"), s.as_bytes())?;
+            // Best-effort: also persist full installable snapshot (stable-only for Go)
+            let stable_full: Vec<String> = idx
+                .installable_labels(&items)
+                .into_iter()
+                .filter(|v| {
+                    // stable_only: Go pre-releases usually include '-' in label
+                    let t = v.trim();
+                    !t.contains('-')
+                })
+                .collect();
+            if !stable_full.is_empty() {
+                let fs = serde_json::to_string(&stable_full).map_err(|e| {
+                    EnvrError::with_source(ErrorCode::Validation, "json encode go full list", e)
+                })?;
+                envr_platform::fs_atomic::write_atomic(
+                    &idx.unified_dir.join("full_installable_versions.json"),
+                    fs.as_bytes(),
+                )?;
+            }
+            Ok(())
+        })();
+        Ok(rows)
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let (url, _base) = self.resolved_dl_urls()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == envr_config::settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+        idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
+            let client = crate::index::blocking_http_client()?;
+            crate::index::fetch_go_index(&client, u)
+        })
+    }
+
+    fn is_installable_on_host(&self, version: &VersionRecord) -> bool {
+        let _ = version;
+        true
     }
 }

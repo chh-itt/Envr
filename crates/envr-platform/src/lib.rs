@@ -10,4 +10,5 @@ pub mod path;
 pub mod path_norm;
 pub mod paths;
 pub mod process;
+pub mod remote_index_cache;
 pub mod shell;

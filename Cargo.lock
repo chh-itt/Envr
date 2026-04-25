@@ -1074,6 +1074,7 @@ version = "0.1.0"
 dependencies = [
  "envr-domain",
  "envr-error",
+ "serde",
  "serde_json",
  "tempfile",
 ]
@@ -1228,6 +1229,7 @@ dependencies = [
  "envr-platform",
  "regex",
  "reqwest",
+ "serde",
  "serde_json",
 ]
 

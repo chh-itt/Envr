@@ -12,6 +12,7 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked, version_line_key_for_kind};
 use envr_error::EnvrResult;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -48,6 +49,22 @@ impl DotnetRuntimeProvider {
 
     fn manager(&self) -> EnvrResult<DotnetManager> {
         DotnetManager::try_new(self.runtime_root()?, self.releases_index_url.clone())
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("dotnet").join("unified_version_list"))
+    }
+
+    fn unified_major_rows_path(&self) -> EnvrResult<PathBuf> {
+        Ok(self.unified_list_dir()?.join("major_rows.json"))
+    }
+
+    fn unified_children_path(&self, major_key: &str) -> EnvrResult<PathBuf> {
+        Ok(self
+            .unified_list_dir()?
+            .join("children")
+            .join(format!("{major_key}.json")))
     }
 }
 
@@ -146,5 +163,102 @@ impl RuntimeProvider for DotnetRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = DotnetPaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for DotnetRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Dotnet
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let path = self.unified_major_rows_path()?;
+        let raw = envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+            .unwrap_or_default();
+        Ok(raw
+            .into_iter()
+            .filter_map(|v| {
+                let major = version_line_key_for_kind(RuntimeKind::Dotnet, &v)?;
+                Some(MajorVersionRecord {
+                    major_key: major,
+                    latest_installable: Some(RuntimeVersion(v)),
+                })
+            })
+            .filter(|r| !major_line_remote_install_blocked(RuntimeKind::Dotnet, &r.major_key))
+            .collect())
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let latest = RuntimeProvider::list_remote_latest_installable_per_major(self)?;
+        let rows: Vec<MajorVersionRecord> = latest
+            .into_iter()
+            .filter_map(|v| {
+                let major = version_line_key_for_kind(RuntimeKind::Dotnet, &v.0)?;
+                Some(MajorVersionRecord {
+                    major_key: major,
+                    latest_installable: Some(v),
+                })
+            })
+            .filter(|r| !major_line_remote_install_blocked(RuntimeKind::Dotnet, &r.major_key))
+            .collect();
+        let labels: Vec<String> = rows
+            .iter()
+            .filter_map(|r| r.latest_installable.as_ref().map(|v| v.0.clone()))
+            .collect();
+        let _ = (|| -> EnvrResult<()> {
+            let p = self.unified_major_rows_path()?;
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let s = serde_json::to_string(&labels).unwrap_or_default();
+            envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
+            Ok(())
+        })();
+        Ok(rows)
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        if major_line_remote_install_blocked(RuntimeKind::Dotnet, major_key) {
+            return Ok(Vec::new());
+        }
+        let path = self.unified_children_path(major_key)?;
+        let raw = envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+            .unwrap_or_default();
+        Ok(raw
+            .into_iter()
+            .map(|v| VersionRecord {
+                version: RuntimeVersion(v),
+            })
+            .collect())
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        if major_line_remote_install_blocked(RuntimeKind::Dotnet, major_key) {
+            return Ok(Vec::new());
+        }
+        let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
+        let filtered: Vec<RuntimeVersion> = all
+            .into_iter()
+            .filter(|v| version_line_key_for_kind(RuntimeKind::Dotnet, &v.0).as_deref() == Some(major_key))
+            .collect();
+        let labels: Vec<String> = filtered.iter().map(|v| v.0.clone()).collect();
+        let _ = (|| -> EnvrResult<()> {
+            let p = self.unified_children_path(major_key)?;
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let s = serde_json::to_string(&labels).unwrap_or_default();
+            envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
+            Ok(())
+        })();
+        Ok(filtered.into_iter().map(|v| VersionRecord { version: v }).collect())
+    }
+
+    fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {
+        true
     }
 }

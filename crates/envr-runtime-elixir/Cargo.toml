@@ -12,4 +12,5 @@ envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
+serde = { workspace = true }
 serde_json = { workspace = true }

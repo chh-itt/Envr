@@ -15,13 +15,49 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub struct ErlangRuntimeProvider {
     tags_api_url: String,
     runtime_root_override: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ErlangTagItem {
+    name: String,
+}
+
+#[derive(Debug, Clone)]
+struct ErlangTagParser;
+
+impl envr_platform::remote_index_cache::RemoteIndexParser for ErlangTagParser {
+    type Item = ErlangTagItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let tags: Vec<index::GithubTag> = serde_json::from_str(body).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid github tags json", e)
+        })?;
+        Ok(tags
+            .into_iter()
+            .map(|t| ErlangTagItem { name: t.name })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.name.as_str()
+    }
+
+    fn is_installable_on_host(&self, item: &Self::Item) -> bool {
+        // Managed install only supported on Windows in current provider.
+        if !cfg!(windows) {
+            return false;
+        }
+        index::normalize_otp_version(&item.name).is_some()
+    }
 }
 
 impl ErlangRuntimeProvider {
@@ -65,6 +101,23 @@ impl ErlangRuntimeProvider {
         let root = self.runtime_root().ok()?;
         let paths = ErlangPaths::new(root);
         Some(paths.cache_dir().join("remote_latest_per_major.json"))
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("erlang").join("unified_version_list"))
+    }
+
+    fn cached_index(
+        &self,
+    ) -> EnvrResult<envr_platform::remote_index_cache::CachedRemoteIndex<ErlangTagParser>> {
+        let unified_dir = self.unified_list_dir()?;
+        Ok(envr_platform::remote_index_cache::CachedRemoteIndex::new(
+            RuntimeKind::Erlang,
+            unified_dir.clone(),
+            envr_platform::remote_index_cache::RemoteSourceCache::new(unified_dir, "erlang_github_tags"),
+            ErlangTagParser,
+        ))
     }
 }
 
@@ -168,5 +221,65 @@ impl RuntimeProvider for ErlangRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = ErlangPaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for ErlangRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Erlang
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        idx.refresh_major_rows_remote(&self.tags_api_url, ttl, envr_platform::remote_index_cache::CacheMode::StaleOk, |u| {
+            let client = index::blocking_http_client()?;
+            let tags = index::fetch_all_tags(&client, u)?;
+            #[derive(serde::Serialize)]
+            struct TagOut {
+                name: String,
+            }
+            let out: Vec<TagOut> = tags.into_iter().map(|t| TagOut { name: t.name }).collect();
+            serde_json::to_string(&out)
+                .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode erlang tags", e))
+        })
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        idx.refresh_children_remote(
+            &self.tags_api_url,
+            ttl,
+            envr_platform::remote_index_cache::CacheMode::StaleOk,
+            major_key,
+            |u| {
+                let client = index::blocking_http_client()?;
+                let tags = index::fetch_all_tags(&client, u)?;
+                #[derive(serde::Serialize)]
+                struct TagOut {
+                    name: String,
+                }
+                let out: Vec<TagOut> = tags.into_iter().map(|t| TagOut { name: t.name }).collect();
+                serde_json::to_string(&out)
+                    .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode erlang tags", e))
+            },
+        )
+    }
+
+    fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {
+        cfg!(windows)
     }
 }

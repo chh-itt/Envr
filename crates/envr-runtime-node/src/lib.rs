@@ -19,10 +19,13 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeIndex, RuntimeInstaller, RuntimeKind,
     RuntimeProvider, RuntimeVersion, VersionSpec,
 };
+use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
+use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// Node.js runtime provider (remote index, install layout under envr data root).
 pub struct NodeRuntimeProvider {
@@ -30,6 +33,41 @@ pub struct NodeRuntimeProvider {
     index_json_override: Option<String>,
     /// When `None`, uses the effective runtime root ([`envr_config::env_context::runtime_root`]).
     runtime_root_override: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct NodeIndexItem {
+    version: String,
+    files: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct NodeIndexParser {
+    os: &'static str,
+    arch: &'static str,
+}
+
+impl RemoteIndexParser for NodeIndexParser {
+    type Item = NodeIndexItem;
+
+    fn parse(&self, body: &str) -> EnvrResult<Vec<Self::Item>> {
+        let releases = index::parse_node_index(body)?;
+        Ok(releases
+            .into_iter()
+            .map(|r| NodeIndexItem {
+                version: index::normalize_node_version(&r.version),
+                files: r.files,
+            })
+            .collect())
+    }
+
+    fn version_label<'a>(&self, item: &'a Self::Item) -> &'a str {
+        item.version.as_str()
+    }
+
+    fn is_installable_on_host(&self, item: &Self::Item) -> bool {
+        index::release_has_platform(&item.files, self.os, self.arch)
+    }
 }
 
 impl NodeRuntimeProvider {
@@ -65,6 +103,23 @@ impl NodeRuntimeProvider {
         }
         let s = load_settings_cached()?;
         Ok(settings::node_index_json_url(&s))
+    }
+
+    fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
+        let root = self.runtime_root()?;
+        Ok(root.join("cache").join("node").join("unified_version_list"))
+    }
+
+    fn cached_index(&self) -> EnvrResult<CachedRemoteIndex<NodeIndexParser>> {
+        let os = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let unified_dir = self.unified_list_dir()?;
+        Ok(CachedRemoteIndex::new(
+            RuntimeKind::Node,
+            unified_dir.clone(),
+            RemoteSourceCache::new(unified_dir, "node_index_json"),
+            NodeIndexParser { os, arch },
+        ))
     }
 
     fn manager(&self) -> EnvrResult<NodeManager> {
@@ -350,5 +405,60 @@ impl RuntimeProvider for NodeRuntimeProvider {
     ) -> EnvrResult<(Vec<PathBuf>, Option<String>)> {
         let paths = NodePaths::new(self.runtime_root()?);
         Ok((vec![paths.version_dir(&version.0)], None))
+    }
+
+    fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
+        Some(self)
+    }
+}
+
+impl VersionListAdapter for NodeRuntimeProvider {
+    fn kind(&self) -> RuntimeKind {
+        RuntimeKind::Node
+    }
+
+    fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        self.cached_index()?.load_major_rows_cached()
+    }
+
+    fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
+        let idx = self.cached_index()?;
+        let url = self.resolved_index_json_url()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+        idx.refresh_major_rows_remote(&url, ttl, mode, |u| {
+            let client = index::blocking_http_client()?;
+            index::fetch_node_index(&client, u)
+        })
+    }
+
+    fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        self.cached_index()?.load_children_cached(major_key)
+    }
+
+    fn refresh_children_remote(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
+        let idx = self.cached_index()?;
+        let url = self.resolved_index_json_url()?;
+        let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
+        let st = load_settings_cached().unwrap_or_default();
+        let mode = if st.mirror.mode == settings::MirrorMode::Offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
+        idx.refresh_children_remote(&url, ttl, mode, major_key, |u| {
+            let client = index::blocking_http_client()?;
+            index::fetch_node_index(&client, u)
+        })
+    }
+
+    fn is_installable_on_host(&self, version: &VersionRecord) -> bool {
+        let _ = version;
+        true
     }
 }
