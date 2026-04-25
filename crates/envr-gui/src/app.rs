@@ -1,4 +1,5 @@
 //! Main-window shell: left navigation, routed content, global error banner.
+//! Update paths live in `pages::*`; shell logic is split under `app/{bootstrap,navigation,persist_settings,download_chrome,env_center_ops,subscription}.rs`.
 
 use envr_config::settings::Settings;
 use envr_ui::theme::{
