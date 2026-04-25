@@ -398,33 +398,11 @@ fn update(state: &mut AppState, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::EnvCenter(msg) => pages::env_center::handle_env_center(state, msg),
-        Message::Dashboard(msg) => handle_dashboard(state, msg),
+        Message::Dashboard(msg) => pages::dashboard::handle_dashboard(state, msg),
         Message::Download(msg) => pages::downloads::handle_download(state, msg),
         Message::Settings(msg) => pages::settings::handle_settings(state, msg),
         Message::RuntimeLayout(msg) => pages::runtime_layout::handle_runtime_layout(state, msg),
     })
-}
-
-fn handle_dashboard(state: &mut AppState, msg: DashboardMsg) -> Task<Message> {
-    match msg {
-        DashboardMsg::Refresh => {
-            state.dashboard.busy = true;
-            state.dashboard.last_error = None;
-            gui_ops::refresh_dashboard()
-        }
-        DashboardMsg::DataLoaded(res) => {
-            state.dashboard.busy = false;
-            match res {
-                Ok(d) => {
-                    state.dashboard.data = Some(d);
-                }
-                Err(e) => {
-                    state.dashboard.last_error = Some(e);
-                }
-            }
-            Task::none()
-        }
-    }
 }
 
 fn settings_path() -> PathBuf {
