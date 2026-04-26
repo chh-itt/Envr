@@ -4,9 +4,9 @@ mod index;
 mod manager;
 
 pub use index::{
-    DEFAULT_KOTLIN_RELEASES_API_URL, blocking_http_client, fetch_releases_json,
-    installable_pairs_from_releases, list_remote_latest_per_major_lines, list_remote_versions,
-    resolve_kotlin_version,
+    DEFAULT_KOTLIN_RELEASES_API_URL, blocking_http_client,
+    fetch_kotlin_installable_pairs_with_fallback, installable_pairs_from_releases,
+    list_remote_latest_per_major_lines, list_remote_versions, resolve_kotlin_version,
 };
 pub use manager::{
     KotlinManager, KotlinPaths, kotlin_installation_valid, kotlin_tool_candidate,

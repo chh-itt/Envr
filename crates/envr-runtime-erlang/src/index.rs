@@ -1,6 +1,7 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use regex::Regex;
 use serde::Deserialize;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -123,7 +124,44 @@ fn max_tag_pages() -> usize {
         .unwrap_or(DEFAULT)
 }
 
-pub fn fetch_all_tags(
+fn github_api_auth_token() -> Option<String> {
+    ["GITHUB_TOKEN", "GH_TOKEN", "ENVR_GITHUB_TOKEN"]
+        .into_iter()
+        .find_map(|k| std::env::var(k).ok())
+        .and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        })
+}
+
+fn strip_known_github_api_proxy_prefix(url: &str) -> Option<String> {
+    let u = url.trim();
+    const NEEDLE: &str = "https://api.github.com/";
+    let i = u.find(NEEDLE)?;
+    Some(u[i..].to_string())
+}
+
+fn candidate_tags_api_urls(start_url: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |s: &str| {
+        let t = s.trim();
+        if !t.is_empty() && !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    };
+    push(start_url);
+    if let Some(inner) = strip_known_github_api_proxy_prefix(start_url) {
+        push(&inner);
+    }
+    push(DEFAULT_GITHUB_TAGS_API);
+    out
+}
+
+fn fetch_all_tags_from_api(
     client: &reqwest::blocking::Client,
     start_url: &str,
 ) -> EnvrResult<Vec<GithubTag>> {
@@ -136,7 +174,14 @@ pub fn fetch_all_tags(
             break;
         }
         pages += 1;
-        let response = client.get(&url).send().map_err(|e| {
+        let mut req = client.get(&url).header("Accept", "application/vnd.github+json");
+        if url.contains("api.github.com") {
+            req = req.header("X-GitHub-Api-Version", "2022-11-28");
+            if let Some(tok) = github_api_auth_token() {
+                req = req.header("Authorization", format!("Bearer {tok}"));
+            }
+        }
+        let response = req.send().map_err(|e| {
             EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
         })?;
         if !response.status().is_success() {
@@ -160,6 +205,70 @@ pub fn fetch_all_tags(
         next = parse_github_next_link(headers.get("link"));
     }
     Ok(out)
+}
+
+fn fetch_all_tags_from_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<GithubTag>> {
+    let re = Regex::new(r#"/erlang/otp/(?:tree|releases/tag)/(OTP-[0-9][^"<>/]*)"#)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid erlang tag regex", e))?;
+    let mut out = Vec::<GithubTag>::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+    let mut empty_pages = 0usize;
+    for page in 1..=20 {
+        let url = format!("https://github.com/erlang/otp/tags?page={page}");
+        let text = client.get(&url).send().and_then(|r| r.error_for_status()).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+        })?.text().map_err(|e| {
+            EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e)
+        })?;
+        let mut found = 0usize;
+        for cap in re.captures_iter(&text) {
+            let Some(m) = cap.get(1) else { continue };
+            let tag = m.as_str().trim().to_string();
+            if seen.insert(tag.clone()) {
+                out.push(GithubTag { name: tag });
+            }
+            found += 1;
+        }
+        if found == 0 {
+            empty_pages += 1;
+            if empty_pages >= 2 {
+                break;
+            }
+        } else {
+            empty_pages = 0;
+        }
+    }
+    if out.is_empty() {
+        return Err(EnvrError::Download(
+            "failed to fetch erlang tags via github HTML fallback".into(),
+        ));
+    }
+    Ok(out)
+}
+
+pub fn fetch_all_tags(
+    client: &reqwest::blocking::Client,
+    start_url: &str,
+) -> EnvrResult<Vec<GithubTag>> {
+    let mut last_err: Option<EnvrError> = None;
+    for cand in candidate_tags_api_urls(start_url) {
+        match fetch_all_tags_from_api(client, &cand) {
+            Ok(tags) if !tags.is_empty() => return Ok(tags),
+            Ok(_) => {
+                last_err = Some(EnvrError::Download(
+                    "github tags API returned empty list".into(),
+                ))
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+    // Final fallback: parse GitHub tags HTML pages (resilient to API 403/rate limit).
+    match fetch_all_tags_from_html(client) {
+        Ok(tags) => Ok(tags),
+        Err(_) => Err(last_err.unwrap_or_else(|| {
+            EnvrError::Download("failed to fetch erlang tags (api + html fallback)".into())
+        })),
+    }
 }
 
 pub fn tags_to_releases(tags: &[GithubTag]) -> EnvrResult<Vec<ErlangRelease>> {

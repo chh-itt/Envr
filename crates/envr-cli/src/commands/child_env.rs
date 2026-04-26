@@ -103,6 +103,69 @@ fn load_settings() -> EnvrResult<Settings> {
     load_settings_cached()
 }
 
+fn inject_elixir_erlang_env(
+    ctx: &ShimContext,
+    cfg: Option<&ProjectConfig>,
+    spec_override: Option<&str>,
+    env: &mut HashMap<String, String>,
+) {
+    let mut injected = false;
+    if let Ok(erlang_home) =
+        resolve_runtime_home_for_lang_with_project(ctx, "erlang", spec_override, cfg)
+    {
+        let erlang_home = std::fs::canonicalize(&erlang_home).unwrap_or(erlang_home);
+        let erlang_home_env =
+            envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home);
+        let mut erts =
+            envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home.join("bin"));
+        #[cfg(windows)]
+        if !erts.ends_with('\\') {
+            erts.push('\\');
+        }
+        env.insert("ERLANG_HOME".into(), erlang_home_env);
+        env.insert("ERTS_BIN".into(), erts);
+        injected = true;
+    }
+    if injected {
+        return;
+    }
+    if let Some(root) = std::env::var_os("ENVR_RUNTIME_ROOT") {
+        let cur = PathBuf::from(root)
+            .join("runtimes")
+            .join("erlang")
+            .join("current");
+        if cur.exists() {
+            let home = if let Ok(target) = std::fs::read_link(&cur) {
+                if target.is_relative() {
+                    cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+                } else {
+                    target
+                }
+            } else if let Ok(s) = std::fs::read_to_string(&cur) {
+                let t = s.trim();
+                if t.is_empty() {
+                    return;
+                }
+                PathBuf::from(t)
+            } else {
+                return;
+            };
+            let home = std::fs::canonicalize(&home).unwrap_or(home);
+            let mut erts =
+                envr_platform::path_norm::normalize_fs_path_string_lossy(&home.join("bin"));
+            #[cfg(windows)]
+            if !erts.ends_with('\\') {
+                erts.push('\\');
+            }
+            env.insert(
+                "ERLANG_HOME".into(),
+                envr_platform::path_norm::normalize_fs_path_string_lossy(&home),
+            );
+            env.insert("ERTS_BIN".into(), erts);
+        }
+    }
+}
+
 pub(crate) fn base_env_with_project_env(cfg: Option<&ProjectConfig>) -> HashMap<String, String> {
     let mut env: HashMap<String, String> = std::env::vars().collect();
     if let Some(c) = cfg {
@@ -190,6 +253,9 @@ pub fn collect_exec_env(
                 env.insert("PATH".into(), prepend_path(&bins, old_path));
                 for (k, v) in runtime_home_env_for_key(&home, lang) {
                     env.insert(k, v);
+                }
+                if lang == "elixir" {
+                    inject_elixir_erlang_env(ctx, cfg, spec_override, &mut env);
                 }
                 if jvm_hosted::is_jvm_hosted_runtime(&lang) {
                     let java_home = resolve_runtime_home_for_lang_with_project(
@@ -338,6 +404,9 @@ fn collect_run_env_impl(
                 }
                 for (k, v) in runtime_home_env_for_key(&home, &lang) {
                     runtime_home_env.insert(k, v);
+                }
+                if lang == "elixir" {
+                    inject_elixir_erlang_env(ctx, cfg, None, &mut runtime_home_env);
                 }
                 if jvm_hosted::is_jvm_hosted_runtime(&lang) {
                     let java_home = resolve_run_lang_home(ctx, cfg, "java")?;

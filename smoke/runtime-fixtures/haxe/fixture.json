@@ -1,0 +1,12 @@
+{
+  "runtime": "haxe",
+  "mode": "exec",
+  "write_files": {
+    "Main.hx": "class Main {\n  static function main() {\n    trace(\"OK\");\n  }\n}\n"
+  },
+  "steps": [
+    { "command": ["haxe", "-main", "Main", "-js", "out.js"], "expect": { "exit_code": 0 } }
+  ],
+  "note": "This fixture only validates compiler output. A full runtime run would require node; phase-1 keeps it compilation-only."
+}
+

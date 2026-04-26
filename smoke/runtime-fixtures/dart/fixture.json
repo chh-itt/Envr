@@ -1,0 +1,13 @@
+{
+  "runtime": "dart",
+  "mode": "exec",
+  "write_files": {
+    "main.dart": "import 'dart:convert';\nimport 'dart:io';\n\nvoid main() {\n  final f = File('tmp.txt');\n  f.writeAsStringSync('abc');\n  final bytes = utf8.encode(f.readAsStringSync());\n  print(base64.encode(bytes));\n}\n"
+  },
+  "command": ["dart", "run", "main.dart"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^YWJj\\r?\\n$"
+  }
+}
+

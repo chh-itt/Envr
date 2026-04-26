@@ -1,0 +1,11 @@
+{
+  "runtime": "go",
+  "mode": "exec",
+  "write_files": {
+    "main.go": "package main\n\nimport (\n\t\"crypto/sha256\"\n\t\"encoding/hex\"\n\t\"fmt\"\n)\n\nfunc main() {\n\th := sha256.Sum256([]byte(\"abc\"))\n\tfmt.Println(hex.EncodeToString(h[:]))\n}\n"
+  },
+  "steps": [
+    { "command": ["go", "run", "main.go"], "expect": { "exit_code": 0, "stdout_regex": "^[a-f0-9]{64}\\r?\\n$" } }
+  ]
+}
+

@@ -297,8 +297,8 @@ fn run_get_pip(
     home: &Path,
     pip_index_url: Option<&str>,
 ) -> EnvrResult<std::process::Output> {
-    Command::new(py)
-        .arg(script)
+    let mut cmd = Command::new(py);
+    cmd.arg(script)
         .args(["--no-warn-script-location", "--disable-pip-version-check"])
         .args(
             pip_index_url
@@ -307,15 +307,27 @@ fn run_get_pip(
                 .into_iter()
                 .filter(|s| !s.is_empty()),
         )
-        .current_dir(home)
-        .output()
-        .map_err(|e| {
-            EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
-                Some(envr_domain::runtime::RuntimeKind::Python),
-                "get-pip.py",
-                &e,
-            ))
-        })
+        .current_dir(home);
+
+    // Keep bootstrap deterministic: ignore host pip config/env that may inject
+    // custom extra indexes (for example stale mirrors returning 403).
+    cmd.env_remove("PIP_INDEX_URL")
+        .env_remove("PIP_EXTRA_INDEX_URL")
+        .env_remove("PIP_TRUSTED_HOST")
+        .env_remove("PIP_FIND_LINKS")
+        .env_remove("PIP_NO_INDEX");
+    #[cfg(windows)]
+    cmd.env("PIP_CONFIG_FILE", "NUL");
+    #[cfg(not(windows))]
+    cmd.env("PIP_CONFIG_FILE", "/dev/null");
+
+    cmd.output().map_err(|e| {
+        EnvrError::Runtime(envr_platform::process::classify_spawn_failure_message(
+            Some(envr_domain::runtime::RuntimeKind::Python),
+            "get-pip.py",
+            &e,
+        ))
+    })
 }
 
 fn bootstrap_pip_windows(

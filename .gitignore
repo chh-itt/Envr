@@ -2,6 +2,8 @@
 未完成的重构项目/
 
 /target/
+/target-smoke/
+/target-dev2/
 /dist/
 /DIST/
 .envr/
@@ -18,3 +20,9 @@ __pycache__/
 
 # CI / observed metrics intermediate
 artifacts/envr-cli-metrics.jsonl
+
+# Smoke local artifacts
+smoke/.state/
+
+# Local crash dumps
+*.dump

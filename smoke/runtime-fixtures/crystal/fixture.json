@@ -1,0 +1,13 @@
+{
+  "runtime": "crystal",
+  "mode": "exec",
+  "write_files": {
+    "main.cr": "require \"digest/sha256\"\nputs Digest::SHA256.hexdigest(\"abc\")\n"
+  },
+  "command": ["crystal", "run", "main.cr"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "runtime": "python",
+  "mode": "exec",
+  "write_files": {
+    "main.py": "import hashlib, json, os, pathlib, tempfile\np = pathlib.Path('tmp.txt')\np.write_text('abc', encoding='utf-8')\ns = p.read_text(encoding='utf-8').encode('utf-8')\nh = hashlib.sha256(s).hexdigest()\nprint(json.dumps({'sha256': h}))\n"
+  },
+  "command": ["python", "main.py"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^\\{\"sha256\": \"[a-f0-9]{64}\"\\}\\r?\\n$"
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "runtime": "r",
+  "mode": "exec",
+  "write_files": {
+    "main.R": "cat(toupper('abc'), '\\n')\n"
+  },
+  "command": ["rscript", "main.R"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\s*\\r?\\n$"
+  }
+}
+

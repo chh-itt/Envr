@@ -1,0 +1,13 @@
+{
+  "runtime": "rust",
+  "mode": "exec",
+  "write_files": {
+    "main.rs": "fn main() { println!(\"OK\"); }\n"
+  },
+  "steps": [
+    { "command": ["rustc", "main.rs"], "expect": { "exit_code": 0 } },
+    { "command": ["./main.exe"], "expect": { "exit_code": 0, "stdout_regex": "^OK\\r?\\n$" } }
+  ],
+  "note": "Rust is special in envr (system rustup preferred; no global PATH proxy). This fixture validates toolchain works in envr exec environment."
+}
+

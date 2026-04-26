@@ -1,0 +1,12 @@
+{
+  "runtime": "terraform",
+  "mode": "exec",
+  "write_files": {
+    "main.tf": "terraform {\n  required_version = \">= 0.13\"\n}\n"
+  },
+  "command": ["terraform", "fmt", "-check", "-diff"],
+  "expect": {
+    "exit_code": 0
+  }
+}
+

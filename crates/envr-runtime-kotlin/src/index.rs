@@ -2,55 +2,24 @@
 
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, RuntimeVersion, version_line_key_for_kind};
 use envr_download::blocking::build_blocking_http_client;
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use serde::Deserialize;
+use envr_error::{EnvrError, EnvrResult};
+use envr_runtime_github_release::{GhRelease, GhRepo};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::time::Duration;
 
 pub const DEFAULT_KOTLIN_RELEASES_API_URL: &str =
     "https://api.github.com/repos/JetBrains/kotlin/releases?per_page=100";
-
-#[derive(Debug, Deserialize)]
-pub struct GhAsset {
-    pub name: String,
-    pub browser_download_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GhRelease {
-    pub tag_name: String,
-    #[serde(default)]
-    pub draft: bool,
-    #[serde(default)]
-    pub prerelease: bool,
-    pub assets: Vec<GhAsset>,
-}
+const KOTLIN_REPO: GhRepo = GhRepo {
+    owner: "JetBrains",
+    name: "kotlin",
+};
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
     build_blocking_http_client(
         concat!("envr-runtime-kotlin/", env!("CARGO_PKG_VERSION")),
         Some(Duration::from_secs(120)),
     )
-}
-
-pub fn fetch_releases_json(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {url} -> {}",
-            response.status()
-        )));
-    }
-    response.text().map_err(|e| {
-        EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
-            e,
-        )
-    })
 }
 
 fn cmp_semver_release_labels(a: &str, b: &str) -> Ordering {
@@ -108,6 +77,55 @@ pub fn installable_pairs_from_releases(releases: &[GhRelease]) -> Vec<(String, S
     out.sort_by(|a, b| cmp_semver_release_labels(&b.0, &a.0));
     out.dedup_by(|a, b| a.0 == b.0);
     out
+}
+
+fn fetch_github_releases_index(
+    client: &reqwest::blocking::Client,
+    releases_api_url: &str,
+) -> EnvrResult<Vec<GhRelease>> {
+    envr_runtime_github_release::fetch_github_releases_index(
+        client,
+        releases_api_url,
+        DEFAULT_KOTLIN_RELEASES_API_URL,
+    )
+}
+
+fn make_synthetic_url(tag: &str, version: &str) -> String {
+    format!(
+        "https://github.com/JetBrains/kotlin/releases/download/{tag}/kotlin-compiler-{version}.zip"
+    )
+}
+
+pub fn fetch_kotlin_installable_pairs_with_fallback(
+    client: &reqwest::blocking::Client,
+    releases_api_url: &str,
+) -> EnvrResult<Vec<(String, String)>> {
+    if let Ok(releases) = fetch_github_releases_index(client, releases_api_url) {
+        let pairs = installable_pairs_from_releases(&releases);
+        if !pairs.is_empty() {
+            return Ok(pairs);
+        }
+    }
+
+    if let Ok(rows) = envr_runtime_github_release::fetch_rows_via_html(
+        client,
+        KOTLIN_REPO,
+        label_from_tag,
+        |tag, version| Some(make_synthetic_url(tag, version)),
+        cmp_semver_release_labels,
+    ) && !rows.is_empty()
+    {
+        return Ok(rows.into_iter().map(|r| (r.version, r.url)).collect());
+    }
+
+    let rows = envr_runtime_github_release::fetch_rows_via_atom(
+        client,
+        KOTLIN_REPO,
+        label_from_tag,
+        |tag, version| Some(make_synthetic_url(tag, version)),
+        cmp_semver_release_labels,
+    )?;
+    Ok(rows.into_iter().map(|r| (r.version, r.url)).collect())
 }
 
 pub fn list_remote_versions(

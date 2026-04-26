@@ -1,0 +1,10 @@
+{
+  "runtime": "bun",
+  "mode": "exec",
+  "command": ["bun", "-e", "const crypto=require('crypto'); console.log(crypto.createHash('sha256').update('abc').digest('hex'));"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

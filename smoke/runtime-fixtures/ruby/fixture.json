@@ -1,0 +1,10 @@
+{
+  "runtime": "ruby",
+  "mode": "exec",
+  "command": ["ruby", "-e", "require 'digest'; puts Digest::SHA256.hexdigest('abc')"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

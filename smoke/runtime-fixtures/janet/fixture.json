@@ -1,0 +1,13 @@
+{
+  "runtime": "janet",
+  "mode": "exec",
+  "write_files": {
+    "main.janet": "(print (string/ascii-upper \"abc\"))\n"
+  },
+  "command": ["janet", "main.janet"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\r?\\n$"
+  }
+}
+

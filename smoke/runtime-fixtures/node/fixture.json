@@ -1,0 +1,13 @@
+{
+  "runtime": "node",
+  "mode": "exec",
+  "write_files": {
+    "main.js": "const crypto = require('crypto');\nconst fs = require('fs');\nconst path = require('path');\nconst p = path.join(process.cwd(), 'tmp.txt');\nfs.writeFileSync(p, 'abc', 'utf8');\nconst s = fs.readFileSync(p, 'utf8');\nconst h = crypto.createHash('sha256').update(s).digest('hex');\nconsole.log(h);\n"
+  },
+  "command": ["node", "main.js"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

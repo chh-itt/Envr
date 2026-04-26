@@ -1,0 +1,11 @@
+{
+  "runtime": "gleam",
+  "mode": "exec",
+  "command": ["gleam", "--version"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^gleam [0-9]+\\.[0-9]+\\.[0-9]+\\r?\\n$"
+  },
+  "note": "Gleam's full stdlib/build smoke would require a project + deps. Phase-1 fixture validates tool runnable; deeper build fixtures can be added later."
+}
+

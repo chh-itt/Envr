@@ -1,0 +1,10 @@
+{
+  "runtime": "php",
+  "mode": "exec",
+  "command": ["php", "-r", "echo hash('sha256','abc'), PHP_EOL;"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

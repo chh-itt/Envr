@@ -10,6 +10,7 @@ envr-domain = { path = "../envr-domain" }
 envr-download = { path = "../envr-download" }
 envr-error = { path = "../envr-error" }
 envr-platform = { path = "../envr-platform" }
+envr-runtime-github-release = { path = "../envr-runtime-github-release" }
 envr-shim-core = { path = "../envr-shim-core" }
 reqwest = { workspace = true, features = ["blocking"] }
 serde = { workspace = true }

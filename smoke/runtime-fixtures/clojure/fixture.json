@@ -1,0 +1,11 @@
+{
+  "runtime": "clojure",
+  "mode": "exec",
+  "write_files": {
+    "main.clj": "(println (.toUpperCase \"abc\"))\n"
+  },
+  "steps": [
+    { "command": ["clojure", "main.clj"], "expect": { "exit_code": 0, "stdout_regex": "(?s)ABC\\r?\\n$" } }
+  ]
+}
+

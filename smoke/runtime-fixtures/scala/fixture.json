@@ -1,0 +1,11 @@
+{
+  "runtime": "scala",
+  "mode": "exec",
+  "write_files": {
+    "Main.scala": "import java.security.MessageDigest\nobject Main extends App {\n  val h = MessageDigest.getInstance(\"SHA-256\").digest(\"abc\".getBytes(\"UTF-8\"))\n  println(h.map(b => f\"$b%02x\").mkString)\n}\n"
+  },
+  "steps": [
+    { "command": ["scalac", "Main.scala"], "expect": { "exit_code": 0 } }
+  ]
+}
+

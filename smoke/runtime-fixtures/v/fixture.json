@@ -1,0 +1,13 @@
+{
+  "runtime": "v",
+  "mode": "exec",
+  "write_files": {
+    "main.v": "fn main() {\n\tprintln('OK')\n}\n"
+  },
+  "command": ["v", "run", "main.v"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^OK\\r?\\n$"
+  }
+}
+

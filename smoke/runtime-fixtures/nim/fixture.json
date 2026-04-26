@@ -1,0 +1,11 @@
+{
+  "runtime": "nim",
+  "mode": "exec",
+  "write_files": {
+    "main.nim": "import strutils\n\nstatic:\n  doAssert toUpperAscii(\"abc\") == \"ABC\"\n"
+  },
+  "steps": [
+    { "command": ["nim", "check", "main.nim"], "expect": { "exit_code": 0 } }
+  ]
+}
+

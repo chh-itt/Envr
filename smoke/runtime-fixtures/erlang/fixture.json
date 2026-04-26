@@ -1,0 +1,10 @@
+{
+  "runtime": "erlang",
+  "mode": "exec",
+  "command": ["erl", "-noshell", "-eval", "io:format([126,115,126,110], [string:uppercase([$a,$b,$c])]), init:stop()."],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\r?\\n$"
+  }
+}
+

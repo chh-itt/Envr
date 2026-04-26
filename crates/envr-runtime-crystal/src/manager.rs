@@ -155,6 +155,14 @@ fn download_to_path(
     )
 }
 
+fn crystal_download_url_candidates(url: &str) -> Vec<String> {
+    let mut out = vec![url.to_string()];
+    if url.contains("-1-windows-x86_64-msvc.zip") {
+        out.push(url.replace("-1-windows-x86_64-msvc.zip", "-windows-x86_64-msvc.zip"));
+    }
+    out
+}
+
 fn collect_archive_root_directories(staging: &Path) -> EnvrResult<Vec<PathBuf>> {
     let mut dirs = Vec::new();
     for e in fs::read_dir(staging).map_err(EnvrError::from)? {
@@ -352,14 +360,29 @@ impl CrystalManager {
         let cache_dir = self.paths.cache_dir().join(version_label);
         fs::create_dir_all(&cache_dir).map_err(EnvrError::from)?;
         let archive_path = cache_dir.join(format!("crystal{ext}"));
-        download_to_path(
-            &self.client,
-            url,
-            &archive_path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
+        let mut last_err: Option<EnvrError> = None;
+        let mut downloaded_ok = false;
+        for cand in crystal_download_url_candidates(url) {
+            match download_to_path(
+                &self.client,
+                &cand,
+                &archive_path,
+                progress_downloaded,
+                progress_total,
+                cancel,
+            ) {
+                Ok(()) => {
+                    downloaded_ok = true;
+                    break;
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        if !downloaded_ok {
+            return Err(last_err.unwrap_or_else(|| {
+                EnvrError::Download("failed to download crystal archive from all URL candidates".into())
+            }));
+        }
         if let Some(hex) = row.sha256_hex.as_deref() {
             let t = hex.trim();
             if !t.is_empty() {

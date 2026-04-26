@@ -268,6 +268,47 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "go" => vec![("GOROOT".into(), home_env.clone())],
         "elixir" => {
             #[cfg(windows)]
+            fn erts_bin_from_envr_runtime_root() -> Option<String> {
+                use std::path::PathBuf;
+                let root = std::env::var_os("ENVR_RUNTIME_ROOT")?;
+                let cur = PathBuf::from(root)
+                    .join("runtimes")
+                    .join("erlang")
+                    .join("current");
+                if !cur.exists() {
+                    return None;
+                }
+                let home = if let Ok(target) = std::fs::read_link(&cur) {
+                    if target.is_relative() {
+                        cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+                    } else {
+                        target
+                    }
+                } else {
+                    let s = std::fs::read_to_string(&cur).ok()?;
+                    let t = s.trim();
+                    if t.is_empty() {
+                        return None;
+                    }
+                    PathBuf::from(t)
+                };
+                let bin = std::fs::canonicalize(home.join("bin")).unwrap_or_else(|_| home.join("bin"));
+                if !bin.join("erl.exe").is_file() {
+                    return None;
+                }
+                let mut s = envr_platform::path_norm::normalize_fs_path_string_lossy(&bin);
+                if !s.ends_with('\\') {
+                    s.push('\\');
+                }
+                Some(s)
+            }
+
+            #[cfg(not(windows))]
+            fn erts_bin_from_envr_runtime_root() -> Option<String> {
+                None
+            }
+
+            #[cfg(windows)]
             fn erts_bin_from_host_path() -> Option<String> {
                 use std::path::PathBuf;
                 let path_os = std::env::var_os("PATH")?;
@@ -296,7 +337,8 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
             }
 
             let mut out = Vec::new();
-            if let Some(erts) = erts_bin_from_host_path() {
+            if let Some(erts) = erts_bin_from_envr_runtime_root().or_else(erts_bin_from_host_path)
+            {
                 out.push(("ERTS_BIN".into(), erts));
             }
             out

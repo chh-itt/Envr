@@ -1,0 +1,10 @@
+{
+  "runtime": "sbcl",
+  "mode": "exec",
+  "command": ["sbcl", "--non-interactive", "--eval", "(progn (princ (string-upcase (coerce '(#\\a #\\b #\\c) 'string))) (terpri) (quit))"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "(?s)ABC\\r?\\n$"
+  }
+}
+

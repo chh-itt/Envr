@@ -275,15 +275,24 @@ fn patch_windows_elixir_batch(home: &Path) -> EnvrResult<()> {
     let src = fs::read_to_string(&bat).map_err(EnvrError::from)?;
     let needle_crlf = "set ERTS_BIN=\r\nset ERTS_BIN=!ERTS_BIN!";
     let needle_lf = "set ERTS_BIN=\nset ERTS_BIN=!ERTS_BIN!";
-    let repl_crlf = "if not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\r\nif not defined ERTS_BIN set ERTS_BIN=\r\nset ERTS_BIN=!ERTS_BIN!";
-    let repl_lf = "if not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\nif not defined ERTS_BIN set ERTS_BIN=\nset ERTS_BIN=!ERTS_BIN!";
-    let patched = if src.contains(needle_crlf) {
+    let repl_crlf = "if defined ERLANG_HOME set ERLANG_HOME=%ERLANG_HOME:\"=%\r\nif not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\r\nif defined ERTS_BIN set ERTS_BIN=%ERTS_BIN:\"=%\r\nif not defined ERTS_BIN set ERTS_BIN=\r\nset ERTS_BIN=!ERTS_BIN!";
+    let repl_lf = "if defined ERLANG_HOME set ERLANG_HOME=%ERLANG_HOME:\"=%\nif not defined ERTS_BIN if defined ERLANG_HOME set ERTS_BIN=%ERLANG_HOME%\\bin\\\nif defined ERTS_BIN set ERTS_BIN=%ERTS_BIN:\"=%\nif not defined ERTS_BIN set ERTS_BIN=\nset ERTS_BIN=!ERTS_BIN!";
+    let mut patched = if src.contains(needle_crlf) {
         src.replace(needle_crlf, repl_crlf)
     } else if src.contains(needle_lf) {
         src.replace(needle_lf, repl_lf)
     } else {
-        return Ok(());
+        src
     };
+    let run_line_crlf = "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    let run_repl_crlf = "set \"ERL_EXE=erl.exe\"\r\nif defined ERTS_BIN set \"ERL_EXE=%ERTS_BIN%\\erl.exe\"\r\n\"%ERL_EXE%\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    let run_line_lf = "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    let run_repl_lf = "set \"ERL_EXE=erl.exe\"\nif defined ERTS_BIN set \"ERL_EXE=%ERTS_BIN%\\erl.exe\"\n\"%ERL_EXE%\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    if patched.contains(run_line_crlf) {
+        patched = patched.replace(run_line_crlf, run_repl_crlf);
+    } else if patched.contains(run_line_lf) {
+        patched = patched.replace(run_line_lf, run_repl_lf);
+    }
     fs::write(&bat, patched).map_err(EnvrError::from)
 }
 

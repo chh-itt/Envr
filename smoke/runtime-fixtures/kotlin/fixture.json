@@ -1,0 +1,12 @@
+{
+  "runtime": "kotlin",
+  "mode": "exec",
+  "write_files": {
+    "Main.kt": "import java.nio.file.Files\nimport java.nio.file.Paths\nimport java.security.MessageDigest\n\nfun main() {\n  val p = Paths.get(\"tmp.txt\")\n  Files.writeString(p, \"abc\")\n  val b = Files.readAllBytes(p)\n  val md = MessageDigest.getInstance(\"SHA-256\")\n  val h = md.digest(b)\n  val s = h.joinToString(\"\") { \"%02x\".format(it) }\n  println(s)\n}\n"
+  },
+  "steps": [
+    { "command": ["kotlinc", "Main.kt", "-include-runtime", "-d", "main.jar"], "expect": { "exit_code": 0 } },
+    { "command": ["kotlin", "-classpath", "main.jar", "MainKt"], "expect": { "exit_code": 0, "stdout_regex": "^[a-f0-9]{64}\\r?\\n$" } }
+  ]
+}
+

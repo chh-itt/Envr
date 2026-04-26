@@ -1,5 +1,5 @@
 use crate::index::{
-    GhRelease, blocking_http_client, fetch_releases_json, installable_pairs_from_releases,
+    blocking_http_client, fetch_kotlin_installable_pairs_with_fallback,
     list_remote_latest_per_major_lines, list_remote_versions, resolve_kotlin_version,
 };
 use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
@@ -256,7 +256,7 @@ impl KotlinManager {
     }
 
     fn releases_cache_path(&self) -> PathBuf {
-        self.paths.cache_dir().join("github_releases.json")
+        self.paths.cache_dir().join("installable_pairs.json")
     }
 
     fn file_is_within_ttl(path: &Path, ttl_secs: u64) -> bool {
@@ -280,8 +280,7 @@ impl KotlinManager {
         let ttl = Self::index_ttl_secs();
         if Self::file_is_within_ttl(&cache_path, ttl) {
             if let Ok(body) = fs::read_to_string(&cache_path) {
-                if let Ok(releases) = serde_json::from_str::<Vec<GhRelease>>(&body) {
-                    let pairs = installable_pairs_from_releases(&releases);
+                if let Ok(pairs) = serde_json::from_str::<Vec<(String, String)>>(&body) {
                     if !pairs.is_empty() {
                         return Ok(pairs);
                     }
@@ -289,16 +288,15 @@ impl KotlinManager {
             }
         }
 
-        let body = fetch_releases_json(&self.client, &self.releases_api_url)?;
-        let releases: Vec<GhRelease> = serde_json::from_str(&body).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Validation, "kotlin releases json", e)
-        })?;
+        let pairs = fetch_kotlin_installable_pairs_with_fallback(&self.client, &self.releases_api_url)?;
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
+            let body = serde_json::to_string(&pairs).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "kotlin installable pairs json", e)
+            })?;
             envr_platform::fs_atomic::write_atomic(&cache_path, body.as_bytes())?;
             Ok(())
         })();
-        let pairs = installable_pairs_from_releases(&releases);
         if pairs.is_empty() {
             return Err(EnvrError::Validation(
                 "kotlin: no installable kotlin-compiler zip entries in GitHub releases response"

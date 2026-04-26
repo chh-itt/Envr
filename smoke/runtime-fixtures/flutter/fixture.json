@@ -1,0 +1,10 @@
+{
+  "runtime": "flutter",
+  "mode": "exec",
+  "command": ["dart", "--version"],
+  "expect": {
+    "exit_code": 0
+  },
+  "note": "Flutter full smoke needs git + first-run bootstrap. This fixture validates bundled Dart toolchain availability under envr."
+}
+

@@ -1,0 +1,10 @@
+{
+  "runtime": "elm",
+  "mode": "exec",
+  "command": ["elm", "--help"],
+  "expect": {
+    "exit_code": 0
+  },
+  "note": "Elm compilation typically requires package fetch. Phase-1 fixture validates tool runnable; deeper offline project smoke can be added later with vendored packages."
+}
+

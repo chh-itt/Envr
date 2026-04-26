@@ -1,0 +1,10 @@
+{
+  "runtime": "lua",
+  "mode": "exec",
+  "command": ["lua", "-e", "local s='abc'; print(string.upper(s))"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\r?\\n$"
+  }
+}
+

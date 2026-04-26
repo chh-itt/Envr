@@ -1,0 +1,10 @@
+{
+  "runtime": "purescript",
+  "mode": "exec",
+  "command": ["purs", "--help"],
+  "expect": {
+    "exit_code": 0
+  },
+  "note": "PureScript stdlib is not shipped with the compiler binary; a full compile smoke needs fetching Prelude/package sets. Phase-1 fixture validates tool runnable."
+}
+

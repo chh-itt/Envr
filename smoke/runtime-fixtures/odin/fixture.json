@@ -1,0 +1,13 @@
+{
+  "runtime": "odin",
+  "mode": "exec",
+  "write_files": {
+    "main.odin": "package main\n\nimport \"core:fmt\"\n\nmain :: proc() {\n\tfmt.println(\"OK\")\n}\n"
+  },
+  "command": ["odin", "run", "main.odin", "-file"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^OK\\r?\\n$"
+  }
+}
+

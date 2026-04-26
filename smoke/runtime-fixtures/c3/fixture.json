@@ -1,0 +1,10 @@
+{
+  "runtime": "c3",
+  "mode": "exec",
+  "command": ["c3c", "--version"],
+  "expect": {
+    "exit_code": 0
+  },
+  "note": "C3 compiler stdlib smoke would require a complete project layout; phase-1 validates tool runnable."
+}
+

@@ -17,6 +17,45 @@ use serde_json::json;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 
+fn inject_elixir_erlang_env_from_runtime_root(
+    env_map: &mut std::collections::HashMap<String, String>,
+) {
+    let Some(root) = std::env::var_os("ENVR_RUNTIME_ROOT") else {
+        return;
+    };
+    let cur = PathBuf::from(root)
+        .join("runtimes")
+        .join("erlang")
+        .join("current");
+    if !cur.exists() {
+        return;
+    }
+    let home = if let Ok(target) = std::fs::read_link(&cur) {
+        if target.is_relative() {
+            cur.parent().map(|p| p.join(&target)).unwrap_or(target)
+        } else {
+            target
+        }
+    } else if let Ok(s) = std::fs::read_to_string(&cur) {
+        let t = s.trim();
+        if t.is_empty() {
+            return;
+        }
+        PathBuf::from(t)
+    } else {
+        return;
+    };
+    let home = std::fs::canonicalize(&home).unwrap_or(home);
+    let erlang_home = envr_platform::path_norm::normalize_fs_path_string_lossy(&home);
+    let mut erts = envr_platform::path_norm::normalize_fs_path_string_lossy(&home.join("bin"));
+    #[cfg(windows)]
+    if !erts.ends_with('\\') {
+        erts.push('\\');
+    }
+    env_map.insert("ERLANG_HOME".into(), erlang_home);
+    env_map.insert("ERTS_BIN".into(), erts);
+}
+
 fn collect_exec_env_maybe_install(
     g: &GlobalArgs,
     ctx: &ShimContext,
@@ -137,6 +176,9 @@ pub(crate) fn run_inner(
         pc,
     )?;
     env_overrides::apply_env_overrides(&mut env_map, &env_files, &env_pairs)?;
+    if lang == "elixir" {
+        inject_elixir_erlang_env_from_runtime_root(&mut env_map);
+    }
 
     if verbose
         && let Ok(line) = child_env::describe_exec_resolution(ctx, &lang, spec.as_deref(), pc)

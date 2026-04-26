@@ -1,0 +1,12 @@
+{
+  "runtime": "java",
+  "mode": "exec",
+  "write_files": {
+    "Main.java": "import java.nio.file.*;\nimport java.security.*;\n\npublic class Main {\n  public static void main(String[] args) throws Exception {\n    Path p = Paths.get(\"tmp.txt\");\n    Files.writeString(p, \"abc\");\n    byte[] b = Files.readAllBytes(p);\n    MessageDigest md = MessageDigest.getInstance(\"SHA-256\");\n    byte[] h = md.digest(b);\n    StringBuilder sb = new StringBuilder();\n    for (byte x : h) sb.append(String.format(\"%02x\", x));\n    System.out.println(sb.toString());\n  }\n}\n"
+  },
+  "steps": [
+    { "command": ["javac", "Main.java"], "expect": { "exit_code": 0 } },
+    { "command": ["java", "Main"], "expect": { "exit_code": 0, "stdout_regex": "^[a-f0-9]{64}\\r?\\n$" } }
+  ]
+}
+

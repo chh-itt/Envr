@@ -305,39 +305,71 @@ impl RlangManager {
             )));
         }
         let latest = self.load_latest_win_version_cached()?;
-        let url = cran_windows_r_installer_url(version_label, &latest);
 
-        let final_dir = self.paths.version_dir(version_label);
-        if final_dir.exists() {
-            let _ = fs::remove_dir_all(&final_dir);
-        }
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
         let installer_path = self
             .paths
             .cache_dir()
-            .join(format!("R-{version_label}-win-installer.exe"));
-        download_to_path(
-            &self.client,
-            &url,
-            &installer_path,
-            progress_downloaded,
-            progress_total,
-            cancel,
-        )?;
+            .join("R-win-installer.exe");
 
-        fs::create_dir_all(self.paths.versions_dir()).map_err(EnvrError::from)?;
-        run_cran_r_windows_installer(&installer_path, &final_dir)?;
-
-        if !rlang_installation_valid(&final_dir) {
-            let _ = fs::remove_dir_all(&final_dir);
-            return Err(EnvrError::Validation(
-                "R install finished but bin/R.exe or bin/Rscript.exe is missing".into(),
-            ));
+        let mut candidates: Vec<String> = Vec::new();
+        if let Some(pos) = versions.iter().position(|v| v == version_label) {
+            candidates.extend(versions[pos..].iter().cloned());
+        } else {
+            candidates.push(version_label.to_string());
         }
 
-        let _ = fs::remove_file(&installer_path);
-        self.set_current(&RuntimeVersion(version_label.to_string()))?;
-        Ok(RuntimeVersion(version_label.to_string()))
+        let mut last_err: Option<EnvrError> = None;
+        for candidate_version in candidates {
+            let urls = [
+                cran_windows_r_installer_url(&candidate_version, &latest),
+                format!(
+                    "https://cran.r-project.org/bin/windows/base/old/{0}/R-{0}-win.exe",
+                    candidate_version
+                ),
+            ];
+            let mut downloaded = false;
+            for url in urls {
+                match download_to_path(
+                    &self.client,
+                    &url,
+                    &installer_path,
+                    progress_downloaded,
+                    progress_total,
+                    cancel,
+                ) {
+                    Ok(()) => {
+                        downloaded = true;
+                        break;
+                    }
+                    Err(e) => last_err = Some(e),
+                }
+            }
+            if !downloaded {
+                continue;
+            }
+
+            let final_dir = self.paths.version_dir(&candidate_version);
+            if final_dir.exists() {
+                let _ = fs::remove_dir_all(&final_dir);
+            }
+            fs::create_dir_all(self.paths.versions_dir()).map_err(EnvrError::from)?;
+            run_cran_r_windows_installer(&installer_path, &final_dir)?;
+            if !rlang_installation_valid(&final_dir) {
+                let _ = fs::remove_dir_all(&final_dir);
+                last_err = Some(EnvrError::Validation(
+                    "R install finished but bin/R.exe or bin/Rscript.exe is missing".into(),
+                ));
+                continue;
+            }
+            let _ = fs::remove_file(&installer_path);
+            self.set_current(&RuntimeVersion(candidate_version.clone()))?;
+            return Ok(RuntimeVersion(candidate_version));
+        }
+
+        Err(last_err.unwrap_or_else(|| {
+            EnvrError::Download("failed to download/install any candidate R Windows installer".into())
+        }))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {

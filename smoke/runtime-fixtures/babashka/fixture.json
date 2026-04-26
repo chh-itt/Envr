@@ -1,0 +1,10 @@
+{
+  "runtime": "babashka",
+  "mode": "exec",
+  "command": ["bb", "-e", "(require '[clojure.string :as str]) (println (str/upper-case (apply str [\\a \\b \\c])))"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\r?\\n$"
+  }
+}
+

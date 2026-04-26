@@ -1,0 +1,11 @@
+{
+  "runtime": "zig",
+  "mode": "exec",
+  "write_files": {
+    "main.zig": "const std = @import(\"std\");\n\npub fn main() void {\n    std.debug.print(\"OK\\n\", .{});\n}\n"
+  },
+  "steps": [
+    { "command": ["zig", "build-exe", "main.zig"], "expect": { "exit_code": 0 } }
+  ]
+}
+

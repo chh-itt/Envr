@@ -1,0 +1,11 @@
+{
+  "runtime": "dotnet",
+  "mode": "exec",
+  "steps": [
+    { "command": ["dotnet", "new", "console", "-n", "App"], "expect": { "exit_code": 0 } },
+    { "command": ["dotnet", "restore", "App"], "expect": { "exit_code": 0 } },
+    { "command": ["dotnet", "run", "--project", "App/App.csproj"], "expect": { "exit_code": 0, "stdout_regex": "Hello,? World!\\r?\\n" } }
+  ],
+  "note": "Old dotnet SDKs may require explicit restore before run."
+}
+

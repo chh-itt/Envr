@@ -1,0 +1,13 @@
+{
+  "runtime": "elixir",
+  "mode": "exec",
+  "write_files": {
+    "main.exs": ":crypto.hash(:sha256, 'abc') |> Base.encode16(case: :lower) |> IO.puts()\n"
+  },
+  "command": ["elixir", "main.exs"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^[a-f0-9]{64}\\r?\\n$"
+  }
+}
+

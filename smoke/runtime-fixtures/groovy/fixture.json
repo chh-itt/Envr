@@ -1,0 +1,10 @@
+{
+  "runtime": "groovy",
+  "mode": "exec",
+  "command": ["groovy", "-e", "println('abc'.toUpperCase())"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^ABC\\r?\\n$"
+  }
+}
+

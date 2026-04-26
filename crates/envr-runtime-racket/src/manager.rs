@@ -383,6 +383,7 @@ impl SpecDrivenInstaller for RacketManager {
         }
         let client = blocking_http_client()?;
         let dl_dir = self.paths.cache_dir().join("downloads");
+        fs::create_dir_all(&dl_dir).map_err(EnvrError::from)?;
         let dl_tmp = tempfile::tempdir_in(&dl_dir).map_err(EnvrError::from)?;
         let archive = dl_tmp.path().join(format!("racket-minimal-{label}.tgz"));
         let fallback = row.url.replace("-cs.tgz", ".tgz");
