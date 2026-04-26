@@ -45,6 +45,7 @@ default-runtime-set = [
     "runtime-perl",
     "runtime-unison",
     "runtime-rlang",
+    "runtime-luau",
 ]
 runtime-node = ["envr-runtime-registry/runtime-node"]
 runtime-python = ["envr-runtime-registry/runtime-python"]
@@ -84,6 +85,7 @@ runtime-crystal = ["envr-runtime-registry/runtime-crystal"]
 runtime-perl = ["envr-runtime-registry/runtime-perl"]
 runtime-unison = ["envr-runtime-registry/runtime-unison"]
 runtime-rlang = ["envr-runtime-registry/runtime-rlang"]
+runtime-luau = ["envr-runtime-registry/runtime-luau"]
 
 [[test]]
 name = "i18n_gui_tr_key"

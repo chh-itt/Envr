@@ -178,6 +178,8 @@ fn page_body(state: &AppState, tokens: ThemeTokens) -> Element<'_, Message> {
                     .then_some(&state.settings.cache.snapshot().runtime.julia),
                 matches!(state.env_center.kind, RuntimeKind::Lua)
                     .then_some(&state.settings.cache.snapshot().runtime.lua),
+                matches!(state.env_center.kind, RuntimeKind::Luau)
+                    .then_some(&state.settings.cache.snapshot().runtime.luau),
                 matches!(state.env_center.kind, RuntimeKind::Nim)
                     .then_some(&state.settings.cache.snapshot().runtime.nim),
                 matches!(state.env_center.kind, RuntimeKind::Crystal)

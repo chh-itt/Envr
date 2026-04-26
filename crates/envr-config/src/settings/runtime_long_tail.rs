@@ -123,6 +123,21 @@ impl Default for LuaRuntimeSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LuauRuntimeSettings {
+    /// When false, luau/luau-analyze shims resolve to the next matching binary on PATH outside envr shims.
+    #[serde(default = "defaults::luau_path_proxy_enabled")]
+    pub path_proxy_enabled: bool,
+}
+
+impl Default for LuauRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            path_proxy_enabled: defaults::luau_path_proxy_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NimRuntimeSettings {
     /// When false, the nim shim resolves to the next matching binary on PATH outside envr shims.
     #[serde(default = "defaults::nim_path_proxy_enabled")]

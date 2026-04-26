@@ -100,6 +100,10 @@ fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)
         RuntimeKind::Perl => &[(CoreCommand::Perl, "perl")],
         RuntimeKind::Unison => &[(CoreCommand::Ucm, "ucm")],
         RuntimeKind::RLang => &[(CoreCommand::R, "R"), (CoreCommand::Rscript, "Rscript")],
+        RuntimeKind::Luau => &[
+            (CoreCommand::Luau, "luau"),
+            (CoreCommand::LuauAnalyze, "luau-analyze"),
+        ],
     }
 }
 

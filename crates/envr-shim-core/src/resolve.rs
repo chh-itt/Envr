@@ -168,6 +168,8 @@ pub enum CoreCommand {
     Ucm,
     R,
     Rscript,
+    Luau,
+    LuauAnalyze,
 }
 
 impl CoreCommand {
@@ -210,6 +212,7 @@ impl CoreCommand {
             CoreCommand::Perl => "perl",
             CoreCommand::Ucm => "unison",
             CoreCommand::R | CoreCommand::Rscript => "r",
+            CoreCommand::Luau | CoreCommand::LuauAnalyze => "luau",
         }
     }
 }
@@ -255,6 +258,7 @@ pub fn runtime_bin_dirs_for_key(home: &Path, key: &str) -> Vec<PathBuf> {
         "perl" => vec![home.join("bin"), home.to_path_buf()],
         "unison" => vec![home.join("bin"), home.to_path_buf()],
         "r" => vec![home.join("bin")],
+        "luau" => vec![home.join("bin"), home.to_path_buf()],
         _ => vec![],
     }
 }
@@ -266,6 +270,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
         "java" => vec![("JAVA_HOME".into(), home_env.clone())],
         // Override stale parent env values so the selected runtime stays authoritative.
         "go" => vec![("GOROOT".into(), home_env.clone())],
+        "luau" => vec![("LUAU_HOME".into(), home_env.clone())],
         "elixir" => {
             #[cfg(windows)]
             fn erts_bin_from_envr_runtime_root() -> Option<String> {
@@ -555,6 +560,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
         "ucm" => Some(CoreCommand::Ucm),
         "r" => Some(CoreCommand::R),
         "rscript" => Some(CoreCommand::Rscript),
+        "luau" => Some(CoreCommand::Luau),
+        "luau-analyze" => Some(CoreCommand::LuauAnalyze),
         _ => None,
     }
 }
@@ -1498,6 +1505,26 @@ fn rlang_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     }
 }
 
+fn luau_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
+    match cmd {
+        CoreCommand::Luau => first_existing(&[
+            home.join("luau.exe"),
+            home.join("luau"),
+            home.join("bin").join("luau.exe"),
+            home.join("bin").join("luau"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("luau missing under {}", home.display()))),
+        CoreCommand::LuauAnalyze => first_existing(&[
+            home.join("luau-analyze.exe"),
+            home.join("luau-analyze"),
+            home.join("bin").join("luau-analyze.exe"),
+            home.join("bin").join("luau-analyze"),
+        ])
+        .ok_or_else(|| EnvrError::Runtime(format!("luau-analyze missing under {}", home.display()))),
+        _ => Err(EnvrError::Runtime("internal: not a luau tool".into())),
+    }
+}
+
 /// Resolved path to a core tool under a runtime **home** directory (e.g. `current` target).
 pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
     match cmd {
@@ -1540,6 +1567,7 @@ pub fn core_tool_executable(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf
         CoreCommand::Perl => perl_tool_path(home, cmd),
         CoreCommand::Ucm => unison_tool_path(home, cmd),
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(home, cmd),
+        CoreCommand::Luau | CoreCommand::LuauAnalyze => luau_tool_path(home, cmd),
     }
 }
 
@@ -1718,6 +1746,8 @@ fn path_proxy_bypass_host_stem(cmd: CoreCommand) -> &'static str {
         CoreCommand::Ucm => "ucm",
         CoreCommand::R => "r",
         CoreCommand::Rscript => "rscript",
+        CoreCommand::Luau => "luau",
+        CoreCommand::LuauAnalyze => "luau-analyze",
     }
 }
 
@@ -1838,6 +1868,7 @@ pub fn resolve_core_shim_command_with_settings(
         CoreCommand::Perl => perl_tool_path(&home, cmd)?,
         CoreCommand::Ucm => unison_tool_path(&home, cmd)?,
         CoreCommand::R | CoreCommand::Rscript => rlang_tool_path(&home, cmd)?,
+        CoreCommand::Luau | CoreCommand::LuauAnalyze => luau_tool_path(&home, cmd)?,
     };
 
     Ok(ResolvedShim {

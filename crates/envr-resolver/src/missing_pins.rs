@@ -45,6 +45,7 @@ pub const RUNTIME_PLAN_ORDER: &[&str] = &[
     "perl",
     "unison",
     "r",
+    "luau",
 ];
 
 /// True when a failed resolution likely means "nothing installed for this spec yet" and

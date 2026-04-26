@@ -715,6 +715,12 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             on,
             |st, on| st.runtime.lua.path_proxy_enabled = on,
         ),
+        EnvCenterMsg::SetLuauPathProxy(on) => persist_path_proxy_toggle(
+            state,
+            envr_domain::runtime::RuntimeKind::Luau,
+            on,
+            |st, on| st.runtime.luau.path_proxy_enabled = on,
+        ),
         EnvCenterMsg::SetNimPathProxy(on) => persist_path_proxy_toggle(
             state,
             envr_domain::runtime::RuntimeKind::Nim,

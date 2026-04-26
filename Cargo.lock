@@ -1440,6 +1440,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "envr-runtime-luau"
+version = "0.1.0"
+dependencies = [
+ "envr-config",
+ "envr-domain",
+ "envr-download",
+ "envr-error",
+ "envr-platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "envr-runtime-nim"
 version = "0.1.0"
 dependencies = [
@@ -1594,6 +1609,7 @@ dependencies = [
  "envr-runtime-julia",
  "envr-runtime-kotlin",
  "envr-runtime-lua",
+ "envr-runtime-luau",
  "envr-runtime-nim",
  "envr-runtime-node",
  "envr-runtime-odin",

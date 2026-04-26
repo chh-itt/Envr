@@ -43,6 +43,7 @@ pub enum RuntimeKind {
     Perl,
     Unison,
     RLang,
+    Luau,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,7 +77,7 @@ impl WindowsPrereq {
     }
 }
 
-pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 38] = [
+pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 39] = [
     RuntimeDescriptor {
         kind: RuntimeKind::Node,
         key: "node",
@@ -415,6 +416,15 @@ pub const RUNTIME_DESCRIPTORS: [RuntimeDescriptor; 38] = [
         key: "r",
         label_en: "R",
         label_zh: "R",
+        supports_remote_latest: true,
+        supports_path_proxy: true,
+        host_runtime: None,
+    },
+    RuntimeDescriptor {
+        kind: RuntimeKind::Luau,
+        key: "luau",
+        label_en: "Luau",
+        label_zh: "Luau",
         supports_remote_latest: true,
         supports_path_proxy: true,
         host_runtime: None,
@@ -804,6 +814,19 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
             let minor = parts.get(1).copied()?;
             Some(format!("{major}.{minor}"))
         }
+        RuntimeKind::Luau => {
+            let major = parts.first().copied()?;
+            let maybe_minor = parts.get(1).copied();
+            if let Some(minor) = maybe_minor {
+                if major == 0 && minor >= 100 {
+                    Some(format!("0.{}", minor / 100))
+                } else {
+                    Some(format!("{major}.{minor}"))
+                }
+            } else {
+                Some(major.to_string())
+            }
+        }
         _ => parts.first().copied().map(|m| m.to_string()),
     }
 }
@@ -857,6 +880,7 @@ mod tests {
         );
         assert_eq!(parse_runtime_kind("SBCL").expect("sbcl"), RuntimeKind::Sbcl);
         assert_eq!(parse_runtime_kind("HAXE").expect("haxe"), RuntimeKind::Haxe);
+        assert_eq!(parse_runtime_kind("LUAU").expect("luau"), RuntimeKind::Luau);
     }
 
     #[test]
@@ -868,7 +892,7 @@ mod tests {
     #[test]
     fn descriptors_cover_all_runtime_kinds() {
         let kinds: Vec<RuntimeKind> = runtime_kinds_all().collect();
-        assert_eq!(kinds.len(), 38);
+        assert_eq!(kinds.len(), 39);
         assert!(kinds.contains(&RuntimeKind::Ruby));
         assert!(kinds.contains(&RuntimeKind::Elixir));
         assert!(kinds.contains(&RuntimeKind::Erlang));
@@ -885,6 +909,7 @@ mod tests {
         assert!(kinds.contains(&RuntimeKind::Perl));
         assert!(kinds.contains(&RuntimeKind::Unison));
         assert!(kinds.contains(&RuntimeKind::RLang));
+        assert!(kinds.contains(&RuntimeKind::Luau));
         assert!(kinds.contains(&RuntimeKind::Lua));
         assert!(kinds.contains(&RuntimeKind::Kotlin));
         assert!(kinds.contains(&RuntimeKind::Scala));
@@ -1091,6 +1116,14 @@ mod tests {
         assert_eq!(
             version_line_key_for_kind(RuntimeKind::Erlang, "27.3.4.10").as_deref(),
             Some("27")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Luau, "0.718").as_deref(),
+            Some("0.7")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Luau, "696").as_deref(),
+            Some("696")
         );
     }
 

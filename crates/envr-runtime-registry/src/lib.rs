@@ -243,6 +243,12 @@ pub fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn Runt
         envr_runtime_rlang::RlangRuntimeProvider::new,
         |p, r| p.with_runtime_root(r),
     )));
+    #[cfg(feature = "runtime-luau")]
+    providers.push(Box::new(attach_runtime_root(
+        &runtime_root,
+        envr_runtime_luau::LuauRuntimeProvider::new,
+        |p, r| p.with_runtime_root(r),
+    )));
 
     providers
 }

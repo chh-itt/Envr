@@ -63,6 +63,11 @@ pub fn lua_path_proxy_enabled_from_disk() -> bool {
     load_runtime_bool_from_disk(|s| s.runtime.lua.path_proxy_enabled)
 }
 
+/// Read [`super::LuauRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
+pub fn luau_path_proxy_enabled_from_disk() -> bool {
+    load_runtime_bool_from_disk(|s| s.runtime.luau.path_proxy_enabled)
+}
+
 /// Read [`super::PerlRuntimeSettings::path_proxy_enabled`] from disk; on error defaults to `true`.
 pub fn perl_path_proxy_enabled_from_disk() -> bool {
     load_runtime_bool_from_disk(|s| s.runtime.perl.path_proxy_enabled)

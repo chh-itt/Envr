@@ -7,7 +7,8 @@ use envr_config::settings::{
     FlutterRuntimeSettings, GleamRuntimeSettings, GoDownloadSource, GoProxyMode, GoRuntimeSettings,
     GroovyRuntimeSettings, HaxeRuntimeSettings, JanetRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
-    LuaRuntimeSettings, NimRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
+    LuaRuntimeSettings, LuauRuntimeSettings, NimRuntimeSettings, NodeDownloadSource,
+    NodeRuntimeSettings,
     NpmRegistryMode, OdinRuntimeSettings, PerlRuntimeSettings, PhpDownloadSource,
     PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode, PurescriptRuntimeSettings,
     PythonDownloadSource, PythonRuntimeSettings, RacketRuntimeSettings, RlangRuntimeSettings,
@@ -110,6 +111,7 @@ pub enum EnvCenterMsg {
     SetSbclPathProxy(bool),
     SetHaxePathProxy(bool),
     SetLuaPathProxy(bool),
+    SetLuauPathProxy(bool),
     SetNimPathProxy(bool),
     SetCrystalPathProxy(bool),
     SetPerlPathProxy(bool),
@@ -272,6 +274,7 @@ fn path_proxy_toggle_msg(kind: RuntimeKind, on: bool) -> Option<EnvCenterMsg> {
         RuntimeKind::Sbcl => EnvCenterMsg::SetSbclPathProxy(on),
         RuntimeKind::Haxe => EnvCenterMsg::SetHaxePathProxy(on),
         RuntimeKind::Lua => EnvCenterMsg::SetLuaPathProxy(on),
+        RuntimeKind::Luau => EnvCenterMsg::SetLuauPathProxy(on),
         RuntimeKind::Nim => EnvCenterMsg::SetNimPathProxy(on),
         RuntimeKind::Crystal => EnvCenterMsg::SetCrystalPathProxy(on),
         RuntimeKind::Perl => EnvCenterMsg::SetPerlPathProxy(on),
@@ -2712,6 +2715,7 @@ pub fn env_center_view(
     zig_runtime: Option<&ZigRuntimeSettings>,
     julia_runtime: Option<&JuliaRuntimeSettings>,
     lua_runtime: Option<&LuaRuntimeSettings>,
+    luau_runtime: Option<&LuauRuntimeSettings>,
     nim_runtime: Option<&NimRuntimeSettings>,
     crystal_runtime: Option<&CrystalRuntimeSettings>,
     perl_runtime: Option<&PerlRuntimeSettings>,
@@ -2951,6 +2955,12 @@ pub fn env_center_view(
     } else if state.kind == RuntimeKind::Lua {
         lua_runtime
             .map(|l| lua_runtime_settings_section(l, tokens))
+            .unwrap_or_else(|| column![].into())
+    } else if state.kind == RuntimeKind::Luau {
+        luau_runtime
+            .map(|l| lua_runtime_settings_section(&LuaRuntimeSettings {
+                path_proxy_enabled: l.path_proxy_enabled,
+            }, tokens))
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Nim {
         nim_runtime

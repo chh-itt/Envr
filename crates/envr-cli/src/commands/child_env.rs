@@ -333,6 +333,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
         "racket" => Some("ENVR_RACKET_VERSION"),
         "dart" => Some("ENVR_DART_VERSION"),
         "flutter" => Some("ENVR_FLUTTER_VERSION"),
+        "luau" => Some("ENVR_LUAU_VERSION"),
         _ => None,
     }
 }

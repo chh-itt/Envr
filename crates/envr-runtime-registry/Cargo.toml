@@ -45,6 +45,7 @@ default-runtime-set = [
     "runtime-perl",
     "runtime-unison",
     "runtime-rlang",
+    "runtime-luau",
 ]
 runtime-node = ["dep:envr-runtime-node"]
 runtime-python = ["dep:envr-runtime-python"]
@@ -84,6 +85,7 @@ runtime-crystal = ["dep:envr-runtime-crystal"]
 runtime-perl = ["dep:envr-runtime-perl"]
 runtime-unison = ["dep:envr-runtime-unison"]
 runtime-rlang = ["dep:envr-runtime-rlang"]
+runtime-luau = ["dep:envr-runtime-luau"]
 
 [dependencies]
 envr-domain = { path = "../envr-domain" }
@@ -125,3 +127,4 @@ envr-runtime-crystal = { path = "../envr-runtime-crystal", optional = true }
 envr-runtime-perl = { path = "../envr-runtime-perl", optional = true }
 envr-runtime-unison = { path = "../envr-runtime-unison", optional = true }
 envr-runtime-rlang = { path = "../envr-runtime-rlang", optional = true }
+envr-runtime-luau = { path = "../envr-runtime-luau", optional = true }

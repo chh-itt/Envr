@@ -185,6 +185,10 @@ pub fn lua_path_proxy_enabled() -> bool {
     true
 }
 
+pub fn luau_path_proxy_enabled() -> bool {
+    true
+}
+
 pub fn nim_path_proxy_enabled() -> bool {
     true
 }

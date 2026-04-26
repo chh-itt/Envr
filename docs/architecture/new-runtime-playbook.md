@@ -22,6 +22,7 @@ Write a runtime-specific plan first (`docs/runtime/<key>-integration-plan.md`) a
 - Runtime key and labels (`key`, `label_en`, `label_zh`).
 - Core commands (for example: `ruby`, `gem`, `bundle`).
 - Version grammar (`major`, `major.minor`, full semver, prerelease policy).
+- Grouping grammar for GUI major lines, including non-semver/single-number versions (for example `696`).
 - Upstream index/discovery shape (API, HTML, atom feed, static URL rules).
 - Install artifact types by host (`zip`, `tar.*`, `exe`, `msi`) and install layout.
 - `current` strategy (symlink, pointer fallback, or custom marker).
@@ -137,7 +138,8 @@ In current GUI architecture, runtime work usually touches:
 Required checks:
 
 - Runtime appears in nav/layout and enters with real data load.
-- Installed/remote/current rows are consistent.
+- Installed/remote/current rows are consistent (including when current version uses a different grammar).
+- Remote version grouping is stable for both semver and non-semver versions.
 - Runtime-specific settings area appears when expected.
 - Download/cancel/error states are coherent.
 
@@ -159,7 +161,9 @@ Before calling the runtime done, all must be "yes":
 - [ ] `run`/`exec`/shim all work (not only one path).
 - [ ] Runtime home env vars come from shared helpers.
 - [ ] GUI runtime page loads and actions are complete.
+- [ ] Current version is always visible/selectable in GUI lists, even when version grammar is irregular.
 - [ ] Settings/path-proxy behavior matches descriptor flags.
+- [ ] If `supports_path_proxy = true`, descriptor + settings + snapshot + GUI toggle + shim bypass are all wired.
 - [ ] Project pin (`.envr.toml`) behavior is verified.
 - [ ] Runtime docs and known limitations are updated.
 - [ ] Focused tests and smoke commands are recorded.

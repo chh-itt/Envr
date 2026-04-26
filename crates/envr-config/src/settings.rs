@@ -31,6 +31,7 @@ pub use runtime_disk_flags::{
     erlang_path_proxy_enabled_from_disk, flutter_path_proxy_enabled_from_disk,
     go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
     julia_path_proxy_enabled_from_disk, lua_path_proxy_enabled_from_disk,
+    luau_path_proxy_enabled_from_disk,
     nim_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
     perl_path_proxy_enabled_from_disk, php_path_proxy_enabled_from_disk,
     php_windows_build_want_ts_from_disk, python_path_proxy_enabled_from_disk,
@@ -51,7 +52,8 @@ pub use runtime_lang_core::{
 };
 pub use runtime_long_tail::{
     BabashkaRuntimeSettings, C3RuntimeSettings, CrystalRuntimeSettings, HaxeRuntimeSettings,
-    JanetRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, NimRuntimeSettings,
+    JanetRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, LuauRuntimeSettings,
+    NimRuntimeSettings,
     PerlRuntimeSettings, RlangRuntimeSettings, SbclRuntimeSettings, UnisonRuntimeSettings,
     ZigRuntimeSettings,
 };
@@ -380,6 +382,9 @@ pub struct RuntimeSettings {
     pub lua: LuaRuntimeSettings,
 
     #[serde(default)]
+    pub luau: LuauRuntimeSettings,
+
+    #[serde(default)]
     pub nim: NimRuntimeSettings,
 
     #[serde(default)]
@@ -536,6 +541,7 @@ mod tests {
                 sbcl: SbclRuntimeSettings::default(),
                 haxe: HaxeRuntimeSettings::default(),
                 lua: LuaRuntimeSettings::default(),
+                luau: LuauRuntimeSettings::default(),
                 nim: NimRuntimeSettings::default(),
                 crystal: CrystalRuntimeSettings::default(),
                 perl: PerlRuntimeSettings::default(),
