@@ -39,6 +39,8 @@ pub struct DownloadJob {
     pub downloaded: Arc<AtomicU64>,
     pub total: Arc<AtomicU64>,
     pub cancel: CancelToken,
+    pub cancel_requested_at: Option<Instant>,
+    pub cancel_settled_by_timeout: bool,
     pub last_error: Option<String>,
     pub tick_prev_bytes: u64,
     pub tick_prev_at: Option<Instant>,

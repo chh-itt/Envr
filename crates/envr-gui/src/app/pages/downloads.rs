@@ -2,15 +2,18 @@ use super::super::*;
 
 use iced::Task;
 use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
 use crate::download_runner;
 use crate::view::downloads::{DownloadJob, DownloadJobPayload, DownloadMsg, JobState};
+
+const CANCEL_SETTLE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(crate) fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Message> {
     match msg {
         DownloadMsg::Tick => {
             state.downloads.on_tick();
-            Task::none()
+            settle_stuck_cancelling_jobs(state)
         }
         DownloadMsg::ToggleVisible => {
             let tokens = state.tokens();
@@ -78,9 +81,13 @@ pub(crate) fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Me
         DownloadMsg::EnqueueDemo => enqueue_demo_download(state),
         DownloadMsg::Finished { id, result } => {
             if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id) {
+                if j.state == JobState::Cancelled && j.cancel.is_cancelled() {
+                    return Task::none();
+                }
                 match &result {
                     Ok(_) => {
                         j.state = JobState::Done;
+                        j.cancel_settled_by_timeout = false;
                         let d = j.downloaded.load(Ordering::Relaxed);
                         let t = j.total.load(Ordering::Relaxed);
                         if t == 0 || d < t {
@@ -91,9 +98,11 @@ pub(crate) fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Me
                     Err(e) => {
                         if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = None;
                         } else {
                             j.state = JobState::Failed;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = Some(e.clone());
                         }
                     }
@@ -107,8 +116,10 @@ pub(crate) fn handle_download(state: &mut AppState, msg: DownloadMsg) -> Task<Me
                     return Task::none();
                 }
                 j.cancel.cancel();
+                j.cancel_requested_at = Some(Instant::now());
                 if j.state == JobState::Queued {
                     j.state = JobState::Cancelled;
+                    j.cancel_settled_by_timeout = false;
                     j.last_error = None;
                 }
             }
@@ -186,6 +197,8 @@ pub(crate) fn retry_download(state: &mut AppState, url_str: &str, label: &str) -
         downloaded: downloaded.clone(),
         total: total.clone(),
         cancel: cancel.clone(),
+        cancel_requested_at: None,
+        cancel_settled_by_timeout: false,
         last_error: None,
         tick_prev_bytes: 0,
         tick_prev_at: None,
@@ -224,6 +237,8 @@ pub(crate) fn enqueue_runtime_install_job(
         downloaded: downloaded.clone(),
         total: total.clone(),
         cancel: cancel.clone(),
+        cancel_requested_at: None,
+        cancel_settled_by_timeout: false,
         last_error: None,
         tick_prev_bytes: 0,
         tick_prev_at: None,
@@ -261,6 +276,8 @@ pub(crate) fn enqueue_op_job_running(
         downloaded: downloaded.clone(),
         total: total.clone(),
         cancel: cancel.clone(),
+        cancel_requested_at: None,
+        cancel_settled_by_timeout: false,
         last_error: None,
         tick_prev_bytes: 0,
         tick_prev_at: None,
@@ -304,6 +321,7 @@ pub(crate) fn maybe_start_queued_jobs(state: &mut AppState) -> Task<Message> {
         };
         if j.cancel.is_cancelled() {
             j.state = JobState::Cancelled;
+            j.cancel_settled_by_timeout = false;
             j.last_error = None;
             continue;
         }
@@ -361,4 +379,46 @@ pub(crate) fn maybe_start_queued_jobs(state: &mut AppState) -> Task<Message> {
     } else {
         Task::batch(tasks)
     }
+}
+
+fn settle_stuck_cancelling_jobs(state: &mut AppState) -> Task<Message> {
+    let now = Instant::now();
+    let mut touched = false;
+    let mut released_active_installs = Vec::new();
+    let mut clear_rust_op = false;
+
+    for j in &mut state.downloads.jobs {
+        if j.state != JobState::Running || !j.cancel.is_cancelled() {
+            continue;
+        }
+        let Some(requested_at) = j.cancel_requested_at else {
+            continue;
+        };
+        if now.duration_since(requested_at) < CANCEL_SETTLE_TIMEOUT {
+            continue;
+        }
+        j.state = JobState::Cancelled;
+        j.cancel_settled_by_timeout = true;
+        j.last_error = None;
+        touched = true;
+        released_active_installs.push(j.id);
+        if state.env_center.op_job_id == Some(j.id) {
+            clear_rust_op = true;
+        }
+    }
+
+    if !touched {
+        return Task::none();
+    }
+
+    for id in released_active_installs {
+        state.env_center.active_install_job_ids.remove(&id);
+    }
+    if clear_rust_op {
+        state.env_center.op_job_id = None;
+    }
+    if state.env_center.op_job_id.is_none() && state.env_center.active_install_job_ids.is_empty() {
+        state.env_center.busy = false;
+    }
+    maybe_start_queued_jobs(state)
 }

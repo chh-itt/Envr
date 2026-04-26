@@ -101,7 +101,17 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
                 envr_core::i18n::tr_key("gui.job.failed", "失败", "Failed"),
             )
         }
-        JobState::Cancelled => envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled"),
+        JobState::Cancelled => {
+            if job.cancel_settled_by_timeout {
+                envr_core::i18n::tr_key(
+                    "gui.job.cancelled_timeout_settled",
+                    "取消超时，界面已结束（后台可能仍在收尾）",
+                    "Cancel timed out; ended in UI (background may still be finalizing)",
+                )
+            } else {
+                envr_core::i18n::tr_key("gui.job.cancelled", "已取消", "Cancelled")
+            }
+        }
     }
 }
 

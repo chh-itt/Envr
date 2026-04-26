@@ -346,11 +346,21 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             kind,
             result,
         } => {
+            let was_force_cancelled = state
+                .downloads
+                .jobs
+                .iter()
+                .find(|j| j.id == job_id)
+                .is_some_and(|j| j.state == JobState::Cancelled && j.cancel.is_cancelled());
             state.env_center.active_install_job_ids.remove(&job_id);
             if let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == job_id) {
+                if was_force_cancelled {
+                    j.last_error = None;
+                } else {
                 match &result {
                     Ok(_) => {
                         j.state = JobState::Done;
+                        j.cancel_settled_by_timeout = false;
                         let d = j.downloaded.load(Ordering::Relaxed);
                         let t = j.total.load(Ordering::Relaxed);
                         if t == 0 || d < t {
@@ -361,15 +371,19 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                     Err(e) => {
                         if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = None;
                         } else {
                             j.state = JobState::Failed;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = Some(e.clone());
                         }
                     }
                 }
+                }
             }
-            match &result {
+            if !was_force_cancelled {
+                match &result {
                 Ok(v) => {
                     tracing::info!(version = %v.0, "gui install ok");
                     // `install_input` is now the search keyword; keep it for better feedback.
@@ -378,6 +392,7 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                     if !looks_like_user_cancelled(e) {
                         state.error = Some(e.clone());
                     }
+                }
                 }
             }
             match result {
@@ -879,12 +894,28 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
         }
         EnvCenterMsg::RustOpFinished(res) => {
             state.env_center.busy = false;
+            let was_force_cancelled = state
+                .env_center
+                .op_job_id
+                .and_then(|id| {
+                    state
+                        .downloads
+                        .jobs
+                        .iter()
+                        .find(|j| j.id == id)
+                        .map(|j| j.state == JobState::Cancelled && j.cancel.is_cancelled())
+                })
+                .unwrap_or(false);
             if let Some(id) = state.env_center.op_job_id.take()
                 && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
             {
+                if was_force_cancelled {
+                    j.last_error = None;
+                } else {
                 match &res {
                     Ok(()) => {
                         j.state = JobState::Done;
+                        j.cancel_settled_by_timeout = false;
                         let d = j.downloaded.load(Ordering::Relaxed);
                         let t = j.total.load(Ordering::Relaxed);
                         if t == 0 || d < t {
@@ -895,15 +926,19 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                     Err(e) => {
                         if looks_like_user_cancelled(e) {
                             j.state = JobState::Cancelled;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = None;
                         } else {
                             j.state = JobState::Failed;
+                            j.cancel_settled_by_timeout = false;
                             j.last_error = Some(e.clone());
                         }
                     }
                 }
+                }
             }
             if let Err(e) = &res
+                && !was_force_cancelled
                 && !looks_like_user_cancelled(e)
             {
                 state.error = Some(e.clone());
