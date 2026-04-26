@@ -1,3 +1,4 @@
+use envr_config::settings::DENO_NPMIRROR_BINARY_BASE;
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
@@ -21,37 +22,7 @@ pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
 }
 
 pub fn fetch_tags(client: &reqwest::blocking::Client, url: &str) -> EnvrResult<String> {
-    let response = client.get(url).send().map_err(|e| {
-        EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-    })?;
-    if !response.status().is_success() {
-        return Err(EnvrError::Download(format!(
-            "GET {} -> {}",
-            url,
-            response.status()
-        )));
-    }
-    response.text().map_err(|e| {
-        EnvrError::with_source(
-            ErrorCode::Download,
-            format!("read body failed for {url}"),
-            e,
-        )
-    })
-}
-
-fn parse_github_next_link(link: Option<&reqwest::header::HeaderValue>) -> Option<String> {
-    let raw = link?.to_str().ok()?;
-    for part in raw.split(',') {
-        let part = part.trim();
-        if !part.contains("rel=\"next\"") && !part.contains("rel=next") {
-            continue;
-        }
-        let start = part.find('<')? + 1;
-        let end = part.find('>')?;
-        return Some(part[start..end].to_string());
-    }
-    None
+    envr_runtime_github_release::fetch_text(client, url)
 }
 
 fn max_tag_pages() -> usize {
@@ -63,52 +34,74 @@ fn max_tag_pages() -> usize {
         .unwrap_or(DEFAULT)
 }
 
-/// Fetches **all** tags from GitHub (follows `Link: ... rel="next"` until exhausted).
+#[derive(Debug, Clone, Deserialize)]
+struct MirrorEntry {
+    name: String,
+    #[allow(dead_code)]
+    r#type: Option<String>,
+}
+
+fn fetch_tags_from_npmmirror(client: &reqwest::blocking::Client) -> EnvrResult<Vec<Tag>> {
+    let index_url = format!("{DENO_NPMIRROR_BINARY_BASE}/");
+    let text = envr_runtime_github_release::fetch_text(client, &index_url)?;
+    let entries: Vec<MirrorEntry> = serde_json::from_str(&text).map_err(|e| {
+        EnvrError::with_source(
+            ErrorCode::Validation,
+            "invalid npmmirror deno index json",
+            e,
+        )
+    })?;
+    let mut out = Vec::new();
+    for e in entries {
+        let raw = e.name.trim().trim_end_matches('/');
+        if !raw.starts_with('v') {
+            continue;
+        }
+        if normalize_deno_version(raw).is_none() {
+            continue;
+        }
+        out.push(Tag {
+            name: raw.to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// Fetches paginated tags from GitHub until empty/short page.
 pub fn fetch_all_tags(client: &reqwest::blocking::Client, start_url: &str) -> EnvrResult<Vec<Tag>> {
     let mut all = Vec::new();
-    let mut next = Some(start_url.to_string());
-    let mut pages = 0usize;
     let max_pages = max_tag_pages();
-    while let Some(url) = next.take() {
-        if pages >= max_pages {
-            break;
-        }
-        pages += 1;
-        let response = match client.get(&url).send() {
-            Ok(r) => r,
+    for page in 1..=max_pages {
+        let url = if page == 1 {
+            start_url.to_string()
+        } else {
+            let sep = if start_url.contains('?') { '&' } else { '?' };
+            format!("{start_url}{sep}page={page}")
+        };
+        let body = match fetch_tags(client, &url) {
+            Ok(t) => t,
             Err(e) => {
                 if !all.is_empty() {
                     break;
                 }
-                return Err(EnvrError::with_source(
-                    ErrorCode::Download,
-                    format!("request failed for {url}"),
-                    e,
-                ));
+                // GitHub API can be rate-limited in some regions/IPs; fallback to npmmirror index.
+                if let Ok(mirror_tags) = fetch_tags_from_npmmirror(client)
+                    && !mirror_tags.is_empty()
+                {
+                    return Ok(mirror_tags);
+                }
+                return Err(e);
             }
         };
-        if !response.status().is_success() {
-            // GitHub may rate-limit paginated tag requests on later pages.
-            // If we already have some pages, degrade gracefully instead of failing all installs.
-            if response.status() == reqwest::StatusCode::FORBIDDEN && !all.is_empty() {
-                break;
-            }
-            return Err(EnvrError::Download(format!(
-                "GET {url} -> {}",
-                response.status()
-            )));
-        }
-        let headers = response.headers().clone();
-        let body = response.text().map_err(|e| {
-            EnvrError::with_source(
-                ErrorCode::Download,
-                format!("read body failed for {url}"),
-                e,
-            )
-        })?;
         let mut page = parse_tags(&body)?;
+        if page.is_empty() {
+            break;
+        }
+        let page_len = page.len();
         all.append(&mut page);
-        next = parse_github_next_link(headers.get("link"));
+        if page_len < 100 {
+            break;
+        }
     }
     Ok(all)
 }

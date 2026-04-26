@@ -1,12 +1,17 @@
 use envr_domain::runtime::{RemoteFilter, RuntimeVersion, numeric_version_segments};
 use envr_download::blocking::build_blocking_http_client;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_runtime_github_release::{GhRepo, InstallableRow};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::Duration;
 
 pub const DEFAULT_LUAU_RELEASES_API_URL: &str = "https://api.github.com/repos/luau-lang/luau/releases";
+const LUAU_REPO: GhRepo = GhRepo {
+    owner: "luau-lang",
+    name: "luau",
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GhAsset {
@@ -115,6 +120,13 @@ fn normalize_release_label(tag: &str) -> Option<String> {
     }
 }
 
+fn synthetic_asset_url(tag: &str) -> Option<String> {
+    let fname = host_asset_candidates().into_iter().next()?;
+    Some(format!(
+        "https://github.com/luau-lang/luau/releases/download/{tag}/{fname}"
+    ))
+}
+
 fn fetch_github_releases_index(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
@@ -122,7 +134,8 @@ fn fetch_github_releases_index(
     let mut page = 1;
     let mut out = Vec::new();
     loop {
-        let url = format!("{releases_api_url}?per_page=100&page={page}");
+        let sep = if releases_api_url.contains('?') { '&' } else { '?' };
+        let url = format!("{releases_api_url}{sep}per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
         let arr: Vec<GhRelease> = serde_json::from_str(&text).map_err(|e| {
             EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
@@ -144,22 +157,54 @@ pub fn fetch_luau_installable_rows(
     client: &reqwest::blocking::Client,
     releases_api_url: &str,
 ) -> EnvrResult<Vec<LuauInstallableRow>> {
-    let releases = fetch_github_releases_index(client, releases_api_url)?;
     let mut by_version: HashMap<String, String> = HashMap::new();
-    for rel in releases {
-        if rel.draft || rel.prerelease {
-            continue;
+
+    // Primary: GitHub Releases API (full fidelity assets).
+    if let Ok(releases) = fetch_github_releases_index(client, releases_api_url) {
+        for rel in releases {
+            if rel.draft || rel.prerelease {
+                continue;
+            }
+            let Some(version) = normalize_release_label(&rel.tag_name) else {
+                continue;
+            };
+            let Some(asset) = pick_asset(&rel.assets) else {
+                continue;
+            };
+            by_version
+                .entry(version)
+                .or_insert(asset.browser_download_url.clone());
         }
-        let Some(version) = normalize_release_label(&rel.tag_name) else {
-            continue;
-        };
-        let Some(asset) = pick_asset(&rel.assets) else {
-            continue;
-        };
-        by_version
-            .entry(version)
-            .or_insert(asset.browser_download_url.clone());
     }
+
+    // Fallbacks: `github.com/.../releases` HTML / Atom; we cannot enumerate assets reliably, so we
+    // synthesize the canonical asset URL by host.
+    if by_version.is_empty() {
+        let rows: Vec<InstallableRow> =
+            if let Ok(rows) = envr_runtime_github_release::fetch_rows_via_html(
+                client,
+                LUAU_REPO,
+                normalize_release_label,
+                |tag, _version| synthetic_asset_url(tag),
+                cmp_release_labels,
+            ) && !rows.is_empty()
+            {
+                rows
+            } else {
+                envr_runtime_github_release::fetch_rows_via_atom(
+                    client,
+                    LUAU_REPO,
+                    normalize_release_label,
+                    |tag, _version| synthetic_asset_url(tag),
+                    cmp_release_labels,
+                )?
+            };
+
+        for r in rows {
+            by_version.entry(r.version).or_insert(r.url);
+        }
+    }
+
     let mut out: Vec<LuauInstallableRow> = by_version
         .into_iter()
         .map(|(version, url)| LuauInstallableRow { version, url })

@@ -105,15 +105,18 @@ pub fn fetch_github_releases_index(
 ) -> EnvrResult<Vec<GhRelease>> {
     let mut all = Vec::new();
     for base in candidate_api_bases(releases_api_url, default_releases_api_url) {
-        let mut ok = true;
         let mut page = 1;
         let mut acc = Vec::new();
         loop {
-            let url = format!("{base}?per_page=100&page={page}");
+            let sep = if base.contains('?') { '&' } else { '?' };
+            let url = format!("{base}{sep}per_page=100&page={page}");
             let text = match fetch_text(client, &url) {
                 Ok(t) => t,
                 Err(_) => {
-                    ok = false;
+                    // Keep already fetched pages as a usable partial index.
+                    if !acc.is_empty() {
+                        break;
+                    }
                     break;
                 }
             };
@@ -121,7 +124,9 @@ pub fn fetch_github_releases_index(
                 EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
             })?;
             let Some(arr) = v.as_array() else {
-                ok = false;
+                if !acc.is_empty() {
+                    break;
+                }
                 break;
             };
             if arr.is_empty() {
@@ -138,7 +143,7 @@ pub fn fetch_github_releases_index(
             }
             page += 1;
         }
-        if ok && !acc.is_empty() {
+        if !acc.is_empty() {
             all = acc;
             break;
         }

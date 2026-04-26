@@ -11,6 +11,7 @@ envr-platform = { path = "../envr-platform" }
 envr-download = { path = "../envr-download" }
 envr-config = { path = "../envr-config" }
 envr-mirror = { path = "../envr-mirror" }
+envr-runtime-github-release = { path = "../envr-runtime-github-release" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }

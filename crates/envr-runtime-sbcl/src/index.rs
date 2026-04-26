@@ -208,7 +208,8 @@ fn fetch_github_releases_index(
     let mut page = 1;
     let mut out = Vec::new();
     loop {
-        let url = format!("{releases_api_url}?per_page=100&page={page}");
+        let sep = if releases_api_url.contains('?') { '&' } else { '?' };
+        let url = format!("{releases_api_url}{sep}per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
         let v: Value = serde_json::from_str(&text).map_err(|e| {
             EnvrError::with_source(ErrorCode::Validation, "invalid github releases json", e)
