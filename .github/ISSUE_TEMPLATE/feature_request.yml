@@ -1,0 +1,72 @@
+name: Feature request
+description: Suggest an improvement or new capability for envr
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What would you like envr to support or improve?
+      placeholder: A short description of the requested feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve? Who needs it?
+      placeholder: Describe the workflow, pain point, or automation scenario.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: If you have a design in mind, describe it here.
+      placeholder: Commands, flags, config shape, runtime behavior, or UI expectations.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there existing workarounds or similar tools/features?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI command or UX
+        - Runtime provider
+        - Project config / .envr.toml
+        - Shim / PATH / shell integration
+        - Download / mirror / cache / offline workflow
+        - GUI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime kind/version, if relevant
+      placeholder: node 22.x / zig 0.14.x / not applicable
+    validations:
+      required: false
+
+  - type: textarea
+    id: automation_contract
+    attributes:
+      label: Automation or compatibility impact
+      description: Would this affect JSON output, scripts, CI, schemas, or backwards compatibility?
+      placeholder: Mention expected output or compatibility constraints if known.
+    validations:
+      required: false
