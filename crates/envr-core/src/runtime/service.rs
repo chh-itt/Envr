@@ -232,13 +232,19 @@ impl RuntimeService {
         kind: RuntimeKind,
         major_key: &str,
     ) -> EnvrResult<Vec<VersionRecord>> {
+        if major_line_remote_install_blocked(kind, major_key) {
+            return Ok(Vec::new());
+        }
         if let Ok(p) = self.provider(kind)
             && let Some(ad) = p.version_list_adapter()
         {
-            return ad.load_children_cached(major_key);
-        }
-        if major_line_remote_install_blocked(kind, major_key) {
-            return Ok(Vec::new());
+            let rows = ad.load_children_cached(major_key)?;
+            if !rows.is_empty() {
+                return Ok(rows);
+            }
+            // Adapter-specific per-major cache may be missing even when the full unified snapshot
+            // is already present locally (e.g. after remote -u). Fall through to generic full-cache
+            // projection so expand can render immediately without waiting for remote refresh.
         }
         let per_major = self.read_cached_children(kind, major_key)?;
         if !per_major.is_empty() {
