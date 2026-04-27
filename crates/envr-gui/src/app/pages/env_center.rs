@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use super::downloads::{
     enqueue_op_job_running, enqueue_runtime_install_job, maybe_start_queued_jobs,
 };
-use crate::view::downloads::JobState;
+use crate::view::downloads::{JobPhaseProgress, JobState};
 
 pub(crate) fn persist_jvm_path_proxy_toggle(
     state: &mut AppState,
@@ -213,6 +213,87 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             }
             Task::none()
         }
+        EnvCenterMsg::WarmAllUnifiedCache => {
+            if state.env_center.busy {
+                return Task::none();
+            }
+            state.env_center.busy = true;
+            state.env_center.remote_error = None;
+            state.settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.settings.runtime_cache_warming_all",
+                "正在刷新全部运行时版本缓存…",
+                "Refreshing all runtime version caches…",
+            ));
+            let label = envr_core::i18n::tr_key(
+                "gui.downloads.runtime_cache_warm_all",
+                "刷新全部运行时版本缓存",
+                "Refresh all runtime version caches",
+            );
+            let total = envr_domain::runtime::runtime_kinds_all()
+                .into_iter()
+                .filter(|kind| {
+                    envr_domain::runtime::runtime_descriptor(*kind).supports_remote_latest
+                })
+                .count();
+            let phase_progress = std::sync::Arc::new(std::sync::Mutex::new(JobPhaseProgress {
+                completed: 0,
+                total,
+                current_label: Some(envr_core::i18n::tr_key(
+                    "gui.downloads.install_preparing",
+                    "准备中…",
+                    "Preparing…",
+                )),
+            }));
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, Some(phase_progress.clone()));
+            state.env_center.op_job_id = Some(id);
+            gui_ops::warm_all_unified_cache(phase_progress)
+        }
+        EnvCenterMsg::WarmAllUnifiedCacheFinished(res) => {
+            state.env_center.busy = false;
+            if let Some(id) = state.env_center.op_job_id.take()
+                && let Some(j) = state.downloads.jobs.iter_mut().find(|j| j.id == id)
+            {
+                match &res {
+                    Ok(_) => {
+                        j.state = JobState::Done;
+                        j.cancel_settled_by_timeout = false;
+                        let d = j.downloaded.load(Ordering::Relaxed);
+                        let t = j.total.load(Ordering::Relaxed);
+                        if t == 0 || d < t {
+                            j.total.store(d.max(t), Ordering::Relaxed);
+                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                        }
+                    }
+                    Err(e) => {
+                        j.state = JobState::Failed;
+                        j.cancel_settled_by_timeout = false;
+                        j.last_error = Some(e.clone());
+                    }
+                }
+            }
+            match res {
+                Ok(report) => {
+                    state.env_center.remote_error = None;
+                    let summary = format!(
+                        "缓存刷新完成：成功 {}，失败 {}",
+                        report.success_count(),
+                        report.failure_count()
+                    );
+                    state.settings.last_message = Some(summary);
+                    let k = state.env_center.kind;
+                    return Task::batch([
+                        gui_ops::load_unified_major_rows_cached(k),
+                        gui_ops::refresh_unified_major_rows(k),
+                    ]);
+                }
+                Err(e) => {
+                    state.env_center.remote_error = Some(e.clone());
+                    state.settings.last_message = Some(format!("缓存刷新失败：{e}"));
+                }
+            }
+            Task::none()
+        }
         EnvCenterMsg::SubmitDirectInstall => {
             let spec = state.env_center.direct_install_input.trim().to_string();
             if spec.is_empty() || !direct_install_spec_ok(&spec) {
@@ -357,42 +438,42 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                 if was_force_cancelled {
                     j.last_error = None;
                 } else {
-                match &result {
-                    Ok(_) => {
-                        j.state = JobState::Done;
-                        j.cancel_settled_by_timeout = false;
-                        let d = j.downloaded.load(Ordering::Relaxed);
-                        let t = j.total.load(Ordering::Relaxed);
-                        if t == 0 || d < t {
-                            j.total.store(d.max(t), Ordering::Relaxed);
-                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                    match &result {
+                        Ok(_) => {
+                            j.state = JobState::Done;
+                            j.cancel_settled_by_timeout = false;
+                            let d = j.downloaded.load(Ordering::Relaxed);
+                            let t = j.total.load(Ordering::Relaxed);
+                            if t == 0 || d < t {
+                                j.total.store(d.max(t), Ordering::Relaxed);
+                                j.downloaded.store(d.max(t), Ordering::Relaxed);
+                            }
+                        }
+                        Err(e) => {
+                            if looks_like_user_cancelled(e) {
+                                j.state = JobState::Cancelled;
+                                j.cancel_settled_by_timeout = false;
+                                j.last_error = None;
+                            } else {
+                                j.state = JobState::Failed;
+                                j.cancel_settled_by_timeout = false;
+                                j.last_error = Some(e.clone());
+                            }
                         }
                     }
-                    Err(e) => {
-                        if looks_like_user_cancelled(e) {
-                            j.state = JobState::Cancelled;
-                            j.cancel_settled_by_timeout = false;
-                            j.last_error = None;
-                        } else {
-                            j.state = JobState::Failed;
-                            j.cancel_settled_by_timeout = false;
-                            j.last_error = Some(e.clone());
-                        }
-                    }
-                }
                 }
             }
             if !was_force_cancelled {
                 match &result {
-                Ok(v) => {
-                    tracing::info!(version = %v.0, "gui install ok");
-                    // `install_input` is now the search keyword; keep it for better feedback.
-                }
-                Err(e) => {
-                    if !looks_like_user_cancelled(e) {
-                        state.error = Some(e.clone());
+                    Ok(v) => {
+                        tracing::info!(version = %v.0, "gui install ok");
+                        // `install_input` is now the search keyword; keep it for better feedback.
                     }
-                }
+                    Err(e) => {
+                        if !looks_like_user_cancelled(e) {
+                            state.error = Some(e.clone());
+                        }
+                    }
                 }
             }
             match result {
@@ -827,7 +908,8 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("channel", &channel);
-            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_channel_install_or_switch(channel)
         }
@@ -838,7 +920,8 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("update", "");
-            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_update_current()
         }
@@ -853,7 +936,7 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                 "正在安装托管 rustup（stable）…",
                 "Installing managed rustup (stable)…",
             );
-            let (id, downloaded, total, cancel) = enqueue_op_job_running(state, label, true);
+            let (id, downloaded, total, cancel) = enqueue_op_job_running(state, label, true, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_install_stable(downloaded, total, cancel)
         }
@@ -864,7 +947,8 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             state.env_center.busy = true;
             state.error = None;
             let label = rust_runtime_task_label("managed_uninstall", "");
-            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_managed_uninstall()
         }
@@ -879,7 +963,8 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             } else {
                 rust_runtime_task_label("component_uninstall", &name)
             };
-            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_component_toggle(name, install)
         }
@@ -894,7 +979,8 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             } else {
                 rust_runtime_task_label("target_uninstall", &name)
             };
-            let (id, _downloaded, _total, _cancel) = enqueue_op_job_running(state, label, false);
+            let (id, _downloaded, _total, _cancel) =
+                enqueue_op_job_running(state, label, false, None);
             state.env_center.op_job_id = Some(id);
             gui_ops::rust_target_toggle(name, install)
         }
@@ -918,29 +1004,29 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
                 if was_force_cancelled {
                     j.last_error = None;
                 } else {
-                match &res {
-                    Ok(()) => {
-                        j.state = JobState::Done;
-                        j.cancel_settled_by_timeout = false;
-                        let d = j.downloaded.load(Ordering::Relaxed);
-                        let t = j.total.load(Ordering::Relaxed);
-                        if t == 0 || d < t {
-                            j.total.store(d.max(t), Ordering::Relaxed);
-                            j.downloaded.store(d.max(t), Ordering::Relaxed);
+                    match &res {
+                        Ok(()) => {
+                            j.state = JobState::Done;
+                            j.cancel_settled_by_timeout = false;
+                            let d = j.downloaded.load(Ordering::Relaxed);
+                            let t = j.total.load(Ordering::Relaxed);
+                            if t == 0 || d < t {
+                                j.total.store(d.max(t), Ordering::Relaxed);
+                                j.downloaded.store(d.max(t), Ordering::Relaxed);
+                            }
+                        }
+                        Err(e) => {
+                            if looks_like_user_cancelled(e) {
+                                j.state = JobState::Cancelled;
+                                j.cancel_settled_by_timeout = false;
+                                j.last_error = None;
+                            } else {
+                                j.state = JobState::Failed;
+                                j.cancel_settled_by_timeout = false;
+                                j.last_error = Some(e.clone());
+                            }
                         }
                     }
-                    Err(e) => {
-                        if looks_like_user_cancelled(e) {
-                            j.state = JobState::Cancelled;
-                            j.cancel_settled_by_timeout = false;
-                            j.last_error = None;
-                        } else {
-                            j.state = JobState::Failed;
-                            j.cancel_settled_by_timeout = false;
-                            j.last_error = Some(e.clone());
-                        }
-                    }
-                }
                 }
             }
             if let Err(e) = &res
@@ -995,19 +1081,19 @@ fn prime_unified_children_for_filter(state: &AppState) -> Task<Message> {
         {
             continue;
         }
-        let matches_key = envr_domain::runtime::runtime_version_matches_filter(kind, key, &query_norm)
-            || query_norm == key
-            || query_norm.starts_with(&format!("{key}."));
-        let should_probe = if alpha_query {
-            true
-        } else {
-            matches_key
-        };
+        let matches_key =
+            envr_domain::runtime::runtime_version_matches_filter(kind, key, &query_norm)
+                || query_norm == key
+                || query_norm.starts_with(&format!("{key}."));
+        let should_probe = if alpha_query { true } else { matches_key };
         if !should_probe {
             continue;
         }
         let major_key = key.to_string();
-        tasks.push(gui_ops::load_unified_children_cached(kind, major_key.clone()));
+        tasks.push(gui_ops::load_unified_children_cached(
+            kind,
+            major_key.clone(),
+        ));
         tasks.push(gui_ops::refresh_unified_children(kind, major_key));
         queued += 1;
     }

@@ -19,7 +19,10 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeIndex, RuntimeInstaller, RuntimeKind,
     RuntimeProvider, RuntimeVersion, VersionSpec,
 };
-use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord, version_line_key_for_kind, major_line_remote_install_blocked};
+use envr_domain::runtime::{
+    MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked,
+    version_line_key_for_kind,
+};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::path::PathBuf;
 
@@ -100,7 +103,10 @@ impl PythonRuntimeProvider {
 
     fn unified_list_dir(&self) -> EnvrResult<std::path::PathBuf> {
         let root = self.runtime_root()?;
-        Ok(root.join("cache").join("python").join("unified_version_list"))
+        Ok(root
+            .join("cache")
+            .join("python")
+            .join("unified_version_list"))
     }
 
     fn unified_major_rows_path(&self) -> EnvrResult<std::path::PathBuf> {
@@ -112,6 +118,42 @@ impl PythonRuntimeProvider {
             .unified_list_dir()?
             .join("children")
             .join(format!("{major_key}.json")))
+    }
+
+    fn unified_full_installable_path(&self) -> EnvrResult<std::path::PathBuf> {
+        Ok(self
+            .unified_list_dir()?
+            .join("full_installable_versions.json"))
+    }
+
+    fn write_unified_full_installable(&self, versions: &[RuntimeVersion]) -> EnvrResult<()> {
+        if versions.is_empty() {
+            return Ok(());
+        }
+        let p = self.unified_full_installable_path()?;
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
+        }
+        let labels: Vec<String> = versions.iter().map(|v| v.0.clone()).collect();
+        let s = serde_json::to_string(&labels).map_err(|e| {
+            EnvrError::with_source(
+                ErrorCode::Validation,
+                "json encode python unified full installable",
+                e,
+            )
+        })?;
+        envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
+        Ok(())
+    }
+
+    fn load_unified_full_installable_cached(&self) -> EnvrResult<Vec<RuntimeVersion>> {
+        let p = self.unified_full_installable_path()?;
+        let Some(raw) =
+            envr_platform::cache_recovery::read_json_string_list(&p, None, |xs| !xs.is_empty())
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(raw.into_iter().map(RuntimeVersion).collect())
     }
 }
 
@@ -244,7 +286,9 @@ impl VersionListAdapter for PythonRuntimeProvider {
         ) else {
             // Fallback: stale allowed
             let Some(stale) =
-                envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+                envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| {
+                    !xs.is_empty()
+                })
             else {
                 return Ok(Vec::new());
             };
@@ -274,18 +318,41 @@ impl VersionListAdapter for PythonRuntimeProvider {
     }
 
     fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
-        let latest = RuntimeProvider::list_remote_latest_installable_per_major(self)?;
-        let rows: Vec<MajorVersionRecord> = latest
+        let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
+        let _ = self.write_unified_full_installable(&all);
+
+        let mut best: std::collections::HashMap<String, RuntimeVersion> =
+            std::collections::HashMap::new();
+        for v in all {
+            let Some(major) = version_line_key_for_kind(RuntimeKind::Python, &v.0) else {
+                continue;
+            };
+            if major_line_remote_install_blocked(RuntimeKind::Python, &major) {
+                continue;
+            }
+            best.entry(major).or_insert(v);
+        }
+
+        let mut majors: Vec<String> = best.keys().cloned().collect();
+        majors.sort_by(|a, b| {
+            let pa = envr_domain::runtime::numeric_version_segments(a);
+            let pb = envr_domain::runtime::numeric_version_segments(b);
+            match (pa, pb) {
+                (Some(aa), Some(bb)) => bb.cmp(&aa),
+                _ => b.cmp(a),
+            }
+        });
+
+        let rows: Vec<MajorVersionRecord> = majors
             .into_iter()
-            .filter_map(|v| {
-                let major = version_line_key_for_kind(RuntimeKind::Python, &v.0)?;
-                Some(MajorVersionRecord {
-                    major_key: major,
+            .filter_map(|m| {
+                best.remove(&m).map(|v| MajorVersionRecord {
+                    major_key: m,
                     latest_installable: Some(v),
                 })
             })
-            .filter(|r| !major_line_remote_install_blocked(RuntimeKind::Python, &r.major_key))
             .collect();
+
         let labels: Vec<String> = rows
             .iter()
             .filter_map(|r| r.latest_installable.as_ref().map(|v| v.0.clone()))
@@ -296,7 +363,11 @@ impl VersionListAdapter for PythonRuntimeProvider {
                 std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
             }
             let s = serde_json::to_string(&labels).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode python unified major rows", e)
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    "json encode python unified major rows",
+                    e,
+                )
             })?;
             envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
             Ok(())
@@ -326,11 +397,24 @@ impl VersionListAdapter for PythonRuntimeProvider {
         if major_line_remote_install_blocked(RuntimeKind::Python, major_key) {
             return Ok(Vec::new());
         }
-        let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
-        let filtered: Vec<RuntimeVersion> = all
+        let mut filtered: Vec<RuntimeVersion> = self
+            .load_unified_full_installable_cached()?
             .into_iter()
-            .filter(|v| version_line_key_for_kind(RuntimeKind::Python, &v.0).as_deref() == Some(major_key))
+            .filter(|v| {
+                version_line_key_for_kind(RuntimeKind::Python, &v.0).as_deref() == Some(major_key)
+            })
             .collect();
+        if filtered.is_empty() {
+            let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
+            let _ = self.write_unified_full_installable(&all);
+            filtered = all
+                .into_iter()
+                .filter(|v| {
+                    version_line_key_for_kind(RuntimeKind::Python, &v.0).as_deref()
+                        == Some(major_key)
+                })
+                .collect();
+        }
         let labels: Vec<String> = filtered.iter().map(|v| v.0.clone()).collect();
         let _ = (|| -> EnvrResult<()> {
             let p = self.unified_children_path(major_key)?;
@@ -338,12 +422,19 @@ impl VersionListAdapter for PythonRuntimeProvider {
                 std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
             }
             let s = serde_json::to_string(&labels).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode python unified children", e)
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    "json encode python unified children",
+                    e,
+                )
             })?;
             envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
             Ok(())
         })();
-        Ok(filtered.into_iter().map(|v| VersionRecord { version: v }).collect())
+        Ok(filtered
+            .into_iter()
+            .map(|v| VersionRecord { version: v })
+            .collect())
     }
 
     fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {

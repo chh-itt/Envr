@@ -72,6 +72,10 @@ pub fn downloads_panel_y() -> i32 {
     12
 }
 
+pub fn gui_runtime_cache_auto_update_on_launch() -> bool {
+    false
+}
+
 pub fn node_path_proxy_enabled() -> bool {
     true
 }

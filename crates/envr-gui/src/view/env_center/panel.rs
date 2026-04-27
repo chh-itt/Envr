@@ -54,6 +54,10 @@ pub enum EnvCenterMsg {
     UnifiedChildrenCached(RuntimeKind, String, Result<Vec<RuntimeVersion>, String>),
     UnifiedChildrenRefreshed(RuntimeKind, String, Result<Vec<RuntimeVersion>, String>),
     ToggleUnifiedMajorExpanded(String),
+    WarmAllUnifiedCache,
+    WarmAllUnifiedCacheFinished(
+        Result<envr_core::runtime::service::UnifiedCacheWarmupReport, String>,
+    ),
     ElixirPrereqChecked(Result<(), String>),
     JvmJavaChecked(RuntimeKind, Result<(), String>),
     SubmitInstall(String),
@@ -2764,6 +2768,8 @@ pub fn env_center_view(
         .size(ty.caption)
         .color(gui_theme::to_color(tokens.colors.text_muted));
 
+    let txt = gui_theme::to_color(tokens.colors.text);
+
     let header_content = row![text(header_title).size(ty.section), cur_el]
         .spacing(sp.sm as f32)
         .align_y(Alignment::Center)
@@ -2772,8 +2778,6 @@ pub fn env_center_view(
     let header = container(header_content)
         .padding(Padding::from([sp.md as f32, sp.md as f32]))
         .style(move |theme: &Theme| card_s(theme));
-
-    let txt = gui_theme::to_color(tokens.colors.text);
 
     let path_proxy_row: Element<'static, Message> =
         if path_proxy_toggle_msg(state.kind, path_proxy_on).is_some() {

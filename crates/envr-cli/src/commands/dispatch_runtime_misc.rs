@@ -24,8 +24,9 @@ pub(super) fn route(command: Command, ctx: &DispatchCtx<'_>) -> CommandOutcome {
             runtime,
             prefix,
             update,
+            warm_all_cache,
         } => dispatch_runtime_result(ctx, |g, service| {
-            remote::run_inner(g, service, runtime, prefix, update)
+            remote::run_inner(g, service, runtime, prefix, update, warm_all_cache)
         }),
         Command::Diagnostics(sub) => dispatch_runtime_result(ctx, |g, service| match sub {
             crate::cli::DiagnosticsCmd::Export { output } => {

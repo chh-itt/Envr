@@ -88,6 +88,10 @@ pub struct GuiSettings {
 
     #[serde(default)]
     pub runtime_layout: RuntimeLayoutSettings,
+
+    /// If enabled, GUI startup performs a best-effort unified remote cache warm-up when stale.
+    #[serde(default = "defaults::gui_runtime_cache_auto_update_on_launch")]
+    pub runtime_cache_auto_update_on_launch: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

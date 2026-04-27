@@ -30,7 +30,29 @@ pub fn format_job_state_line(job: &DownloadJob) -> String {
             if job.is_runtime_install_row() {
                 let d = job.downloaded_display();
                 let t = job.total_display();
-                let phase = if t == 0 && d == 0 {
+                let phase = if let Some(progress) = &job.phase_progress {
+                    match progress.lock() {
+                        Ok(progress) if progress.total > 0 => {
+                            let current = progress
+                                .current_label
+                                .clone()
+                                .filter(|s| !s.trim().is_empty())
+                                .unwrap_or_else(|| {
+                                    envr_core::i18n::tr_key(
+                                        "gui.downloads.install_preparing",
+                                        "准备中…",
+                                        "Preparing…",
+                                    )
+                                });
+                            format!("[{}/{}] {current}", progress.completed, progress.total)
+                        }
+                        _ => envr_core::i18n::tr_key(
+                            "gui.downloads.install_preparing",
+                            "准备中…",
+                            "Preparing…",
+                        ),
+                    }
+                } else if t == 0 && d == 0 {
                     envr_core::i18n::tr_key(
                         "gui.downloads.install_preparing",
                         "准备中…",

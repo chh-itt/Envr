@@ -8,6 +8,7 @@ use iced::{Alignment, Element, Length};
 use crate::app::Message;
 use crate::icons::Lucide;
 use crate::theme as gui_theme;
+use crate::view::env_center::EnvCenterMsg;
 use crate::view::runtime_layout::RuntimeLayoutMsg;
 use crate::view::settings::state::SettingsViewState;
 use crate::widget_styles::{
@@ -31,6 +32,7 @@ pub enum SettingsMsg {
     SetThemeMode(ThemeMode),
     AccentColorEdit(String),
     SetLocaleMode(LocaleMode),
+    SetRuntimeCacheAutoUpdateOnLaunch(bool),
     Save,
     ReloadDisk,
     DiskLoaded(Result<envr_config::settings::Settings, String>),
@@ -583,6 +585,44 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
     .padding([sp.sm as f32, sp.md as f32])
     .style(button_style(tokens, ButtonVariant::Secondary));
 
+    let auto_cache_update = toggler(state.draft.gui.runtime_cache_auto_update_on_launch)
+        .label(envr_core::i18n::tr_key(
+            "gui.settings.runtime_cache_auto_update_on_launch",
+            "启动 GUI 时自动更新过期运行时版本缓存",
+            "Auto-refresh stale runtime version cache on GUI launch",
+        ))
+        .on_toggle(|v| Message::Settings(SettingsMsg::SetRuntimeCacheAutoUpdateOnLaunch(v)));
+
+    let runtime_cache_help = text(envr_core::i18n::tr_key(
+        "gui.settings.runtime_cache_help",
+        "进入某个运行时页面会自动读取本地缓存并刷新当前运行时版本列表；下方按钮用于一次性刷新所有支持远程版本列表的运行时缓存。",
+        "Opening a runtime page reads local cache and refreshes that runtime's version list; the button below refreshes caches for all runtimes with remote version lists.",
+    ))
+    .size(ty.micro)
+    .color(gui_theme::to_color(tokens.colors.text_muted));
+
+    let warm_all_cache_btn = button(button_content_centered(
+        row![
+            Lucide::RefreshCw.view(14.0, txt),
+            text(envr_core::i18n::tr_key(
+                "gui.settings.runtime_cache_warm_all_now",
+                "立即预热全部运行时缓存",
+                "Warm all runtime caches now",
+            )),
+        ]
+        .spacing(sp.xs as f32)
+        .align_y(Alignment::Center)
+        .into(),
+    ))
+    .on_press(Message::EnvCenter(EnvCenterMsg::WarmAllUnifiedCache))
+    .height(Length::Fixed(
+        tokens
+            .control_height_secondary
+            .max(tokens.min_click_target_px()),
+    ))
+    .padding([sp.sm as f32, sp.md as f32])
+    .style(button_style(tokens, ButtonVariant::Secondary));
+
     let runtime_ui_card = section_card(
         tokens,
         envr_core::i18n::tr_key(
@@ -590,9 +630,16 @@ pub fn settings_view(state: &SettingsViewState, tokens: ThemeTokens) -> Element<
             "运行时显示",
             "Runtime display",
         ),
-        column![runtime_layout_help, reset_layout_btn]
-            .spacing(sp.md as f32)
-            .into(),
+        column![
+            runtime_layout_help,
+            auto_cache_update,
+            runtime_cache_help,
+            row![warm_all_cache_btn, reset_layout_btn]
+                .spacing(sp.sm as f32)
+                .align_y(Alignment::Center),
+        ]
+        .spacing(sp.md as f32)
+        .into(),
     );
 
     column![

@@ -8,6 +8,7 @@ use envr_platform::cache_recovery;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 struct ProviderIndexRef<'a> {
     inner: &'a dyn RuntimeProvider,
@@ -90,6 +91,30 @@ pub struct RuntimeService {
     runtime_root_override: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone)]
+pub struct UnifiedCacheWarmupRuntimeReport {
+    pub kind: RuntimeKind,
+    pub major_rows: usize,
+    pub children_rows: usize,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UnifiedCacheWarmupReport {
+    pub runtimes: Vec<UnifiedCacheWarmupRuntimeReport>,
+}
+
+impl UnifiedCacheWarmupReport {
+    pub fn success_count(&self) -> usize {
+        self.runtimes.iter().filter(|r| r.ok).count()
+    }
+
+    pub fn failure_count(&self) -> usize {
+        self.runtimes.iter().filter(|r| !r.ok).count()
+    }
+}
+
 impl RuntimeService {
     pub fn new(providers: Vec<Box<dyn RuntimeProvider>>) -> EnvrResult<Self> {
         let mut map = HashMap::new();
@@ -154,6 +179,94 @@ impl RuntimeService {
     pub fn installer_port(&self, kind: RuntimeKind) -> EnvrResult<Box<dyn RuntimeInstaller + '_>> {
         self.installer_provider(kind)
             .map(|p| Box::new(p) as Box<dyn RuntimeInstaller>)
+    }
+
+    /// Refresh unified remote cache snapshots for all runtimes that expose remote lists.
+    ///
+    /// This eagerly refreshes:
+    /// - major rows (`major_rows.json`)
+    /// - per-major children (`children/<major>.json`)
+    ///
+    /// The method is best-effort: failures are captured per runtime in the returned report.
+    pub fn refresh_all_unified_cache(&self) -> UnifiedCacheWarmupReport {
+        let mut report = UnifiedCacheWarmupReport::default();
+        for kind in envr_domain::runtime::runtime_kinds_all() {
+            if !runtime_descriptor(kind).supports_remote_latest {
+                continue;
+            }
+            report
+                .runtimes
+                .push(self.refresh_unified_cache_for_kind_for_report(kind));
+        }
+        report
+    }
+
+    /// Refresh unified remote cache snapshots only for runtimes with stale full snapshot files.
+    pub fn refresh_all_unified_cache_if_stale(&self) -> UnifiedCacheWarmupReport {
+        let mut report = UnifiedCacheWarmupReport::default();
+        for kind in envr_domain::runtime::runtime_kinds_all() {
+            if !runtime_descriptor(kind).supports_remote_latest {
+                continue;
+            }
+            if !self.unified_full_snapshot_is_stale(kind) {
+                continue;
+            }
+            report
+                .runtimes
+                .push(self.refresh_unified_cache_for_kind_for_report(kind));
+        }
+        report
+    }
+
+    pub fn refresh_unified_cache_for_kind_for_report(
+        &self,
+        kind: RuntimeKind,
+    ) -> UnifiedCacheWarmupRuntimeReport {
+        let mut row = UnifiedCacheWarmupRuntimeReport {
+            kind,
+            major_rows: 0,
+            children_rows: 0,
+            ok: true,
+            error: None,
+        };
+        match self.refresh_major_rows_remote(kind) {
+            Ok(major_rows) => {
+                row.major_rows = major_rows.len();
+                for major in major_rows.iter().map(|r| r.major_key.as_str()) {
+                    match self.refresh_children_remote(kind, major) {
+                        Ok(children) => {
+                            row.children_rows += children.len();
+                        }
+                        Err(e) => {
+                            row.ok = false;
+                            row.error = Some(e.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                row.ok = false;
+                row.error = Some(e.to_string());
+            }
+        }
+        row
+    }
+
+    fn unified_full_snapshot_is_stale(&self, kind: RuntimeKind) -> bool {
+        let path = match self.unified_full_remote_installable_cache_file(kind) {
+            Ok(p) => p,
+            Err(_) => return true,
+        };
+        let ttl = Duration::from_secs(Self::unified_list_full_remote_ttl_secs());
+        let modified = match fs::metadata(&path).and_then(|m| m.modified()) {
+            Ok(m) => m,
+            Err(_) => return true,
+        };
+        match SystemTime::now().duration_since(modified) {
+            Ok(age) => age > ttl,
+            Err(_) => true,
+        }
     }
 
     pub fn try_load_remote_latest_per_major_from_disk(

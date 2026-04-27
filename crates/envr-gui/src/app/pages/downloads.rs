@@ -5,7 +5,9 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use crate::download_runner;
-use crate::view::downloads::{DownloadJob, DownloadJobPayload, DownloadMsg, JobState};
+use crate::view::downloads::{
+    DownloadJob, DownloadJobPayload, DownloadMsg, JobPhaseProgress, JobState,
+};
 
 const CANCEL_SETTLE_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -196,6 +198,7 @@ pub(crate) fn retry_download(state: &mut AppState, url_str: &str, label: &str) -
         cancellable: true,
         downloaded: downloaded.clone(),
         total: total.clone(),
+        phase_progress: None,
         cancel: cancel.clone(),
         cancel_requested_at: None,
         cancel_settled_by_timeout: false,
@@ -236,6 +239,7 @@ pub(crate) fn enqueue_runtime_install_job(
         cancellable,
         downloaded: downloaded.clone(),
         total: total.clone(),
+        phase_progress: None,
         cancel: cancel.clone(),
         cancel_requested_at: None,
         cancel_settled_by_timeout: false,
@@ -256,6 +260,7 @@ pub(crate) fn enqueue_op_job_running(
     state: &mut AppState,
     label: String,
     cancellable: bool,
+    phase_progress: Option<std::sync::Arc<std::sync::Mutex<JobPhaseProgress>>>,
 ) -> (
     u64,
     std::sync::Arc<std::sync::atomic::AtomicU64>,
@@ -275,6 +280,7 @@ pub(crate) fn enqueue_op_job_running(
         cancellable,
         downloaded: downloaded.clone(),
         total: total.clone(),
+        phase_progress,
         cancel: cancel.clone(),
         cancel_requested_at: None,
         cancel_settled_by_timeout: false,

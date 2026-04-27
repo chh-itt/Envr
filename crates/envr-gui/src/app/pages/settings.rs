@@ -122,6 +122,15 @@ pub(crate) fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Me
             state.locale = envr_core::i18n::locale_from_settings(&st);
             Task::none()
         }
+        SettingsMsg::SetRuntimeCacheAutoUpdateOnLaunch(v) => {
+            state.settings.draft.gui.runtime_cache_auto_update_on_launch = v;
+            state.settings.last_message = Some(envr_core::i18n::tr_key(
+                "gui.app.saving",
+                "正在保存…",
+                "Saving…",
+            ));
+            super::super::persist_settings_draft_task(state)
+        }
         SettingsMsg::Save => {
             state.settings.last_message = Some(envr_core::i18n::tr_key(
                 "gui.app.saving",

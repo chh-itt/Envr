@@ -1,6 +1,7 @@
 use envr_download::task::CancelToken;
 use envr_ui::theme::ThemeTokens;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,13 @@ pub enum JobState {
     Done,
     Failed,
     Cancelled,
+}
+
+#[derive(Debug, Clone)]
+pub struct JobPhaseProgress {
+    pub completed: usize,
+    pub total: usize,
+    pub current_label: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +46,7 @@ pub struct DownloadJob {
     pub cancellable: bool,
     pub downloaded: Arc<AtomicU64>,
     pub total: Arc<AtomicU64>,
+    pub phase_progress: Option<Arc<Mutex<JobPhaseProgress>>>,
     pub cancel: CancelToken,
     pub cancel_requested_at: Option<Instant>,
     pub cancel_settled_by_timeout: bool,

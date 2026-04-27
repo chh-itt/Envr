@@ -11,9 +11,10 @@ use envr_error::EnvrResult;
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
 use envr_runtime_node::{NodeRemoteRow, list_node_remote_rows, parse_node_index};
 use serde_json::{Value, json};
+use std::io::{self, Write};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn node_index_cache_path() -> Option<std::path::PathBuf> {
     let platform = current_platform_paths().ok()?;
@@ -171,6 +172,109 @@ fn try_fetch_remote_with_timeout(
     }
 }
 
+fn emit_human_progress_line(g: &GlobalArgs, line: &str) {
+    if !CliUxPolicy::from_global(g).human_text_primary() {
+        return;
+    }
+    println!("{line}");
+    let _ = io::stdout().flush();
+}
+
+fn warm_all_cache_start_line(total: usize) -> String {
+    fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.start",
+            "开始刷新全部运行时版本缓存（共 {total} 项）…",
+            "Starting runtime version cache refresh for all supported runtimes ({total} total)...",
+        ),
+        &[("total", &total.to_string())],
+    )
+}
+
+fn warm_all_cache_runtime_start_line(kind: RuntimeKind, idx: usize, total: usize) -> String {
+    fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.runtime_start",
+            "[{idx}/{total}] 正在刷新 {kind}…",
+            "[{idx}/{total}] Refreshing {kind}...",
+        ),
+        &[
+            ("idx", &idx.to_string()),
+            ("total", &total.to_string()),
+            ("kind", kind_label(kind)),
+        ],
+    )
+}
+
+fn warm_all_cache_runtime_done_line(
+    kind: RuntimeKind,
+    major_rows: usize,
+    children_rows: usize,
+    elapsed: Duration,
+) -> String {
+    let counts = if major_rows == 0 && children_rows == 0 {
+        envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.runtime_done_no_rows",
+            "无可安装版本，缓存已刷新",
+            "no installable versions; cache refreshed",
+        )
+    } else {
+        fmt_template(
+            &envr_core::i18n::tr_key(
+                "cli.remote.warm_all_cache.runtime_done_counts",
+                "主版本 {major_rows}，子版本 {children_rows}",
+                "{major_rows} majors, {children_rows} children",
+            ),
+            &[
+                ("major_rows", &major_rows.to_string()),
+                ("children_rows", &children_rows.to_string()),
+            ],
+        )
+    };
+    fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.runtime_done",
+            "  完成 {kind}：{counts}，耗时 {elapsed_ms} ms",
+            "  Done {kind}: {counts}, {elapsed_ms} ms",
+        ),
+        &[
+            ("kind", kind_label(kind)),
+            ("counts", &counts),
+            ("elapsed_ms", &elapsed.as_millis().to_string()),
+        ],
+    )
+}
+
+fn warm_all_cache_runtime_failed_line(kind: RuntimeKind, err: &str, elapsed: Duration) -> String {
+    fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.runtime_failed",
+            "  失败 {kind}：{error}（耗时 {elapsed_ms} ms）",
+            "  Failed {kind}: {error} ({elapsed_ms} ms)",
+        ),
+        &[
+            ("kind", kind_label(kind)),
+            ("error", err),
+            ("elapsed_ms", &elapsed.as_millis().to_string()),
+        ],
+    )
+}
+
+fn warm_all_cache_summary_line(success: usize, failed: usize, elapsed: Duration) -> String {
+    fmt_template(
+        &envr_core::i18n::tr_key(
+            "cli.remote.warm_all_cache.summary",
+            "全部缓存刷新完成：成功 {success}，失败 {failed}，总耗时 {elapsed_ms} ms。",
+            "Runtime cache refresh finished: {success} succeeded, {failed} failed, {elapsed_ms} ms total.",
+        ),
+        &[
+            ("success", &success.to_string()),
+            ("failed", &failed.to_string()),
+            ("elapsed_ms", &elapsed.as_millis().to_string()),
+        ],
+    )
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -178,7 +282,84 @@ pub(crate) fn run_inner(
     runtime: Option<String>,
     prefix: Option<String>,
     update: bool,
+    warm_all_cache: bool,
 ) -> EnvrResult<CliExit> {
+    if warm_all_cache {
+        let warm_kinds: Vec<RuntimeKind> = runtime_kinds_all()
+            .filter(|k| runtime_descriptor(*k).supports_remote_latest)
+            .collect();
+        emit_human_progress_line(g, &warm_all_cache_start_line(warm_kinds.len()));
+
+        let started_at = Instant::now();
+        let mut runtime_entries: Vec<Value> = Vec::with_capacity(warm_kinds.len());
+        let mut success = 0usize;
+        let mut failed = 0usize;
+
+        for (idx, kind) in warm_kinds.iter().copied().enumerate() {
+            emit_human_progress_line(
+                g,
+                &warm_all_cache_runtime_start_line(kind, idx + 1, warm_kinds.len()),
+            );
+            let item_started_at = Instant::now();
+            let row = service.refresh_unified_cache_for_kind_for_report(kind);
+            let item_elapsed = item_started_at.elapsed();
+
+            if row.ok {
+                success += 1;
+                emit_human_progress_line(
+                    g,
+                    &warm_all_cache_runtime_done_line(
+                        row.kind,
+                        row.major_rows,
+                        row.children_rows,
+                        item_elapsed,
+                    ),
+                );
+            } else {
+                failed += 1;
+                emit_human_progress_line(
+                    g,
+                    &warm_all_cache_runtime_failed_line(
+                        row.kind,
+                        row.error.as_deref().unwrap_or("unknown"),
+                        item_elapsed,
+                    ),
+                );
+            }
+
+            runtime_entries.push(json!({
+                "kind": kind_label(row.kind),
+                "major_rows": row.major_rows,
+                "children_rows": row.children_rows,
+                "ok": row.ok,
+                "error": row.error,
+                "elapsed_ms": item_elapsed.as_millis(),
+            }));
+        }
+
+        let total_elapsed = started_at.elapsed();
+        let data = json!({
+            "warm_all_cache": true,
+            "success": success,
+            "failed": failed,
+            "elapsed_ms": total_elapsed.as_millis(),
+            "runtimes": runtime_entries,
+        });
+        return Ok(output::emit_ok(
+            g,
+            crate::codes::ok::LIST_REMOTE,
+            data,
+            || {
+                if CliUxPolicy::from_global(g).human_text_primary() {
+                    println!(
+                        "{}",
+                        warm_all_cache_summary_line(success, failed, total_elapsed)
+                    );
+                }
+            },
+        ));
+    }
+
     let filter = RemoteFilter {
         prefix,
         force_index_refresh: update,

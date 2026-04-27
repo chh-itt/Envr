@@ -78,6 +78,9 @@ pub enum Command {
         /// Force live refresh before rendering (ignore cached snapshot for this run)
         #[arg(long, short = 'u')]
         update: bool,
+        /// Refresh and persist unified remote cache snapshots for all runtimes (majors + children)
+        #[arg(long)]
+        warm_all_cache: bool,
     },
     /// Rust / rustup helpers (e.g. managed rustup when no system rustup)
     #[command(subcommand)]

@@ -190,7 +190,12 @@ pub fn run() -> iced::Result {
             state.locale = locale;
             state.dashboard.busy = true;
             state.dashboard.last_error = None;
-            (state, gui_ops::refresh_dashboard())
+            let startup_tasks = if startup.gui.runtime_cache_auto_update_on_launch {
+                Task::batch([gui_ops::refresh_dashboard(), gui_ops::warm_stale_unified_cache()])
+            } else {
+                gui_ops::refresh_dashboard()
+            };
+            (state, startup_tasks)
         },
         update,
         view,

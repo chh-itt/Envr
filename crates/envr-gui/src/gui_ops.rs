@@ -515,6 +515,82 @@ pub fn refresh_unified_children(kind: RuntimeKind, major_key: String) -> Task<Me
     })
 }
 
+pub fn warm_all_unified_cache(
+    phase_progress: Arc<std::sync::Mutex<crate::view::downloads::JobPhaseProgress>>,
+) -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(
+                move || -> Result<envr_core::runtime::service::UnifiedCacheWarmupReport, String> {
+                    let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                    let mut report =
+                        envr_core::runtime::service::UnifiedCacheWarmupReport::default();
+                    let kinds: Vec<_> = envr_domain::runtime::runtime_kinds_all()
+                        .into_iter()
+                        .filter(|kind| {
+                            envr_domain::runtime::runtime_descriptor(*kind).supports_remote_latest
+                        })
+                        .collect();
+                    if let Ok(mut progress) = phase_progress.lock() {
+                        progress.completed = 0;
+                        progress.total = kinds.len();
+                    }
+                    for (idx, kind) in kinds.into_iter().enumerate() {
+                        if let Ok(mut progress) = phase_progress.lock() {
+                            progress.completed = idx;
+                            progress.current_label = Some(format!(
+                                "正在刷新 {}…",
+                                envr_domain::runtime::runtime_descriptor(kind).label_zh
+                            ));
+                        }
+                        report
+                            .runtimes
+                            .push(svc.refresh_unified_cache_for_kind_for_report(kind));
+                        if let Ok(mut progress) = phase_progress.lock() {
+                            progress.completed = idx + 1;
+                        }
+                    }
+                    if let Ok(mut progress) = phase_progress.lock() {
+                        progress.current_label = Some(envr_core::i18n::tr_key(
+                            "gui.downloads.install_finalizing",
+                            "下载完成，正在安装…",
+                            "Download complete, installing…",
+                        ));
+                    }
+                    Ok(report)
+                },
+            )
+            .await;
+        let msg = match res {
+            Ok(Ok(report)) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Ok(report)),
+            Ok(Err(e)) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Err(e)),
+            Err(e) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
+pub fn warm_stale_unified_cache() -> Task<Message> {
+    let handle = runtime().handle().clone();
+    Task::future(async move {
+        let res = handle
+            .spawn_blocking(
+                move || -> Result<envr_core::runtime::service::UnifiedCacheWarmupReport, String> {
+                    let svc = open_runtime_service().map_err(|e: EnvrError| e.to_string())?;
+                    Ok(svc.refresh_all_unified_cache_if_stale())
+                },
+            )
+            .await;
+        let msg = match res {
+            Ok(Ok(report)) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Ok(report)),
+            Ok(Err(e)) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Err(e)),
+            Err(e) => EnvCenterMsg::WarmAllUnifiedCacheFinished(Err(e.to_string())),
+        };
+        Message::EnvCenter(msg)
+    })
+}
+
 /// Best-effort: delete unified list on-disk cache for `kind` (major rows, full remote snapshot, children).
 pub fn invalidate_unified_list_disk_cache(kind: RuntimeKind) -> Task<Message> {
     let handle = runtime().handle().clone();
