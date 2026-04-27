@@ -1,77 +1,82 @@
-# envr 发布说明（Release）
+# Release documentation
 
-本目录收录 **Windows 首发**相关的安装说明、发行说明模板与已知问题，供发布流程与 GitHub Release 页面复用。
+This directory contains release-facing notes and packaging instructions.
 
-| 文件 | 说明 |
-|------|------|
-| [WINDOWS.md](WINDOWS.md) | Windows 下解压、PATH、首启与校验包用法 |
-| [RELEASE-NOTES.md](RELEASE-NOTES.md) | 按版本维护的发行说明（含 0.1.0 首发条目） |
-| [KNOWN-ISSUES.md](KNOWN-ISSUES.md) | 已知问题与限制（发布前更新） |
+| File | Purpose |
+|---|---|
+| [`WINDOWS.md`](WINDOWS.md) | Windows installation, PATH setup, first-run checks, and package verification. |
+| [`RELEASE-NOTES.md`](RELEASE-NOTES.md) | Versioned release notes. |
+| [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) | Current limitations and known issues. |
 
-## 本地打 Windows 包（x86_64）
+## Windows packaging from source
 
-在仓库根目录执行（需已安装 Rust stable 与 MSVC 工具链）：
+The current packaging scripts target Windows x86_64 and are intended for maintainers.
+Run them from the repository root with Rust stable and the MSVC toolchain installed.
+
+### Zip package
 
 ```powershell
 .\scripts\package-windows-release.ps1 -Version 0.1.0
 ```
 
-产物默认在 `dist/`：
+Outputs under `dist/`:
 
-- `envr-windows-x86_64-<version>/` — `envr.exe`、`er.exe`、`envr-gui.exe`、`envr-shim.exe` 及 `SHA256SUMS.txt`
-- `envr-windows-x86_64-<version>.zip` — 同上目录的压缩包
-- `SHA256SUMS-archive.txt` — 压缩包本身的 SHA256
+- `envr-windows-x86_64-<version>/` — `envr.exe`, `er.exe`, `envr-gui.exe`, `envr-shim.exe`, and `SHA256SUMS.txt`.
+- `envr-windows-x86_64-<version>.zip` — archive for the same directory.
+- `SHA256SUMS-archive.txt` — checksum for the archive.
 
-## 本地打 MSI 安装包（手动流程）
+### MSI installer
 
-需先安装 **WiX v4 CLI**（仅需一次）：
+Install WiX v4 CLI once:
 
 ```powershell
 dotnet tool install --global wix
 ```
 
-若安装过 WiX 7 且出现 `wixext ... damaged`，可先重装：
+Then run:
+
+```powershell
+.\scripts\package-windows-msi.ps1 -Version 0.1.0
+```
+
+Outputs under `dist/`:
+
+- `envr-windows-x64-<version>.msi` — MSI installer containing `envr.exe`, `er.exe`, `envr-gui.exe`, and `envr-shim.exe`.
+- `SHA256SUMS-msi.txt` — checksum for the MSI.
+
+If WiX reports a damaged extension after using another WiX version, reinstall the tool:
 
 ```powershell
 dotnet tool uninstall --global wix
 dotnet tool install --global wix
 ```
 
-然后在仓库根目录执行：
+### Setup bootstrapper
 
-```powershell
-.\scripts\package-windows-msi.ps1 -Version 0.1.0
-```
-
-产物默认在 `dist/`：
-
-- `envr-windows-x64-<version>.msi` — MSI 安装包（包含 `envr.exe`、`er.exe`、`envr-gui.exe`、`envr-shim.exe`，并写入机器 PATH）
-- `SHA256SUMS-msi.txt` — MSI 的 SHA256
-
-## 本地打 setup.exe（引导安装器）
-
-在已有 MSI 的基础上执行（若 MSI 不存在，脚本会先调用 MSI 脚本）：
+With or without an existing MSI, run:
 
 ```powershell
 .\scripts\package-windows-setup.ps1 -Version 0.1.0
 ```
 
-产物默认在 `dist/`：
+Outputs under `dist/`:
 
-- `envr-setup-x64-<version>.exe` — setup 引导器（先处理 VC++ Runtime，再安装 MSI）
-- `SHA256SUMS-setup.txt` — setup 的 SHA256
+- `envr-setup-x64-<version>.exe` — setup bootstrapper.
+- `SHA256SUMS-setup.txt` — checksum for the bootstrapper.
 
-可选参数：
+Use a local Visual C++ Redistributable when packaging offline:
 
-- `-VcRedistPath <path>`：使用本地 `vc_redist.x64.exe`，避免每次联网下载
+```powershell
+.\scripts\package-windows-setup.ps1 -Version 0.1.0 -VcRedistPath "D:\offline\vc_redist.x64.exe"
+```
 
-## 一次命令打 MSI + setup.exe
+### MSI + setup bundle
 
 ```powershell
 .\scripts\package-windows-bundle.ps1 -Version 0.1.0
 ```
 
-常见离线场景：
+Offline example:
 
 ```powershell
 .\scripts\package-windows-bundle.ps1 -Version 0.1.0 -VcRedistPath "D:\offline\vc_redist.x64.exe"
