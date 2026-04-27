@@ -104,7 +104,7 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             state.env_center.install_input =
                 sanitize_runtime_filter_input(state.env_center.kind, &s);
             recompute_env_center_derived(state);
-            Task::none()
+            prime_unified_children_for_filter(state)
         }
         EnvCenterMsg::DirectInstallInput(s) => {
             state.env_center.direct_install_input = s;
@@ -961,5 +961,60 @@ pub(crate) fn handle_env_center(state: &mut AppState, msg: EnvCenterMsg) -> Task
             }
             Task::none()
         }
+    }
+}
+
+fn prime_unified_children_for_filter(state: &AppState) -> Task<Message> {
+    let kind = state.env_center.kind;
+    if !envr_domain::runtime::unified_major_list_rollout_enabled(kind) {
+        return Task::none();
+    }
+    let query_norm =
+        envr_domain::runtime::normalize_runtime_filter_query(&state.env_center.install_input);
+    if query_norm.is_empty() {
+        return Task::none();
+    }
+    let Some(rows) = state.env_center.unified_major_rows_by_kind.get(&kind) else {
+        return Task::none();
+    };
+
+    let alpha_query = query_norm.chars().any(|c| c.is_ascii_alphabetic());
+    let mut tasks: Vec<Task<Message>> = Vec::new();
+    let mut queued = 0usize;
+    const PRIME_LIMIT: usize = 20;
+
+    for row in rows {
+        if queued >= PRIME_LIMIT {
+            break;
+        }
+        let key = row.major_key.as_str();
+        if state
+            .env_center
+            .unified_children_rows_by_kind_major
+            .contains_key(&(kind, key.to_string()))
+        {
+            continue;
+        }
+        let matches_key = envr_domain::runtime::runtime_version_matches_filter(kind, key, &query_norm)
+            || query_norm == key
+            || query_norm.starts_with(&format!("{key}."));
+        let should_probe = if alpha_query {
+            true
+        } else {
+            matches_key
+        };
+        if !should_probe {
+            continue;
+        }
+        let major_key = key.to_string();
+        tasks.push(gui_ops::load_unified_children_cached(kind, major_key.clone()));
+        tasks.push(gui_ops::refresh_unified_children(kind, major_key));
+        queued += 1;
+    }
+
+    if tasks.is_empty() {
+        Task::none()
+    } else {
+        Task::batch(tasks)
     }
 }

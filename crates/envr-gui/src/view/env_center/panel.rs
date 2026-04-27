@@ -18,7 +18,8 @@ use envr_config::settings::{
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
-    runtime_descriptor, version_line_key_for_kind,
+    normalize_runtime_filter_query, runtime_descriptor, runtime_version_matches_filter,
+    version_line_key_for_kind,
 };
 use envr_ui::theme::ThemeTokens;
 use iced::alignment::Horizontal;
@@ -2992,7 +2993,7 @@ pub fn env_center_view(
     // Search/filter text (we reuse `install_input` field). Actual grouping/sorting is precomputed
     // in `update()` and stored on the state to keep `view()` fast.
     let query = state.install_input.trim();
-    let query_norm = query.strip_prefix('v').unwrap_or(query);
+    let query_norm = normalize_runtime_filter_query(query);
     let unified_major_rows = state.unified_major_rows_by_kind.get(&state.kind);
     let unified_major_latest_by_key: HashMap<String, RuntimeVersion> = unified_major_rows
         .map(|rows| {
@@ -3091,17 +3092,48 @@ pub fn env_center_view(
             keys.sort_by(|a, b| parse_python_key_sort(b).cmp(&parse_python_key_sort(a)));
             if query_norm.is_empty() {
                 keys
-            } else if query_norm.contains('.') {
-                keys.into_iter()
-                    .filter(|k| k.starts_with(query_norm))
-                    .collect()
             } else {
                 keys.into_iter()
                     .filter(|k| {
-                        let mut it = k.split('.');
-                        let major = it.next().unwrap_or("");
-                        let minor = it.next().unwrap_or("");
-                        major == query_norm || minor == query_norm || k.contains(query_norm)
+                        runtime_version_matches_filter(state.kind, k, &query_norm)
+                            || query_norm.starts_with(&format!("{k}."))
+                            || query_norm == *k
+                            || unified_major_latest_by_key.get(k).is_some_and(|latest| {
+                                runtime_version_matches_filter(state.kind, &latest.0, &query_norm)
+                            })
+                            || state
+                                .installed
+                                .iter()
+                                .any(|v| {
+                                    version_line_key_for_kind(state.kind, &v.0).as_deref()
+                                        == Some(k.as_str())
+                                        && runtime_version_matches_filter(
+                                            state.kind,
+                                            &v.0,
+                                            &query_norm,
+                                        )
+                                })
+                            || state.current.as_ref().is_some_and(|c| {
+                                version_line_key_for_kind(state.kind, &c.0).as_deref()
+                                    == Some(k.as_str())
+                                    && runtime_version_matches_filter(
+                                        state.kind,
+                                        &c.0,
+                                        &query_norm,
+                                    )
+                            })
+                            || state
+                                .unified_children_rows_by_kind_major
+                                .get(&(state.kind, k.clone()))
+                                .is_some_and(|rows| {
+                                    rows.iter().any(|rv| {
+                                        runtime_version_matches_filter(
+                                            state.kind,
+                                            &rv.0,
+                                            &query_norm,
+                                        )
+                                    })
+                                })
                     })
                     .collect()
             }
@@ -3436,8 +3468,22 @@ pub fn env_center_view(
                     .get(&(state.kind, key.clone()))
                     .cloned()
                     .unwrap_or_default();
+                let key_matches_query = query_norm.is_empty()
+                    || runtime_version_matches_filter(state.kind, key, &query_norm)
+                    || query_norm.starts_with(&format!("{key}."))
+                    || query_norm == *key
+                    || unified_major_latest_by_key.get(key).is_some_and(|latest| {
+                        runtime_version_matches_filter(state.kind, &latest.0, &query_norm)
+                    });
                 for child in child_rows {
                     let spec = child.0.clone();
+                    let child_matches_query =
+                        query_norm.is_empty()
+                            || runtime_version_matches_filter(state.kind, &spec, &query_norm);
+                    let allow_all_children_for_key = query_norm.is_empty() || query_norm == *key;
+                    if !(child_matches_query || (allow_all_children_for_key && key_matches_query)) {
+                        continue;
+                    }
                     let is_installed = state.installed.iter().any(|v| v.0 == spec);
                     let is_current = state.current.as_ref().is_some_and(|c| c.0 == spec);
                     let child_label = if is_current {
@@ -4362,6 +4408,8 @@ fn parse_python_key_sort(k: &str) -> (u64, u64) {
     let b = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     (a, b)
 }
+
+
 
 /// Drop in-memory unified list VM when leaving the Runtime page; on-disk cache under runtime root is kept.
 pub(crate) fn env_center_clear_unified_list_render_state(state: &mut EnvCenterState) {

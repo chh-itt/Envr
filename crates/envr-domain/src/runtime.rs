@@ -778,8 +778,34 @@ pub fn major_key_from_version(version: &str) -> Option<String> {
         .map(|m| m.to_string())
 }
 
+fn grouping_numeric_version_segments(version: &str) -> Option<Vec<u64>> {
+    let t = version.trim().trim_start_matches('v');
+    if t.is_empty() {
+        return None;
+    }
+    let without_prerelease = t.split_once('-').map(|(v, _)| v).unwrap_or(t);
+    let core = without_prerelease
+        .split_once('+')
+        .map(|(v, _)| v)
+        .unwrap_or(without_prerelease);
+    if core.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    for seg in core.split('.') {
+        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        parts.push(seg.parse::<u64>().ok()?);
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(parts)
+}
+
 pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<String> {
-    let parts = numeric_version_segments(version)?;
+    let parts = grouping_numeric_version_segments(version)?;
     match kind {
         RuntimeKind::Python
         | RuntimeKind::Php
@@ -836,6 +862,129 @@ pub fn version_line_key_for_kind(kind: RuntimeKind, version: &str) -> Option<Str
 /// [`version_line_key_for_kind`] shows the user still has a local install on that line (uninstall/switch).
 pub fn major_line_remote_install_blocked(kind: RuntimeKind, major_key: &str) -> bool {
     matches!(kind, RuntimeKind::Bun | RuntimeKind::Deno) && major_key == "0"
+}
+
+pub fn normalize_runtime_filter_query(raw: &str) -> String {
+    raw.trim()
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .to_ascii_lowercase()
+}
+
+fn split_filter_tokens(raw: &str) -> Vec<String> {
+    raw.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect()
+}
+
+pub fn runtime_filter_tokens_for_kind(kind: RuntimeKind, value: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let normalized = normalize_runtime_filter_query(value);
+    if !normalized.is_empty() {
+        tokens.push(normalized.clone());
+    }
+    tokens.extend(split_filter_tokens(&normalized));
+
+    match kind {
+        RuntimeKind::Kotlin | RuntimeKind::Dotnet => {
+            if let Some((core, suffix)) = normalized.split_once('-') {
+                if !core.is_empty() {
+                    tokens.push(core.to_string());
+                    tokens.extend(split_filter_tokens(core));
+                }
+                if !suffix.is_empty() {
+                    tokens.push(suffix.to_string());
+                    tokens.extend(split_filter_tokens(suffix));
+                }
+            }
+        }
+        _ => {}
+    }
+
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+pub fn runtime_version_matches_filter(kind: RuntimeKind, value: &str, query_raw: &str) -> bool {
+    let query_norm = normalize_runtime_filter_query(query_raw);
+    if query_norm.is_empty() {
+        return true;
+    }
+    if let Some(matched) = numeric_dot_query_matches(value, &query_norm) {
+        return matched;
+    }
+    let value_norm = normalize_runtime_filter_query(value);
+    if value_norm.contains(&query_norm) {
+        return true;
+    }
+    let query_tokens = split_filter_tokens(&query_norm);
+    if query_tokens.is_empty() {
+        return false;
+    }
+    let value_tokens = runtime_filter_tokens_for_kind(kind, value);
+    query_tokens
+        .iter()
+        .all(|q| value_tokens.iter().any(|v| v.starts_with(q)))
+}
+
+fn numeric_dot_query_matches(value: &str, query_norm: &str) -> Option<bool> {
+    let trailing_dot = query_norm.ends_with('.');
+    let query_core = query_norm.trim_end_matches('.');
+    if query_core.is_empty()
+        || !query_core
+            .split('.')
+            .all(|seg| !seg.is_empty() && seg.chars().all(|c| c.is_ascii_digit()))
+    {
+        return None;
+    }
+    let qsegs: Vec<&str> = query_core.split('.').collect();
+    let vsegs = numeric_segments_for_match(value)?;
+    if qsegs.len() > vsegs.len() {
+        return Some(false);
+    }
+    if qsegs.len() == 1 {
+        let q = qsegs[0];
+        if trailing_dot {
+            return Some(
+                vsegs
+                    .windows(2)
+                    .any(|w| w.first().is_some_and(|seg| seg == q)),
+            );
+        }
+        return Some(vsegs.iter().any(|seg| seg == q));
+    }
+    Some(
+        vsegs.windows(qsegs.len()).any(|w| {
+            w.iter()
+                .map(|s| s.as_str())
+                .eq(qsegs.iter().copied())
+        }),
+    )
+}
+
+fn numeric_segments_for_match(value: &str) -> Option<Vec<String>> {
+    let t = normalize_runtime_filter_query(value);
+    let without_prerelease = t.split_once('-').map(|(v, _)| v).unwrap_or(&t);
+    let core = without_prerelease
+        .split_once('+')
+        .map(|(v, _)| v)
+        .unwrap_or(without_prerelease);
+    if core.is_empty() {
+        return None;
+    }
+    let mut segs = Vec::new();
+    for seg in core.split('.') {
+        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        segs.push(seg.to_string());
+    }
+    if segs.is_empty() {
+        return None;
+    }
+    Some(segs)
 }
 
 #[cfg(test)]
@@ -1125,6 +1274,14 @@ mod tests {
             version_line_key_for_kind(RuntimeKind::Luau, "696").as_deref(),
             Some("696")
         );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Dotnet, "10.0.100-preview.7").as_deref(),
+            Some("10")
+        );
+        assert_eq!(
+            version_line_key_for_kind(RuntimeKind::Kotlin, "2.4.0-Beta2").as_deref(),
+            Some("2.4")
+        );
     }
 
     #[test]
@@ -1133,5 +1290,81 @@ mod tests {
         assert!(major_line_remote_install_blocked(RuntimeKind::Deno, "0"));
         assert!(!major_line_remote_install_blocked(RuntimeKind::Bun, "1"));
         assert!(!major_line_remote_install_blocked(RuntimeKind::Node, "0"));
+    }
+
+    #[test]
+    fn runtime_version_matches_filter_supports_v_prefix_and_tokens() {
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "v20.10.0",
+            "20.10"
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "20.10.0",
+            "v20"
+        ));
+    }
+
+    #[test]
+    fn runtime_version_matches_filter_supports_kotlin_prerelease_suffix() {
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Kotlin,
+            "2.4.0-Beta2",
+            "beta"
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Kotlin,
+            "2.4.0-Beta2",
+            "2.4 beta2"
+        ));
+    }
+
+    #[test]
+    fn runtime_version_matches_filter_supports_dotnet_preview_suffix() {
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Dotnet,
+            "10.0.100-preview.7",
+            "preview"
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Dotnet,
+            "10.0.100-preview.7",
+            "10.0 7"
+        ));
+    }
+
+    #[test]
+    fn runtime_version_matches_filter_numeric_dot_query_is_segment_aware() {
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "23.11.1",
+            "23."
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "1.23.9",
+            "23."
+        ));
+        assert!(!runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "123.4.5",
+            "23."
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "23.2.1",
+            "23.2"
+        ));
+        assert!(runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "1.23.2",
+            "23.2"
+        ));
+        assert!(!runtime_version_matches_filter(
+            RuntimeKind::Node,
+            "23.12.2",
+            "23.2"
+        ));
     }
 }

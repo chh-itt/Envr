@@ -214,51 +214,13 @@ pub(crate) fn deno_direct_spec_blocked(
 }
 
 pub(crate) fn sanitize_runtime_filter_input(
-    kind: envr_domain::runtime::RuntimeKind,
+    _kind: envr_domain::runtime::RuntimeKind,
     raw: &str,
 ) -> String {
-    let t = raw.trim();
-    match kind {
-        // Node filter supports major only.
-        envr_domain::runtime::RuntimeKind::Node => {
-            t.chars().filter(|c| c.is_ascii_digit()).take(4).collect()
-        }
-        // Python filter supports major.minor.
-        envr_domain::runtime::RuntimeKind::Python => {
-            let mut out = String::new();
-            let mut dot_seen = false;
-            for ch in t.chars() {
-                if ch.is_ascii_digit() {
-                    out.push(ch);
-                } else if ch == '.' && !dot_seen {
-                    out.push(ch);
-                    dot_seen = true;
-                }
-                if out.len() >= 8 {
-                    break;
-                }
-            }
-            out
-        }
-        envr_domain::runtime::RuntimeKind::Java => {
-            t.chars().filter(|c| c.is_ascii_digit()).take(3).collect()
-        }
-        envr_domain::runtime::RuntimeKind::Go => {
-            let mut out = String::new();
-            let mut dot_seen = false;
-            for ch in t.chars() {
-                if ch.is_ascii_digit() {
-                    out.push(ch);
-                } else if ch == '.' && !dot_seen {
-                    out.push(ch);
-                    dot_seen = true;
-                }
-                if out.len() >= 12 {
-                    break;
-                }
-            }
-            out
-        }
-        _ => t.chars().take(32).collect(),
-    }
+    // Keep filter expressive across runtimes (`.`, `-`, spaces, prerelease tags),
+    // while still guarding against control characters and pathological lengths.
+    raw.chars()
+        .filter(|c| !c.is_control())
+        .take(64)
+        .collect()
 }
