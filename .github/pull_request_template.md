@@ -1,60 +1,63 @@
 ## Summary
 
-- Describe the main change in 1-3 bullet points.
-- Focus on why this change is needed.
+- 
 
 ## Change type
 
 - [ ] Bug fix
 - [ ] Feature
 - [ ] Refactor
-- [ ] Docs
-- [ ] Test
-- [ ] Build / CI / release
+- [ ] Documentation
+- [ ] CI / workflow
 - [ ] Other
 
 ## Affected areas
 
-- [ ] CLI behavior
-- [ ] JSON output / schemas / automation contract
-- [ ] Runtime provider logic
-- [ ] Download / mirror / cache / offline workflow
-- [ ] Shim / PATH / shell integration
+- [ ] CLI
+- [ ] Runtime provider(s)
 - [ ] Project config / `.envr.toml`
+- [ ] Shim / PATH / shell integration
+- [ ] Download / mirror / cache / offline workflow
 - [ ] GUI
-- [ ] Docs only
+- [ ] Docs
+- [ ] CI / release
 
 ## Test plan
 
 - [ ] `cargo fmt --all -- --check`
 - [ ] `cargo check --workspace --all-targets`
 - [ ] `cargo test --workspace`
-- [ ] Targeted manual verification completed
+- [ ] Manual verification completed
 - [ ] Not applicable
 
 ## Manual verification
 
-Describe any commands, platforms, or runtime scenarios you manually tested.
+Describe the commands, scenarios, or platforms you verified manually.
 
 ## Contract and compatibility notes
 
-If this PR changes user-facing CLI behavior, JSON output, schemas, runtime resolution, or shell/shim behavior, describe the compatibility impact here.
+Does this change affect any of the following?
 
-## Documentation
+- [ ] JSON output contract
+- [ ] CLI help or command surface
+- [ ] Schema files under `schemas/cli/`
+- [ ] Runtime install layout or cache behavior
+- [ ] Project config format
+- [ ] No compatibility impact
 
-- [ ] README updated if needed
-- [ ] User-facing docs updated if behavior changed
-- [ ] Contract/schema docs updated if needed
-- [ ] No docs update needed
+If yes, describe the compatibility or migration impact.
+
+## Documentation checklist
+
+- [ ] README updated if user-facing behavior changed
+- [ ] Relevant docs under `docs/` updated
+- [ ] `CONTRIBUTING.md` / `SUPPORT.md` / `SECURITY.md` updated if needed
+- [ ] Not applicable
 
 ## Security considerations
 
-Does this change affect any of the following?
+- [ ] This change does not introduce known security-sensitive behavior changes
+- [ ] This change touches download / extraction / mirror / checksum / shim / PATH / diagnostics behavior and was reviewed carefully
+- [ ] Additional follow-up is required (describe below)
 
-- remote downloads or archive extraction
-- checksum or integrity validation
-- mirrors, offline caches, or bundle behavior
-- shims, PATH handling, or shell integration
-- diagnostics export or sensitive local paths
-
-If yes, explain the risk and mitigation.
+Notes:
