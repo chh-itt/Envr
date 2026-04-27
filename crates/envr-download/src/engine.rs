@@ -1,10 +1,8 @@
+use crate::stats::{record_async_pool_hit, record_async_pool_miss};
 use crate::task::CancelToken;
 use crate::{
     DownloadPriority, GlobalRateLimiter, global_download_concurrency_limiter,
     global_download_limiter,
-};
-use crate::stats::{
-    record_async_pool_hit, record_async_pool_miss,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use futures::StreamExt;

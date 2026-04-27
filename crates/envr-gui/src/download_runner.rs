@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use envr_download::DownloadPriority;
 use envr_download::engine::{DownloadEngine, DownloadOptions};
 use envr_download::task::CancelToken;
-use envr_download::DownloadPriority;
 use iced::Task;
 use reqwest::Url;
 

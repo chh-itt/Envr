@@ -20,7 +20,9 @@ use envr_domain::runtime::{
 };
 use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
+use envr_platform::remote_index_cache::{
+    CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache,
+};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -80,7 +82,11 @@ impl RemoteIndexParser for GoIndexParser {
     fn is_installable_on_host(&self, item: &Self::Item) -> bool {
         let go_os = crate::index::go_dl_os_for_rust(self.os);
         let go_arch = crate::index::go_dl_arch_for_rust(self.arch);
-        let want_ext = if go_os == "windows" { ".zip" } else { ".tar.gz" };
+        let want_ext = if go_os == "windows" {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
         item.files.iter().any(|f| {
             f.os == go_os
                 && f.arch == go_arch
@@ -329,7 +335,10 @@ impl VersionListAdapter for GoRuntimeProvider {
             let s = serde_json::to_string(&data).map_err(|e| {
                 EnvrError::with_source(ErrorCode::Validation, "json encode go major rows", e)
             })?;
-            envr_platform::fs_atomic::write_atomic(&idx.unified_dir.join("major_rows.json"), s.as_bytes())?;
+            envr_platform::fs_atomic::write_atomic(
+                &idx.unified_dir.join("major_rows.json"),
+                s.as_bytes(),
+            )?;
             // Best-effort: also persist full installable snapshot (stable-only for Go)
             let stable_full: Vec<String> = idx
                 .installable_labels(&items)

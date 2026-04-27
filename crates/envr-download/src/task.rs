@@ -1,5 +1,5 @@
-use envr_error::{EnvrError, EnvrResult};
 use crate::stats::record_retry_scheduled;
+use envr_error::{EnvrError, EnvrResult};
 use std::{
     fmt,
     sync::{

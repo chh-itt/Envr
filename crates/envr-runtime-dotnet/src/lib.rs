@@ -12,7 +12,10 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked, version_line_key_for_kind};
+use envr_domain::runtime::{
+    MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked,
+    version_line_key_for_kind,
+};
 use envr_error::EnvrResult;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -53,7 +56,10 @@ impl DotnetRuntimeProvider {
 
     fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
         let root = self.runtime_root()?;
-        Ok(root.join("cache").join("dotnet").join("unified_version_list"))
+        Ok(root
+            .join("cache")
+            .join("dotnet")
+            .join("unified_version_list"))
     }
 
     fn unified_major_rows_path(&self) -> EnvrResult<PathBuf> {
@@ -177,8 +183,9 @@ impl VersionListAdapter for DotnetRuntimeProvider {
 
     fn load_major_rows_cached(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
         let path = self.unified_major_rows_path()?;
-        let raw = envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
-            .unwrap_or_default();
+        let raw =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+                .unwrap_or_default();
         Ok(raw
             .into_iter()
             .filter_map(|v| {
@@ -226,8 +233,9 @@ impl VersionListAdapter for DotnetRuntimeProvider {
             return Ok(Vec::new());
         }
         let path = self.unified_children_path(major_key)?;
-        let raw = envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
-            .unwrap_or_default();
+        let raw =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+                .unwrap_or_default();
         Ok(raw
             .into_iter()
             .map(|v| VersionRecord {
@@ -243,7 +251,9 @@ impl VersionListAdapter for DotnetRuntimeProvider {
         let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
         let filtered: Vec<RuntimeVersion> = all
             .into_iter()
-            .filter(|v| version_line_key_for_kind(RuntimeKind::Dotnet, &v.0).as_deref() == Some(major_key))
+            .filter(|v| {
+                version_line_key_for_kind(RuntimeKind::Dotnet, &v.0).as_deref() == Some(major_key)
+            })
             .collect();
         let labels: Vec<String> = filtered.iter().map(|v| v.0.clone()).collect();
         let _ = (|| -> EnvrResult<()> {
@@ -255,7 +265,10 @@ impl VersionListAdapter for DotnetRuntimeProvider {
             envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
             Ok(())
         })();
-        Ok(filtered.into_iter().map(|v| VersionRecord { version: v }).collect())
+        Ok(filtered
+            .into_iter()
+            .map(|v| VersionRecord { version: v })
+            .collect())
     }
 
     fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {

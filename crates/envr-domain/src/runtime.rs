@@ -956,11 +956,9 @@ fn numeric_dot_query_matches(value: &str, query_norm: &str) -> Option<bool> {
         return Some(vsegs.iter().any(|seg| seg == q));
     }
     Some(
-        vsegs.windows(qsegs.len()).any(|w| {
-            w.iter()
-                .map(|s| s.as_str())
-                .eq(qsegs.iter().copied())
-        }),
+        vsegs
+            .windows(qsegs.len())
+            .any(|w| w.iter().map(|s| s.as_str()).eq(qsegs.iter().copied())),
     )
 }
 

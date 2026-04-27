@@ -300,11 +300,7 @@ impl NodeManager {
                 if !r.status().is_success() {
                     return Err(EnvrError::Context {
                         code: ErrorCode::RemoteIndexFetchFailed,
-                        message: format!(
-                        "GET {} -> {}",
-                        shasums_url,
-                        r.status()
-                    ),
+                        message: format!("GET {} -> {}", shasums_url, r.status()),
                         source: Box::new(std::io::Error::other("remote-index-fetch-failed")),
                     });
                 }
@@ -354,7 +350,9 @@ impl NodeManager {
             },
             || {
                 if !node_installation_valid(&final_dir) {
-                    return Err(err_version_not_found("extracted node layout missing node binary"));
+                    return Err(err_version_not_found(
+                        "extracted node layout missing node binary",
+                    ));
                 }
                 self.set_current(version)?;
                 Ok(RuntimeVersion(normalize_node_version(&version.0)))
@@ -365,7 +363,10 @@ impl NodeManager {
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
         let dir = self.paths.version_dir(&version.0);
         if !node_installation_valid(&dir) {
-            return Err(err_version_not_found(format!("node {} is not installed", version.0)));
+            return Err(err_version_not_found(format!(
+                "node {} is not installed",
+                version.0
+            )));
         }
         let abs = fs::canonicalize(&dir).map_err(EnvrError::from)?;
         let cur = self.paths.current_link();

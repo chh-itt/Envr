@@ -779,12 +779,21 @@ mod tests {
             exit_code_for_error_code(ErrorCode::RuntimeVersionSpecInvalid),
             1
         );
-        assert_eq!(exit_code_for_error_code(ErrorCode::RuntimeVersionNotFound), 1);
-        assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexParseFailed), 1);
+        assert_eq!(
+            exit_code_for_error_code(ErrorCode::RuntimeVersionNotFound),
+            1
+        );
+        assert_eq!(
+            exit_code_for_error_code(ErrorCode::RemoteIndexParseFailed),
+            1
+        );
         assert_eq!(exit_code_for_error_code(ErrorCode::Io), 2);
         assert_eq!(exit_code_for_error_code(ErrorCode::Download), 2);
         assert_eq!(exit_code_for_error_code(ErrorCode::Mirror), 2);
-        assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexFetchFailed), 2);
+        assert_eq!(
+            exit_code_for_error_code(ErrorCode::RemoteIndexFetchFailed),
+            2
+        );
     }
 
     #[test]

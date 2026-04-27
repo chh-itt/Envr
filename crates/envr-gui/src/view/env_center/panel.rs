@@ -8,13 +8,12 @@ use envr_config::settings::{
     GroovyRuntimeSettings, HaxeRuntimeSettings, JanetRuntimeSettings, JavaDistro,
     JavaDownloadSource, JavaRuntimeSettings, JuliaRuntimeSettings, KotlinRuntimeSettings,
     LuaRuntimeSettings, LuauRuntimeSettings, NimRuntimeSettings, NodeDownloadSource,
-    NodeRuntimeSettings,
-    NpmRegistryMode, OdinRuntimeSettings, PerlRuntimeSettings, PhpDownloadSource,
-    PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode, PurescriptRuntimeSettings,
-    PythonDownloadSource, PythonRuntimeSettings, RacketRuntimeSettings, RlangRuntimeSettings,
-    RubyRuntimeSettings, RuntimeSettings, RustDownloadSource, RustRuntimeSettings,
-    SbclRuntimeSettings, ScalaRuntimeSettings, TerraformRuntimeSettings, UnisonRuntimeSettings,
-    VRuntimeSettings, ZigRuntimeSettings,
+    NodeRuntimeSettings, NpmRegistryMode, OdinRuntimeSettings, PerlRuntimeSettings,
+    PhpDownloadSource, PhpRuntimeSettings, PhpWindowsBuildFlavor, PipRegistryMode,
+    PurescriptRuntimeSettings, PythonDownloadSource, PythonRuntimeSettings, RacketRuntimeSettings,
+    RlangRuntimeSettings, RubyRuntimeSettings, RuntimeSettings, RustDownloadSource,
+    RustRuntimeSettings, SbclRuntimeSettings, ScalaRuntimeSettings, TerraformRuntimeSettings,
+    UnisonRuntimeSettings, VRuntimeSettings, ZigRuntimeSettings,
 };
 use envr_domain::runtime::{
     MajorVersionRecord, RuntimeKind, RuntimeVersion, major_line_remote_install_blocked,
@@ -2963,9 +2962,14 @@ pub fn env_center_view(
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Luau {
         luau_runtime
-            .map(|l| lua_runtime_settings_section(&LuaRuntimeSettings {
-                path_proxy_enabled: l.path_proxy_enabled,
-            }, tokens))
+            .map(|l| {
+                lua_runtime_settings_section(
+                    &LuaRuntimeSettings {
+                        path_proxy_enabled: l.path_proxy_enabled,
+                    },
+                    tokens,
+                )
+            })
             .unwrap_or_else(|| column![].into())
     } else if state.kind == RuntimeKind::Nim {
         nim_runtime
@@ -3105,26 +3109,15 @@ pub fn env_center_view(
                             || unified_major_latest_by_key.get(k).is_some_and(|latest| {
                                 runtime_version_matches_filter(state.kind, &latest.0, &query_norm)
                             })
-                            || state
-                                .installed
-                                .iter()
-                                .any(|v| {
-                                    version_line_key_for_kind(state.kind, &v.0).as_deref()
-                                        == Some(k.as_str())
-                                        && runtime_version_matches_filter(
-                                            state.kind,
-                                            &v.0,
-                                            &query_norm,
-                                        )
-                                })
+                            || state.installed.iter().any(|v| {
+                                version_line_key_for_kind(state.kind, &v.0).as_deref()
+                                    == Some(k.as_str())
+                                    && runtime_version_matches_filter(state.kind, &v.0, &query_norm)
+                            })
                             || state.current.as_ref().is_some_and(|c| {
                                 version_line_key_for_kind(state.kind, &c.0).as_deref()
                                     == Some(k.as_str())
-                                    && runtime_version_matches_filter(
-                                        state.kind,
-                                        &c.0,
-                                        &query_norm,
-                                    )
+                                    && runtime_version_matches_filter(state.kind, &c.0, &query_norm)
                             })
                             || state
                                 .unified_children_rows_by_kind_major
@@ -3481,9 +3474,8 @@ pub fn env_center_view(
                     });
                 for child in child_rows {
                     let spec = child.0.clone();
-                    let child_matches_query =
-                        query_norm.is_empty()
-                            || runtime_version_matches_filter(state.kind, &spec, &query_norm);
+                    let child_matches_query = query_norm.is_empty()
+                        || runtime_version_matches_filter(state.kind, &spec, &query_norm);
                     let allow_all_children_for_key = query_norm.is_empty() || query_norm == *key;
                     if !(child_matches_query || (allow_all_children_for_key && key_matches_query)) {
                         continue;
@@ -4412,8 +4404,6 @@ fn parse_python_key_sort(k: &str) -> (u64, u64) {
     let b = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     (a, b)
 }
-
-
 
 /// Drop in-memory unified list VM when leaving the Runtime page; on-disk cache under runtime root is kept.
 pub(crate) fn env_center_clear_unified_list_render_state(state: &mut EnvCenterState) {

@@ -31,12 +31,12 @@ pub use runtime_disk_flags::{
     erlang_path_proxy_enabled_from_disk, flutter_path_proxy_enabled_from_disk,
     go_path_proxy_enabled_from_disk, java_path_proxy_enabled_from_disk,
     julia_path_proxy_enabled_from_disk, lua_path_proxy_enabled_from_disk,
-    luau_path_proxy_enabled_from_disk,
-    nim_path_proxy_enabled_from_disk, node_path_proxy_enabled_from_disk,
-    perl_path_proxy_enabled_from_disk, php_path_proxy_enabled_from_disk,
-    php_windows_build_want_ts_from_disk, python_path_proxy_enabled_from_disk,
-    rlang_path_proxy_enabled_from_disk, ruby_path_proxy_enabled_from_disk,
-    v_path_proxy_enabled_from_disk, zig_path_proxy_enabled_from_disk,
+    luau_path_proxy_enabled_from_disk, nim_path_proxy_enabled_from_disk,
+    node_path_proxy_enabled_from_disk, perl_path_proxy_enabled_from_disk,
+    php_path_proxy_enabled_from_disk, php_windows_build_want_ts_from_disk,
+    python_path_proxy_enabled_from_disk, rlang_path_proxy_enabled_from_disk,
+    ruby_path_proxy_enabled_from_disk, v_path_proxy_enabled_from_disk,
+    zig_path_proxy_enabled_from_disk,
 };
 pub use runtime_js_py_go::{
     GoDownloadSource, GoProxyMode, GoRuntimeSettings, NodeDownloadSource, NodeRuntimeSettings,
@@ -53,9 +53,8 @@ pub use runtime_lang_core::{
 pub use runtime_long_tail::{
     BabashkaRuntimeSettings, C3RuntimeSettings, CrystalRuntimeSettings, HaxeRuntimeSettings,
     JanetRuntimeSettings, JuliaRuntimeSettings, LuaRuntimeSettings, LuauRuntimeSettings,
-    NimRuntimeSettings,
-    PerlRuntimeSettings, RlangRuntimeSettings, SbclRuntimeSettings, UnisonRuntimeSettings,
-    ZigRuntimeSettings,
+    NimRuntimeSettings, PerlRuntimeSettings, RlangRuntimeSettings, SbclRuntimeSettings,
+    UnisonRuntimeSettings, ZigRuntimeSettings,
 };
 pub use runtime_root_cache::{
     SettingsCache, process_runtime_root_override, reset_settings_load_caches, resolve_runtime_root,
@@ -488,6 +487,7 @@ mod tests {
                     y_frac: None,
                 },
                 runtime_layout: RuntimeLayoutSettings::default(),
+                runtime_cache_auto_update_on_launch: true,
             },
             download: DownloadSettings {
                 max_concurrent_downloads: 8,

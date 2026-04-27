@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{Arc, OnceLock, RwLock};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 
 use crate::global_limit::{
@@ -64,7 +64,8 @@ pub fn build_blocking_http_client(
         .filter(|n| *n > 0)
         .unwrap_or(30);
     let timeout = request_timeout.unwrap_or(Duration::from_secs(60)).as_secs();
-    let key = format!("ua={user_agent}|timeout={timeout}|connect={connect_timeout}|profile=default");
+    let key =
+        format!("ua={user_agent}|timeout={timeout}|connect={connect_timeout}|profile=default");
 
     if let Ok(g) = pool.read()
         && let Some(client) = g.get(&key)
@@ -311,10 +312,7 @@ pub fn download_url_to_path_resumable_with_headers(
 ///
 /// Useful for index/tag fetches that should use `Index` priority while reusing the same
 /// process-wide queue as artifact downloads.
-pub fn with_download_priority_blocking<T, F>(
-    priority: DownloadPriority,
-    f: F,
-) -> EnvrResult<T>
+pub fn with_download_priority_blocking<T, F>(priority: DownloadPriority, f: F) -> EnvrResult<T>
 where
     F: FnOnce() -> EnvrResult<T>,
 {

@@ -100,7 +100,9 @@ impl fmt::Display for PhpIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FetchRequest { url } => write!(f, "php index request failed: {url}"),
-            Self::FetchStatus { url, status } => write!(f, "php index http status {status} for {url}"),
+            Self::FetchStatus { url, status } => {
+                write!(f, "php index http status {status} for {url}")
+            }
             Self::ReadBody { url } => write!(f, "php index body read failed: {url}"),
             Self::InvalidIndexJson => write!(f, "invalid php windows index json"),
             Self::InvalidBuildEntryJson => write!(f, "invalid php build entry json"),
@@ -108,7 +110,10 @@ impl fmt::Display for PhpIndexError {
             Self::NoVersionsInIndex => write!(f, "no php versions in index"),
             Self::NoMatchForSpec { spec } => write!(f, "no php release matches spec {spec}"),
             Self::NoWindowsZip { version, arch } => {
-                write!(f, "no suitable windows zip for php {version} on arch {arch}")
+                write!(
+                    f,
+                    "no suitable windows zip for php {version} on arch {arch}"
+                )
             }
         }
     }

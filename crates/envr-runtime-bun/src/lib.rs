@@ -19,7 +19,9 @@ use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_mirror::resolver::{load_settings_cached, maybe_mirror_url};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
-use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
+use envr_platform::remote_index_cache::{
+    CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache,
+};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -311,7 +313,11 @@ impl VersionListAdapter for BunRuntimeProvider {
         let idx = self.cached_index()?;
         let st = load_settings_cached()?;
         let offline = st.mirror.mode == envr_config::settings::MirrorMode::Offline;
-        let mode = if offline { CacheMode::Offline } else { CacheMode::StaleOk };
+        let mode = if offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
         let url = maybe_mirror_url(&st, &self.tags_api)?;
         idx.refresh_major_rows_remote(url.as_str(), ttl, mode, |u| {
@@ -336,7 +342,11 @@ impl VersionListAdapter for BunRuntimeProvider {
         let idx = self.cached_index()?;
         let st = load_settings_cached()?;
         let offline = st.mirror.mode == envr_config::settings::MirrorMode::Offline;
-        let mode = if offline { CacheMode::Offline } else { CacheMode::StaleOk };
+        let mode = if offline {
+            CacheMode::Offline
+        } else {
+            CacheMode::StaleOk
+        };
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
         let url = maybe_mirror_url(&st, &self.tags_api)?;
         idx.refresh_children_remote(url.as_str(), ttl, mode, major_key, |u| {

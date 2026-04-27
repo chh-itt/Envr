@@ -307,10 +307,7 @@ impl RlangManager {
         let latest = self.load_latest_win_version_cached()?;
 
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;
-        let installer_path = self
-            .paths
-            .cache_dir()
-            .join("R-win-installer.exe");
+        let installer_path = self.paths.cache_dir().join("R-win-installer.exe");
 
         let mut candidates: Vec<String> = Vec::new();
         if let Some(pos) = versions.iter().position(|v| v == version_label) {
@@ -368,7 +365,9 @@ impl RlangManager {
         }
 
         Err(last_err.unwrap_or_else(|| {
-            EnvrError::Download("failed to download/install any candidate R Windows installer".into())
+            EnvrError::Download(
+                "failed to download/install any candidate R Windows installer".into(),
+            )
         }))
     }
 

@@ -22,7 +22,9 @@ use envr_domain::runtime::{
 use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::paths::{current_platform_paths, index_cache_dir_from_platform};
-use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
+use envr_platform::remote_index_cache::{
+    CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache,
+};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

@@ -23,8 +23,20 @@ fn structured_runtime_error_tokens_are_stable() {
 
 #[test]
 fn structured_runtime_error_exit_codes_are_stable() {
-    assert_eq!(exit_code_for_error_code(ErrorCode::RuntimeVersionSpecInvalid), 1);
-    assert_eq!(exit_code_for_error_code(ErrorCode::RuntimeVersionNotFound), 1);
-    assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexParseFailed), 1);
-    assert_eq!(exit_code_for_error_code(ErrorCode::RemoteIndexFetchFailed), 2);
+    assert_eq!(
+        exit_code_for_error_code(ErrorCode::RuntimeVersionSpecInvalid),
+        1
+    );
+    assert_eq!(
+        exit_code_for_error_code(ErrorCode::RuntimeVersionNotFound),
+        1
+    );
+    assert_eq!(
+        exit_code_for_error_code(ErrorCode::RemoteIndexParseFailed),
+        1
+    );
+    assert_eq!(
+        exit_code_for_error_code(ErrorCode::RemoteIndexFetchFailed),
+        2
+    );
 }

@@ -24,7 +24,9 @@ use envr_domain::runtime::{
 };
 use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
-use envr_platform::remote_index_cache::{CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache};
+use envr_platform::remote_index_cache::{
+    CacheMode, CachedRemoteIndex, RemoteIndexParser, RemoteSourceCache,
+};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -140,7 +142,14 @@ impl PhpRuntimeProvider {
         Ok(CachedRemoteIndex::new(
             RuntimeKind::Php,
             unified_dir.clone(),
-            RemoteSourceCache::new(unified_dir, if want_ts { "php_releases_ts" } else { "php_releases_nts" }),
+            RemoteSourceCache::new(
+                unified_dir,
+                if want_ts {
+                    "php_releases_ts"
+                } else {
+                    "php_releases_nts"
+                },
+            ),
             PhpIndexParser { want_ts, arch },
         ))
     }
@@ -293,11 +302,7 @@ impl RuntimeProvider for PhpRuntimeProvider {
     }
 
     fn version_list_adapter(&self) -> Option<&dyn VersionListAdapter> {
-        if cfg!(windows) {
-            Some(self)
-        } else {
-            None
-        }
+        if cfg!(windows) { Some(self) } else { None }
     }
 }
 
@@ -354,7 +359,10 @@ impl VersionListAdapter for PhpRuntimeProvider {
             let s = serde_json::to_string(&data).map_err(|e| {
                 EnvrError::with_source(ErrorCode::Validation, "json encode php major rows", e)
             })?;
-            envr_platform::fs_atomic::write_atomic(&idx.unified_dir.join("major_rows.json"), s.as_bytes())?;
+            envr_platform::fs_atomic::write_atomic(
+                &idx.unified_dir.join("major_rows.json"),
+                s.as_bytes(),
+            )?;
             Ok(())
         })();
         Ok(rows)

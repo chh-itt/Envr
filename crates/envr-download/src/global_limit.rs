@@ -1,10 +1,10 @@
-use envr_error::{EnvrError, EnvrResult};
-use std::sync::{Arc, Condvar, Mutex, OnceLock, RwLock};
-use std::time::{Duration, Instant};
 use crate::stats::{
     dec_async_in_flight, dec_blocking_in_flight, inc_async_in_flight, inc_blocking_in_flight,
     record_async_queue_wait_micros, record_blocking_queue_wait_micros,
 };
+use envr_error::{EnvrError, EnvrResult};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, RwLock};
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 struct WindowState {
@@ -141,7 +141,11 @@ impl GlobalDownloadConcurrencyLimiter {
         self.max_in_flight
     }
 
-    fn can_acquire(state: &ConcurrencyState, max_in_flight: usize, priority: DownloadPriority) -> bool {
+    fn can_acquire(
+        state: &ConcurrencyState,
+        max_in_flight: usize,
+        priority: DownloadPriority,
+    ) -> bool {
         if state.in_flight >= max_in_flight {
             return false;
         }
@@ -300,7 +304,10 @@ mod tests {
     #[tokio::test]
     async fn acquire_async_and_blocking_roundtrip() {
         let lim = Arc::new(GlobalDownloadConcurrencyLimiter::new(1).expect("limiter"));
-        let p1 = lim.acquire_async(DownloadPriority::Index).await.expect("async");
+        let p1 = lim
+            .acquire_async(DownloadPriority::Index)
+            .await
+            .expect("async");
         drop(p1);
         let p2 = lim.acquire_blocking(DownloadPriority::Artifact);
         drop(p2);

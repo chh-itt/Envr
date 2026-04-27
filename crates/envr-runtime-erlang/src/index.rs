@@ -174,7 +174,9 @@ fn fetch_all_tags_from_api(
             break;
         }
         pages += 1;
-        let mut req = client.get(&url).header("Accept", "application/vnd.github+json");
+        let mut req = client
+            .get(&url)
+            .header("Accept", "application/vnd.github+json");
         if url.contains("api.github.com") {
             req = req.header("X-GitHub-Api-Version", "2022-11-28");
             if let Some(tok) = github_api_auth_token() {
@@ -208,18 +210,30 @@ fn fetch_all_tags_from_api(
 }
 
 fn fetch_all_tags_from_html(client: &reqwest::blocking::Client) -> EnvrResult<Vec<GithubTag>> {
-    let re = Regex::new(r#"/erlang/otp/(?:tree|releases/tag)/(OTP-[0-9][^"<>/]*)"#)
-        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "invalid erlang tag regex", e))?;
+    let re =
+        Regex::new(r#"/erlang/otp/(?:tree|releases/tag)/(OTP-[0-9][^"<>/]*)"#).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "invalid erlang tag regex", e)
+        })?;
     let mut out = Vec::<GithubTag>::new();
     let mut seen = std::collections::HashSet::<String>::new();
     let mut empty_pages = 0usize;
     for page in 1..=20 {
         let url = format!("https://github.com/erlang/otp/tags?page={page}");
-        let text = client.get(&url).send().and_then(|r| r.error_for_status()).map_err(|e| {
-            EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
-        })?.text().map_err(|e| {
-            EnvrError::with_source(ErrorCode::Download, format!("read body failed for {url}"), e)
-        })?;
+        let text = client
+            .get(&url)
+            .send()
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| {
+                EnvrError::with_source(ErrorCode::Download, format!("request failed for {url}"), e)
+            })?
+            .text()
+            .map_err(|e| {
+                EnvrError::with_source(
+                    ErrorCode::Download,
+                    format!("read body failed for {url}"),
+                    e,
+                )
+            })?;
         let mut found = 0usize;
         for cap in re.captures_iter(&text) {
             let Some(m) = cap.get(1) else { continue };

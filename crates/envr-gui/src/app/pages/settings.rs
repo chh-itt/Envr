@@ -231,7 +231,12 @@ pub(crate) fn handle_settings(state: &mut AppState, msg: SettingsMsg) -> Task<Me
                         state.settings.cache.snapshot().download.max_bytes_per_sec,
                     ));
                     let _ = envr_download::set_global_download_concurrency_limit(Some(
-                        state.settings.cache.snapshot().download.max_concurrent_downloads as usize,
+                        state
+                            .settings
+                            .cache
+                            .snapshot()
+                            .download
+                            .max_concurrent_downloads as usize,
                     ));
                     super::super::sync_go_env_center_drafts_from_settings(state);
                     if matches!(state.route(), Route::Runtime) {

@@ -284,9 +284,11 @@ fn patch_windows_elixir_batch(home: &Path) -> EnvrResult<()> {
     } else {
         src
     };
-    let run_line_crlf = "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    let run_line_crlf =
+        "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
     let run_repl_crlf = "set \"ERL_EXE=erl.exe\"\r\nif defined ERTS_BIN set \"ERL_EXE=%ERTS_BIN%\\erl.exe\"\r\n\"%ERL_EXE%\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
-    let run_line_lf = "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
+    let run_line_lf =
+        "\"%ERTS_BIN%erl.exe\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
     let run_repl_lf = "set \"ERL_EXE=erl.exe\"\nif defined ERTS_BIN set \"ERL_EXE=%ERTS_BIN%\\erl.exe\"\n\"%ERL_EXE%\" %ELIXIR_ERL_OPTIONS% %parsErlang% %beforeExtra% -extra %*";
     if patched.contains(run_line_crlf) {
         patched = patched.replace(run_line_crlf, run_repl_crlf);

@@ -7,7 +7,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub const DEFAULT_LUAU_RELEASES_API_URL: &str = "https://api.github.com/repos/luau-lang/luau/releases";
+pub const DEFAULT_LUAU_RELEASES_API_URL: &str =
+    "https://api.github.com/repos/luau-lang/luau/releases";
 const LUAU_REPO: GhRepo = GhRepo {
     owner: "luau-lang",
     name: "luau",
@@ -134,7 +135,11 @@ fn fetch_github_releases_index(
     let mut page = 1;
     let mut out = Vec::new();
     loop {
-        let sep = if releases_api_url.contains('?') { '&' } else { '?' };
+        let sep = if releases_api_url.contains('?') {
+            '&'
+        } else {
+            '?'
+        };
         let url = format!("{releases_api_url}{sep}per_page=100&page={page}");
         let text = fetch_text(client, &url)?;
         let arr: Vec<GhRelease> = serde_json::from_str(&text).map_err(|e| {
@@ -213,7 +218,10 @@ pub fn fetch_luau_installable_rows(
     Ok(out)
 }
 
-pub fn list_remote_versions(rows: &[LuauInstallableRow], filter: &RemoteFilter) -> Vec<RuntimeVersion> {
+pub fn list_remote_versions(
+    rows: &[LuauInstallableRow],
+    filter: &RemoteFilter,
+) -> Vec<RuntimeVersion> {
     let mut out: Vec<RuntimeVersion> = rows
         .iter()
         .filter(|r| {

@@ -15,7 +15,10 @@ use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,
     VersionSpec,
 };
-use envr_domain::runtime::{MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked, version_line_key_for_kind};
+use envr_domain::runtime::{
+    MajorVersionRecord, VersionListAdapter, VersionRecord, major_line_remote_install_blocked,
+    version_line_key_for_kind,
+};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -260,7 +263,9 @@ impl VersionListAdapter for RubyRuntimeProvider {
             Some(unified_major_disk_ttl_secs()),
             |xs| !xs.is_empty(),
         )
-        .or_else(|| envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty()))
+        .or_else(|| {
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+        })
         .unwrap_or_default();
         Ok(raw
             .into_iter()
@@ -298,7 +303,11 @@ impl VersionListAdapter for RubyRuntimeProvider {
                 std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
             }
             let s = serde_json::to_string(&labels).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode ruby unified major rows", e)
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    "json encode ruby unified major rows",
+                    e,
+                )
             })?;
             envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
             Ok(())
@@ -311,8 +320,9 @@ impl VersionListAdapter for RubyRuntimeProvider {
             return Ok(Vec::new());
         }
         let path = self.unified_children_path(major_key)?;
-        let raw = envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
-            .unwrap_or_default();
+        let raw =
+            envr_platform::cache_recovery::read_json_string_list(&path, None, |xs| !xs.is_empty())
+                .unwrap_or_default();
         Ok(raw
             .into_iter()
             .map(|v| VersionRecord {
@@ -328,7 +338,9 @@ impl VersionListAdapter for RubyRuntimeProvider {
         let all = RuntimeProvider::list_remote_installable(self, &RemoteFilter::default())?;
         let filtered: Vec<RuntimeVersion> = all
             .into_iter()
-            .filter(|v| version_line_key_for_kind(RuntimeKind::Ruby, &v.0).as_deref() == Some(major_key))
+            .filter(|v| {
+                version_line_key_for_kind(RuntimeKind::Ruby, &v.0).as_deref() == Some(major_key)
+            })
             .collect();
         let labels: Vec<String> = filtered.iter().map(|v| v.0.clone()).collect();
         let _ = (|| -> EnvrResult<()> {
@@ -337,12 +349,19 @@ impl VersionListAdapter for RubyRuntimeProvider {
                 std::fs::create_dir_all(parent).map_err(EnvrError::from)?;
             }
             let s = serde_json::to_string(&labels).map_err(|e| {
-                EnvrError::with_source(ErrorCode::Validation, "json encode ruby unified children", e)
+                EnvrError::with_source(
+                    ErrorCode::Validation,
+                    "json encode ruby unified children",
+                    e,
+                )
             })?;
             envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())?;
             Ok(())
         })();
-        Ok(filtered.into_iter().map(|v| VersionRecord { version: v }).collect())
+        Ok(filtered
+            .into_iter()
+            .map(|v| VersionRecord { version: v })
+            .collect())
     }
 
     fn is_installable_on_host(&self, _version: &VersionRecord) -> bool {

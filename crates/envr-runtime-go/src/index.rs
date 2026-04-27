@@ -49,13 +49,17 @@ impl fmt::Display for GoIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FetchRequest { url } => write!(f, "go index request failed: {url}"),
-            Self::FetchStatus { url, status } => write!(f, "go index http status {status} for {url}"),
+            Self::FetchStatus { url, status } => {
+                write!(f, "go index http status {status} for {url}")
+            }
             Self::ReadBody { url } => write!(f, "go index body read failed: {url}"),
             Self::InvalidJson => write!(f, "invalid go releases json"),
             Self::EmptySpec => write!(f, "empty go version spec"),
             Self::NoVersionsInIndex => write!(f, "no go versions in index"),
             Self::NoMatchForSpec { spec } => write!(f, "no go release matches spec {spec}"),
-            Self::NoStablePlatformReleases => write!(f, "no stable go releases for this platform in index"),
+            Self::NoStablePlatformReleases => {
+                write!(f, "no stable go releases for this platform in index")
+            }
         }
     }
 }
@@ -139,7 +143,11 @@ pub fn fetch_go_index(client: &reqwest::blocking::Client, url: &str) -> EnvrResu
 
 pub fn parse_go_index(json: &str) -> EnvrResult<Vec<GoRelease>> {
     serde_json::from_str(json).map_err(|e| {
-        EnvrError::with_source(ErrorCode::RemoteIndexParseFailed, GoIndexError::InvalidJson.to_string(), e)
+        EnvrError::with_source(
+            ErrorCode::RemoteIndexParseFailed,
+            GoIndexError::InvalidJson.to_string(),
+            e,
+        )
     })
 }
 

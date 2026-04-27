@@ -219,8 +219,5 @@ pub(crate) fn sanitize_runtime_filter_input(
 ) -> String {
     // Keep filter expressive across runtimes (`.`, `-`, spaces, prerelease tags),
     // while still guarding against control characters and pathological lengths.
-    raw.chars()
-        .filter(|c| !c.is_control())
-        .take(64)
-        .collect()
+    raw.chars().filter(|c| !c.is_control()).take(64).collect()
 }

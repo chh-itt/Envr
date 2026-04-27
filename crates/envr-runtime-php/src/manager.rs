@@ -264,7 +264,9 @@ fn promote_archive_layout(staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     install_layout::hoist_directory_children(staging, &staging_final)?;
     if !php_installation_valid(&staging_final) {
         let _ = fs::remove_dir_all(&staging_final);
-        return Err(err_version_not_found("extracted php layout missing php executable"));
+        return Err(err_version_not_found(
+            "extracted php layout missing php executable",
+        ));
     }
     install_layout::commit_staging_dir(&staging_final, final_dir)?;
     Ok(())
@@ -318,7 +320,9 @@ impl PhpManager {
         let line = idx
             .values()
             .find(|l| l.version == version.0)
-            .ok_or_else(|| err_version_not_found(format!("php version not found: {}", version.0)))?;
+            .ok_or_else(|| {
+                err_version_not_found(format!("php version not found: {}", version.0))
+            })?;
 
         let (zip_name, sha) = pick_windows_zip(line, Some(self.want_ts), std::env::consts::ARCH)?;
         fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from)?;

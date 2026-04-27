@@ -7,9 +7,9 @@ use crate::commands::common;
 use crate::output;
 
 use envr_config::settings::{settings_path_from_platform, validate_settings_file};
+use envr_download::snapshot_download_control_plane_stats;
 use envr_error::EnvrResult;
 use envr_platform::paths::current_platform_paths;
-use envr_download::snapshot_download_control_plane_stats;
 use serde_json::json;
 
 fn summarize_dir(path: &std::path::Path, max_entries: usize) -> Vec<String> {

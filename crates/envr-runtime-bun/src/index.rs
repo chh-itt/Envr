@@ -33,11 +33,7 @@ fn fetch_tags_from_npmmirror(client: &reqwest::blocking::Client) -> EnvrResult<V
     let index_url = format!("{BUN_NPMIRROR_BINARY_BASE}/");
     let text = envr_runtime_github_release::fetch_text(client, &index_url)?;
     let entries: Vec<MirrorEntry> = serde_json::from_str(&text).map_err(|e| {
-        EnvrError::with_source(
-            ErrorCode::Validation,
-            "invalid npmmirror bun index json",
-            e,
-        )
+        EnvrError::with_source(ErrorCode::Validation, "invalid npmmirror bun index json", e)
     })?;
     let mut out = Vec::new();
     for e in entries {

@@ -127,7 +127,9 @@ pub fn list_installed_versions(paths: &LuauPaths) -> EnvrResult<Vec<RuntimeVersi
         }
         let p = entry.path();
         if luau_installation_valid(&p) {
-            out.push(RuntimeVersion(entry.file_name().to_string_lossy().into_owned()));
+            out.push(RuntimeVersion(
+                entry.file_name().to_string_lossy().into_owned(),
+            ));
         }
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
@@ -243,7 +245,10 @@ impl LuauManager {
     }
 
     pub fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        Ok(list_remote_versions(&self.fetch_rows(filter.force_index_refresh)?, filter))
+        Ok(list_remote_versions(
+            &self.fetch_rows(filter.force_index_refresh)?,
+            filter,
+        ))
     }
 
     pub fn list_remote_latest_per_major(&self) -> EnvrResult<Vec<RuntimeVersion>> {

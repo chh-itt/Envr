@@ -105,7 +105,10 @@ impl ErlangRuntimeProvider {
 
     fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
         let root = self.runtime_root()?;
-        Ok(root.join("cache").join("erlang").join("unified_version_list"))
+        Ok(root
+            .join("cache")
+            .join("erlang")
+            .join("unified_version_list"))
     }
 
     fn cached_index(
@@ -115,7 +118,10 @@ impl ErlangRuntimeProvider {
         Ok(envr_platform::remote_index_cache::CachedRemoteIndex::new(
             RuntimeKind::Erlang,
             unified_dir.clone(),
-            envr_platform::remote_index_cache::RemoteSourceCache::new(unified_dir, "erlang_github_tags"),
+            envr_platform::remote_index_cache::RemoteSourceCache::new(
+                unified_dir,
+                "erlang_github_tags",
+            ),
             ErlangTagParser,
         ))
     }
@@ -240,22 +246,33 @@ impl VersionListAdapter for ErlangRuntimeProvider {
     fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
         let idx = self.cached_index()?;
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
-        idx.refresh_major_rows_remote(&self.tags_api_url, ttl, envr_platform::remote_index_cache::CacheMode::StaleOk, |u| {
-            envr_download::blocking::with_download_priority_blocking(
-                envr_download::DownloadPriority::Index,
-                || {
-                    let client = index::blocking_http_client()?;
-                    let tags = index::fetch_all_tags(&client, u)?;
-                    #[derive(serde::Serialize)]
-                    struct TagOut {
-                        name: String,
-                    }
-                    let out: Vec<TagOut> = tags.into_iter().map(|t| TagOut { name: t.name }).collect();
-                    serde_json::to_string(&out)
-                        .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode erlang tags", e))
-                },
-            )
-        })
+        idx.refresh_major_rows_remote(
+            &self.tags_api_url,
+            ttl,
+            envr_platform::remote_index_cache::CacheMode::StaleOk,
+            |u| {
+                envr_download::blocking::with_download_priority_blocking(
+                    envr_download::DownloadPriority::Index,
+                    || {
+                        let client = index::blocking_http_client()?;
+                        let tags = index::fetch_all_tags(&client, u)?;
+                        #[derive(serde::Serialize)]
+                        struct TagOut {
+                            name: String,
+                        }
+                        let out: Vec<TagOut> =
+                            tags.into_iter().map(|t| TagOut { name: t.name }).collect();
+                        serde_json::to_string(&out).map_err(|e| {
+                            EnvrError::with_source(
+                                ErrorCode::Validation,
+                                "json encode erlang tags",
+                                e,
+                            )
+                        })
+                    },
+                )
+            },
+        )
     }
 
     fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {
@@ -280,9 +297,15 @@ impl VersionListAdapter for ErlangRuntimeProvider {
                         struct TagOut {
                             name: String,
                         }
-                        let out: Vec<TagOut> = tags.into_iter().map(|t| TagOut { name: t.name }).collect();
-                        serde_json::to_string(&out)
-                            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode erlang tags", e))
+                        let out: Vec<TagOut> =
+                            tags.into_iter().map(|t| TagOut { name: t.name }).collect();
+                        serde_json::to_string(&out).map_err(|e| {
+                            EnvrError::with_source(
+                                ErrorCode::Validation,
+                                "json encode erlang tags",
+                                e,
+                            )
+                        })
                     },
                 )
             },

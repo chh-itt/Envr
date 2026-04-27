@@ -41,7 +41,9 @@ impl RemoteSourceCache {
     }
 
     fn meta_path(&self) -> PathBuf {
-        self.dir.join("source").join(format!("{}.meta.json", self.key))
+        self.dir
+            .join("source")
+            .join(format!("{}.meta.json", self.key))
     }
 
     fn read_meta(&self) -> Option<SourceMeta> {
@@ -179,7 +181,12 @@ pub struct CachedRemoteIndex<P: RemoteIndexParser> {
 }
 
 impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
-    pub fn new(kind: RuntimeKind, unified_dir: PathBuf, source: RemoteSourceCache, parser: P) -> Self {
+    pub fn new(
+        kind: RuntimeKind,
+        unified_dir: PathBuf,
+        source: RemoteSourceCache,
+        parser: P,
+    ) -> Self {
         Self {
             kind,
             unified_dir,
@@ -197,7 +204,8 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
     }
 
     fn parsed_meta_path(&self) -> PathBuf {
-        self.parsed_dir().join(format!("{}.meta.json", self.source.key))
+        self.parsed_dir()
+            .join(format!("{}.meta.json", self.source.key))
     }
 
     fn major_rows_path(&self) -> PathBuf {
@@ -238,9 +246,14 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
             .unwrap_or(DEFAULT)
     }
 
-    fn read_cached_string_list_fresh_or_stale(path: &Path, fresh_ttl: Option<u64>) -> Option<Vec<String>> {
+    fn read_cached_string_list_fresh_or_stale(
+        path: &Path,
+        fresh_ttl: Option<u64>,
+    ) -> Option<Vec<String>> {
         if let Some(ttl) = fresh_ttl {
-            if let Some(xs) = crate::cache_recovery::read_json_string_list(path, Some(ttl), |l| !l.is_empty()) {
+            if let Some(xs) =
+                crate::cache_recovery::read_json_string_list(path, Some(ttl), |l| !l.is_empty())
+            {
                 return Some(xs);
             }
         }
@@ -269,8 +282,9 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
         if let Some(parent) = p.parent() {
             fs::create_dir_all(parent).map_err(EnvrError::from)?;
         }
-        let s = serde_json::to_string(meta)
-            .map_err(|e| EnvrError::with_source(ErrorCode::Validation, "json encode parsed meta", e))?;
+        let s = serde_json::to_string(meta).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Validation, "json encode parsed meta", e)
+        })?;
         crate::fs_atomic::write_atomic(&p, s.as_bytes())?;
         Ok(())
     }
@@ -284,7 +298,11 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
         serde_json::from_str::<Vec<P::Item>>(&s).ok()
     }
 
-    fn write_parsed(&self, items: &[P::Item], source_mtime_unix_secs: Option<u64>) -> EnvrResult<()> {
+    fn write_parsed(
+        &self,
+        items: &[P::Item],
+        source_mtime_unix_secs: Option<u64>,
+    ) -> EnvrResult<()> {
         let cache_path = self.parsed_cache_path();
         if let Some(parent) = cache_path.parent() {
             fs::create_dir_all(parent).map_err(EnvrError::from)?;
@@ -305,7 +323,9 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
         mode: CacheMode,
         fetcher: impl FnOnce(&str) -> EnvrResult<String>,
     ) -> EnvrResult<Vec<P::Item>> {
-        let body = self.source.get_body_cached(url, source_ttl, mode, fetcher)?;
+        let body = self
+            .source
+            .get_body_cached(url, source_ttl, mode, fetcher)?;
         let source_mtime = Self::parsed_meta_source_mtime_secs(&self.source.body_path());
         if let Some(items) = self.load_parsed_cached(source_mtime) {
             return Ok(items);
@@ -380,10 +400,7 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
                 _ => b.cmp(a),
             }
         });
-        majors
-            .into_iter()
-            .filter_map(|m| best.remove(&m))
-            .collect()
+        majors.into_iter().filter_map(|m| best.remove(&m)).collect()
     }
 
     fn write_string_list(&self, path: &Path, strings: &[String]) -> EnvrResult<()> {
@@ -404,7 +421,9 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
         let ttl = Self::unified_list_full_remote_ttl_secs();
         let path = self.full_installable_path();
         if mode != CacheMode::ForceRefresh {
-            if let Some(list) = crate::cache_recovery::read_json_string_list(&path, Some(ttl), |xs| !xs.is_empty()) {
+            if let Some(list) =
+                crate::cache_recovery::read_json_string_list(&path, Some(ttl), |xs| !xs.is_empty())
+            {
                 return Ok(list);
             }
         }
@@ -552,10 +571,9 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
             return Err(EnvrError::Validation("no remote versions in index".into()));
         }
         // Exact match
-        if let Some(v) = labels
-            .iter()
-            .find(|v| v.eq_ignore_ascii_case(wanted) || v.eq_ignore_ascii_case(wanted.trim_start_matches('v')))
-        {
+        if let Some(v) = labels.iter().find(|v| {
+            v.eq_ignore_ascii_case(wanted) || v.eq_ignore_ascii_case(wanted.trim_start_matches('v'))
+        }) {
             return Ok(RuntimeVersion(v.clone()));
         }
         // Prefix match (major / major.minor)
@@ -607,7 +625,11 @@ mod tests {
     #[test]
     fn source_cache_offline_requires_existing_file() {
         let td = tempdir().expect("tmp");
-        let unified = td.path().join("cache").join("node").join("unified_version_list");
+        let unified = td
+            .path()
+            .join("cache")
+            .join("node")
+            .join("unified_version_list");
         let src = RemoteSourceCache::new(unified, "k");
         let err = src
             .get_body_cached(
@@ -623,7 +645,11 @@ mod tests {
     #[test]
     fn stale_ok_returns_cached_body_on_refresh_failure() {
         let td = tempdir().expect("tmp");
-        let unified = td.path().join("cache").join("node").join("unified_version_list");
+        let unified = td
+            .path()
+            .join("cache")
+            .join("node")
+            .join("unified_version_list");
         let src = RemoteSourceCache::new(unified, "k");
         // Seed cache with some body
         let seeded = src
@@ -650,7 +676,11 @@ mod tests {
     #[test]
     fn derived_cache_writes_major_rows_and_children() {
         let td = tempdir().expect("tmp");
-        let unified = td.path().join("cache").join("node").join("unified_version_list");
+        let unified = td
+            .path()
+            .join("cache")
+            .join("node")
+            .join("unified_version_list");
         let idx = CachedRemoteIndex::new(
             RuntimeKind::Node,
             unified.clone(),
@@ -679,4 +709,3 @@ mod tests {
         assert!(idx.children_path("3").is_file());
     }
 }
-

@@ -55,12 +55,16 @@ impl fmt::Display for NodeIndexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FetchRequest { url } => write!(f, "node index request failed: {url}"),
-            Self::FetchStatus { url, status } => write!(f, "node index http status {status} for {url}"),
+            Self::FetchStatus { url, status } => {
+                write!(f, "node index http status {status} for {url}")
+            }
             Self::ReadBody { url } => write!(f, "node index body read failed: {url}"),
             Self::InvalidJson => write!(f, "invalid node index json"),
             Self::InvalidSemver { version } => write!(f, "invalid node semver: {version}"),
             Self::EmptyVersionSpec => write!(f, "empty node version spec"),
-            Self::NoPlatformReleases { os, arch } => write!(f, "no node releases for platform {os}-{arch}"),
+            Self::NoPlatformReleases { os, arch } => {
+                write!(f, "no node releases for platform {os}-{arch}")
+            }
             Self::NoLtsForCodename { codename } => match codename {
                 Some(c) => write!(f, "no LTS node releases for codename {c}"),
                 None => write!(f, "no LTS node releases for this platform"),
@@ -280,20 +284,22 @@ fn semver_key(version: &str) -> EnvrResult<SemVerKey> {
         .map_err(|_| NodeIndexError::InvalidSemver {
             version: version.to_string(),
         })?;
-    let minor: u64 = parts
-        .next()
-        .unwrap_or("0")
-        .parse()
-        .map_err(|_| NodeIndexError::InvalidSemver {
-            version: version.to_string(),
-        })?;
-    let patch: u64 = parts
-        .next()
-        .unwrap_or("0")
-        .parse()
-        .map_err(|_| NodeIndexError::InvalidSemver {
-            version: version.to_string(),
-        })?;
+    let minor: u64 =
+        parts
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .map_err(|_| NodeIndexError::InvalidSemver {
+                version: version.to_string(),
+            })?;
+    let patch: u64 =
+        parts
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .map_err(|_| NodeIndexError::InvalidSemver {
+                version: version.to_string(),
+            })?;
     Ok(SemVerKey(major, minor, patch))
 }
 

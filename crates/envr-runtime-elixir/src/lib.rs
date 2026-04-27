@@ -103,7 +103,10 @@ impl ElixirRuntimeProvider {
 
     fn unified_list_dir(&self) -> EnvrResult<PathBuf> {
         let root = self.runtime_root()?;
-        Ok(root.join("cache").join("elixir").join("unified_version_list"))
+        Ok(root
+            .join("cache")
+            .join("elixir")
+            .join("unified_version_list"))
     }
 
     fn cached_index(
@@ -113,7 +116,10 @@ impl ElixirRuntimeProvider {
         Ok(envr_platform::remote_index_cache::CachedRemoteIndex::new(
             RuntimeKind::Elixir,
             unified_dir.clone(),
-            envr_platform::remote_index_cache::RemoteSourceCache::new(unified_dir, "elixir_builds_index"),
+            envr_platform::remote_index_cache::RemoteSourceCache::new(
+                unified_dir,
+                "elixir_builds_index",
+            ),
             ElixirBuildParser {
                 builds_base_url: DEFAULT_BUILDS_BASE_URL.to_string(),
                 preferred_otp: DEFAULT_OTP_SERIES.to_string(),
@@ -253,15 +259,20 @@ impl VersionListAdapter for ElixirRuntimeProvider {
     fn refresh_major_rows_remote(&self) -> EnvrResult<Vec<MajorVersionRecord>> {
         let idx = self.cached_index()?;
         let ttl = Duration::from_secs(Self::remote_cache_ttl_secs());
-        idx.refresh_major_rows_remote(&self.builds_index_url, ttl, envr_platform::remote_index_cache::CacheMode::StaleOk, |u| {
-            envr_download::blocking::with_download_priority_blocking(
-                envr_download::DownloadPriority::Index,
-                || {
-                    let client = index::blocking_http_client()?;
-                    index::fetch_builds_index(&client, u)
-                },
-            )
-        })
+        idx.refresh_major_rows_remote(
+            &self.builds_index_url,
+            ttl,
+            envr_platform::remote_index_cache::CacheMode::StaleOk,
+            |u| {
+                envr_download::blocking::with_download_priority_blocking(
+                    envr_download::DownloadPriority::Index,
+                    || {
+                        let client = index::blocking_http_client()?;
+                        index::fetch_builds_index(&client, u)
+                    },
+                )
+            },
+        )
     }
 
     fn load_children_cached(&self, major_key: &str) -> EnvrResult<Vec<VersionRecord>> {

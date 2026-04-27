@@ -297,7 +297,8 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
                     }
                     PathBuf::from(t)
                 };
-                let bin = std::fs::canonicalize(home.join("bin")).unwrap_or_else(|_| home.join("bin"));
+                let bin =
+                    std::fs::canonicalize(home.join("bin")).unwrap_or_else(|_| home.join("bin"));
                 if !bin.join("erl.exe").is_file() {
                     return None;
                 }
@@ -342,8 +343,7 @@ pub fn runtime_home_env_for_key(home: &Path, key: &str) -> Vec<(String, String)>
             }
 
             let mut out = Vec::new();
-            if let Some(erts) = erts_bin_from_envr_runtime_root().or_else(erts_bin_from_host_path)
-            {
+            if let Some(erts) = erts_bin_from_envr_runtime_root().or_else(erts_bin_from_host_path) {
                 out.push(("ERTS_BIN".into(), erts));
             }
             out
@@ -1520,7 +1520,9 @@ fn luau_tool_path(home: &Path, cmd: CoreCommand) -> EnvrResult<PathBuf> {
             home.join("bin").join("luau-analyze.exe"),
             home.join("bin").join("luau-analyze"),
         ])
-        .ok_or_else(|| EnvrError::Runtime(format!("luau-analyze missing under {}", home.display()))),
+        .ok_or_else(|| {
+            EnvrError::Runtime(format!("luau-analyze missing under {}", home.display()))
+        }),
         _ => Err(EnvrError::Runtime("internal: not a luau tool".into())),
     }
 }
@@ -2360,7 +2362,8 @@ version = "20"
             ],
             || {
                 let paths = envr_platform::paths::current_platform_paths().expect("paths");
-                let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+                let settings =
+                    Settings::load_or_default_from(&paths.settings_file).expect("settings");
                 let snap = ShimSettingsSnapshot::from_settings(&settings);
 
                 let ctx = ShimContext {
@@ -2369,8 +2372,9 @@ version = "20"
                     profile: None,
                 };
 
-                let resolved = resolve_core_shim_command_with_settings(CoreCommand::Julia, &ctx, &snap)
-                    .expect("resolve");
+                let resolved =
+                    resolve_core_shim_command_with_settings(CoreCommand::Julia, &ctx, &snap)
+                        .expect("resolve");
                 assert!(
                     resolved
                         .executable
@@ -2415,7 +2419,8 @@ version = "20"
             ],
             || {
                 let paths = envr_platform::paths::current_platform_paths().expect("paths");
-                let settings = Settings::load_or_default_from(&paths.settings_file).expect("settings");
+                let settings =
+                    Settings::load_or_default_from(&paths.settings_file).expect("settings");
                 let snap = ShimSettingsSnapshot::from_settings(&settings);
 
                 let ctx = ShimContext {
@@ -2424,8 +2429,9 @@ version = "20"
                     profile: None,
                 };
 
-                let resolved = resolve_core_shim_command_with_settings(CoreCommand::Nim, &ctx, &snap)
-                    .expect("resolve");
+                let resolved =
+                    resolve_core_shim_command_with_settings(CoreCommand::Nim, &ctx, &snap)
+                        .expect("resolve");
                 assert!(
                     resolved
                         .executable

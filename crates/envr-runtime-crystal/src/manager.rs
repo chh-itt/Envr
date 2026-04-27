@@ -380,7 +380,9 @@ impl CrystalManager {
         }
         if !downloaded_ok {
             return Err(last_err.unwrap_or_else(|| {
-                EnvrError::Download("failed to download crystal archive from all URL candidates".into())
+                EnvrError::Download(
+                    "failed to download crystal archive from all URL candidates".into(),
+                )
             }));
         }
         if let Some(hex) = row.sha256_hex.as_deref() {

@@ -288,7 +288,8 @@ impl KotlinManager {
             }
         }
 
-        let pairs = fetch_kotlin_installable_pairs_with_fallback(&self.client, &self.releases_api_url)?;
+        let pairs =
+            fetch_kotlin_installable_pairs_with_fallback(&self.client, &self.releases_api_url)?;
         let _ = (|| -> EnvrResult<()> {
             fs::create_dir_all(self.paths.cache_dir())?;
             let body = serde_json::to_string(&pairs).map_err(|e| {
