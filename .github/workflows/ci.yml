@@ -10,6 +10,19 @@ env:
   REQUIRE_OBSERVED_ON_MAIN: "true"
 
 jobs:
+  msrv:
+    name: MSRV Check (Rust 1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: cargo check (MSRV)
+        run: cargo check --workspace --all-targets
+
   fmt:
     name: Rustfmt Check
     runs-on: ubuntu-latest

@@ -36,7 +36,7 @@ cargo build --release -p envr-cli
 ./target/release/envr --help
 ```
 
-The workspace currently uses Rust 2024 edition and requires the Rust version declared in [`Cargo.toml`](Cargo.toml).
+The workspace currently uses Rust 2024 edition and requires Rust **1.88 or newer** (see `rust-version = "1.88"` in [`Cargo.toml`](Cargo.toml)). Older local toolchains will fail before the workspace can build.
 
 ## Quick start
 
