@@ -233,6 +233,7 @@ $probeByRuntime = @{
   sbcl = @{ tool = "sbcl"; args = @("--non-interactive","--eval",'(format t "~a" (+ 1 1))') }
   haxe = @{ tool = "haxe"; args = @("-version") }
   lua = @{ tool = "lua"; args = @("-e","print(1+1)") }
+  luau = @{ tool = "luau"; args = @("-e","print(1+1)") }
   nim = @{ tool = "nim"; args = @("--version") }
   crystal = @{ tool = "crystal"; args = @("eval","puts 2") }
   perl = @{ tool = "perl"; args = @("-e","print 1+1") }
@@ -249,7 +250,7 @@ $runtimes = @(
   "racket","dart","flutter",
   "go","ruby","elixir",
   "php","deno","bun","dotnet",
-  "zig","julia","janet","c3","babashka","sbcl","haxe","lua","nim","crystal","perl","unison",
+  "zig","julia","janet","c3","babashka","sbcl","haxe","lua","luau","nim","crystal","perl","unison",
   "r"
 )
 

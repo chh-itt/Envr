@@ -72,6 +72,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\30_runtime_fixtures_r
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\30_runtime_fixtures_run.ps1 -StepTimeoutSec 900
 ```
 
+`luau` is now included in both lifecycle smoke and fixture smoke:
+
+- lifecycle probe: `luau -e "print(1+1)"`
+- fixture: table iteration + numeric accumulation, expected output `6`
+
 ## Reports & logs
 
 - `smoke/.state/report.json` — machine-readable summary (append-only sections)
@@ -92,7 +97,7 @@ Use this as a quick pass/fail reference for full runs:
 
 Example of a healthy full fixture summary:
 
-- `OK: fixtures run complete. ok=37 fail=0`
+- `OK: fixtures run complete. ok=38 fail=0`
 - plus one `SKIP` entry for `flutter` on constrained hosts
 
 ## Runtime fixtures
@@ -101,6 +106,38 @@ Fixtures live under `smoke/runtime-fixtures/<runtime>/` and must:
 
 - execute runtime-provided tooling (compiler/interpreter/package manager) rather than only `--version`
 - use standard library or toolchain behavior and assert deterministic output
+
+## Full isolated test commands
+
+From repo root, to ensure the smoke suite never pollutes your global envr state, explicitly set both `ENVR_ROOT` and `ENVR_RUNTIME_ROOT` to `smoke/.state/root/` for the current PowerShell session before running the suite:
+
+```powershell
+$env:ENVR_ROOT = (Resolve-Path .\smoke\.state\root).Path
+$env:ENVR_RUNTIME_ROOT = $env:ENVR_ROOT
+
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\00_bootstrap.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\10_commands_all.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\20_runtimes_lifecycle.ps1 -StepTimeoutSec 900
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\30_runtime_fixtures_run.ps1 -StepTimeoutSec 900
+```
+
+If `smoke/.state/root/` does not exist yet in a fresh checkout, create it first:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .\smoke\.state\root | Out-Null
+$env:ENVR_ROOT = (Resolve-Path .\smoke\.state\root).Path
+$env:ENVR_RUNTIME_ROOT = $env:ENVR_ROOT
+```
+
+Useful partial commands:
+
+```powershell
+# lifecycle + fixtures for luau only
+$env:ENVR_ROOT = (Resolve-Path .\smoke\.state\root).Path
+$env:ENVR_RUNTIME_ROOT = $env:ENVR_ROOT
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\20_runtimes_lifecycle.ps1 -StepTimeoutSec 900
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\smoke\pwsh\30_runtime_fixtures_run.ps1 -Only luau -StepTimeoutSec 900
+```
 
 ## Platform support reference
 

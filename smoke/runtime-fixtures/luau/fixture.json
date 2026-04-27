@@ -1,0 +1,12 @@
+{
+  "runtime": "luau",
+  "mode": "exec",
+  "write_files": {
+    "main.luau": "local t = {1, 2, 3}\nlocal s = 0\nfor _, v in ipairs(t) do\n    s += v\nend\nprint(s)\n"
+  },
+  "command": ["luau", "main.luau"],
+  "expect": {
+    "exit_code": 0,
+    "stdout_regex": "^6\\r?\\n$"
+  }
+}
