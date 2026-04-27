@@ -19,6 +19,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
 
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: cargo deny check
+        run: cargo deny check
+
       - name: Package release
         shell: pwsh
         env:

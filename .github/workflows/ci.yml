@@ -51,10 +51,8 @@ jobs:
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
 
-      # Full `cargo deny check` includes advisories; RustSec entries using CVSS 4.0 require a
-      # recent cargo-deny. Licenses + bans + sources run on all supported versions.
-      - name: cargo deny check (licenses, bans, sources)
-        run: cargo deny check licenses bans sources
+      - name: cargo deny check
+        run: cargo deny check
 
   clippy:
     name: Clippy Lints

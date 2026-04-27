@@ -111,6 +111,13 @@ Until `envr` reaches a more stable release process, users should take standard p
 - keep runtime root and cache directories writable only by the expected user account
 - verify release artifacts and checksums when official release packaging is available
 
+## Dependency advisory policy
+
+CI and release packaging are expected to run `cargo deny check`, including RustSec advisories.
+Any temporary advisory ignore in `deny.toml` must have a documented risk-acceptance reason and review plan in [`docs/deps/security-and-licenses.md`](docs/deps/security-and-licenses.md).
+
+Currently accepted advisory ignores are limited to transitive GUI stack issues with no compatible safe upgrade path. These must be reviewed before release cuts and whenever the GUI dependency stack is upgraded.
+
 ## Security updates
 
 Security-relevant fixes will be documented in release notes when applicable.

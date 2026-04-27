@@ -1,4 +1,4 @@
-﻿# Dependency security and licenses (T904)
+# Dependency security and licenses (T904)
 
 This document matches the workspace policy in `Cargo.toml` (`[workspace.metadata.envr.dependency_policy]`) and `refactor docs/07-依赖选择与原则.md`.
 
@@ -14,22 +14,22 @@ Configuration: repository root **`deny.toml`**.
 ## Local commands
 
 ```bash
-# Recommended (works across cargo-deny versions; see advisories note below):
-cargo deny check licenses bans sources
-
-# When your cargo-deny supports the advisory DB in use (CVSS 4.0 in newer RustSec entries):
+# Recommended full check:
 cargo deny check
+
+# If you need to isolate categories while debugging policy failures:
+cargo deny check licenses bans sources advisories
 
 # Optional advisory-only:
 cargo install cargo-audit
 cargo audit
 ```
 
-**Advisories:** Some RustSec advisories use CVSS 4.0 metadata. Older `cargo-deny` releases fail to parse the database; CI therefore runs `licenses bans sources` only. Upgrade `cargo-deny` locally when you want a full advisory scan, or use `cargo audit`.
+`envr` now expects a recent `cargo-deny` release that can parse the current advisory database, including RustSec entries that use newer metadata.
 
 ## CI
 
-Pull requests and `main` run **`cargo deny check licenses bans sources`** (see `.github/workflows/ci.yml`). Full advisories are run locally when possible (`cargo deny check advisories` or `cargo audit`).
+Pull requests and `main` run **`cargo deny check`** in CI. The release workflow also runs a full `cargo deny check` before packaging artifacts.
 
 ## Upgrade plan when advisories fire
 
@@ -44,5 +44,18 @@ Allowed SPDX identifiers live in `deny.toml` under `[licenses] allow`. Adding a 
 
 ## Temporary advisory exceptions
 
-- `RUSTSEC-2024-0384` (`instant`) and `RUSTSEC-2024-0436` (`paste`) are currently ignored in `deny.toml` because they arrive transitively from the `iced/wgpu` GUI stack and cargo-deny reports no safe upgrade path today.
-- Remove these ignores when the GUI stack is upgraded to versions that eliminate those crates.
+The following RustSec advisories are currently ignored in `deny.toml` as an explicit risk-acceptance decision:
+
+- `RUSTSEC-2024-0384` (`instant`)
+  - Source: transitive dependency from the `iced` GUI stack.
+  - Current reason: no compatible safe upgrade path is available in the current GUI dependency set.
+  - Acceptance scope: accepted only while `envr` continues to depend on the affected `iced` stack.
+  - Review plan: re-check on every GUI dependency upgrade and before each release cut.
+
+- `RUSTSEC-2024-0436` (`paste`)
+  - Source: transitive dependency from the `wgpu` / `metal` GUI stack.
+  - Current reason: no compatible safe upgrade path is available in the current GUI dependency set.
+  - Acceptance scope: accepted only while `envr` continues to depend on the affected graphics stack.
+  - Review plan: re-check on every GUI dependency upgrade and before each release cut.
+
+These ignores should be removed as soon as the GUI stack can be upgraded to versions that eliminate or replace the affected crates.
