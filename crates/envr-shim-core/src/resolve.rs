@@ -2292,9 +2292,24 @@ version = "20"
             assert!(!snapshot.path_proxy.ruby);
             assert!(!snapshot.path_proxy.elixir);
             assert!(!snapshot.path_proxy.erlang);
-            assert!(matches!(snapshot.path_proxy.enabled_for_kind(envr_domain::runtime::RuntimeKind::Ruby), Some(false)));
-            assert!(matches!(snapshot.path_proxy.enabled_for_kind(envr_domain::runtime::RuntimeKind::Elixir), Some(false)));
-            assert!(matches!(snapshot.path_proxy.enabled_for_kind(envr_domain::runtime::RuntimeKind::Erlang), Some(false)));
+            assert!(matches!(
+                snapshot
+                    .path_proxy
+                    .enabled_for_kind(envr_domain::runtime::RuntimeKind::Ruby),
+                Some(false)
+            ));
+            assert!(matches!(
+                snapshot
+                    .path_proxy
+                    .enabled_for_kind(envr_domain::runtime::RuntimeKind::Elixir),
+                Some(false)
+            ));
+            assert!(matches!(
+                snapshot
+                    .path_proxy
+                    .enabled_for_kind(envr_domain::runtime::RuntimeKind::Erlang),
+                Some(false)
+            ));
             assert!(core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
             assert!(core_command_uses_path_proxy_bypass(CoreCommand::Gem));
             assert!(core_command_uses_path_proxy_bypass(CoreCommand::Bundle));

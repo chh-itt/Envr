@@ -567,7 +567,11 @@ fn python_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.python_path_proxy_label", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.python_path_proxy_label",
+            "PATH 代理",
+            "PATH proxy",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.python_path_proxy_hint_short",
             "开启时由 envr 接管 python/pip；关闭时 shim 透传到系统 PATH。",
@@ -670,7 +674,11 @@ fn java_runtime_settings_section(
 
     let proxy_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.java_path_proxy_label", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.java_path_proxy_label",
+            "PATH 代理",
+            "PATH proxy",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.java_path_proxy_hint_short",
             "开启时由 envr 接管 java/javac；关闭时 shim 透传到系统 PATH。",
@@ -1408,7 +1416,11 @@ fn bun_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.bun_path_proxy_label", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key(
+            "gui.runtime.bun_path_proxy_label",
+            "PATH 代理",
+            "PATH proxy",
+        ),
         Some(envr_core::i18n::tr_key(
             "gui.runtime.bun_path_proxy_off_hint",
             "开启时由 envr 接管 bun/bunx；关闭时 shim 透传到系统 PATH。",
