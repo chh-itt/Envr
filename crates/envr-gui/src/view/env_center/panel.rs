@@ -403,12 +403,12 @@ fn node_runtime_settings_section(
     let proxy_toggle = setting_row(
         tokens,
         envr_core::i18n::tr_key(
-            "gui.runtime.node.path_proxy.label",
+            "gui.runtime.node_path_proxy_label",
             "PATH 代理",
             "PATH proxy",
         ),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.node.path_proxy.hint_short",
+            "gui.runtime.node_path_proxy_hint_short",
             "开启时由 envr 接管 node/npm/npx；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages node/npm/npx; when off, shims passthrough to system PATH.",
         )),
@@ -420,7 +420,7 @@ fn node_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.node.path_proxy.note",
+        "gui.runtime.node_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -567,9 +567,9 @@ fn python_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.python.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.python_path_proxy_label", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.python.path_proxy.hint_short",
+            "gui.runtime.python_path_proxy_hint_short",
             "开启时由 envr 接管 python/pip；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages python/pip; when off, shims passthrough to system PATH.",
         )),
@@ -581,7 +581,7 @@ fn python_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.python.path_proxy.note",
+        "gui.runtime.python_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "While off, Use / Install & Use are disabled.",
     ))
@@ -670,9 +670,9 @@ fn java_runtime_settings_section(
 
     let proxy_row = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.java.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.java_path_proxy_label", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.java.path_proxy_hint_short",
+            "gui.runtime.java_path_proxy_hint_short",
             "开启时由 envr 接管 java/javac；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages java/javac; when off, shims passthrough to system PATH.",
         )),
@@ -896,9 +896,9 @@ fn go_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.go.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.go_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.go.path_proxy.hint",
+            "gui.runtime.go_path_proxy_hint",
             "开启时由 envr 接管 go/gofmt；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages go/gofmt; when off, shims delegate to your system PATH.",
         )),
@@ -908,7 +908,7 @@ fn go_runtime_settings_section(
     );
 
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.go.path_proxy.note",
+        "gui.runtime.go_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "While off, Use / Install & Use are disabled.",
     ))
@@ -1006,9 +1006,9 @@ fn php_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.php.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.php_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.php.path_proxy_hint",
+            "gui.runtime.php_path_proxy_hint",
             "开启时由 envr 接管 php；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages php; when off, shims passthrough to system PATH.",
         )),
@@ -1259,9 +1259,9 @@ fn deno_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.deno.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.deno_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.deno.path_proxy.label",
+            "gui.runtime.deno_path_proxy_label",
             "开启时由 envr 接管 deno；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages deno; when off, shims passthrough to system PATH.",
         )),
@@ -1275,7 +1275,7 @@ fn deno_runtime_settings_section(
         pkg_row,
         proxy_toggle,
         text(envr_core::i18n::tr_key(
-            "gui.runtime.deno.path_proxy.off_hint",
+            "gui.runtime.deno_path_proxy_off_hint",
             "关闭时无法使用「切换」「安装并切换」。",
             "When off, you can't Use / Install & Use.",
         ))
@@ -1408,9 +1408,9 @@ fn bun_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.bun.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.bun_path_proxy_label", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.bun.path_proxy.label",
+            "gui.runtime.bun_path_proxy_off_hint",
             "开启时由 envr 接管 bun/bunx；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages bun/bunx; when off, shims passthrough to system PATH.",
         )),
@@ -1431,7 +1431,7 @@ fn bun_runtime_settings_section(
         .color(muted),
         proxy_toggle,
         text(envr_core::i18n::tr_key(
-            "gui.runtime.bun.path_proxy.off_hint",
+            "gui.runtime.bun_path_proxy_off_hint",
             "关闭时无法使用「切换」「安装并切换」。",
             "When off, you can't Use / Install & Use.",
         ))
@@ -1484,9 +1484,9 @@ fn ruby_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.ruby.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.ruby_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.ruby.path_proxy.hint",
+            "gui.runtime.ruby_path_proxy_hint",
             "开启时由 envr 接管 ruby/gem/bundle/irb；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages ruby/gem/bundle/irb; when off, shim passthrough goes to system PATH.",
         )),
@@ -1499,7 +1499,7 @@ fn ruby_runtime_settings_section(
     );
 
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.ruby.path_proxy.note",
+        "gui.runtime.ruby_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1526,9 +1526,9 @@ fn dotnet_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.dotnet.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.dotnet_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.dotnet.path_proxy.hint",
+            "gui.runtime.dotnet_path_proxy_hint",
             "开启时由 envr 接管 dotnet；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages dotnet; when off, shim passthrough goes to system PATH.",
         )),
@@ -1540,7 +1540,7 @@ fn dotnet_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.dotnet.path_proxy.note",
+        "gui.runtime.dotnet_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1567,9 +1567,9 @@ fn janet_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.janet.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.janet_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.janet.path_proxy.hint",
+            "gui.runtime.janet_path_proxy_hint",
             "开启时由 envr 接管 janet / jpm；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages janet/jpm; when off, shim passthrough goes to system PATH.",
         )),
@@ -1581,7 +1581,7 @@ fn janet_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.janet.path_proxy.note",
+        "gui.runtime.janet_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1608,9 +1608,9 @@ fn julia_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.julia.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.julia_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.julia.path_proxy.hint",
+            "gui.runtime.julia_path_proxy_hint",
             "开启时由 envr 接管 julia；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages julia; when off, shim passthrough goes to system PATH.",
         )),
@@ -1622,7 +1622,7 @@ fn julia_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.julia.path_proxy.note",
+        "gui.runtime.julia_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1649,9 +1649,9 @@ fn kotlin_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.kotlin.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.kotlin_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.kotlin.path_proxy.hint",
+            "gui.runtime.kotlin_path_proxy_hint",
             "开启时由 envr 接管 kotlin / kotlinc；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages kotlin/kotlinc; when off, shim passthrough goes to system PATH.",
         )),
@@ -1665,7 +1665,7 @@ fn kotlin_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.kotlin.path_proxy.note",
+        "gui.runtime.kotlin_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1692,9 +1692,9 @@ fn scala_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.scala.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.scala_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.scala.path_proxy.hint",
+            "gui.runtime.scala_path_proxy_hint",
             "开启时由 envr 接管 scala / scalac；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages scala/scalac; when off, shim passthrough goes to system PATH.",
         )),
@@ -1706,7 +1706,7 @@ fn scala_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.scala.path_proxy.note",
+        "gui.runtime.scala_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1733,9 +1733,9 @@ fn clojure_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.clojure.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.clojure_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.clojure.path_proxy.hint",
+            "gui.runtime.clojure_path_proxy_hint",
             "开启时由 envr 接管 clojure / clj；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages clojure/clj; when off, shim passthrough goes to system PATH.",
         )),
@@ -1749,7 +1749,7 @@ fn clojure_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.clojure.path_proxy.note",
+        "gui.runtime.clojure_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1776,9 +1776,9 @@ fn groovy_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.groovy.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.groovy_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.groovy.path_proxy.hint",
+            "gui.runtime.groovy_path_proxy_hint",
             "开启时由 envr 接管 groovy / groovyc；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages groovy/groovyc; when off, shim passthrough goes to system PATH.",
         )),
@@ -1792,7 +1792,7 @@ fn groovy_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.groovy.path_proxy.note",
+        "gui.runtime.groovy_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1819,12 +1819,12 @@ fn terraform_runtime_settings_section(
     let proxy_toggle = setting_row(
         tokens,
         envr_core::i18n::tr_key(
-            "gui.runtime.terraform.path_proxy",
+            "gui.runtime.terraform_path_proxy",
             "PATH 代理",
             "PATH proxy",
         ),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.terraform.path_proxy.hint",
+            "gui.runtime.terraform_path_proxy_hint",
             "开启时由 envr 接管 terraform；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages terraform; when off, shim passthrough goes to system PATH.",
         )),
@@ -1836,7 +1836,7 @@ fn terraform_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.terraform.path_proxy.note",
+        "gui.runtime.terraform_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1861,9 +1861,9 @@ fn v_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.v.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.v_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.v.path_proxy.hint",
+            "gui.runtime.v_path_proxy_hint",
             "开启时由 envr 接管 v；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages v; when off, shim passthrough goes to system PATH.",
         )),
@@ -1875,7 +1875,7 @@ fn v_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.v.path_proxy.note",
+        "gui.runtime.v_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1900,9 +1900,9 @@ fn odin_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.odin.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.odin_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.odin.path_proxy.hint",
+            "gui.runtime.odin_path_proxy_hint",
             "开启时由 envr 接管 odin；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages odin; when off, shim passthrough goes to system PATH.",
         )),
@@ -1914,7 +1914,7 @@ fn odin_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.odin.path_proxy.note",
+        "gui.runtime.odin_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1940,12 +1940,12 @@ fn purescript_runtime_settings_section(
     let proxy_toggle = setting_row(
         tokens,
         envr_core::i18n::tr_key(
-            "gui.runtime.purescript.path_proxy",
+            "gui.runtime.purescript_path_proxy",
             "PATH 代理",
             "PATH proxy",
         ),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.purescript.path_proxy.hint",
+            "gui.runtime.purescript_path_proxy_hint",
             "开启时由 envr 接管 purs；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages purs; when off, shim passthrough goes to system PATH.",
         )),
@@ -1957,7 +1957,7 @@ fn purescript_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.purescript.path_proxy.note",
+        "gui.runtime.purescript_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -1982,9 +1982,9 @@ fn elm_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.elm.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.elm_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.elm.path_proxy.hint",
+            "gui.runtime.elm_path_proxy_hint",
             "开启时由 envr 接管 elm；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages elm; when off, shim passthrough goes to system PATH.",
         )),
@@ -1996,7 +1996,7 @@ fn elm_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.elm.path_proxy.note",
+        "gui.runtime.elm_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2021,9 +2021,9 @@ fn gleam_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.gleam.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.gleam_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.gleam.path_proxy.hint",
+            "gui.runtime.gleam_path_proxy_hint",
             "开启时由 envr 接管 gleam；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages gleam; when off, shim passthrough goes to system PATH.",
         )),
@@ -2035,7 +2035,7 @@ fn gleam_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.gleam.path_proxy.note",
+        "gui.runtime.gleam_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2060,9 +2060,9 @@ fn racket_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.racket.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.racket_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.racket.path_proxy.hint",
+            "gui.runtime.racket_path_proxy_hint",
             "开启时由 envr 接管 racket/raco；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages racket/raco; when off, shim passthrough goes to system PATH.",
         )),
@@ -2074,7 +2074,7 @@ fn racket_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.racket.path_proxy.note",
+        "gui.runtime.racket_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2099,9 +2099,9 @@ fn dart_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.dart.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.dart_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.dart.path_proxy.hint",
+            "gui.runtime.dart_path_proxy_hint",
             "开启时由 envr 接管 dart；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages dart; when off, shim passthrough goes to system PATH.",
         )),
@@ -2113,7 +2113,7 @@ fn dart_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.dart.path_proxy.note",
+        "gui.runtime.dart_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2138,9 +2138,9 @@ fn flutter_runtime_settings_section(
     let muted = gui_theme::to_color(tokens.colors.text_muted);
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.flutter.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.flutter_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.flutter.path_proxy.hint",
+            "gui.runtime.flutter_path_proxy_hint",
             "开启时由 envr 接管 flutter；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages flutter; when off, shim passthrough goes to system PATH.",
         )),
@@ -2178,9 +2178,9 @@ fn c3_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.c3.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.c3_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.c3.path_proxy.hint",
+            "gui.runtime.c3_path_proxy_hint",
             "开启时由 envr 接管 c3c；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages c3c; when off, shim passthrough goes to system PATH.",
         )),
@@ -2192,7 +2192,7 @@ fn c3_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.c3.path_proxy.note",
+        "gui.runtime.c3_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2219,9 +2219,9 @@ fn babashka_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.babashka.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.babashka_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.babashka.path_proxy.hint",
+            "gui.runtime.babashka_path_proxy_hint",
             "开启时由 envr 接管 bb；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages bb; when off, shim passthrough goes to system PATH.",
         )),
@@ -2233,7 +2233,7 @@ fn babashka_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.babashka.path_proxy.note",
+        "gui.runtime.babashka_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2260,9 +2260,9 @@ fn sbcl_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.sbcl.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.sbcl_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.sbcl.path_proxy.hint",
+            "gui.runtime.sbcl_path_proxy_hint",
             "开启时由 envr 接管 sbcl；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages sbcl; when off, shim passthrough goes to system PATH.",
         )),
@@ -2274,7 +2274,7 @@ fn sbcl_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.sbcl.path_proxy.note",
+        "gui.runtime.sbcl_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2301,9 +2301,9 @@ fn haxe_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.haxe.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.haxe_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.haxe.path_proxy.hint",
+            "gui.runtime.haxe_path_proxy_hint",
             "开启时由 envr 接管 haxe / haxelib；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages haxe/haxelib; when off, shim passthrough goes to system PATH.",
         )),
@@ -2315,7 +2315,7 @@ fn haxe_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.haxe.path_proxy.note",
+        "gui.runtime.haxe_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2342,9 +2342,9 @@ fn lua_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.lua.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.lua_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.lua.path_proxy.hint",
+            "gui.runtime.lua_path_proxy_hint",
             "开启时由 envr 接管 lua / luac；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages lua/luac; when off, shim passthrough goes to system PATH.",
         )),
@@ -2356,7 +2356,7 @@ fn lua_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.lua.path_proxy.note",
+        "gui.runtime.lua_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2383,9 +2383,9 @@ fn rlang_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.r.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.r_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.r.path_proxy.hint",
+            "gui.runtime.r_path_proxy_hint",
             "开启时由 envr 接管 R / Rscript；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages R/Rscript; when off, shim passthrough goes to system PATH.",
         )),
@@ -2397,7 +2397,7 @@ fn rlang_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.r.path_proxy.note",
+        "gui.runtime.r_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2424,9 +2424,9 @@ fn crystal_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.crystal.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.crystal_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.crystal.path_proxy.hint",
+            "gui.runtime.crystal_path_proxy_hint",
             "开启时由 envr 接管 crystal；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages crystal; when off, shim passthrough goes to system PATH.",
         )),
@@ -2438,7 +2438,7 @@ fn crystal_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.crystal.path_proxy.note",
+        "gui.runtime.crystal_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2465,9 +2465,9 @@ fn perl_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.perl.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.perl_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.perl.path_proxy.hint",
+            "gui.runtime.perl_path_proxy_hint",
             "开启时由 envr 接管 perl；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages perl; when off, shim passthrough goes to system PATH.",
         )),
@@ -2479,7 +2479,7 @@ fn perl_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.perl.path_proxy.note",
+        "gui.runtime.perl_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2506,9 +2506,9 @@ fn unison_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.unison.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.unison_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.unison.path_proxy.hint",
+            "gui.runtime.unison_path_proxy_hint",
             "开启时由 envr 接管 ucm；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages ucm; when off, shim passthrough goes to system PATH.",
         )),
@@ -2520,7 +2520,7 @@ fn unison_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.unison.path_proxy.note",
+        "gui.runtime.unison_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2547,9 +2547,9 @@ fn nim_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.nim.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.nim_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.nim.path_proxy.hint",
+            "gui.runtime.nim_path_proxy_hint",
             "开启时由 envr 接管 nim；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages nim; when off, shim passthrough goes to system PATH.",
         )),
@@ -2561,7 +2561,7 @@ fn nim_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.nim.path_proxy.note",
+        "gui.runtime.nim_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2588,9 +2588,9 @@ fn zig_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.zig.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.zig_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.zig.path_proxy.hint",
+            "gui.runtime.zig_path_proxy_hint",
             "开启时由 envr 接管 zig；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages zig; when off, shim passthrough goes to system PATH.",
         )),
@@ -2602,7 +2602,7 @@ fn zig_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.zig.path_proxy.note",
+        "gui.runtime.zig_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2629,9 +2629,9 @@ fn elixir_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.elixir.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.elixir_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.elixir.path_proxy.hint",
+            "gui.runtime.elixir_path_proxy_hint",
             "开启时由 envr 接管 elixir/mix/iex；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages elixir/mix/iex; when off, shim passthrough goes to system PATH.",
         )),
@@ -2643,7 +2643,7 @@ fn elixir_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.elixir.path_proxy.note",
+        "gui.runtime.elixir_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
@@ -2670,9 +2670,9 @@ fn erlang_runtime_settings_section(
 
     let proxy_toggle = setting_row(
         tokens,
-        envr_core::i18n::tr_key("gui.runtime.erlang.path_proxy", "PATH 代理", "PATH proxy"),
+        envr_core::i18n::tr_key("gui.runtime.erlang_path_proxy", "PATH 代理", "PATH proxy"),
         Some(envr_core::i18n::tr_key(
-            "gui.runtime.erlang.path_proxy.hint",
+            "gui.runtime.erlang_path_proxy_hint",
             "开启时由 envr 接管 erl/erlc/escript；关闭时 shim 透传到系统 PATH。",
             "When on, envr manages erl/erlc/escript; when off, shim passthrough goes to system PATH.",
         )),
@@ -2684,7 +2684,7 @@ fn erlang_runtime_settings_section(
             .into(),
     );
     let proxy_note = text(envr_core::i18n::tr_key(
-        "gui.runtime.erlang.path_proxy.note",
+        "gui.runtime.erlang_path_proxy_note",
         "关闭时无法使用「切换」「安装并切换」。",
         "When off, Use / Install & Use are disabled.",
     ))
