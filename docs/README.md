@@ -1,7 +1,10 @@
 # Documentation guide
 
+English | [简体中文](README.zh-CN.md)
+
 This directory contains the public and maintainer documentation for `envr`.
 If you are new to the project, start with the root [`README.md`](../README.md).
+If you prefer Simplified Chinese, start with [`README.zh-CN.md`](README.zh-CN.md).
 
 ## Information architecture
 

@@ -1,5 +1,7 @@
 # envr
 
+English | [简体中文](README.zh-CN.md)
+
 `envr` is a Rust-based language runtime manager for developers and automation.
 It installs and switches toolchain/runtime versions, resolves project pins from `.envr.toml`, and provides script-friendly CLI output for CI and other tools.
 
@@ -127,7 +129,8 @@ Relevant docs:
 
 ## Documentation map
 
-Start with [`docs/README.md`](docs/README.md) for the full documentation guide.
+Start with [`docs/README.md`](docs/README.md) for the default English documentation guide.
+Chinese documentation entry points begin at [`docs/README.zh-CN.md`](docs/README.zh-CN.md).
 
 Quick links:
 
