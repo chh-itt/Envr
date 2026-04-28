@@ -31,11 +31,14 @@ When asking for help, include:
 
 - your OS and architecture
 - the `envr` version or commit
-- the runtime involved
+- how you installed `envr`
+- the runtime kind and version involved
 - the exact command you ran
 - the output you expected
 - the output you actually saw
-- whether you are using a custom runtime root, mirror, or project-local `.envr.toml`
+- whether you are using a custom runtime root, mirror, offline/cache workflow, or project-local `.envr.toml`
+
+For environment, shim, PATH, mirror, offline, or cache issues, also include `envr doctor` output and, when useful, a sanitized `envr diagnostics export` summary. See [`docs/qa/diagnostics.md`](docs/qa/diagnostics.md).
 
 ## Reporting bugs
 

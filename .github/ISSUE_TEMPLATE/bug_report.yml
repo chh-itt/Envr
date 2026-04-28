@@ -142,7 +142,7 @@ body:
     id: doctor
     attributes:
       label: `envr doctor` output
-      description: Paste the relevant output from `envr doctor` if available.
+      description: Paste the relevant output from `envr doctor` if available. JSON output from `envr doctor --format json` is especially helpful for reproducible bug reports.
       render: shell
     validations:
       required: false
@@ -151,7 +151,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics export
-      description: If you ran `envr diagnostics export`, provide the path or summarize what was produced. Remove secrets before posting.
+      description: If you ran `envr diagnostics export`, provide the path or summarize what was produced. Review the archive first and remove secrets, tokens, private paths, or internal mirror URLs before posting.
       placeholder: Path to the zip, or a short sanitized summary.
     validations:
       required: false

@@ -2,11 +2,25 @@
 
 This directory contains release-facing notes and packaging instructions.
 
+## Audience split
+
+- End users should start with release notes, known issues, and platform-specific install notes.
+- Maintainers should use the packaging sections below when producing release artifacts from source.
+
 | File | Purpose |
 |---|---|
 | [`WINDOWS.md`](WINDOWS.md) | Windows installation, PATH setup, first-run checks, and package verification. |
 | [`RELEASE-NOTES.md`](RELEASE-NOTES.md) | Versioned release notes. |
 | [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) | Current limitations and known issues. |
+
+## Current distribution status
+
+`envr` does not yet describe a fully stable public install channel across all supported platforms.
+Until that changes:
+
+- building from source is the primary documented installation method
+- Windows packaging scripts are maintainer tooling
+- release notes and known issues should be reviewed before asking users to consume packaged artifacts
 
 ## Windows packaging from source
 

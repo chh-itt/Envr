@@ -20,6 +20,8 @@ __pycache__/
 
 # CI / observed metrics intermediate
 artifacts/envr-cli-metrics.jsonl
+artifacts/*.tmp
+artifacts/*.local.*
 
 # Smoke local artifacts
 smoke/.state/

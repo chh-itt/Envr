@@ -22,7 +22,12 @@ Support varies by operating system, architecture, and upstream release artifacts
 
 ## Installation
 
-There is not yet a published binary release flow in this repository. For now, build from source:
+`envr` does not yet publish a stable multi-platform installation channel for end users.
+Today, the supported path is to build from source; Windows packaging docs exist for maintainers preparing release artifacts.
+
+### Build from source
+
+On Windows:
 
 ```powershell
 cargo build --release -p envr-cli
@@ -37,6 +42,12 @@ cargo build --release -p envr-cli
 ```
 
 The workspace currently uses Rust 2024 edition and requires Rust **1.88 or newer** (see `rust-version = "1.88"` in [`Cargo.toml`](Cargo.toml)). Older local toolchains will fail before the workspace can build.
+
+### Release packaging status
+
+- End-user install packages are not yet documented as a stable distribution channel.
+- Maintainer packaging notes for Windows zip/MSI/setup artifacts live in [`docs/release/README.md`](docs/release/README.md).
+- Known release limitations and issues live in [`docs/release/KNOWN-ISSUES.md`](docs/release/KNOWN-ISSUES.md).
 
 ## Quick start
 
@@ -117,6 +128,7 @@ Quick links:
 - Security policy and vulnerability reporting: [`SECURITY.md`](SECURITY.md)
 - Architecture notes and ADRs: [`docs/architecture/README.md`](docs/architecture/README.md)
 - QA and regression notes: [`docs/qa/README.md`](docs/qa/README.md)
+- Diagnostics collection for support issues: [`docs/qa/diagnostics.md`](docs/qa/diagnostics.md)
 - Historical refactor notes: [`refactor docs/`](refactor%20docs/)
 
 ## Development
