@@ -9,11 +9,11 @@ The project is currently pre-1.0. The CLI surface is already broad, but contract
 
 ## Platform status
 
-- **Current first-release target:** Windows x86_64.
-- **CLI:** the Rust CLI workspace is intended to build on Windows, Linux, and macOS, but packaged end-user releases are not yet published as a stable multi-platform channel.
-- **GUI:** `envr-gui` is built on cross-platform Rust GUI/runtime libraries, so the implementation is not designed as Windows-only. In principle, the GUI should remain portable to most desktop platforms supported by the current `iced`/`wgpu`/native-dialog stack, but only Windows packaging and release validation are currently in scope.
-- **Linux/macOS:** source builds are part of the intended technical direction, but packaged releases and platform-specific support promises are not yet declared.
-- **Runtime providers:** support is runtime-by-runtime and host-dependent; some providers are cross-platform, while others currently have Windows-only or partial host coverage.
+- **Current public release targets:** Windows x86_64, Linux x86_64, macOS x86_64, and macOS arm64.
+- **CLI:** `envr` is intended to build and run on Windows, Linux, and macOS. GitHub Releases are the primary public distribution channel for the supported release targets above.
+- **GUI:** `envr-gui` is built on cross-platform Rust GUI/runtime libraries. Windows is the primary release-validation target today; Unix-like builds are technically expected to work where the current `iced` / `wgpu` / native dialog stack is available, but GUI packaging and release guarantees remain narrower than the CLI.
+- **Package formats:** Windows publishes zip packages plus installer artifacts (`.msi` / setup bootstrapper). Linux x86_64 publishes a `.tar.gz` archive. macOS x86_64 and arm64 publish archive-based packages (`.tar.gz` or `.zip`).
+- **Support boundary:** release artifacts are built on GitHub Actions and published through GitHub Releases, but runtime support is still runtime-by-runtime and host-dependent; some providers are cross-platform, while others currently have Windows-only or partial host coverage.
 
 See [`docs/runtime/platform-support-matrix.md`](docs/runtime/platform-support-matrix.md) for the current runtime matrix, and [`docs/release/README.md`](docs/release/README.md) for current release packaging scope.
 
@@ -34,10 +34,18 @@ Support varies by operating system, architecture, and upstream release artifacts
 
 ## Installation
 
-`envr` does not yet publish a stable multi-platform installation channel for end users.
-Today, the supported path is to build from source; Windows packaging docs exist for maintainers preparing release artifacts.
+GitHub Releases are the primary installation channel for `envr`.
+Download the archive or installer that matches your platform and architecture:
+
+- **Windows x86_64:** zip package, `.msi`, or setup bootstrapper
+- **Linux x86_64:** `.tar.gz`
+- **macOS x86_64 / arm64:** `.tar.gz` or `.zip`
+
+Release packaging notes, verification guidance, and current limitations live in [`docs/release/README.md`](docs/release/README.md) and [`docs/release/KNOWN-ISSUES.md`](docs/release/KNOWN-ISSUES.md).
 
 ### Build from source
+
+Building from source remains supported for contributors, local debugging, and unsupported host combinations.
 
 On Windows:
 
@@ -57,9 +65,10 @@ The workspace currently uses Rust 2024 edition and requires Rust **1.88 or newer
 
 ### Release packaging status
 
-- End-user install packages are not yet documented as a stable distribution channel.
-- Maintainer packaging notes for Windows zip/MSI/setup artifacts live in [`docs/release/README.md`](docs/release/README.md).
+- GitHub Releases are intended to carry the primary end-user artifacts for the supported targets listed above.
+- Windows packaging notes for zip/MSI/setup artifacts live in [`docs/release/README.md`](docs/release/README.md).
 - Known release limitations and issues live in [`docs/release/KNOWN-ISSUES.md`](docs/release/KNOWN-ISSUES.md).
+- Runtime availability still depends on the provider, host OS, architecture, and upstream release artifacts.
 
 ## Quick start
 

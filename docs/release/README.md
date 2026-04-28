@@ -1,11 +1,13 @@
 # Release documentation
 
-This directory contains release-facing notes and packaging instructions.
+English | [简体中文](README.zh-CN.md)
+
+This directory contains release-facing notes, installation guidance, and packaging instructions.
 
 ## Audience split
 
-- End users should start with release notes, known issues, and platform-specific install notes.
-- Maintainers should use the packaging sections below when producing release artifacts from source.
+- End users should start with GitHub Releases, release notes, known issues, and platform-specific install notes.
+- Maintainers should use the packaging sections below when producing or reviewing release artifacts.
 
 | File | Purpose |
 |---|---|
@@ -15,30 +17,37 @@ This directory contains release-facing notes and packaging instructions.
 
 ## Current distribution status
 
-`envr` does not yet describe a fully stable public install channel across all supported platforms.
-Until that changes:
+GitHub Releases are the primary public installation channel for `envr`.
+The intended low-cost release target set is:
 
-- building from source is the primary documented installation method
-- Windows packaging scripts are maintainer tooling
-- release notes and known issues should be reviewed before asking users to consume packaged artifacts
+| Platform | Architecture | Public artifacts |
+|---|---:|---|
+| Windows | x86_64 | `.zip`, `.msi`, setup bootstrapper |
+| Linux | x86_64 | `.tar.gz` |
+| macOS | x86_64 | `.tar.gz` or `.zip` |
+| macOS | arm64 | `.tar.gz` or `.zip` |
+
+Source builds remain useful for contributors, local debugging, and unsupported host combinations, but end users should prefer published GitHub Release artifacts when available.
+
+Runtime availability is still provider-specific. A platform-level `envr` artifact does not mean every managed runtime can be installed on that platform. See [`../runtime/platform-support-matrix.md`](../runtime/platform-support-matrix.md).
 
 ## GitHub release workflow
 
 Tag pushes matching `v*` run `.github/workflows/release.yml`.
-The release job currently:
+The release workflow should:
 
-1. checks formatting, workspace compilation, clippy, tests, i18n lint, and cargo-deny
-2. builds the Windows x86_64 zip package
-3. uploads workflow artifacts
-4. creates a **draft** GitHub Release with the zip and checksum files attached
+1. check formatting, workspace compilation, clippy, tests, i18n lint, and cargo-deny
+2. build release artifacts for Windows x86_64, Linux x86_64, macOS x86_64, and macOS arm64
+3. generate SHA256 checksum files for each artifact group
+4. upload workflow artifacts
+5. create a **draft** GitHub Release with all archives/installers and checksum files attached
 
-The release stays draft so maintainers can review notes, checksums, signing status, and known issues before publishing.
-When MSI/setup artifacts become part of the public channel, add the bundle packaging scripts and matching checksum files to the workflow asset list.
+The release stays draft so maintainers can review notes, checksums, signing status, smoke-test results, and known issues before publishing.
 
 ## Windows packaging from source
 
-The current packaging scripts target Windows x86_64 and are intended for maintainers.
-Run them from the repository root with Rust stable and the MSVC toolchain installed.
+The Windows packaging scripts target Windows x86_64 and are intended for maintainers.
+Run them from the repository root with Rust 1.88+ and the MSVC toolchain installed.
 
 ### Zip package
 
@@ -108,3 +117,17 @@ Offline example:
 ```powershell
 .\scripts\package-windows-bundle.ps1 -Version 0.1.0 -VcRedistPath "D:\offline\vc_redist.x64.exe"
 ```
+
+## Linux and macOS archive packaging
+
+Linux and macOS public artifacts are archive-based packages produced by GitHub Actions.
+The intended contents are the release binaries that are valid for the target platform, plus a checksum file.
+
+Initial archive targets:
+
+- `envr-linux-x86_64-<version>.tar.gz`
+- `envr-macos-x86_64-<version>.tar.gz`
+- `envr-macos-arm64-<version>.tar.gz`
+
+The release workflow uses `scripts/package-unix-release.sh` to build these archive artifacts and their checksum files.
+If GUI packaging for Unix-like hosts is not release-validated for a given version, the corresponding archive should be CLI-focused and release notes should say so explicitly.

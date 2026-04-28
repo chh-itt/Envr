@@ -8,16 +8,21 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  windows-x86_64:
-    name: Windows x86_64 zip + checksums
-    runs-on: windows-latest
+  verify:
+    name: Verify workspace
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: clippy, rustfmt
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
@@ -40,28 +45,156 @@ jobs:
       - name: cargo deny check
         run: cargo deny check
 
-      - name: Package release
+  build-windows:
+    name: Build Windows x86_64 artifacts
+    runs-on: windows-latest
+    needs: verify
+    env:
+      REL_VER: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install WiX
         shell: pwsh
-        env:
-          REL_VER: ${{ github.ref_name }}
+        run: dotnet tool install --global wix
+
+      - name: Package zip
+        shell: pwsh
         run: ./scripts/package-windows-release.ps1 -Version $env:REL_VER
 
-      - name: Upload workflow artifacts
+      - name: Package MSI + setup
+        shell: pwsh
+        run: ./scripts/package-windows-bundle.ps1 -Version $env:REL_VER
+
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: envr-windows-${{ github.ref_name }}
           path: |
             dist/*.zip
+            dist/*.msi
+            dist/*.exe
             dist/**/SHA256SUMS.txt
             dist/SHA256SUMS-archive.txt
+            dist/SHA256SUMS-msi.txt
+            dist/SHA256SUMS-setup.txt
           if-no-files-found: error
+
+  build-linux:
+    name: Build Linux x86_64 archive
+    runs-on: ubuntu-latest
+    needs: verify
+    env:
+      REL_VER: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Package tar.gz
+        shell: bash
+        run: ./scripts/package-unix-release.sh --version "$REL_VER" --platform linux --arch x86_64
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: envr-linux-${{ github.ref_name }}
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS-*.txt
+            dist/**/SHA256SUMS.txt
+          if-no-files-found: error
+
+  build-macos-intel:
+    name: Build macOS x86_64 archive
+    runs-on: macos-13
+    needs: verify
+    env:
+      REL_VER: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Package tar.gz
+        shell: bash
+        run: ./scripts/package-unix-release.sh --version "$REL_VER" --platform macos --arch x86_64 --target x86_64-apple-darwin
+
+      - name: Upload macOS x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: envr-macos-x86_64-${{ github.ref_name }}
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS-*.txt
+            dist/**/SHA256SUMS.txt
+          if-no-files-found: error
+
+  build-macos-arm64:
+    name: Build macOS arm64 archive
+    runs-on: macos-latest
+    needs: verify
+    env:
+      REL_VER: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.88
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Package tar.gz
+        shell: bash
+        run: ./scripts/package-unix-release.sh --version "$REL_VER" --platform macos --arch arm64 --target aarch64-apple-darwin
+
+      - name: Upload macOS arm64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: envr-macos-arm64-${{ github.ref_name }}
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS-*.txt
+            dist/**/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    name: Create draft GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-windows
+      - build-linux
+      - build-macos-intel
+      - build-macos-arm64
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Show collected assets
+        shell: bash
+        run: find release-assets -type f | sort
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
-          files: |
-            dist/*.zip
-            dist/**/SHA256SUMS.txt
-            dist/SHA256SUMS-archive.txt
+          files: release-assets/**/*
