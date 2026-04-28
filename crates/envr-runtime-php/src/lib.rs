@@ -17,6 +17,7 @@ pub use manager::{
 use envr_config::env_context::{load_settings_cached, runtime_root};
 
 use envr_config::settings::{PhpWindowsBuildFlavor, php_windows_releases_json_url};
+#[cfg(windows)]
 use envr_domain::installer::install_via_manager;
 use envr_domain::runtime::{
     InstallRequest, RemoteFilter, ResolvedVersion, RuntimeKind, RuntimeProvider, RuntimeVersion,

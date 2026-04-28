@@ -5,7 +5,7 @@ use envr_domain::runtime::RuntimeVersion;
 use envr_error::{EnvrError, EnvrResult};
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Refresh symlinks in `versions/` for prefixes found via Homebrew / `PATH`.
