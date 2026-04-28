@@ -156,6 +156,7 @@ CLI-facing changes should also follow [`CONTRIBUTING.md`](CONTRIBUTING.md), espe
 ## Community and project policies
 
 - For contribution workflow and maintainer checks, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- For community behavior expectations, see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 - For ordinary questions, bug reports, feature requests, and support expectations, see [`SUPPORT.md`](SUPPORT.md).
 - For suspected vulnerabilities, do not open a public issue; follow [`SECURITY.md`](SECURITY.md).
 
