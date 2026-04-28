@@ -5,6 +5,16 @@ It installs and switches toolchain/runtime versions, resolves project pins from 
 
 The project is currently pre-1.0. The CLI surface is already broad, but contracts and behavior may still change while the workspace is being stabilized.
 
+## Platform status
+
+- **Current first-release target:** Windows x86_64.
+- **CLI:** the Rust CLI workspace is intended to build on Windows, Linux, and macOS, but packaged end-user releases are not yet published as a stable multi-platform channel.
+- **GUI:** `envr-gui` is built on cross-platform Rust GUI/runtime libraries, so the implementation is not designed as Windows-only. In principle, the GUI should remain portable to most desktop platforms supported by the current `iced`/`wgpu`/native-dialog stack, but only Windows packaging and release validation are currently in scope.
+- **Linux/macOS:** source builds are part of the intended technical direction, but packaged releases and platform-specific support promises are not yet declared.
+- **Runtime providers:** support is runtime-by-runtime and host-dependent; some providers are cross-platform, while others currently have Windows-only or partial host coverage.
+
+See [`docs/runtime/platform-support-matrix.md`](docs/runtime/platform-support-matrix.md) for the current runtime matrix, and [`docs/release/README.md`](docs/release/README.md) for current release packaging scope.
+
 ## What envr does
 
 - Installs and manages language runtimes under a single runtime root.
