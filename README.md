@@ -129,8 +129,7 @@ Relevant docs:
 
 ## Documentation map
 
-Start with [`docs/README.md`](docs/README.md) for the default English documentation guide.
-Chinese documentation entry points begin at [`docs/README.zh-CN.md`](docs/README.zh-CN.md).
+Start with [`docs/README.md`](docs/README.md) for the English default documentation guide, or [`docs/README.zh-CN.md`](docs/README.zh-CN.md) for the Simplified Chinese guide.
 
 Quick links:
 

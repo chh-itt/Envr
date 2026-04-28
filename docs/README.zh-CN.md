@@ -5,6 +5,18 @@
 本目录包含 `envr` 的公开文档与维护者文档。
 如果你第一次接触该项目，建议先阅读根目录 [`README.zh-CN.md`](../README.zh-CN.md)；如需英文默认入口，可看 [`../README.md`](../README.md)。
 
+## 中文导航首页
+
+- [`cli/README.zh-CN.md`](cli/README.zh-CN.md) — CLI 命令、工作流、自动化与输出契约
+- [`runtime/README.zh-CN.md`](runtime/README.zh-CN.md) — 各 runtime 说明与平台支持矩阵
+- [`release/README.zh-CN.md`](release/README.zh-CN.md) — 发布说明、已知问题与 Windows 打包
+
+## English default entry points
+
+- [`cli/README.md`](cli/README.md)
+- [`runtime/README.md`](runtime/README.md)
+- [`release/README.md`](release/README.md)
+
 ## 信息架构
 
 文档按受众与稳定性组织：
@@ -13,22 +25,22 @@
 |---|---|---|---|
 | 产品文档 | 用户、运维、CI 作者 | 应尽量与当前行为一致 | [`cli/`](cli/)、[`runtime/*.md`](runtime/)、[`paths-and-caches.md`](paths-and-caches.md)、[`release/`](release/) |
 | 集成契约 | 工具作者、维护者 | 对测试与脚本相对稳定 | [`cli/output-contract.md`](cli/output-contract.md)、[`schemas/`](schemas/) |
-| 贡献者文档 | 贡献者与维护者 | 当前流程指引 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md)、[`qa/`](qa/)、[`i18n/`](i18n/)、[`perf/`](perf/) |
+| 贡献者文档 | 贡献者与维护者 | 当前流程指引 | [`../CONTRIBUTING.zh-CN.md`](../CONTRIBUTING.zh-CN.md)、[`qa/`](qa/)、[`i18n/`](i18n/)、[`perf/`](perf/) |
 | 设计历史与规划 | 维护者 | 可能是历史、草稿或部分已实现 | [`architecture/`](architecture/)、[`runtime/*-integration-plan.md`](runtime/)、[`../refactor docs/`](../refactor%20docs/) |
 
 ## 推荐阅读路径
 
 ### 终端用户
 
-- 命令总览：[`cli/README.md`](cli/README.md)、[`cli/commands.md`](cli/commands.md)
+- 命令总览：[`cli/README.zh-CN.md`](cli/README.zh-CN.md)、[`cli/commands.md`](cli/commands.md)
 - 常见工作流：[`cli/recipes.md`](cli/recipes.md)
 - 配置：[`cli/config.md`](cli/config.md)
 - 离线使用与 bundle：[`cli/offline.md`](cli/offline.md)、[`cli/bundle.md`](cli/bundle.md)
 - 路径、缓存与 runtime root 布局：[`paths-and-caches.md`](paths-and-caches.md)
-- 平台 / runtime 支持范围：[`runtime/README.md`](runtime/README.md)、[`runtime/platform-support-matrix.md`](runtime/platform-support-matrix.md)
-- 发布说明与已知问题：[`release/README.md`](release/README.md)
-- 支持与 issue 报告：[`../SUPPORT.md`](../SUPPORT.md)
-- 安全策略与漏洞报告：[`../SECURITY.md`](../SECURITY.md)
+- 平台 / runtime 支持范围：[`runtime/README.zh-CN.md`](runtime/README.zh-CN.md)、[`runtime/platform-support-matrix.md`](runtime/platform-support-matrix.md)
+- 发布说明与已知问题：[`release/README.zh-CN.md`](release/README.zh-CN.md)
+- 支持与 issue 报告：[`../SUPPORT.zh-CN.md`](../SUPPORT.zh-CN.md)
+- 安全策略与漏洞报告：[`../SECURITY.zh-CN.md`](../SECURITY.zh-CN.md)
 
 ### 脚本与 CI 作者
 
@@ -39,7 +51,7 @@
 
 ### 贡献者
 
-- 贡献流程：[`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+- 贡献流程：[`../CONTRIBUTING.zh-CN.md`](../CONTRIBUTING.zh-CN.md)
 - 架构索引：[`architecture/README.md`](architecture/README.md)
 - Runtime 集成资料：[`runtime/README.md`](runtime/README.md)、[`architecture/new-runtime-playbook.md`](architecture/new-runtime-playbook.md)
 - QA 文档：[`qa/README.md`](qa/README.md)
