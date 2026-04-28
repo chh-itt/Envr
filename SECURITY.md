@@ -1,5 +1,7 @@
 # Security policy
 
+English | [简体中文](SECURITY.zh-CN.md)
+
 ## Supported versions
 
 `envr` is currently pre-1.0 and does not yet maintain long-term support branches.

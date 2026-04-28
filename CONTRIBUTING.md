@@ -1,5 +1,7 @@
 # Contributing
 
+English | [简体中文](CONTRIBUTING.zh-CN.md)
+
 ## CLI automation (envr)
 
 If you change or add user-facing CLI behavior that scripts might depend on:

@@ -139,6 +139,7 @@ Quick links:
 - Release notes and known issues: [`docs/release/README.md`](docs/release/README.md)
 - Support policy and where to ask for help: [`SUPPORT.md`](SUPPORT.md)
 - Security policy and vulnerability reporting: [`SECURITY.md`](SECURITY.md)
+- Contribution workflow and governance: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Architecture notes and ADRs: [`docs/architecture/README.md`](docs/architecture/README.md)
 - QA and regression notes: [`docs/qa/README.md`](docs/qa/README.md)
 - Diagnostics collection for support issues: [`docs/qa/diagnostics.md`](docs/qa/diagnostics.md)

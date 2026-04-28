@@ -1,5 +1,7 @@
 # Support
 
+English | [简体中文](SUPPORT.zh-CN.md)
+
 Thanks for using `envr`.
 
 This document explains where to ask questions, where to report bugs, and how to report security issues.
