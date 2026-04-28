@@ -158,6 +158,7 @@ CLI-facing changes should also follow [`CONTRIBUTING.md`](CONTRIBUTING.md), espe
 - For contribution workflow and maintainer checks, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - For community behavior expectations, see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 - For ordinary questions, bug reports, feature requests, and support expectations, see [`SUPPORT.md`](SUPPORT.md).
+- For issue intake behavior, see [`.github/ISSUE_TEMPLATE/config.yml`](.github/ISSUE_TEMPLATE/config.yml).
 - For suspected vulnerabilities, do not open a public issue; follow [`SECURITY.md`](SECURITY.md).
 
 ## Project status
