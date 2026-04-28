@@ -63,9 +63,7 @@ pub fn kotlin_compiler_bundle_max_supported_java_major(kotlin_version: &str) -> 
 /// `None` = OK; `Some` = user-facing message (CLI / shim / GUI).
 pub fn kotlin_jdk_mismatch_message(kotlin_version: &str, java_dir_label: &str) -> Option<String> {
     let java_m = jdk_dir_label_effective_major(java_dir_label)?;
-    let Some(cap) = kotlin_compiler_bundle_max_supported_java_major(kotlin_version) else {
-        return None;
-    };
+    let cap = kotlin_compiler_bundle_max_supported_java_major(kotlin_version)?;
     if java_m > cap {
         Some(format!(
             "Kotlin {kotlin_version} 与当前 JDK 不兼容：检测到的 JDK 主版本为 {java_m}，而该编译器发行在当前策略下仅支持 Java ≤{cap}（JDK {} 起可能无法启动 kotlinc）。请执行 `envr use java 21` 等较低主版本，或升级到更新的 Kotlin 主线；详见 docs/runtime/kotlin.md。",

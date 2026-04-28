@@ -27,9 +27,7 @@ pub fn scala_minimum_java_major_for_compiler(scala_version_label: &str) -> Optio
 /// `None` = OK; `Some` = user-facing message (CLI / shim / GUI) when JDK is **too old** for this Scala 3 build.
 pub fn scala_jdk_mismatch_message(scala_version: &str, java_dir_label: &str) -> Option<String> {
     let java_m = jdk_dir_label_effective_major(java_dir_label)?;
-    let Some(need) = scala_minimum_java_major_for_compiler(scala_version) else {
-        return None;
-    };
+    let need = scala_minimum_java_major_for_compiler(scala_version)?;
     if java_m < need {
         Some(format!(
             "Scala {scala_version} 的编译器需要 Java {need}+ 才能运行；当前 JDK 目录名推断主版本为 {java_m}。请执行 `envr use java 21` 等更高版本；详见 docs/runtime/scala.md。"

@@ -184,7 +184,7 @@ fn validate_erlang_installation(home: &Path) -> EnvrResult<()> {
         ) {
             return Err(EnvrError::Runtime(diag));
         }
-        return Err(EnvrError::Runtime(format!("erl probe failed: {}", stderr)));
+        return Err(EnvrError::Runtime(format!("erl probe failed: {stderr}")));
     }
     Ok(())
 }

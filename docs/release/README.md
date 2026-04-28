@@ -22,6 +22,19 @@ Until that changes:
 - Windows packaging scripts are maintainer tooling
 - release notes and known issues should be reviewed before asking users to consume packaged artifacts
 
+## GitHub release workflow
+
+Tag pushes matching `v*` run `.github/workflows/release.yml`.
+The release job currently:
+
+1. checks formatting, workspace compilation, clippy, tests, i18n lint, and cargo-deny
+2. builds the Windows x86_64 zip package
+3. uploads workflow artifacts
+4. creates a **draft** GitHub Release with the zip and checksum files attached
+
+The release stays draft so maintainers can review notes, checksums, signing status, and known issues before publishing.
+When MSI/setup artifacts become part of the public channel, add the bundle packaging scripts and matching checksum files to the workflow asset list.
+
 ## Windows packaging from source
 
 The current packaging scripts target Windows x86_64 and are intended for maintainers.

@@ -22,6 +22,21 @@ jobs:
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
 
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Workspace check
+        run: cargo check --workspace --all-targets
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Workspace tests
+        run: cargo test --workspace --all-targets
+
+      - name: i18n lint
+        run: cargo run -p envr-i18n-lint --locked
+
       - name: cargo deny check
         run: cargo deny check
 
@@ -31,7 +46,7 @@ jobs:
           REL_VER: ${{ github.ref_name }}
         run: ./scripts/package-windows-release.ps1 -Version $env:REL_VER
 
-      - name: Upload artifacts
+      - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: envr-windows-${{ github.ref_name }}
@@ -40,3 +55,13 @@ jobs:
             dist/**/SHA256SUMS.txt
             dist/SHA256SUMS-archive.txt
           if-no-files-found: error
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/**/SHA256SUMS.txt
+            dist/SHA256SUMS-archive.txt

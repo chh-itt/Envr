@@ -127,7 +127,7 @@ fn unison_asset_candidates() -> Vec<&'static str> {
     }
 }
 
-fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+fn pick_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     let cands = unison_asset_candidates();
     assets
         .iter()

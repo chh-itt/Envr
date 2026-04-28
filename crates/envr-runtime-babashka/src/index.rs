@@ -92,7 +92,7 @@ fn asset_priority(name: &str) -> Option<u8> {
     }
 }
 
-fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+fn pick_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     assets
         .iter()
         .filter_map(|a| asset_priority(&a.name).map(|p| (p, a)))

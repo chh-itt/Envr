@@ -156,8 +156,7 @@ fn vendor_latest_binary_url(
 ) -> Option<String> {
     match vendor {
         JavaVendor::EclipseTemurin | JavaVendor::OpenJdk => Some(format!(
-            "{}/v3/binary/latest/{major}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
-            DEFAULT_ADOPTIUM_API_BASE
+            "{DEFAULT_ADOPTIUM_API_BASE}/v3/binary/latest/{major}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse"
         )),
         JavaVendor::OracleOpenJdk => {
             if os != "windows" {

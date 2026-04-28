@@ -292,7 +292,7 @@ pub fn resolve_julia_version(
                     })
                     .map(|x| x.to_string());
             }
-            3 | _ => {
+            _ => {
                 let best = candidates
                     .iter()
                     .filter(|k| {

@@ -14,7 +14,7 @@ pub fn resolved_crystal_releases_api_url(default_api: &str) -> String {
     if let Ok(p) = std::env::var("ENVR_GITHUB_API_PROXY_PREFIX") {
         let p = p.trim().trim_end_matches('/');
         if !p.is_empty() {
-            return format!("{}/{}", p, default_api);
+            return format!("{p}/{default_api}");
         }
     }
     default_api.to_string()

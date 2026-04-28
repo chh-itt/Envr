@@ -137,7 +137,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn perl_valid_when_interpreter_exists_under_bin() {
         let tmp = tempdir().unwrap();
         let home = tmp.path();
@@ -150,6 +149,7 @@ mod tests {
         assert!(resolve_perl_exe(home).is_some());
     }
 
+    #[test]
     fn flutter_valid_when_launcher_exists_under_bin() {
         let tmp = tempdir().unwrap();
         let home = tmp.path();

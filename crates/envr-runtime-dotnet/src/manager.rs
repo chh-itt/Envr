@@ -203,8 +203,7 @@ fn validate_dotnet_installation(home: &Path) -> EnvrResult<()> {
             return Err(EnvrError::Runtime(diag));
         }
         return Err(EnvrError::Runtime(format!(
-            "dotnet --version failed: {}",
-            stderr
+            "dotnet --version failed: {stderr}"
         )));
     }
     Ok(())

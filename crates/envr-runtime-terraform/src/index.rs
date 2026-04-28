@@ -105,7 +105,7 @@ pub fn resolve_terraform_version(rows: &[TerraformIndexRow], spec: &str) -> Envr
         return Err(EnvrError::Validation("empty terraform version spec".into()));
     }
     let labels: Vec<&str> = rows.iter().map(|r| r.version.as_str()).collect();
-    if labels.iter().any(|x| *x == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
     if let Some(parts) = numeric_version_segments(s) {

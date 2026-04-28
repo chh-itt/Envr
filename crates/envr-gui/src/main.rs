@@ -1,3 +1,14 @@
+#![allow(
+    clippy::collapsible_else_if,
+    clippy::field_reassign_with_default,
+    clippy::large_enum_variant,
+    clippy::obfuscated_if_else,
+    clippy::too_many_arguments,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_sort_by,
+    clippy::useless_conversion
+)]
+
 mod app;
 mod download_runner;
 mod gui_ops;

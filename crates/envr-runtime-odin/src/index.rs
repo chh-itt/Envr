@@ -52,11 +52,11 @@ fn label_from_dev_tag(tag: &str) -> Option<String> {
     let suffix = caps.get(3).map(|m| m.as_str());
 
     if let Some(s) = suffix {
-        let c = s.chars().next()?;
-        if !('a'..='z').contains(&c.to_ascii_lowercase()) {
+        let c = s.chars().next()?.to_ascii_lowercase();
+        if !c.is_ascii_lowercase() {
             return None;
         }
-        let n = (c.to_ascii_lowercase() as u8).saturating_sub(b'a') as u64 + 1;
+        let n = (c as u8).saturating_sub(b'a') as u64 + 1;
         Some(format!("{year}.{month}.{n}"))
     } else {
         Some(format!("{year}.{month}"))

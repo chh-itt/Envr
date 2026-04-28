@@ -10,6 +10,9 @@ use tempfile::TempDir;
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+// These tests mutate process-global download gating state, so they must not overlap.
+// We only hold the lock while preparing global state and spawning the task/thread under test;
+// the guard is dropped before any await points to avoid holding a std::sync::Mutex across await.
 fn global_test_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -43,10 +46,12 @@ fn blocking_index_job_waits_until_global_permit_released() {
 
 #[tokio::test]
 async fn async_prefetch_download_waits_then_completes_under_global_gate() {
-    let _guard = global_test_lock().lock().expect("test lock");
-    set_global_download_concurrency_limit(Some(1)).expect("set limit");
-    let lim = global_download_concurrency_limiter().expect("limiter");
-    let holder = lim.acquire_blocking(DownloadPriority::Artifact);
+    let holder = {
+        let _guard = global_test_lock().lock().expect("test lock");
+        set_global_download_concurrency_limit(Some(1)).expect("set limit");
+        let lim = global_download_concurrency_limiter().expect("limiter");
+        lim.acquire_blocking(DownloadPriority::Artifact)
+    };
 
     let server = MockServer::start().await;
     Mock::given(method("GET"))

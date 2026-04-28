@@ -12,6 +12,7 @@ fn attach_runtime_root<T>(
     }
 }
 
+#[allow(clippy::vec_init_then_push)]
 pub fn default_provider_boxes(runtime_root: Option<PathBuf>) -> Vec<Box<dyn RuntimeProvider>> {
     let mut providers: Vec<Box<dyn RuntimeProvider>> = Vec::new();
 

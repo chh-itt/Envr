@@ -304,7 +304,7 @@ impl RubyManager {
         #[cfg(windows)]
         {
             let releases = self.load_installer_releases()?;
-            return Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?));
+            Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?))
         }
         #[cfg(not(windows))]
         {

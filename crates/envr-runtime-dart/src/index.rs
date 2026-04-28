@@ -152,7 +152,7 @@ pub fn resolve_dart_version(rows: &[DartIndexRow], spec: &str) -> EnvrResult<Str
         return Err(EnvrError::Validation("empty dart version spec".into()));
     }
     let labels: Vec<&str> = rows.iter().map(|r| r.version.as_str()).collect();
-    if labels.iter().any(|v| *v == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
     if let Some(parts) = numeric_version_segments(s) {

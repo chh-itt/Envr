@@ -104,9 +104,8 @@ pub fn hoist_directory_children(src: &Path, dst: &Path) -> EnvrResult<()> {
 /// Replace `final_dir` with the validated staging directory in one rename.
 pub fn commit_staging_dir(validated_staging: &Path, final_dir: &Path) -> EnvrResult<()> {
     remove_if_exists(final_dir)?;
-    move_dir(validated_staging, final_dir).map_err(|e| {
+    move_dir(validated_staging, final_dir).inspect_err(|_| {
         let _ = fs::remove_dir_all(validated_staging);
-        e
     })?;
     Ok(())
 }

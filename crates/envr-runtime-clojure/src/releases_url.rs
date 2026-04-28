@@ -13,7 +13,7 @@ pub fn resolved_clojure_releases_api_url() -> String {
     if let Ok(p) = std::env::var("ENVR_GITHUB_API_PROXY_PREFIX") {
         let p = p.trim().trim_end_matches('/');
         if !p.is_empty() {
-            return format!("{}/{}", p, DEFAULT_CLOJURE_RELEASES_API_URL);
+            return format!("{p}/{DEFAULT_CLOJURE_RELEASES_API_URL}");
         }
     }
     DEFAULT_CLOJURE_RELEASES_API_URL.to_string()

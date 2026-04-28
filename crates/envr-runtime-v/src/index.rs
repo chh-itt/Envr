@@ -305,7 +305,7 @@ pub fn resolve_v_version(rows: &[VInstallableRow], spec: &str) -> EnvrResult<Str
         return Err(EnvrError::Validation("empty v version spec".into()));
     }
     let labels: Vec<&str> = rows.iter().map(|r| r.version.as_str()).collect();
-    if labels.iter().any(|x| *x == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
     if let Some(parts) = envr_domain::runtime::numeric_version_segments(s) {

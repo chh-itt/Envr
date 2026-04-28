@@ -12,24 +12,13 @@ use envr_platform::paths::EnvSnapshot;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ShimSettingsSnapshot {
     /// PATH-proxy flags copied once from settings (see [`PathProxyRuntimeSnapshot`]).
     pub path_proxy: PathProxyRuntimeSnapshot,
     php_windows_build_want_ts: bool,
     deno_registry_env: Vec<(String, String)>,
     bun_registry_env: Vec<(String, String)>,
-}
-
-impl Default for ShimSettingsSnapshot {
-    fn default() -> Self {
-        Self {
-            path_proxy: PathProxyRuntimeSnapshot::default(),
-            php_windows_build_want_ts: false,
-            deno_registry_env: Vec::new(),
-            bun_registry_env: Vec::new(),
-        }
-    }
 }
 
 impl ShimSettingsSnapshot {
@@ -1614,7 +1603,7 @@ fn paths_equal_trimmed_case_insensitive(a: &Path, b: &Path) -> bool {
         p.as_os_str()
             .to_string_lossy()
             .to_ascii_lowercase()
-            .trim_end_matches(|c| c == '/' || c == '\\')
+            .trim_end_matches(['/', '\\'])
             .to_string()
     }
     norm(a) == norm(b)

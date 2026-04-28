@@ -328,7 +328,7 @@ impl SpecDrivenInstaller for OdinManager {
         let archive_name = row
             .url
             .split('/')
-            .last()
+            .next_back()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("odin-archive");
         let archive_path = tmp.path().join(archive_name);

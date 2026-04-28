@@ -53,19 +53,16 @@ fn load_settings_for_invocation() -> Option<Settings> {
     load_settings_cached().ok()
 }
 
-fn prepare(
-    args: &[OsString],
-) -> Result<
-    (
-        CoreCommand,
-        ShimContext,
-        ShimSettingsSnapshot,
-        ResolvedShim,
-        Vec<OsString>,
-        ShimTimings,
-    ),
-    EnvrError,
-> {
+type PrepareResult = (
+    CoreCommand,
+    ShimContext,
+    ShimSettingsSnapshot,
+    ResolvedShim,
+    Vec<OsString>,
+    ShimTimings,
+);
+
+fn prepare(args: &[OsString]) -> Result<PrepareResult, EnvrError> {
     let mut timings = ShimTimings::default();
     let prepare_started = Instant::now();
     let settings_started = Instant::now();

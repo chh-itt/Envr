@@ -268,7 +268,7 @@ pub fn resolve_zig_version(
                     })
                     .map(|x| x.to_string());
             }
-            3 | _ => {
+            _ => {
                 if parts.len() >= 3 {
                     let best = candidates
                         .iter()
@@ -295,7 +295,7 @@ pub fn resolve_zig_version(
         .iter()
         .filter(|k| k.starts_with(&pfx))
         .max_by(|a, b| cmp_semver_release_labels(a, b))
-        .map(|x| x.clone())
+        .cloned()
         .ok_or_else(|| {
             EnvrError::Validation(format!(
                 "could not resolve zig version `{spec}` for this host (check spec and platform `{platform_key}`)"

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::items_after_test_module,
+    clippy::needless_option_as_deref,
+    clippy::too_many_arguments,
+    clippy::uninlined_format_args
+)]
+
 //! Library surface for `envr` CLI logic (binary stays a thin `main` + logging bootstrap).
 //!
 //! Downstream tests and tools can depend on this crate without linking the full binary.

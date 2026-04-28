@@ -133,7 +133,7 @@ pub fn parse_rows_from_releases_json(json: &str) -> EnvrResult<Vec<FlutterIndexR
         if !version.chars().next().is_some_and(|c| c.is_ascii_digit()) {
             continue;
         }
-        if !numeric_version_segments(&version).is_some_and(|p| p.len() >= 2) {
+        if numeric_version_segments(&version).is_none_or(|p| p.len() < 2) {
             continue;
         }
         if !release_matches_host_archive(&r.archive, host) {
@@ -188,7 +188,7 @@ pub fn resolve_flutter_version(rows: &[FlutterIndexRow], spec: &str) -> EnvrResu
         return Err(EnvrError::Validation("empty flutter version spec".into()));
     }
     let labels: Vec<&str> = rows.iter().map(|r| r.version.as_str()).collect();
-    if labels.iter().any(|v| *v == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
     if let Some(parts) = numeric_version_segments(s) {

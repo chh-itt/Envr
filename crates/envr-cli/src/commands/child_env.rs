@@ -257,7 +257,7 @@ pub fn collect_exec_env(
                 if lang == "elixir" {
                     inject_elixir_erlang_env(ctx, cfg, spec_override, &mut env);
                 }
-                if jvm_hosted::is_jvm_hosted_runtime(&lang) {
+                if jvm_hosted::is_jvm_hosted_runtime(lang) {
                     let java_home = resolve_runtime_home_for_lang_with_project(
                         ctx,
                         "java",

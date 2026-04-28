@@ -132,7 +132,7 @@ fn try_create_junction(src: &Path, dst: &Path) -> EnvrResult<bool> {
 
     // `mklink /J <dst> <src>` creates a junction.
     // We intentionally run through `cmd /C` to let Windows handle quoting.
-    let cmdline = format!("mklink /J \"{}\" \"{}\"", dst_s, src_s);
+    let cmdline = format!("mklink /J \"{dst_s}\" \"{src_s}\"");
     let status = Command::new("cmd")
         .args(["/C", &cmdline])
         .stdout(Stdio::null())

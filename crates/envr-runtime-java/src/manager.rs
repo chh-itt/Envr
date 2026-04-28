@@ -814,7 +814,7 @@ impl JavaManager {
         major: u32,
         cache_file: &Path,
     ) -> EnvrResult<RuntimeVersion> {
-        let staging_parent = self.paths.cache_dir().join(format!("extract-{}", major));
+        let staging_parent = self.paths.cache_dir().join(format!("extract-{major}"));
         fs::create_dir_all(&staging_parent).map_err(EnvrError::from)?;
         let staging = tempfile::tempdir_in(&staging_parent).map_err(EnvrError::from)?;
         extract::extract_archive(cache_file, staging.path())?;

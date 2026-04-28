@@ -321,8 +321,7 @@ impl RlangManager {
             let urls = [
                 cran_windows_r_installer_url(&candidate_version, &latest),
                 format!(
-                    "https://cran.r-project.org/bin/windows/base/old/{0}/R-{0}-win.exe",
-                    candidate_version
+                    "https://cran.r-project.org/bin/windows/base/old/{candidate_version}/R-{candidate_version}-win.exe"
                 ),
             ];
             let mut downloaded = false;

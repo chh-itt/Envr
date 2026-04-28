@@ -179,6 +179,6 @@ pub fn maybe_emit(ctx: &ShimContext, active_label: &str) {
     if !throttle_allows_emit(&cache_dir, &key) {
         return;
     }
-    let msg = shim_i18n::node_engines_hint(&spec, &active_label);
+    let msg = shim_i18n::node_engines_hint(&spec, active_label);
     eprintln!("{msg}");
 }

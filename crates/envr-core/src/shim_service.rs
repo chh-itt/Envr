@@ -551,18 +551,17 @@ impl ShimService {
                     let shim_s = normalize_windows_path_for_cmd(&self.shim_exe);
                     let target_s = normalize_windows_path_for_cmd(target);
                     format!(
-                        "@echo off\r\n\"{}\" __forward-node-global \"{}\" \"{}\" %*\r\n",
-                        shim_s, target_s, stem
+                        "@echo off\r\n\"{shim_s}\" __forward-node-global \"{target_s}\" \"{stem}\" %*\r\n"
                     )
                 }
                 (Some(node_exe), Some(ext)) if JS_BIN_EXTS.contains(&ext) => {
                     let node_s = normalize_windows_path_for_cmd(node_exe);
                     let target_s = normalize_windows_path_for_cmd(target);
-                    format!("@echo off\r\n\"{}\" \"{}\" %*\r\n", node_s, target_s)
+                    format!("@echo off\r\n\"{node_s}\" \"{target_s}\" %*\r\n")
                 }
                 _ => {
                     let target_s = normalize_windows_path_for_cmd(target);
-                    format!("@echo off\r\ncall \"{}\" %*\r\n", target_s)
+                    format!("@echo off\r\ncall \"{target_s}\" %*\r\n")
                 }
             };
             fs::write(&dst, body).map_err(EnvrError::from)?;

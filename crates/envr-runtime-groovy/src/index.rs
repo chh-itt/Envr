@@ -152,7 +152,7 @@ pub fn resolve_groovy_version(rows: &[GroovyIndexRow], spec: &str) -> EnvrResult
         return Err(EnvrError::Validation("empty groovy version spec".into()));
     }
     let labels: Vec<&str> = rows.iter().map(|r| r.version.as_str()).collect();
-    if labels.iter().any(|x| *x == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
     if let Some(parts) = numeric_version_segments(s) {

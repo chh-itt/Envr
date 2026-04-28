@@ -55,7 +55,7 @@ fn elm_asset_candidates() -> Vec<&'static str> {
         _ => vec![],
     }
 }
-fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+fn pick_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     let cands = elm_asset_candidates();
     assets.iter().find(|a| cands.iter().any(|n| a.name == *n))
 }

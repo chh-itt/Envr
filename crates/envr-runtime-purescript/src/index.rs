@@ -61,7 +61,7 @@ pub fn purescript_asset_candidates() -> Vec<&'static str> {
     }
 }
 
-fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+fn pick_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     let cands = purescript_asset_candidates();
     assets.iter().find(|a| cands.iter().any(|n| a.name == *n))
 }

@@ -180,7 +180,7 @@ pub fn download_url_to_path_resumable_with_headers(
             }
         }
         if resumed_from > 0 {
-            request = request.header(reqwest::header::RANGE, format!("bytes={}-", resumed_from));
+            request = request.header(reqwest::header::RANGE, format!("bytes={resumed_from}-"));
         }
 
         let response = match request.send() {
@@ -206,7 +206,7 @@ pub fn download_url_to_path_resumable_with_headers(
 
         let status = response.status();
         if !status.is_success() {
-            let err = EnvrError::Download(format!("GET {} -> {}", url, status));
+            let err = EnvrError::Download(format!("GET {url} -> {status}"));
             if resumed_from > 0 && status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
                 drop(response);
                 range_recovery = range_recovery.saturating_add(1);
@@ -248,11 +248,7 @@ pub fn download_url_to_path_resumable_with_headers(
                 .truncate(true)
                 .open(path)
         } else if resumed_from > 0 {
-            fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .append(true)
-                .open(path)
+            fs::OpenOptions::new().create(true).append(true).open(path)
         } else {
             fs::File::create(path)
         }

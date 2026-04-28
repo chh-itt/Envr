@@ -386,7 +386,7 @@ pub fn resolve_scala_version(pairs: &[(String, String)], spec: &str) -> EnvrResu
         return Err(EnvrError::Validation("empty scala version spec".into()));
     }
     let labels: Vec<&str> = pairs.iter().map(|(l, _)| l.as_str()).collect();
-    if labels.iter().any(|k| *k == s) {
+    if labels.contains(&s) {
         return Ok(s.to_string());
     }
 

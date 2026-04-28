@@ -259,8 +259,7 @@ fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<
             return Err(EnvrError::Runtime(diag));
         }
         return Err(EnvrError::Runtime(format!(
-            "elixir --version failed: {}",
-            stderr
+            "elixir --version failed: {stderr}"
         )));
     }
     Ok(())

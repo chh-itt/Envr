@@ -89,7 +89,7 @@ pub fn classify_spawn_failure_message(
                 msg.push_str(&labels);
             }
         }
-        return msg;
+        msg
     }
     #[cfg(not(windows))]
     {
@@ -107,10 +107,8 @@ pub fn classify_exit_failure_message(
     #[cfg(windows)]
     {
         let code = status.code()?;
-        let category = classify_windows_exit_code(code).or_else(|| classify_windows_stderr(stderr));
-        let Some(category) = category else {
-            return None;
-        };
+        let category =
+            classify_windows_exit_code(code).or_else(|| classify_windows_stderr(stderr))?;
         let mut msg = format!(
             "{context} exited with Windows failure code 0x{code:08X}; {}",
             remediation_for_category(category)
@@ -127,7 +125,7 @@ pub fn classify_exit_failure_message(
                 msg.push_str(&labels);
             }
         }
-        return Some(msg);
+        Some(msg)
     }
     #[cfg(not(windows))]
     {

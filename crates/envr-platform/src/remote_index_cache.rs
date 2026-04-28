@@ -90,9 +90,7 @@ impl RemoteSourceCache {
         let body_path = self.body_path();
         let ttl_secs = ttl.as_secs();
 
-        let meta_ok = self
-            .read_meta()
-            .is_some_and(|m| m.url == url.trim().to_string());
+        let meta_ok = self.read_meta().is_some_and(|m| m.url == url.trim());
 
         if mode != CacheMode::ForceRefresh
             && meta_ok
@@ -387,9 +385,7 @@ impl<P: RemoteIndexParser> CachedRemoteIndex<P> {
             if major_line_remote_install_blocked(self.kind, &major) {
                 continue;
             }
-            if !best.contains_key(&major) {
-                best.insert(major, v);
-            }
+            best.entry(major).or_insert(v);
         }
         let mut majors: Vec<String> = best.keys().cloned().collect();
         majors.sort_by(|a, b| {

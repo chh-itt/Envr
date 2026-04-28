@@ -121,7 +121,7 @@ impl RuntimeProvider for RubyRuntimeProvider {
         #[cfg(windows)]
         {
             let releases = self.manager()?.load_installer_releases()?;
-            return index::list_remote_versions(&releases, filter);
+            index::list_remote_versions(&releases, filter)
         }
         #[cfg(not(windows))]
         {
@@ -178,7 +178,7 @@ impl RuntimeProvider for RubyRuntimeProvider {
                 envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
                 Ok(())
             })();
-            return Ok(list);
+            Ok(list)
         }
         #[cfg(not(windows))]
         {

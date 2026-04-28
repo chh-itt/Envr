@@ -166,7 +166,7 @@ fn pick_racket_home_from_candidates(staging: &Path, candidates: &[PathBuf]) -> E
         )),
         1 => Ok(val[0].clone()),
         _ => {
-            val.sort_by(|a, b| depth_key(staging, a).cmp(&depth_key(staging, b)));
+            val.sort_by_key(|a| depth_key(staging, a));
             Ok(val[0].clone())
         }
     }

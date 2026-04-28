@@ -57,7 +57,7 @@ fn c3_primary_asset_filename() -> Option<&'static str> {
     }
 }
 
-fn pick_asset<'a>(assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+fn pick_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     let expected = c3_primary_asset_filename()?;
     assets.iter().find(|a| a.name == expected)
 }
