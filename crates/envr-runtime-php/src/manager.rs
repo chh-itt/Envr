@@ -217,7 +217,7 @@ pub fn read_current_global_want_ts(paths: &PhpPaths) -> EnvrResult<Option<bool>>
     #[cfg(not(windows))]
     {
         let _ = paths;
-        return Ok(None);
+        Ok(None)
     }
     #[cfg(windows)]
     {

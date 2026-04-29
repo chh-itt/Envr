@@ -93,6 +93,7 @@ impl PhpRuntimeProvider {
         })
     }
 
+    #[cfg(windows)]
     fn manager(&self) -> EnvrResult<PhpManager> {
         let (json_url, want_ts) = self.resolved_remote_settings()?;
         PhpManager::try_new(self.runtime_root()?, json_url, want_ts)
