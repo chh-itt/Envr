@@ -104,6 +104,7 @@ fn resolve_shell_invocation(
     #[cfg(not(windows))]
     {
         let sh = std::env::var("SHELL")
+            .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)

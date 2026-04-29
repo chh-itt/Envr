@@ -1,8 +1,8 @@
 use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
-use crate::commands::doctor::{
-    DoctorReport, onboarding_checklist_lines, powershell_append_user_path_snippet,
-};
+use crate::commands::doctor::{DoctorReport, onboarding_checklist_lines};
+#[cfg(windows)]
+use crate::commands::doctor::powershell_append_user_path_snippet;
 use crate::output::fmt_template;
 
 use std::io::{self, Write};

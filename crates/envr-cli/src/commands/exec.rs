@@ -48,8 +48,7 @@ fn inject_elixir_erlang_env_from_runtime_root(
     let home = std::fs::canonicalize(&home).unwrap_or(home);
     let erlang_home = envr_platform::path_norm::normalize_fs_path_string_lossy(&home);
     let mut erts = envr_platform::path_norm::normalize_fs_path_string_lossy(&home.join("bin"));
-    #[cfg(windows)]
-    if !erts.ends_with('\\') {
+    if cfg!(windows) && !erts.ends_with('\\') {
         erts.push('\\');
     }
     env_map.insert("ERLANG_HOME".into(), erlang_home);

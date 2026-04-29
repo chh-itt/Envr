@@ -44,8 +44,7 @@ fn resolve_run_command(
 
 fn normalized_run_token(command: &str) -> String {
     let mut t = command.trim().to_ascii_lowercase();
-    #[cfg(windows)]
-    if t.ends_with(".exe") {
+    if cfg!(windows) && t.ends_with(".exe") {
         t.truncate(t.len().saturating_sub(4));
     }
     t
