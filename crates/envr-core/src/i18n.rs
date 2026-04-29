@@ -103,11 +103,6 @@ fn locale_from_bcp47_name(s: &str) -> Locale {
     Locale::EnUs
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-fn locale_from_bcp47_name(_s: &str) -> Locale {
-    Locale::EnUs
-}
-
 #[cfg(target_os = "windows")]
 fn windows_locale_name_from_registry() -> Option<String> {
     use std::process::Command;
@@ -143,11 +138,6 @@ fn parse_reg_sz_locale_name(reg_stdout: &str) -> Option<String> {
             }
         }
     }
-    None
-}
-
-#[cfg(not(target_os = "windows"))]
-fn parse_reg_sz_locale_name(_reg_stdout: &str) -> Option<String> {
     None
 }
 
