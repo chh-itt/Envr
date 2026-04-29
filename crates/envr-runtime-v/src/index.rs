@@ -356,14 +356,15 @@ mod tests {
 
     #[test]
     fn installable_rows_keep_stable_only_and_order_desc() {
+        let asset_name = v_asset_candidates().into_iter().next().expect("asset");
         let rows = installable_rows_from_releases(&[
             GhRelease {
                 tag_name: "0.5.1".into(),
                 draft: false,
                 prerelease: false,
                 assets: vec![GhAsset {
-                    name: "v_windows.zip".into(),
-                    browser_download_url: "https://example/v_windows.zip".into(),
+                    name: asset_name.to_string(),
+                    browser_download_url: format!("https://example/{asset_name}"),
                 }],
             },
             GhRelease {
@@ -371,8 +372,8 @@ mod tests {
                 draft: false,
                 prerelease: true,
                 assets: vec![GhAsset {
-                    name: "v_windows.zip".into(),
-                    browser_download_url: "https://example/v_windows.zip".into(),
+                    name: asset_name.to_string(),
+                    browser_download_url: format!("https://example/{asset_name}"),
                 }],
             },
             GhRelease {
@@ -380,8 +381,8 @@ mod tests {
                 draft: false,
                 prerelease: false,
                 assets: vec![GhAsset {
-                    name: "v_windows.zip".into(),
-                    browser_download_url: "https://example/v_windows.zip".into(),
+                    name: asset_name.to_string(),
+                    browser_download_url: format!("https://example/{asset_name}"),
                 }],
             },
         ]);
