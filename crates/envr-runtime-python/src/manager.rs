@@ -7,9 +7,9 @@ use crate::index::{
 use envr_config::env_context::load_settings_cached;
 #[cfg(windows)]
 use envr_config::settings::PythonWindowsDistribution;
-use envr_config::settings::{
-    pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
-};
+use envr_config::settings::python_download_url_candidates;
+#[cfg(windows)]
+use envr_config::settings::{pip_registry_urls_for_bootstrap, python_get_pip_url};
 use envr_domain::installer::{
     SpecDrivenInstaller, execute_install_pipeline, install_via_version_spec,
 };
@@ -18,7 +18,6 @@ use envr_download::{blocking::download_url_to_path_resumable, checksum, extract}
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
 use std::{
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -26,7 +25,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64},
     },
-    time::Duration,
 };
 
 #[derive(Debug, Clone)]
@@ -112,26 +110,24 @@ fn lone_child_directory(staging: &Path) -> EnvrResult<PathBuf> {
     })
 }
 
+#[cfg(windows)]
 fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
-    #[cfg(windows)]
-    {
-        for e in fs::read_dir(home).map_err(EnvrError::from)? {
-            let e = e.map_err(EnvrError::from)?;
-            let p = e.path();
-            if p.extension() == Some(OsStr::new("_pth")) && p.is_file() {
-                let mut s = fs::read_to_string(&p).map_err(EnvrError::from)?;
-                let has_active_import_site = s.lines().any(|line| {
-                    let t = line.trim();
-                    !t.starts_with('#') && t == "import site"
-                });
-                if !has_active_import_site {
-                    if !s.ends_with('\n') {
-                        s.push('\n');
-                    }
-                    s.push_str("import site\n");
-                    envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())
-                        .map_err(EnvrError::from)?;
+    for e in fs::read_dir(home).map_err(EnvrError::from)? {
+        let e = e.map_err(EnvrError::from)?;
+        let p = e.path();
+        if p.extension().and_then(|x| x.to_str()) == Some("_pth") && p.is_file() {
+            let mut s = fs::read_to_string(&p).map_err(EnvrError::from)?;
+            let has_active_import_site = s.lines().any(|line| {
+                let t = line.trim();
+                !t.starts_with('#') && t == "import site"
+            });
+            if !has_active_import_site {
+                if !s.ends_with('\n') {
+                    s.push('\n');
                 }
+                s.push_str("import site\n");
+                envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())
+                    .map_err(EnvrError::from)?;
             }
         }
     }
