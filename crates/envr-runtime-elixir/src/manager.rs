@@ -199,6 +199,7 @@ fn ensure_erlang_runtime_available() -> EnvrResult<()> {
 }
 
 /// Resolve envr-managed Erlang home from `runtimes/erlang/current` (symlink or pointer file).
+#[cfg(windows)]
 fn resolve_erlang_home(runtime_root: &Path) -> Option<PathBuf> {
     let cur = runtime_root.join("runtimes").join("erlang").join("current");
     if !cur.exists() {
@@ -221,7 +222,7 @@ fn resolve_erlang_home(runtime_root: &Path) -> Option<PathBuf> {
     fs::canonicalize(&resolved).ok().or(Some(resolved))
 }
 
-fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<()> {
+fn validate_elixir_installation(home: &Path, _runtime_root: &Path) -> EnvrResult<()> {
     if !elixir_installation_valid(home) {
         return Err(EnvrError::Validation(
             "elixir install did not produce a valid runtime layout".into(),
