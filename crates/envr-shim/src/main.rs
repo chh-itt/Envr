@@ -456,6 +456,7 @@ fn main() {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
     fn os_args(xs: &[&str]) -> Vec<OsString> {
         xs.iter().map(|s| OsString::from(*s)).collect()
     }
