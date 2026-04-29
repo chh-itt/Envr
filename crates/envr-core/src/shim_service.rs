@@ -318,7 +318,7 @@ impl ShimService {
         &self,
         npm: &Path,
         node_home: &Path,
-        node_exe: &Path,
+        _node_exe: &Path,
     ) -> EnvrResult<HashSet<String>> {
         let global_root = self.npm_global_root_dir(npm, node_home)?;
         let mut seen = HashSet::<String>::new();
@@ -347,11 +347,11 @@ impl ShimService {
                 };
                 for se in scoped_entries.flatten() {
                     if let Some(pkg_dir) = se.path().is_dir().then_some(se.path()) {
-                        self.scan_single_node_pkg_bin(&pkg_dir, node_exe, &mut seen)?;
+                        self.scan_single_node_pkg_bin(&pkg_dir, &mut seen)?;
                     }
                 }
             } else {
-                self.scan_single_node_pkg_bin(&p, node_exe, &mut seen)?;
+                self.scan_single_node_pkg_bin(&p, &mut seen)?;
             }
         }
 
@@ -361,7 +361,6 @@ impl ShimService {
     fn scan_single_node_pkg_bin(
         &self,
         pkg_dir: &Path,
-        #[cfg(windows)] _node_exe: &Path,
         seen: &mut HashSet<String>,
     ) -> EnvrResult<()> {
         let pkg_json_path = pkg_dir.join("package.json");
