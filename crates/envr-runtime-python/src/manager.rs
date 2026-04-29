@@ -1008,6 +1008,8 @@ impl SpecDrivenInstaller for PythonManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
     use std::io::Write;
 
     #[test]
