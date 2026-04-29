@@ -51,11 +51,10 @@ pub fn normalize_fs_path_string_lossy(path: &Path) -> String {
     normalize_fs_path(path).to_string_lossy().to_string()
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 
-    #[cfg(windows)]
     #[test]
     fn strips_verbatim_drive_prefix() {
         let p = Path::new(r"\\?\D:\runtime\node\npm.cmd");
