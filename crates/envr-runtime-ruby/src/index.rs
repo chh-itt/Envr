@@ -300,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn parse_rubyinstaller_7z_artifacts_derives_download_url() {
         let html = r#"
             <a href="https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.11-1/rubyinstaller-3.3.11-1-x64.7z.asc">sig</a>
