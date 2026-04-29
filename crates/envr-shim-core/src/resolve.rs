@@ -2288,6 +2288,7 @@ version = "20"
             )
             .expect("write");
             envr_config::env_context::clear_settings_cache();
+            envr_config::reset_settings_load_caches();
             let snapshot = load_shim_settings_snapshot();
             assert!(!snapshot.path_proxy.ruby);
             assert!(!snapshot.path_proxy.elixir);
@@ -2327,6 +2328,7 @@ version = "20"
             )
             .expect("write");
             envr_config::env_context::clear_settings_cache();
+            envr_config::reset_settings_load_caches();
             assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Ruby));
             assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Gem));
             assert!(!core_command_uses_path_proxy_bypass(CoreCommand::Bundle));

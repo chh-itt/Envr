@@ -13,6 +13,7 @@ use envr_domain::runtime::{RuntimeVersion, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
+#[cfg(windows)]
 fn escape_windows_cmd_token(arg: &str) -> String {
     if arg.is_empty() {
         return "\"\"".to_string();

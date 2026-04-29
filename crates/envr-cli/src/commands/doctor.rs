@@ -172,10 +172,12 @@ pub(crate) fn onboarding_checklist_lines() -> Vec<String> {
     ]
 }
 
+#[cfg(windows)]
 fn escape_ps_single_quoted(s: &str) -> String {
     s.replace('\'', "''")
 }
 
+#[cfg(windows)]
 pub(crate) fn powershell_append_user_path_snippet(shims: &Path) -> String {
     let esc = escape_ps_single_quoted(&shims.display().to_string());
     format!(

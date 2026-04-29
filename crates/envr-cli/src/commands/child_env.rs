@@ -336,6 +336,7 @@ fn template_version_key_for_lang(lang: &str) -> Option<&'static str> {
     }
 }
 
+#[cfg(windows)]
 fn join_path_entries(entries: &[PathBuf]) -> String {
     let sep = path_sep().to_string();
     entries
@@ -460,6 +461,7 @@ fn collect_run_env_impl(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::*;
 
     #[cfg(windows)]
