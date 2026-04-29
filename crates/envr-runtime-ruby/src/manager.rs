@@ -1,25 +1,30 @@
 use crate::RubyRelease;
-use crate::index::{
-    DEFAULT_RUBYINSTALLER_DOWNLOADS_URL, blocking_http_client, fetch_release_page,
-    host_rubyinstaller_arch, parse_ruby_releases, parse_rubyinstaller_7z_artifacts,
-    pick_rubyinstaller_artifact, resolve_ruby_version,
-};
-use envr_domain::installer::{
-    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
-};
+use crate::index::{blocking_http_client, fetch_release_page, parse_ruby_releases, resolve_ruby_version};
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
-use envr_download::blocking::download_url_to_path_resumable;
-use envr_download::extract;
 #[cfg(windows)]
 use envr_error::ErrorCode;
 use envr_error::{EnvrError, EnvrResult};
 use envr_platform::links::{LinkType, ensure_link};
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+use crate::index::{host_rubyinstaller_arch, parse_rubyinstaller_7z_artifacts, pick_rubyinstaller_artifact};
+#[cfg(windows)]
+use envr_domain::installer::{execute_install_pipeline, install_progress_handles};
+#[cfg(windows)]
+use envr_download::blocking::download_url_to_path_resumable;
+#[cfg(windows)]
+use envr_download::extract;
+#[cfg(windows)]
+use std::collections::HashSet;
+#[cfg(windows)]
 use std::process::Command;
-use std::sync::Arc;
+#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, AtomicU64};
+#[cfg(windows)]
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct RubyPaths {
@@ -263,6 +268,7 @@ fn extract_7z_with_bsdtar(_archive: &Path, _dest: &Path) -> EnvrResult<()> {
 pub struct RubyManager {
     pub paths: RubyPaths,
     releases_url: String,
+    #[cfg(windows)]
     rubyinstaller_downloads_url: String,
     client: reqwest::blocking::Client,
 }
@@ -272,7 +278,8 @@ impl RubyManager {
         Ok(Self {
             paths: RubyPaths::new(runtime_root),
             releases_url,
-            rubyinstaller_downloads_url: DEFAULT_RUBYINSTALLER_DOWNLOADS_URL.to_string(),
+            #[cfg(windows)]
+            rubyinstaller_downloads_url: crate::index::DEFAULT_RUBYINSTALLER_DOWNLOADS_URL.to_string(),
             client: blocking_http_client()?,
         })
     }
@@ -282,97 +289,14 @@ impl RubyManager {
         parse_ruby_releases(&html)
     }
 
-    /// Versions that actually have a RubyInstaller `.7z` for this host (Windows).
-    #[cfg(windows)]
-    pub fn load_installer_releases(&self) -> EnvrResult<Vec<RubyRelease>> {
-        let html = fetch_release_page(&self.client, &self.rubyinstaller_downloads_url)?;
-        let artifacts = parse_rubyinstaller_7z_artifacts(&html)?;
-        let arch = host_rubyinstaller_arch()?;
-        let mut seen = HashSet::new();
-        let mut out: Vec<RubyRelease> = Vec::new();
-        for a in artifacts.into_iter() {
-            if a.arch != arch {
-                continue;
-            }
-            if seen.insert(a.ruby_version.clone()) {
-                out.push(RubyRelease {
-                    version: a.ruby_version,
-                });
-            }
-        }
-        out.sort_by(|a, b| crate::index::cmp_semver(&a.version, &b.version));
-        Ok(out)
+    pub fn resolve_spec(&self, spec: &str) -> EnvrResult<RuntimeVersion> {
+        let releases = self.load_releases()?;
+        Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?))
     }
 
     pub fn resolve_spec(&self, spec: &str) -> EnvrResult<RuntimeVersion> {
-        #[cfg(windows)]
-        {
-            let releases = self.load_installer_releases()?;
-            Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?))
-        }
-        #[cfg(not(windows))]
-        {
-            let releases = self.load_releases()?;
-            Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?))
-        }
-    }
-
-    #[cfg(windows)]
-    fn install_resolved_version(
-        &self,
-        version: &RuntimeVersion,
-        progress_downloaded: Option<&Arc<AtomicU64>>,
-        progress_total: Option<&Arc<AtomicU64>>,
-        cancel: Option<&Arc<AtomicBool>>,
-    ) -> EnvrResult<RuntimeVersion> {
-        let downloads_html = fetch_release_page(&self.client, &self.rubyinstaller_downloads_url)?;
-        let artifacts = parse_rubyinstaller_7z_artifacts(&downloads_html)?;
-        let artifact = pick_rubyinstaller_artifact(&artifacts, &version.0)?;
-        let file_name =
-            artifact.url.rsplit('/').next().ok_or_else(|| {
-                EnvrError::Validation("rubyinstaller url missing filename".into())
-            })?;
-        let cache_file = self.paths.cache_dir().join(&version.0).join(file_name);
-        let final_dir = self.paths.version_dir(&version.0);
-        execute_install_pipeline(
-            cancel,
-            || fs::create_dir_all(self.paths.cache_dir()).map_err(EnvrError::from),
-            || {
-                download_url_to_path_resumable(
-                    &self.client,
-                    &artifact.url,
-                    &cache_file,
-                    progress_downloaded,
-                    progress_total,
-                    cancel,
-                )
-            },
-            || Ok(()),
-            || {
-                use envr_platform::install_layout;
-                install_layout::ensure_final_parent(&final_dir)?;
-                let staging_final = install_layout::sibling_staging_path(&final_dir)?;
-                install_layout::remove_if_exists(&staging_final)?;
-                fs::create_dir_all(&staging_final).map_err(EnvrError::from)?;
-
-                if file_name.ends_with(".7z") {
-                    extract_7z_with_bsdtar(&cache_file, &staging_final)?;
-                } else {
-                    extract::extract_archive(&cache_file, &staging_final)?;
-                }
-
-                maybe_promote_single_root_dir(&staging_final)?;
-                if let Err(e) = validate_ruby_installation(&staging_final) {
-                    let _ = fs::remove_dir_all(&staging_final);
-                    return Err(e);
-                }
-                install_layout::commit_staging_dir(&staging_final, &final_dir)
-            },
-            || {
-                self.set_current(version)?;
-                Ok(RuntimeVersion(version.0.clone()))
-            },
-        )
+        let releases = self.load_releases()?;
+        Ok(RuntimeVersion(resolve_ruby_version(&releases, spec)?))
     }
 
     pub fn set_current(&self, version: &RuntimeVersion) -> EnvrResult<()> {
@@ -414,19 +338,10 @@ impl RubyManager {
 
 impl SpecDrivenInstaller for RubyManager {
     fn install_from_spec(&self, request: &InstallRequest) -> EnvrResult<RuntimeVersion> {
-        #[cfg(not(windows))]
-        {
-            let _ = request;
-            return Err(EnvrError::Platform(
-                "ruby install is currently implemented only for Windows RubyInstaller archives"
-                    .into(),
-            ));
-        }
-        #[cfg(windows)]
-        {
-            let version = self.resolve_spec(&request.spec.0)?;
-            let (downloaded, total, cancel) = install_progress_handles(request);
-            self.install_resolved_version(&version, downloaded, total, cancel)
-        }
+        let _ = request;
+        Err(EnvrError::Platform(
+            "ruby install is currently implemented only for Windows RubyInstaller archives"
+                .into(),
+        ))
     }
 }
