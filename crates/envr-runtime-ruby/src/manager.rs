@@ -271,8 +271,7 @@ impl RubyManager {
             paths: RubyPaths::new(runtime_root),
             releases_url,
             #[cfg(windows)]
-            rubyinstaller_downloads_url: crate::index::DEFAULT_RUBYINSTALLER_DOWNLOADS_URL
-                .to_string(),
+            rubyinstaller_downloads_url: "https://rubyinstaller.org/downloads/".to_string(),
             client: blocking_http_client()?,
         })
     }

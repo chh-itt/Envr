@@ -6,7 +6,6 @@ use std::cmp::Ordering;
 use std::time::Duration;
 
 pub const DEFAULT_RUBY_RELEASES_URL: &str = "https://www.ruby-lang.org/en/downloads/releases/";
-pub const DEFAULT_RUBYINSTALLER_DOWNLOADS_URL: &str = "https://rubyinstaller.org/downloads/";
 
 pub fn blocking_http_client() -> EnvrResult<reqwest::blocking::Client> {
     // RubyInstaller `.7z` assets are large; in some networks the request may
