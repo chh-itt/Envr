@@ -112,24 +112,26 @@ fn lone_child_directory(staging: &Path) -> EnvrResult<PathBuf> {
     })
 }
 
-#[cfg(windows)]
 fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
-    for e in fs::read_dir(home).map_err(EnvrError::from)? {
-        let e = e.map_err(EnvrError::from)?;
-        let p = e.path();
-        if p.extension() == Some(OsStr::new("_pth")) && p.is_file() {
-            let mut s = fs::read_to_string(&p).map_err(EnvrError::from)?;
-            let has_active_import_site = s.lines().any(|line| {
-                let t = line.trim();
-                !t.starts_with('#') && t == "import site"
-            });
-            if !has_active_import_site {
-                if !s.ends_with('\n') {
-                    s.push('\n');
+    #[cfg(windows)]
+    {
+        for e in fs::read_dir(home).map_err(EnvrError::from)? {
+            let e = e.map_err(EnvrError::from)?;
+            let p = e.path();
+            if p.extension() == Some(OsStr::new("_pth")) && p.is_file() {
+                let mut s = fs::read_to_string(&p).map_err(EnvrError::from)?;
+                let has_active_import_site = s.lines().any(|line| {
+                    let t = line.trim();
+                    !t.starts_with('#') && t == "import site"
+                });
+                if !has_active_import_site {
+                    if !s.ends_with('\n') {
+                        s.push('\n');
+                    }
+                    s.push_str("import site\n");
+                    envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())
+                        .map_err(EnvrError::from)?;
                 }
-                s.push_str("import site\n");
-                envr_platform::fs_atomic::write_atomic(&p, s.as_bytes())
-                    .map_err(EnvrError::from)?;
             }
         }
     }

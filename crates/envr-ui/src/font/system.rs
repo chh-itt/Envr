@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 use std::path::{Path, PathBuf};
 
 pub fn preferred_system_sans_family() -> &'static str {
