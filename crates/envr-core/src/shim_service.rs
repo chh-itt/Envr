@@ -6,8 +6,10 @@
 use envr_config::env_context::load_settings_cached;
 use envr_domain::runtime::{RuntimeKind, runtime_kinds_all};
 use envr_error::{EnvrError, EnvrResult};
-use envr_platform::path_norm::normalize_fs_path_string_lossy;
 use envr_shim_core::{CoreCommand, core_tool_executable};
+
+#[cfg(windows)]
+use envr_platform::path_norm::normalize_fs_path_string_lossy;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -666,6 +668,8 @@ fn should_skip_global_forward(stem: &str, target: &Path) -> bool {
     if is_global_skip_stem(stem) {
         return true;
     }
+    #[cfg(not(windows))]
+    let _ = target;
     #[cfg(windows)]
     {
         if target

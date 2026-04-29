@@ -538,28 +538,29 @@ impl RuntimeService {
             return Ok(None);
         }
         #[cfg(windows)]
-        let root = self.cache_runtime_root()?;
-        #[cfg(windows)]
-        let php_home = root.join("runtimes").join("php");
-        #[cfg(windows)]
-        for link in [
-            php_home.join("current"),
-            php_home.join("current-ts"),
-            php_home.join("current-nts"),
-        ] {
-            if let Some(target) = Self::resolve_current_link_target(&link)? {
-                let Some(name) = target.file_name().and_then(|s| s.to_str()) else {
-                    return Ok(None);
-                };
-                if name.is_empty() {
-                    return Ok(None);
+        {
+            let root = self.cache_runtime_root()?;
+            let php_home = root.join("runtimes").join("php");
+            for link in [
+                php_home.join("current"),
+                php_home.join("current-ts"),
+                php_home.join("current-nts"),
+            ] {
+                if let Some(target) = Self::resolve_current_link_target(&link)? {
+                    let Some(name) = target.file_name().and_then(|s| s.to_str()) else {
+                        return Ok(None);
+                    };
+                    if name.is_empty() {
+                        return Ok(None);
+                    }
+                    return Ok(Some(envr_config::php_layout::dir_flavor_is_ts(name)));
                 }
-                return Ok(Some(envr_config::php_layout::dir_flavor_is_ts(name)));
             }
         }
         Ok(None)
     }
 
+    #[cfg(windows)]
     fn resolve_current_link_target(link: &Path) -> EnvrResult<Option<PathBuf>> {
         if !link.exists() {
             return Ok(None);
