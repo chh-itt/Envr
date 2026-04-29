@@ -1,22 +1,13 @@
 use crate::index::{
     DEFAULT_RUBYINSTALLER_DOWNLOADS_URL, RubyRelease, blocking_http_client, fetch_release_page,
-    host_rubyinstaller_arch, parse_ruby_releases, parse_rubyinstaller_7z_artifacts,
-    pick_rubyinstaller_artifact, resolve_ruby_version,
+    parse_ruby_releases, resolve_ruby_version,
 };
-use envr_domain::installer::{
-    SpecDrivenInstaller, execute_install_pipeline, install_progress_handles,
-};
+use envr_domain::installer::SpecDrivenInstaller;
 use envr_domain::runtime::{InstallRequest, RuntimeVersion};
-use envr_download::blocking::download_url_to_path_resumable;
-use envr_download::extract;
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64};
 
 #[derive(Debug, Clone)]
 pub struct RubyPaths {
@@ -75,19 +66,18 @@ fn gem_executable(home: &Path) -> PathBuf {
     }
 }
 
+#[cfg(windows)]
 fn bundle_executable_candidates(home: &Path) -> Vec<PathBuf> {
-    #[cfg(windows)]
-    {
-        vec![
-            home.join("bin").join("bundle.cmd"),
-            home.join("bin").join("bundle.bat"),
-            home.join("bin").join("bundle.exe"),
-        ]
-    }
-    #[cfg(not(windows))]
-    {
-        vec![home.join("bin").join("bundle")]
-    }
+    vec![
+        home.join("bin").join("bundle.cmd"),
+        home.join("bin").join("bundle.bat"),
+        home.join("bin").join("bundle.exe"),
+    ]
+}
+
+#[cfg(not(windows))]
+fn bundle_executable_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join("bin").join("bundle")]
 }
 
 pub fn list_installed_versions(paths: &RubyPaths) -> EnvrResult<Vec<RuntimeVersion>> {
@@ -174,6 +164,7 @@ fn remove_path_if_exists(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(windows)]
 fn maybe_promote_single_root_dir(staging: &Path) -> EnvrResult<()> {
     if ruby_executable(staging).is_file() && gem_executable(staging).is_file() {
         return Ok(());
@@ -200,6 +191,7 @@ fn maybe_promote_single_root_dir(staging: &Path) -> EnvrResult<()> {
     Ok(())
 }
 
+#[cfg(windows)]
 fn validate_ruby_installation(home: &Path) -> EnvrResult<()> {
     if !ruby_installation_valid(home) {
         return Err(EnvrError::Validation(
