@@ -600,8 +600,13 @@ fn shim_filename(dispatch_name: &str) -> String {
 fn normalized_stem(path: &Path) -> String {
     path.file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase()
+        .map(|s| s.to_ascii_lowercase())
+        .or_else(|| {
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_ascii_lowercase())
+        })
+        .unwrap_or_default()
 }
 
 fn is_global_skip_stem(stem: &str) -> bool {
