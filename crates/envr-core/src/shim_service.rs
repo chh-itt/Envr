@@ -23,11 +23,6 @@ fn normalize_windows_path_for_cmd(p: &Path) -> String {
     normalize_fs_path_string_lossy(p)
 }
 
-#[cfg(windows)]
-fn needs_node_global_forward_helper(stem: &str) -> bool {
-    matches!(stem, "pnpm" | "yarn" | "yarnpkg")
-}
-
 fn core_shim_entries(kind: RuntimeKind) -> &'static [(CoreCommand, &'static str)] {
     match kind {
         RuntimeKind::Node => &[
@@ -285,7 +280,7 @@ impl ShimService {
                 continue;
             }
             seen.insert(stem.clone());
-            self.write_global_forward(&path, &stem, None)?;
+            self.write_global_forward(&path, &stem)?;
         }
         Ok(seen)
     }
@@ -366,7 +361,7 @@ impl ShimService {
     fn scan_single_node_pkg_bin(
         &self,
         pkg_dir: &Path,
-        node_exe: &Path,
+        #[cfg(windows)] _node_exe: &Path,
         seen: &mut HashSet<String>,
     ) -> EnvrResult<()> {
         let pkg_json_path = pkg_dir.join("package.json");
@@ -399,7 +394,7 @@ impl ShimService {
                     .next_back()
                     .unwrap_or(&pkg_name)
                     .to_ascii_lowercase();
-                self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, node_exe, seen)?;
+                self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, seen)?;
             }
             serde_json::Value::Object(map) => {
                 for (k, rel_v) in map {
@@ -408,7 +403,7 @@ impl ShimService {
                     if rel.is_empty() {
                         continue;
                     }
-                    self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, node_exe, seen)?;
+                    self.try_write_pkg_bin(&pkg_dir.join(rel), &stem, seen)?;
                 }
             }
             _ => {}
@@ -420,7 +415,6 @@ impl ShimService {
         &self,
         target: &Path,
         stem: &str,
-        node_exe: &Path,
         seen: &mut HashSet<String>,
     ) -> EnvrResult<()> {
         if should_skip_global_forward(stem, target) {
@@ -430,7 +424,7 @@ impl ShimService {
             return Ok(());
         }
         seen.insert(stem.to_string());
-        self.write_global_forward(target, stem, Some(node_exe))?;
+        self.write_global_forward(target, stem)?;
         Ok(())
     }
 
@@ -539,27 +533,14 @@ impl ShimService {
         Ok(())
     }
 
-    fn write_global_forward(
-        &self,
-        target: &Path,
-        stem: &str,
-        #[cfg(windows)] node_exe: Option<&Path>,
-    ) -> EnvrResult<()> {
+    fn write_global_forward(&self, target: &Path, stem: &str) -> EnvrResult<()> {
         let dst = self.shim_dir().join(shim_filename(stem));
         #[cfg(windows)]
         {
-            let body = match (node_exe, target.extension().and_then(|e| e.to_str())) {
-                (Some(_), _) if needs_node_global_forward_helper(stem) => {
-                    let shim_s = normalize_windows_path_for_cmd(&self.shim_exe);
+            let body = match target.extension().and_then(|e| e.to_str()) {
+                Some(ext) if JS_BIN_EXTS.contains(&ext) => {
                     let target_s = normalize_windows_path_for_cmd(target);
-                    format!(
-                        "@echo off\r\n\"{shim_s}\" __forward-node-global \"{target_s}\" \"{stem}\" %*\r\n"
-                    )
-                }
-                (Some(node_exe), Some(ext)) if JS_BIN_EXTS.contains(&ext) => {
-                    let node_s = normalize_windows_path_for_cmd(node_exe);
-                    let target_s = normalize_windows_path_for_cmd(target);
-                    format!("@echo off\r\n\"{node_s}\" \"{target_s}\" %*\r\n")
+                    format!("@echo off\r\nnode \"{target_s}\" %*\r\n")
                 }
                 _ => {
                     let target_s = normalize_windows_path_for_cmd(target);
@@ -575,8 +556,6 @@ impl ShimService {
             }
             std::os::unix::fs::symlink(target, &dst).map_err(EnvrError::from)?;
         }
-        #[cfg(windows)]
-        let _ = node_exe;
         Ok(())
     }
 
