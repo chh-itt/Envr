@@ -734,6 +734,7 @@ fn bun_path_env(bun_home: &Path) -> EnvrResult<String> {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
     #[test]
     fn normalized_stem_trims_cmd() {
         let p = PathBuf::from(r"C:\npm\cowsay.cmd");
