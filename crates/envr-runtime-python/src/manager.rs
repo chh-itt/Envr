@@ -5,6 +5,7 @@ use crate::index::{
     release_id_for_version_label, resolve_python_version,
 };
 use envr_config::env_context::load_settings_cached;
+#[cfg(windows)]
 use envr_config::settings::PythonWindowsDistribution;
 use envr_config::settings::{
     pip_registry_urls_for_bootstrap, python_download_url_candidates, python_get_pip_url,
@@ -111,6 +112,7 @@ fn lone_child_directory(staging: &Path) -> EnvrResult<PathBuf> {
     })
 }
 
+#[cfg(windows)]
 fn fix_windows_embed_pth(home: &Path) -> EnvrResult<()> {
     for e in fs::read_dir(home).map_err(EnvrError::from)? {
         let e = e.map_err(EnvrError::from)?;
@@ -204,6 +206,7 @@ fn remove_path_if_exists(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
+#[cfg(windows)]
 fn load_python_bootstrap_from_settings() -> (Vec<String>, Vec<String>) {
     if let Some(st) = load_settings_snapshot() {
         let primary = python_get_pip_url(&st).to_string();
@@ -253,6 +256,7 @@ fn download_with_fallbacks(
     Err(last_err.unwrap_or_else(|| EnvrError::Download("no download urls available".into())))
 }
 
+#[cfg(windows)]
 fn ensure_cached_get_pip(
     client: &reqwest::blocking::Client,
     paths: &PythonPaths,
@@ -291,6 +295,7 @@ fn ensure_cached_get_pip(
     Ok(cache_file)
 }
 
+#[cfg(windows)]
 fn run_get_pip(
     py: &Path,
     script: &Path,
@@ -330,6 +335,7 @@ fn run_get_pip(
     })
 }
 
+#[cfg(windows)]
 fn bootstrap_pip_windows(
     client: &reqwest::blocking::Client,
     paths: &PythonPaths,
