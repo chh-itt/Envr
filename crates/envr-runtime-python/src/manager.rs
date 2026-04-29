@@ -17,6 +17,7 @@ use envr_domain::runtime::{InstallRequest, RuntimeVersion, VersionSpec};
 use envr_download::{blocking::download_url_to_path_resumable, checksum, extract};
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use envr_platform::links::{LinkType, ensure_link};
+#[cfg(windows)]
 use std::time::Duration;
 use std::{
     fs,
