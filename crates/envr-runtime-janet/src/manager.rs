@@ -11,6 +11,7 @@ use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use std::process::Command;
 use std::time::SystemTime;
 
@@ -128,6 +129,7 @@ pub fn read_current(paths: &JanetPaths) -> EnvrResult<Option<RuntimeVersion>> {
     }
 }
 
+#[cfg(windows)]
 fn find_named_executable_recursive(root: &Path, base: &str) -> Option<PathBuf> {
     let with_ext = format!("{base}.exe");
     let mut stack = vec![root.to_path_buf()];
@@ -426,16 +428,18 @@ impl SpecDrivenInstaller for JanetManager {
             cancel,
         )?;
 
-        let is_msi = row.url.to_ascii_lowercase().contains(".msi");
         #[cfg(windows)]
-        if is_msi {
-            install_from_msi_admin_unpack(&cache_file, &final_dir)?;
-            if !janet_installation_valid(&final_dir) {
-                return Err(EnvrError::Validation(
-                    "janet MSI install validation failed".into(),
-                ));
+        {
+            let is_msi = row.url.to_ascii_lowercase().contains(".msi");
+            if is_msi {
+                install_from_msi_admin_unpack(&cache_file, &final_dir)?;
+                if !janet_installation_valid(&final_dir) {
+                    return Err(EnvrError::Validation(
+                        "janet MSI install validation failed".into(),
+                    ));
+                }
+                return Ok(RuntimeVersion(label));
             }
-            return Ok(RuntimeVersion(label));
         }
 
         let staging_parent = self.paths.cache_dir().join("extract_staging");
