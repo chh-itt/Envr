@@ -94,7 +94,6 @@ pub fn detect_system_locale() -> Locale {
 }
 
 /// Map BCP-47-ish tags (e.g. `zh-CN`, `zh-Hans-CN`) to our coarse UI locale.
-#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn locale_from_bcp47_name(s: &str) -> Locale {
     let lower = s.trim().to_ascii_lowercase();
     if lower.starts_with("zh") {
@@ -124,7 +123,6 @@ fn windows_locale_name_from_registry() -> Option<String> {
 }
 
 /// Parse `reg query` stdout for a line like `LocaleName    REG_SZ    zh-CN`.
-#[cfg(target_os = "windows")]
 fn parse_reg_sz_locale_name(reg_stdout: &str) -> Option<String> {
     for line in reg_stdout.lines() {
         let line = line.trim();
@@ -281,6 +279,7 @@ mod tests {
     use super::*;
     use envr_config::settings::{I18nSettings, Settings};
 
+    #[cfg(target_os = "windows")]
     #[test]
     fn parses_locale_name_from_reg_output() {
         let sample = r#"
@@ -323,6 +322,7 @@ HKEY_CURRENT_USER\Control Panel\International
         assert_eq!(Locale::EnUs.label(), "English");
     }
 
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[test]
     fn bcp47_name_mapping_handles_zh_and_non_zh() {
         assert_eq!(locale_from_bcp47_name("zh-Hans-CN"), Locale::ZhCn);

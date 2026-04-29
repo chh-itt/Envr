@@ -96,10 +96,12 @@ fn maybe_node_engines_hint(cmd: CoreCommand, ctx: &ShimContext, active_label: Op
     }
 }
 
+#[cfg(windows)]
 fn is_python_core_stem(stem: &str) -> bool {
     matches!(stem, "python" | "python3" | "pip" | "pip3")
 }
 
+#[cfg(windows)]
 fn npm_install_is_local_without_global(args: &[OsString]) -> bool {
     let mut saw_install_subcommand = false;
     let mut saw_global_flag = false;
@@ -129,6 +131,7 @@ fn npm_install_is_local_without_global(args: &[OsString]) -> bool {
     saw_install_subcommand && saw_pkg_operand && !saw_global_flag
 }
 
+#[cfg(windows)]
 fn npm_is_package_mutation(args: &[OsString]) -> bool {
     let mut saw_mutating_subcommand = false;
     for a in args {
@@ -153,6 +156,7 @@ fn npm_is_package_mutation(args: &[OsString]) -> bool {
     saw_mutating_subcommand
 }
 
+#[cfg(windows)]
 fn maybe_print_npm_local_install_hint(
     core_cmd: CoreCommand,
     forward: &[OsString],
@@ -171,6 +175,7 @@ or run via `npx <cmd>` from this project."
     );
 }
 
+#[cfg(windows)]
 fn sync_globals_via_envr_cli_best_effort(runtime_root: &Path) {
     let warn = |msg: String| eprintln!("envr-shim: warning: {msg}");
     let Ok(cur) = std::env::current_exe() else {
@@ -284,6 +289,7 @@ fn maybe_run_windows_node_forward_helper(args: &[OsString]) -> Option<i32> {
     Some(code)
 }
 
+#[cfg(windows)]
 fn sync_python_script_shims_best_effort(runtime_root: &Path, pip_executable: &Path) {
     let warn = |msg: String| {
         eprintln!("envr-shim: warning: {msg}");
@@ -447,6 +453,12 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(windows))]
+    use super::{
+        is_python_core_stem, maybe_print_npm_local_install_hint,
+        npm_install_is_local_without_global, npm_is_package_mutation,
+        sync_globals_via_envr_cli_best_effort, sync_python_script_shims_best_effort,
+    };
 
     fn os_args(xs: &[&str]) -> Vec<OsString> {
         xs.iter().map(|s| OsString::from(*s)).collect()
