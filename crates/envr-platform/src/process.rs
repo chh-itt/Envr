@@ -1,4 +1,6 @@
-use envr_domain::runtime::{RuntimeKind, runtime_windows_prereqs};
+use envr_domain::runtime::RuntimeKind;
+#[cfg(windows)]
+use envr_domain::runtime::runtime_windows_prereqs;
 use std::process::ExitStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

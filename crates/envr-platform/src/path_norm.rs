@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub fn normalize_fs_path(path: &Path) -> PathBuf {
     #[cfg(not(windows))]
     {
-        return path.to_path_buf();
+        path.to_path_buf()
     }
 
     #[cfg(windows)]

@@ -3,6 +3,7 @@
 //! This module centralizes discovery so install validation and shim resolution stay aligned.
 
 use crate::layout_common::first_existing_path;
+#[cfg(windows)]
 use std::fs;
 use std::path::{Path, PathBuf};
 

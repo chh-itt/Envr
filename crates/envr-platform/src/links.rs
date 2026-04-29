@@ -46,22 +46,18 @@ pub fn ensure_runtime_current_symlink_or_pointer(
     current_link: &Path,
 ) -> EnvrResult<()> {
     let target = fs::canonicalize(version_dir).unwrap_or_else(|_| version_dir.to_path_buf());
-    if let Err(_e) = ensure_link(LinkType::Soft, &target, current_link) {
-        #[cfg(windows)]
-        {
-            if let Some(parent) = current_link.parent() {
-                fs::create_dir_all(parent).map_err(EnvrError::from)?;
-            }
-            let payload = target.display().to_string();
-            crate::fs_atomic::write_atomic(current_link, payload.as_bytes())
-                .map_err(EnvrError::from)?;
-            return Ok(());
+    #[cfg(windows)]
+    if ensure_link(LinkType::Soft, &target, current_link).is_err() {
+        if let Some(parent) = current_link.parent() {
+            fs::create_dir_all(parent).map_err(EnvrError::from)?;
         }
-        #[cfg(not(windows))]
-        {
-            return Err(_e);
-        }
+        let payload = target.display().to_string();
+        crate::fs_atomic::write_atomic(current_link, payload.as_bytes())
+            .map_err(EnvrError::from)?;
+        return Ok(());
     }
+    #[cfg(not(windows))]
+    ensure_link(LinkType::Soft, &target, current_link)?;
     Ok(())
 }
 
