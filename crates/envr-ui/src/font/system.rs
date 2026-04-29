@@ -20,7 +20,7 @@ pub fn preferred_system_sans_family() -> &'static str {
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         // Prefer common CJK-capable sans fonts.
-        return "Noto Sans CJK SC";
+        "Noto Sans CJK SC"
     }
 }
 
