@@ -17,6 +17,7 @@ fn subcommand_python_forwards_exit_code() {
     let py = home.join("bin/python3");
     let mut f = fs::File::create(&py).expect("script");
     writeln!(f, "#!/bin/sh\nexit 77").expect("write");
+    drop(f);
     let mut perms = fs::metadata(&py).expect("meta").permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&py, perms).expect("chmod");
