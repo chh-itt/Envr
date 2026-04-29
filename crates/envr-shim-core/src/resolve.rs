@@ -2272,7 +2272,6 @@ version = "20"
         assert!(jh.contains("17.0.2"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn ruby_and_elixir_path_proxy_bypass_follow_settings_disk() {
         let _guard = ENV_LOCK.lock().expect("lock");
