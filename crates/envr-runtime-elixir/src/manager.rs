@@ -231,6 +231,8 @@ fn validate_elixir_installation(home: &Path, runtime_root: &Path) -> EnvrResult<
     let exe = elixir_executable(home);
     let mut cmd = Command::new(&exe);
     cmd.arg("--version");
+    #[cfg(not(windows))]
+    let _ = runtime_root;
     #[cfg(windows)]
     if let Some(erlang_home) = resolve_erlang_home(runtime_root) {
         let eh = envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home);
