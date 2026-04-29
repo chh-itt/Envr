@@ -1016,6 +1016,7 @@ mod tests {
         assert!(p.ends_with("Python-9.9.9"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn fix_pth_appends_import_site() {
         let tmp = tempfile::tempdir().expect("tmp");
