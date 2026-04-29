@@ -454,7 +454,10 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::npm_install_is_local_without_global;
+    use super::npm_is_package_mutation;
+    use super::strip_windows_verbatim_prefix;
+    use std::ffi::OsString;
 
     #[cfg(windows)]
     fn os_args(xs: &[&str]) -> Vec<OsString> {
