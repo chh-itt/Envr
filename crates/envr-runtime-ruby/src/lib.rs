@@ -118,22 +118,11 @@ impl RuntimeProvider for RubyRuntimeProvider {
     }
 
     fn list_remote(&self, filter: &RemoteFilter) -> EnvrResult<Vec<RuntimeVersion>> {
-        #[cfg(windows)]
-        {
-            let releases = self.manager()?.load_installer_releases()?;
-            index::list_remote_versions(&releases, filter)
-        }
-        #[cfg(not(windows))]
-        {
-            let releases = self.manager()?.load_releases()?;
-            index::list_remote_versions(&releases, filter)
-        }
+        let releases = self.manager()?.load_releases()?;
+        index::list_remote_versions(&releases, filter)
     }
 
     fn list_remote_majors(&self) -> EnvrResult<Vec<String>> {
-        #[cfg(windows)]
-        let releases = self.manager()?.load_installer_releases()?;
-        #[cfg(not(windows))]
         let releases = self.manager()?.load_releases()?;
         let mut majors = BTreeSet::<String>::new();
         for release in releases {
@@ -156,54 +145,23 @@ impl RuntimeProvider for RubyRuntimeProvider {
         {
             return Ok(list.into_iter().map(RuntimeVersion).collect());
         }
-        #[cfg(windows)]
-        {
-            let releases = self.manager()?.load_installer_releases()?;
-            let list = index::list_latest_per_major_from_installer_releases(&releases)?;
-            let _ = (|| -> EnvrResult<()> {
-                let root = self.runtime_root()?;
-                let paths = RubyPaths::new(root);
-                std::fs::create_dir_all(paths.cache_dir())?;
-                let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-                let s = serde_json::to_string(&strings).map_err(|e| {
-                    EnvrError::with_source(
-                        ErrorCode::Validation,
-                        "json encode ruby latest labels",
-                        e,
-                    )
-                })?;
-                let cache_file = paths
-                    .cache_dir()
-                    .join("remote_latest_per_major_installer.json");
-                envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
-                Ok(())
-            })();
-            Ok(list)
-        }
-        #[cfg(not(windows))]
-        {
-            let releases = self.manager()?.load_releases()?;
-            let list = index::list_latest_patch_per_major(&releases)?;
-            let _ = (|| -> EnvrResult<()> {
-                let root = self.runtime_root()?;
-                let paths = RubyPaths::new(root);
-                std::fs::create_dir_all(paths.cache_dir())?;
-                let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
-                let s = serde_json::to_string(&strings).map_err(|e| {
-                    EnvrError::with_source(
-                        ErrorCode::Validation,
-                        "json encode ruby latest labels",
-                        e,
-                    )
-                })?;
-                let cache_file = paths
-                    .cache_dir()
-                    .join("remote_latest_per_major_installer.json");
-                envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
-                Ok(())
-            })();
-            Ok(list)
-        }
+        let releases = self.manager()?.load_releases()?;
+        let list = index::list_latest_patch_per_major(&releases)?;
+        let _ = (|| -> EnvrResult<()> {
+            let root = self.runtime_root()?;
+            let paths = RubyPaths::new(root);
+            std::fs::create_dir_all(paths.cache_dir())?;
+            let strings: Vec<String> = list.iter().map(|v| v.0.clone()).collect();
+            let s = serde_json::to_string(&strings).map_err(|e| {
+                EnvrError::with_source(ErrorCode::Validation, "json encode ruby latest labels", e)
+            })?;
+            let cache_file = paths
+                .cache_dir()
+                .join("remote_latest_per_major_installer.json");
+            envr_platform::fs_atomic::write_atomic(&cache_file, s.as_bytes())?;
+            Ok(())
+        })();
+        Ok(list)
     }
 
     fn try_load_remote_latest_per_major_from_disk(&self) -> Vec<RuntimeVersion> {

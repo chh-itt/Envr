@@ -90,28 +90,6 @@ pub(crate) fn cmp_semver(a: &str, b: &str) -> Ordering {
 
 /// Latest semver **per major** (first component) using only versions published as RubyInstaller
 /// `.7z` artifacts. This avoids offering ruby-lang.org releases that do not yet have installers.
-pub fn list_latest_per_major_from_installer_releases(
-    releases: &[RubyRelease],
-) -> EnvrResult<Vec<RuntimeVersion>> {
-    use std::collections::BTreeMap;
-    let mut best: BTreeMap<u64, String> = BTreeMap::new();
-    for r in releases {
-        let v = r.version.trim();
-        let key = semver_key(v)?;
-        let major = key.0;
-        best.entry(major)
-            .and_modify(|cur| {
-                if cmp_semver(v, cur) == Ordering::Greater {
-                    *cur = v.to_string();
-                }
-            })
-            .or_insert_with(|| v.to_string());
-    }
-    let mut out: Vec<RuntimeVersion> = best.into_values().map(RuntimeVersion).collect();
-    out.sort_by(|a, b| cmp_semver(&b.0, &a.0));
-    Ok(out)
-}
-
 pub fn parse_ruby_releases(html: &str) -> EnvrResult<Vec<RubyRelease>> {
     let re = Regex::new(r"Ruby\s+(\d+\.\d+\.\d+)").map_err(|e| {
         EnvrError::with_source(ErrorCode::Validation, "invalid ruby version regex", e)
@@ -131,6 +109,7 @@ pub fn parse_ruby_releases(html: &str) -> EnvrResult<Vec<RubyRelease>> {
     Ok(versions)
 }
 
+#[cfg(windows)]
 pub fn parse_rubyinstaller_7z_artifacts(html: &str) -> EnvrResult<Vec<RubyInstallerArtifact>> {
     let re = Regex::new(
         r#"https://github\.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-(\d+\.\d+\.\d+-\d+)/rubyinstaller-\d+\.\d+\.\d+-\d+-(x64|x86|arm)\.7z\.asc"#,
@@ -248,6 +227,7 @@ pub fn resolve_ruby_version(releases: &[RubyRelease], spec: &str) -> EnvrResult<
         .ok_or_else(|| EnvrError::Validation(format!("no ruby version matches spec {spec:?}")))
 }
 
+#[cfg(windows)]
 pub fn host_rubyinstaller_arch() -> EnvrResult<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("windows", "x86_64") => Ok("x64"),
@@ -259,6 +239,7 @@ pub fn host_rubyinstaller_arch() -> EnvrResult<&'static str> {
     }
 }
 
+#[cfg(windows)]
 pub fn pick_rubyinstaller_artifact(
     artifacts: &[RubyInstallerArtifact],
     version: &str,
@@ -332,24 +313,5 @@ mod tests {
             got[0].url,
             "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.11-1/rubyinstaller-3.3.11-1-x64.7z"
         );
-    }
-
-    #[test]
-    fn list_latest_per_major_from_installer_picks_highest_in_major() {
-        let releases = vec![
-            RubyRelease {
-                version: "3.3.11".into(),
-            },
-            RubyRelease {
-                version: "3.4.2".into(),
-            },
-            RubyRelease {
-                version: "4.0.2".into(),
-            },
-        ];
-        let got = list_latest_per_major_from_installer_releases(&releases).expect("ok");
-        assert_eq!(got.len(), 2);
-        assert!(got.iter().any(|v| v.0 == "4.0.2"));
-        assert!(got.iter().any(|v| v.0 == "3.4.2"));
     }
 }
