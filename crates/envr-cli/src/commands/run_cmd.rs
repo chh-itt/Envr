@@ -211,7 +211,7 @@ fn maybe_emit_run_script_miss_hint(
 
 #[cfg(unix)]
 fn script_shell_invocation(script: &str, tail_args: &[String]) -> (String, Vec<String>) {
-    let body = format!("'{}' \"$@\"", script.replace('\'', "'\\''"));
+    let body = format!("{script} \"$@\"");
     let mut v = vec!["-c".to_string(), body, "_".to_string()];
     v.extend(tail_args.iter().cloned());
     ("sh".to_string(), v)
