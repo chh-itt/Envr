@@ -157,6 +157,7 @@ pub fn index_cache_dir_from_platform(paths: &EnvrPaths) -> PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
     #[test]
     fn windows_prefers_appdata() {
         let mut envs = EnvSnapshot::default();
