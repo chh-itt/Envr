@@ -183,9 +183,12 @@ pub(crate) fn sync_kind_after_use(
             _ => {}
         }
     }
-    if cfg!(windows) && include_windows_path_mirror {
+    #[cfg(windows)]
+    if include_windows_path_mirror {
         ensure_windows_path_shim_mirror(kind, &root, &shim_exe)?;
     }
+    #[cfg(not(windows))]
+    let _ = include_windows_path_mirror;
     Ok(())
 }
 
