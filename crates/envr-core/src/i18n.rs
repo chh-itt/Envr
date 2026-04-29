@@ -94,11 +94,17 @@ pub fn detect_system_locale() -> Locale {
 }
 
 /// Map BCP-47-ish tags (e.g. `zh-CN`, `zh-Hans-CN`) to our coarse UI locale.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn locale_from_bcp47_name(s: &str) -> Locale {
     let lower = s.trim().to_ascii_lowercase();
     if lower.starts_with("zh") {
         return Locale::ZhCn;
     }
+    Locale::EnUs
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn locale_from_bcp47_name(_s: &str) -> Locale {
     Locale::EnUs
 }
 
@@ -123,6 +129,7 @@ fn windows_locale_name_from_registry() -> Option<String> {
 }
 
 /// Parse `reg query` stdout for a line like `LocaleName    REG_SZ    zh-CN`.
+#[cfg(target_os = "windows")]
 fn parse_reg_sz_locale_name(reg_stdout: &str) -> Option<String> {
     for line in reg_stdout.lines() {
         let line = line.trim();
@@ -136,6 +143,11 @@ fn parse_reg_sz_locale_name(reg_stdout: &str) -> Option<String> {
             }
         }
     }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn parse_reg_sz_locale_name(_reg_stdout: &str) -> Option<String> {
     None
 }
 

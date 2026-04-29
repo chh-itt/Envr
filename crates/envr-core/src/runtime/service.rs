@@ -533,10 +533,6 @@ impl RuntimeService {
 
     /// `Some(true)` = global active PHP is TS, `Some(false)` = NTS/legacy; `None` = no global current.
     pub fn php_global_current_want_ts(&self) -> EnvrResult<Option<bool>> {
-        #[cfg(not(windows))]
-        {
-            return Ok(None);
-        }
         #[cfg(windows)]
         {
             let root = self.cache_runtime_root()?;
@@ -556,8 +552,12 @@ impl RuntimeService {
                     return Ok(Some(envr_config::php_layout::dir_flavor_is_ts(name)));
                 }
             }
+            Ok(None)
         }
-        Ok(None)
+        #[cfg(not(windows))]
+        {
+            Ok(None)
+        }
     }
 
     #[cfg(windows)]

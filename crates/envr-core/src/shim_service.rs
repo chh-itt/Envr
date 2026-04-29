@@ -543,7 +543,7 @@ impl ShimService {
         &self,
         target: &Path,
         stem: &str,
-        node_exe: Option<&Path>,
+        #[cfg(windows)] node_exe: Option<&Path>,
     ) -> EnvrResult<()> {
         let dst = self.shim_dir().join(shim_filename(stem));
         #[cfg(windows)]
@@ -575,6 +575,8 @@ impl ShimService {
             }
             std::os::unix::fs::symlink(target, &dst).map_err(EnvrError::from)?;
         }
+        #[cfg(windows)]
+        let _ = node_exe;
         Ok(())
     }
 
