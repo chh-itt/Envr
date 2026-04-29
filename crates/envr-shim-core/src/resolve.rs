@@ -1930,6 +1930,7 @@ mod tests {
         assert_eq!(rest, vec![OsString::from("-c"), OsString::from("pass")]);
     }
 
+    #[cfg(windows)]
     #[test]
     fn normalize_and_parse_core_command_cover_aliases() {
         assert_eq!(normalize_invoked_basename(r"C:\bin\PYTHON3.EXE"), "python3");
