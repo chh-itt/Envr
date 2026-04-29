@@ -1,0 +1,624 @@
+error[unmaintained]: number_prefix crate is unmaintained
+    ┌─ /home/runner/work/Envr/Envr/Cargo.lock:317:1
+    │
+317 │ number_prefix 0.4.0 registry+https://github.com/rust-lang/crates.io-index
+    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ unmaintained advisory detected
+    │
+    ├ ID: RUSTSEC-2025-0119
+    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2025-0119
+    ├ The `number_prefix` crate is no longer actively maintained.  If you rely on this crate, consider switching to a recommended alternative.
+      
+      ## Recommended alternatives
+      
+      - [`unit-prefix`](https://crates.io/crates/unit-prefix)
+    ├ Announcement: https://github.com/ogham/rust-number-prefix/pull/8
+    ├ Solution: No safe upgrade is available!
+    ├ number_prefix v0.4.0
+      └── indicatif v0.17.11
+          └── envr-cli v0.1.0
+error[vulnerability]: Name constraints for URI names were incorrectly accepted
+    ┌─ /home/runner/work/Envr/Envr/Cargo.lock:400:1
+    │
+400 │ rustls-webpki 0.103.10 registry+https://github.com/rust-lang/crates.io-index
+    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ security vulnerability detected
+    │
+    ├ ID: RUSTSEC-2026-0098
+    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0098
+    ├ Name constraints for URI names were ignored and therefore accepted.
+      
+      Note this library does not provide an API for asserting URI names, and URI name constraints are otherwise not implemented.  URI name constraints are now rejected unconditionally.
+      
+      Since name constraints are restrictions on otherwise properly-issued certificates, this bug is reachable only after signature verification and requires misissuance to exploit.
+      
+      This vulnerability is identified as [GHSA-965h-392x-2mh5](https://github.com/rustls/webpki/security/advisories/GHSA-965h-392x-2mh5). Thank you to @1seal for the report.
+    ├ Solution: Upgrade to >=0.103.12, <0.104.0-alpha.1 OR >=0.104.0-alpha.6 (try `cargo update -p rustls-webpki`)
+    ├ rustls-webpki v0.103.10
+      └── rustls v0.23.37
+          ├── hyper-rustls v0.27.7
+          │   └── reqwest v0.12.28
+          │       ├── envr-download v0.1.0
+          │       │   ├── envr-cli v0.1.0
+          │       │   ├── envr-gui v0.1.0
+          │       │   ├── envr-runtime-babashka v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0
+          │       │   │       └── envr-core v0.1.0
+          │       │   │           ├── envr-cli v0.1.0 (*)
+          │       │   │           └── envr-gui v0.1.0 (*)
+          │       │   ├── envr-runtime-bun v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-c3 v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-clojure v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-crystal v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-dart v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-dotnet v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-elixir v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-elm v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-erlang v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-flutter v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-gleam v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-go v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-groovy v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-haxe v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-janet v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-java v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-julia v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-kotlin v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-lua v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-luau v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-nim v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-node v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-odin v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-perl v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-php v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-purescript v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-python v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-racket v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-rlang v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-ruby v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-rust v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   ├── envr-gui v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-sbcl v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-scala v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-terraform v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-unison v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-v v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   └── envr-runtime-zig v0.1.0
+          │       │       ├── (dev) envr-cli v0.1.0 (*)
+          │       │       └── envr-runtime-registry v0.1.0 (*)
+          │       ├── envr-gui v0.1.0 (*)
+          │       ├── envr-mirror v0.1.0
+          │       │   ├── envr-runtime-bun v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0 (*)
+          │       │   └── envr-runtime-lua v0.1.0 (*)
+          │       ├── envr-runtime-babashka v0.1.0 (*)
+          │       ├── envr-runtime-bun v0.1.0 (*)
+          │       ├── envr-runtime-c3 v0.1.0 (*)
+          │       ├── envr-runtime-clojure v0.1.0 (*)
+          │       ├── envr-runtime-crystal v0.1.0 (*)
+          │       ├── envr-runtime-dart v0.1.0 (*)
+          │       ├── envr-runtime-deno v0.1.0 (*)
+          │       ├── envr-runtime-dotnet v0.1.0 (*)
+          │       ├── envr-runtime-elixir v0.1.0 (*)
+          │       ├── envr-runtime-elm v0.1.0 (*)
+          │       ├── envr-runtime-erlang v0.1.0 (*)
+          │       ├── envr-runtime-flutter v0.1.0 (*)
+          │       ├── envr-runtime-github-release v0.1.0
+          │       │   ├── envr-runtime-babashka v0.1.0 (*)
+          │       │   ├── envr-runtime-bun v0.1.0 (*)
+          │       │   ├── envr-runtime-c3 v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0 (*)
+          │       │   ├── envr-runtime-elm v0.1.0 (*)
+          │       │   ├── envr-runtime-gleam v0.1.0 (*)
+          │       │   ├── envr-runtime-haxe v0.1.0 (*)
+          │       │   ├── envr-runtime-janet v0.1.0 (*)
+          │       │   ├── envr-runtime-kotlin v0.1.0 (*)
+          │       │   ├── envr-runtime-luau v0.1.0 (*)
+          │       │   ├── envr-runtime-odin v0.1.0 (*)
+          │       │   ├── envr-runtime-purescript v0.1.0 (*)
+          │       │   └── envr-runtime-v v0.1.0 (*)
+          │       ├── envr-runtime-gleam v0.1.0 (*)
+          │       ├── envr-runtime-go v0.1.0 (*)
+          │       ├── envr-runtime-groovy v0.1.0 (*)
+          │       ├── envr-runtime-haxe v0.1.0 (*)
+          │       ├── envr-runtime-janet v0.1.0 (*)
+          │       ├── envr-runtime-java v0.1.0 (*)
+          │       ├── envr-runtime-julia v0.1.0 (*)
+          │       ├── envr-runtime-kotlin v0.1.0 (*)
+          │       ├── envr-runtime-lua v0.1.0 (*)
+          │       ├── envr-runtime-luau v0.1.0 (*)
+          │       ├── envr-runtime-nim v0.1.0 (*)
+          │       ├── envr-runtime-node v0.1.0 (*)
+          │       ├── envr-runtime-odin v0.1.0 (*)
+          │       ├── envr-runtime-perl v0.1.0 (*)
+          │       ├── envr-runtime-php v0.1.0 (*)
+          │       ├── envr-runtime-purescript v0.1.0 (*)
+          │       ├── envr-runtime-python v0.1.0 (*)
+          │       ├── envr-runtime-racket v0.1.0 (*)
+          │       ├── envr-runtime-rlang v0.1.0 (*)
+          │       ├── envr-runtime-ruby v0.1.0 (*)
+          │       ├── envr-runtime-rust v0.1.0 (*)
+          │       ├── envr-runtime-sbcl v0.1.0 (*)
+          │       ├── envr-runtime-scala v0.1.0 (*)
+          │       ├── envr-runtime-terraform v0.1.0 (*)
+          │       ├── envr-runtime-unison v0.1.0 (*)
+          │       ├── envr-runtime-v v0.1.0 (*)
+          │       └── envr-runtime-zig v0.1.0 (*)
+          ├── reqwest v0.12.28 (*)
+          ├── tokio-rustls v0.26.4
+          │   ├── hyper-rustls v0.27.7 (*)
+          │   └── reqwest v0.12.28 (*)
+          └── ureq v2.12.1
+              └── envr-config v0.1.0
+                  ├── envr-cli v0.1.0 (*)
+                  ├── envr-core v0.1.0 (*)
+                  ├── envr-gui v0.1.0 (*)
+                  ├── envr-mirror v0.1.0 (*)
+                  ├── envr-resolver v0.1.0
+                  │   └── envr-cli v0.1.0 (*)
+                  ├── envr-runtime-babashka v0.1.0 (*)
+                  ├── envr-runtime-bun v0.1.0 (*)
+                  ├── envr-runtime-c3 v0.1.0 (*)
+                  ├── envr-runtime-clojure v0.1.0 (*)
+                  ├── envr-runtime-crystal v0.1.0 (*)
+                  ├── envr-runtime-dart v0.1.0 (*)
+                  ├── envr-runtime-deno v0.1.0 (*)
+                  ├── envr-runtime-dotnet v0.1.0 (*)
+                  ├── envr-runtime-elixir v0.1.0 (*)
+                  ├── envr-runtime-elm v0.1.0 (*)
+                  ├── envr-runtime-erlang v0.1.0 (*)
+                  ├── envr-runtime-flutter v0.1.0 (*)
+                  ├── envr-runtime-gleam v0.1.0 (*)
+                  ├── envr-runtime-go v0.1.0 (*)
+                  ├── envr-runtime-groovy v0.1.0 (*)
+                  ├── envr-runtime-haxe v0.1.0 (*)
+                  ├── envr-runtime-janet v0.1.0 (*)
+                  ├── envr-runtime-java v0.1.0 (*)
+                  ├── envr-runtime-julia v0.1.0 (*)
+                  ├── envr-runtime-kotlin v0.1.0 (*)
+                  ├── envr-runtime-lua v0.1.0 (*)
+                  ├── envr-runtime-luau v0.1.0 (*)
+                  ├── envr-runtime-nim v0.1.0 (*)
+                  ├── envr-runtime-node v0.1.0 (*)
+                  ├── envr-runtime-odin v0.1.0 (*)
+                  ├── envr-runtime-perl v0.1.0 (*)
+                  ├── envr-runtime-php v0.1.0 (*)
+                  ├── envr-runtime-purescript v0.1.0 (*)
+                  ├── envr-runtime-python v0.1.0 (*)
+                  ├── envr-runtime-racket v0.1.0 (*)
+                  ├── envr-runtime-rlang v0.1.0 (*)
+                  ├── envr-runtime-ruby v0.1.0 (*)
+                  ├── envr-runtime-rust v0.1.0 (*)
+                  ├── envr-runtime-sbcl v0.1.0 (*)
+                  ├── envr-runtime-scala v0.1.0 (*)
+                  ├── envr-runtime-terraform v0.1.0 (*)
+                  ├── envr-runtime-unison v0.1.0 (*)
+                  ├── envr-runtime-v v0.1.0 (*)
+                  ├── envr-runtime-zig v0.1.0 (*)
+                  ├── envr-shim v0.1.0
+                  ├── envr-shim-core v0.1.0
+                  │   ├── envr-cli v0.1.0 (*)
+                  │   ├── envr-core v0.1.0 (*)
+                  │   ├── envr-resolver v0.1.0 (*)
+                  │   ├── envr-runtime-clojure v0.1.0 (*)
+                  │   ├── envr-runtime-groovy v0.1.0 (*)
+                  │   ├── envr-runtime-kotlin v0.1.0 (*)
+                  │   ├── envr-runtime-scala v0.1.0 (*)
+                  │   └── envr-shim v0.1.0 (*)
+                  └── envr-ui v0.1.0
+                      └── envr-gui v0.1.0 (*)
+error[vulnerability]: Name constraints were accepted for certificates asserting a wildcard name
+    ┌─ /home/runner/work/Envr/Envr/Cargo.lock:400:1
+    │
+400 │ rustls-webpki 0.103.10 registry+https://github.com/rust-lang/crates.io-index
+    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ security vulnerability detected
+    │
+    ├ ID: RUSTSEC-2026-0099
+    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0099
+    ├ Permitted subtree name constraints for DNS names were accepted for certificates asserting a wildcard name.
+      
+      This was incorrect because, given a name constraint of `accept.example.com`, `*.example.com` could feasibly allow a name of `reject.example.com` which is outside the constraint.
+      This is very similar to [CVE-2025-61727](https://go.dev/issue/76442).
+      
+      Since name constraints are restrictions on otherwise properly-issued certificates, this bug is reachable only after signature verification and requires misissuance to exploit.
+      
+      This vulnerability is identified as [GHSA-xgp8-3hg3-c2mh](https://github.com/rustls/webpki/security/advisories/GHSA-xgp8-3hg3-c2mh). Thank you to @1seal for the report.
+    ├ Solution: Upgrade to >=0.103.12, <0.104.0-alpha.1 OR >=0.104.0-alpha.6 (try `cargo update -p rustls-webpki`)
+    ├ rustls-webpki v0.103.10
+      └── rustls v0.23.37
+          ├── hyper-rustls v0.27.7
+          │   └── reqwest v0.12.28
+          │       ├── envr-download v0.1.0
+          │       │   ├── envr-cli v0.1.0
+          │       │   ├── envr-gui v0.1.0
+          │       │   ├── envr-runtime-babashka v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0
+          │       │   │       └── envr-core v0.1.0
+          │       │   │           ├── envr-cli v0.1.0 (*)
+          │       │   │           └── envr-gui v0.1.0 (*)
+          │       │   ├── envr-runtime-bun v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-c3 v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-clojure v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-crystal v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-dart v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-dotnet v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-elixir v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-elm v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-erlang v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-flutter v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-gleam v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-go v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-groovy v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-haxe v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-janet v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-java v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-julia v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-kotlin v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-lua v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-luau v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-nim v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-node v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-odin v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-perl v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-php v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-purescript v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-python v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-racket v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-rlang v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-ruby v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-rust v0.1.0
+          │       │   │   ├── envr-cli v0.1.0 (*)
+          │       │   │   ├── envr-gui v0.1.0 (*)
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-sbcl v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-scala v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-terraform v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-unison v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   ├── envr-runtime-v v0.1.0
+          │       │   │   └── envr-runtime-registry v0.1.0 (*)
+          │       │   └── envr-runtime-zig v0.1.0
+          │       │       ├── (dev) envr-cli v0.1.0 (*)
+          │       │       └── envr-runtime-registry v0.1.0 (*)
+          │       ├── envr-gui v0.1.0 (*)
+          │       ├── envr-mirror v0.1.0
+          │       │   ├── envr-runtime-bun v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0 (*)
+          │       │   └── envr-runtime-lua v0.1.0 (*)
+          │       ├── envr-runtime-babashka v0.1.0 (*)
+          │       ├── envr-runtime-bun v0.1.0 (*)
+          │       ├── envr-runtime-c3 v0.1.0 (*)
+          │       ├── envr-runtime-clojure v0.1.0 (*)
+          │       ├── envr-runtime-crystal v0.1.0 (*)
+          │       ├── envr-runtime-dart v0.1.0 (*)
+          │       ├── envr-runtime-deno v0.1.0 (*)
+          │       ├── envr-runtime-dotnet v0.1.0 (*)
+          │       ├── envr-runtime-elixir v0.1.0 (*)
+          │       ├── envr-runtime-elm v0.1.0 (*)
+          │       ├── envr-runtime-erlang v0.1.0 (*)
+          │       ├── envr-runtime-flutter v0.1.0 (*)
+          │       ├── envr-runtime-github-release v0.1.0
+          │       │   ├── envr-runtime-babashka v0.1.0 (*)
+          │       │   ├── envr-runtime-bun v0.1.0 (*)
+          │       │   ├── envr-runtime-c3 v0.1.0 (*)
+          │       │   ├── envr-runtime-deno v0.1.0 (*)
+          │       │   ├── envr-runtime-elm v0.1.0 (*)
+          │       │   ├── envr-runtime-gleam v0.1.0 (*)
+          │       │   ├── envr-runtime-haxe v0.1.0 (*)
+          │       │   ├── envr-runtime-janet v0.1.0 (*)
+          │       │   ├── envr-runtime-kotlin v0.1.0 (*)
+          │       │   ├── envr-runtime-luau v0.1.0 (*)
+          │       │   ├── envr-runtime-odin v0.1.0 (*)
+          │       │   ├── envr-runtime-purescript v0.1.0 (*)
+          │       │   └── envr-runtime-v v0.1.0 (*)
+          │       ├── envr-runtime-gleam v0.1.0 (*)
+          │       ├── envr-runtime-go v0.1.0 (*)
+          │       ├── envr-runtime-groovy v0.1.0 (*)
+          │       ├── envr-runtime-haxe v0.1.0 (*)
+          │       ├── envr-runtime-janet v0.1.0 (*)
+          │       ├── envr-runtime-java v0.1.0 (*)
+          │       ├── envr-runtime-julia v0.1.0 (*)
+          │       ├── envr-runtime-kotlin v0.1.0 (*)
+          │       ├── envr-runtime-lua v0.1.0 (*)
+          │       ├── envr-runtime-luau v0.1.0 (*)
+          │       ├── envr-runtime-nim v0.1.0 (*)
+          │       ├── envr-runtime-node v0.1.0 (*)
+          │       ├── envr-runtime-odin v0.1.0 (*)
+          │       ├── envr-runtime-perl v0.1.0 (*)
+          │       ├── envr-runtime-php v0.1.0 (*)
+          │       ├── envr-runtime-purescript v0.1.0 (*)
+          │       ├── envr-runtime-python v0.1.0 (*)
+          │       ├── envr-runtime-racket v0.1.0 (*)
+          │       ├── envr-runtime-rlang v0.1.0 (*)
+          │       ├── envr-runtime-ruby v0.1.0 (*)
+          │       ├── envr-runtime-rust v0.1.0 (*)
+          │       ├── envr-runtime-sbcl v0.1.0 (*)
+          │       ├── envr-runtime-scala v0.1.0 (*)
+          │       ├── envr-runtime-terraform v0.1.0 (*)
+          │       ├── envr-runtime-unison v0.1.0 (*)
+          │       ├── envr-runtime-v v0.1.0 (*)
+          │       └── envr-runtime-zig v0.1.0 (*)
+          ├── reqwest v0.12.28 (*)
+          ├── tokio-rustls v0.26.4
+          │   ├── hyper-rustls v0.27.7 (*)
+          │   └── reqwest v0.12.28 (*)
+          └── ureq v2.12.1
+              └── envr-config v0.1.0
+                  ├── envr-cli v0.1.0 (*)
+                  ├── envr-core v0.1.0 (*)
+                  ├── envr-gui v0.1.0 (*)
+                  ├── envr-mirror v0.1.0 (*)
+                  ├── envr-resolver v0.1.0
+                  │   └── envr-cli v0.1.0 (*)
+                  ├── envr-runtime-babashka v0.1.0 (*)
+                  ├── envr-runtime-bun v0.1.0 (*)
+                  ├── envr-runtime-c3 v0.1.0 (*)
+                  ├── envr-runtime-clojure v0.1.0 (*)
+                  ├── envr-runtime-crystal v0.1.0 (*)
+                  ├── envr-runtime-dart v0.1.0 (*)
+                  ├── envr-runtime-deno v0.1.0 (*)
+                  ├── envr-runtime-dotnet v0.1.0 (*)
+                  ├── envr-runtime-elixir v0.1.0 (*)
+                  ├── envr-runtime-elm v0.1.0 (*)
+                  ├── envr-runtime-erlang v0.1.0 (*)
+                  ├── envr-runtime-flutter v0.1.0 (*)
+                  ├── envr-runtime-gleam v0.1.0 (*)
+                  ├── envr-runtime-go v0.1.0 (*)
+                  ├── envr-runtime-groovy v0.1.0 (*)
+                  ├── envr-runtime-haxe v0.1.0 (*)
+                  ├── envr-runtime-janet v0.1.0 (*)
+                  ├── envr-runtime-java v0.1.0 (*)
+                  ├── envr-runtime-julia v0.1.0 (*)
+                  ├── envr-runtime-kotlin v0.1.0 (*)
+                  ├── envr-runtime-lua v0.1.0 (*)
+                  ├── envr-runtime-luau v0.1.0 (*)
+                  ├── envr-runtime-nim v0.1.0 (*)
+                  ├── envr-runtime-node v0.1.0 (*)
+                  ├── envr-runtime-odin v0.1.0 (*)
+                  ├── envr-runtime-perl v0.1.0 (*)
+                  ├── envr-runtime-php v0.1.0 (*)
+                  ├── envr-runtime-purescript v0.1.0 (*)
+                  ├── envr-runtime-python v0.1.0 (*)
+                  ├── envr-runtime-racket v0.1.0 (*)
+                  ├── envr-runtime-rlang v0.1.0 (*)
+                  ├── envr-runtime-ruby v0.1.0 (*)
+                  ├── envr-runtime-rust v0.1.0 (*)
+                  ├── envr-runtime-sbcl v0.1.0 (*)
+                  ├── envr-runtime-scala v0.1.0 (*)
+                  ├── envr-runtime-terraform v0.1.0 (*)
+                  ├── envr-runtime-unison v0.1.0 (*)
+                  ├── envr-runtime-v v0.1.0 (*)
+                  ├── envr-runtime-zig v0.1.0 (*)
+                  ├── envr-shim v0.1.0
+                  ├── envr-shim-core v0.1.0
+                  │   ├── envr-cli v0.1.0 (*)
+                  │   ├── envr-core v0.1.0 (*)
+                  │   ├── envr-resolver v0.1.0 (*)
+                  │   ├── envr-runtime-clojure v0.1.0 (*)
+                  │   ├── envr-runtime-groovy v0.1.0 (*)
+                  │   ├── envr-runtime-kotlin v0.1.0 (*)
+                  │   ├── envr-runtime-scala v0.1.0 (*)
+                  │   └── envr-shim v0.1.0 (*)
+                  └── envr-ui v0.1.0
+                      └── envr-gui v0.1.0 (*)
+error[vulnerability]: Reachable panic in certificate revocation list parsing
+    ┌─ /home/runner/work/Envr/Envr/Cargo.lock:400:1
+    │
+400 │ rustls-webpki 0.103.10 registry+https://github.com/rust-lang/crates.io-index
+    │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ security vulnerability detected
+    │
+    ├ ID: RUSTSEC-2026-0104
+    ├ Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0104
+    ├ A panic was reachable when parsing certificate revocation lists via [`BorrowedCertRevocationList::from_der`]
+      or [`OwnedCertRevocationList::from_der`].  This was the result of mishandling a syntactically valid empty
+      `BIT STRING` appearing in the `onlySomeReasons` element of a `IssuingDistributionPoint` CRL extension.
+      
+      This panic is reachable prior to a CRL's signature being verified.
+      
+      Applications that do not use CRLs are not affected.
+      
+      Thank you to @tynus3 for the report.
+    ├ Solution: Upgrade to >=0.103.13, <0.104.0-alpha.1 OR >=0.104.0-alpha.7 (try `cargo update -p rustls-webpki`)
+    ├ rustls-webpki v0.103.10
+      └── rustls v0.23.37
+          ├── hyper-rustls v0.27.7
+          │   └── reqwest v0.12.28
+     │   │           │   └── envr-runtime-registry v0.1.0 (*)
+     │   │           ├── envr-runtime-unison v0.1.0
+     │   │           │   └── envr-runtime-registry v0.1.0 (*)
+     │   │           ├── envr-runtime-v v0.1.0
+     │   │           │   └── envr-runtime-registry v0.1.0 (*)
+     │   │           └── envr-runtime-zig v0.1.0
+     │   │               ├── (dev) envr-cli v0.1.0 (*)
+     │   │               └── envr-runtime-registry v0.1.0 (*)
+     │   └── orbclient v0.3.51
+     │       └── winit v0.30.13 (*)
+     ├── metal v0.32.0 (*)
+     ├── naga v27.0.3
+     │   ├── wgpu-core v27.0.3 (*)
+     │   └── wgpu-hal v27.0.4 (*)
+     ├── ndk v0.9.0
+     │   ├── android-activity v0.6.1 (*)
+     │   └── winit v0.30.13 (*)
+     ├── objc2-app-kit v0.2.2
+     │   ├── clipboard_macos v0.1.1
+     │   │   └── window_clipboard v0.5.1 (*)
+     │   └── winit v0.30.13 (*)
+     ├── objc2-app-kit v0.3.2
+     │   └── rfd v0.15.4 (*)
+     ├── objc2-core-foundation v0.3.2
+     │   ├── objc2-foundation v0.3.2
+     │   │   ├── objc2-app-kit v0.3.2 (*)
+     │   │   └── rfd v0.15.4 (*)
+     │   └── rfd v0.15.4 (*)
+     ├── objc2-foundation v0.2.2
+     │   ├── clipboard_macos v0.1.1 (*)
+     │   ├── objc2-app-kit v0.2.2 (*)
+     │   ├── objc2-ui-kit v0.2.2
+     │   │   └── winit v0.30.13 (*)
+     │   └── winit v0.30.13 (*)
+     ├── objc2-foundation v0.3.2 (*)
+     ├── objc2-ui-kit v0.2.2 (*)
+     ├── proptest v1.11.0
+     │   ├── (dev) envr-cli v0.1.0 (*)
+     │   ├── (dev) envr-config v0.1.0
+     │   │   ├── envr-cli v0.1.0 (*)
+     │   │   ├── envr-core v0.1.0 (*)
+     │   │   ├── envr-gui v0.1.0 (*)
+     │   │   ├── envr-mirror v0.1.0
+     │   │   │   ├── envr-runtime-bun v0.1.0 (*)
+     │   │   │   ├── envr-runtime-deno v0.1.0 (*)
+     │   │   │   └── envr-runtime-lua v0.1.0 (*)
+     │   │   ├── envr-resolver v0.1.0
+     │   │   │   └── envr-cli v0.1.0 (*)
+     │   │   ├── envr-runtime-babashka v0.1.0 (*)
+     │   │   ├── envr-runtime-bun v0.1.0 (*)
+     │   │   ├── envr-runtime-c3 v0.1.0 (*)
+     │   │   ├── envr-runtime-clojure v0.1.0 (*)
+     │   │   ├── envr-runtime-crystal v0.1.0 (*)
+     │   │   ├── envr-runtime-dart v0.1.0 (*)
+     │   │   ├── envr-runtime-deno v0.1.0 (*)
+     │   │   ├── envr-runtime-dotnet v0.1.0 (*)
+     │   │   ├── envr-runtime-elixir v0.1.0 (*)
+     │   │   ├── envr-runtime-elm v0.1.0 (*)
+     │   │   ├── envr-runtime-erlang v0.1.0 (*)
+     │   │   ├── envr-runtime-flutter v0.1.0 (*)
+     │   │   ├── envr-runtime-gleam v0.1.0 (*)
+     │   │   ├── envr-runtime-go v0.1.0 (*)
+     │   │   ├── envr-runtime-groovy v0.1.0 (*)
+     │   │   ├── envr-runtime-haxe v0.1.0 (*)
+     │   │   ├── envr-runtime-janet v0.1.0 (*)
+     │   │   ├── envr-runtime-java v0.1.0 (*)
+     │   │   ├── envr-runtime-julia v0.1.0 (*)
+     │   │   ├── envr-runtime-kotlin v0.1.0 (*)
+     │   │   ├── envr-runtime-lua v0.1.0 (*)
+     │   │   ├── envr-runtime-luau v0.1.0 (*)
+     │   │   ├── envr-runtime-nim v0.1.0 (*)
+     │   │   ├── envr-runtime-node v0.1.0 (*)
+     │   │   ├── envr-runtime-odin v0.1.0 (*)
+     │   │   ├── envr-runtime-perl v0.1.0 (*)
+     │   │   ├── envr-runtime-php v0.1.0 (*)
+     │   │   ├── envr-runtime-purescript v0.1.0 (*)
+     │   │   ├── envr-runtime-python v0.1.0 (*)
+     │   │   ├── envr-runtime-racket v0.1.0 (*)
+     │   │   ├── envr-runtime-rlang v0.1.0 (*)
+     │   │   ├── envr-runtime-ruby v0.1.0 (*)
+     │   │   ├── envr-runtime-rust v0.1.0 (*)
+     │   │   ├── envr-runtime-sbcl v0.1.0 (*)
+     │   │   ├── envr-runtime-scala v0.1.0 (*)
+     │   │   ├── envr-runtime-terraform v0.1.0 (*)
+     │   │   ├── envr-runtime-unison v0.1.0 (*)
+     │   │   ├── envr-runtime-v v0.1.0 (*)
+     │   │   ├── envr-runtime-zig v0.1.0 (*)
+     │   │   ├── envr-shim v0.1.0
+     │   │   ├── envr-shim-core v0.1.0
+     │   │   │   ├── envr-cli v0.1.0 (*)
+     │   │   │   ├── envr-core v0.1.0 (*)
+     │   │   │   ├── envr-resolver v0.1.0 (*)
+     │   │   │   ├── envr-runtime-clojure v0.1.0 (*)
+     │   │   │   ├── envr-runtime-groovy v0.1.0 (*)
+     │   │   │   ├── envr-runtime-kotlin v0.1.0 (*)
+     │   │   │   ├── envr-runtime-scala v0.1.0 (*)
+     │   │   │   └── envr-shim v0.1.0 (*)
+     │   │   └── envr-ui v0.1.0
+     │   │       └── envr-gui v0.1.0 (*)
+     │   ├── (dev) envr-download v0.1.0 (*)
+     │   └── (dev) envr-runtime-node v0.1.0 (*)
+     ├── redox_syscall v0.5.18
+     │   └── parking_lot_core v0.9.12
+     │       └── parking_lot v0.12.5
+     │           ├── referencing v0.46.0
+     │           │   └── jsonschema v0.46.0
+     │           │       └── (dev) envr-cli v0.1.0 (*)
+     │           ├── temp-env v0.3.6
+     │           │   └── (dev) envr-shim-core v0.1.0 (*)
+     │           ├── wasmtimer v0.4.3
+     │           │   └── iced_futures v0.14.0 (*)
+     │           ├── wgpu v27.0.1 (*)
+     │           ├── wgpu-core v27.0.3 (*)
+     │           └── wgpu-hal v27.0.4 (*)
+     ├── redox_syscall v0.7.3
+     │   └── libredox v0.1.15 (*)
+     ├── rustix v0.38.44
+     │   ├── calloop v0.13.0 (*)
+     │   ├── calloop-wayland-source v0.3.0 (*)
+     │   ├── smithay-client-toolkit v0.19.2 (*)
+     │   └── winit v0.30.13 (*)
+     ├── rustix v1.1.4
+     │   ├── calloop v0.14.4 (*)
