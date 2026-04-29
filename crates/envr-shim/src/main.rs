@@ -460,6 +460,7 @@ mod tests {
         xs.iter().map(|s| OsString::from(*s)).collect()
     }
 
+    #[cfg(windows)]
     #[test]
     fn npm_install_without_global_is_detected() {
         assert!(npm_install_is_local_without_global(&os_args(&[
@@ -472,6 +473,7 @@ mod tests {
         ])));
     }
 
+    #[cfg(windows)]
     #[test]
     fn npm_global_install_is_not_reported_local() {
         assert!(!npm_install_is_local_without_global(&os_args(&[
@@ -484,6 +486,7 @@ mod tests {
         ])));
     }
 
+    #[cfg(windows)]
     #[test]
     fn npm_package_mutation_detection() {
         assert!(npm_is_package_mutation(&os_args(&[
