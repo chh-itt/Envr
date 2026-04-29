@@ -6,9 +6,9 @@ use crate::index::{
 use envr_domain::installer::{SpecDrivenInstaller, install_progress_handles};
 use envr_domain::runtime::{InstallRequest, RemoteFilter, RuntimeVersion};
 use envr_download::blocking::download_url_to_path_resumable;
-use envr_error::{EnvrError, EnvrResult};
 #[cfg(windows)]
 use envr_error::ErrorCode;
+use envr_error::{EnvrError, EnvrResult};
 use envr_platform::bin_tool_layout::rlang_installation_valid;
 use envr_platform::links::ensure_runtime_current_symlink_or_pointer;
 use std::fs;
