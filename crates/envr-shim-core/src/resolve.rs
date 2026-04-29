@@ -615,7 +615,7 @@ pub fn pick_php_version_home(
     #[cfg(not(windows))]
     {
         let _ = want_ts;
-        return pick_version_home(versions_dir, spec);
+        pick_version_home(versions_dir, spec)
     }
     #[cfg(windows)]
     {
@@ -1626,6 +1626,7 @@ fn path_matches_managed_shims(dir: &Path, managed: &Path) -> bool {
 /// Skip a PATH segment that points at envr shims when we have no [`ShimContext`]
 /// (e.g. Elixir `ERTS_BIN` discovery). Uses the same root as shim resolution plus a
 /// narrow legacy heuristic.
+#[cfg(windows)]
 fn should_skip_envr_shims_path_entry(dir: &Path) -> bool {
     if let Ok(root) = resolve_runtime_root() {
         if path_matches_managed_shims(dir, &root.join("shims")) {
@@ -1780,8 +1781,7 @@ pub fn resolve_core_shim_command_with_settings(
             envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home);
         let mut erts =
             envr_platform::path_norm::normalize_fs_path_string_lossy(&erlang_home.join("bin"));
-        #[cfg(windows)]
-        if !erts.ends_with('\\') {
+        if cfg!(windows) && !erts.ends_with('\\') {
             erts.push('\\');
         }
         if let Some((_, v)) = extra_env.iter_mut().find(|(k, _)| k == "ERTS_BIN") {
