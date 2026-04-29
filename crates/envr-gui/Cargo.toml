@@ -56,7 +56,7 @@ envr-platform = { path = "../envr-platform" }
 envr-ui = { path = "../envr-ui" }
 envr-runtime-rust = { path = "../envr-runtime-rust" }
 reqwest = { workspace = true }
-iced = { version = "0.14", default-features = false, features = ["wgpu", "tokio", "svg"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tokio", "svg", "x11", "wayland"] }
 rfd = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }
