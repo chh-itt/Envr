@@ -11,7 +11,9 @@ use envr_shim_core::{
     resolve_core_shim_command_with_settings, runtime_version_label_from_executable,
 };
 use std::ffi::OsString;
+#[cfg(windows)]
 use std::fs;
+#[cfg(windows)]
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -453,12 +455,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(not(windows))]
-    use super::{
-        is_python_core_stem, maybe_print_npm_local_install_hint,
-        npm_install_is_local_without_global, npm_is_package_mutation,
-        sync_globals_via_envr_cli_best_effort, sync_python_script_shims_best_effort,
-    };
 
     fn os_args(xs: &[&str]) -> Vec<OsString> {
         xs.iter().map(|s| OsString::from(*s)).collect()
