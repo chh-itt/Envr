@@ -20,6 +20,9 @@ jobs:
       - name: Setup Rust 1.88
         uses: dtolnay/rust-toolchain@1.88
 
+      - name: Install Linux GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxi-dev libgl1-mesa-dev
+
       - name: cargo check (MSRV)
         run: cargo check --workspace --all-targets
 
@@ -65,6 +68,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+
+      - name: Install Linux GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxi-dev libgl1-mesa-dev
 
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -189,6 +195,9 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxi-dev libgl1-mesa-dev
+
       - name: i18n lint (T914)
         run: cargo run -p envr-i18n-lint --locked
 
@@ -236,6 +245,9 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux GUI build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxi-dev libgl1-mesa-dev
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
