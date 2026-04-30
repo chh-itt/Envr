@@ -32,7 +32,7 @@
 |------|------|
 | `why` | 解释某语言版本如何从 pin / 全局 `current` 解析 |
 | `init` | 生成 `.envr.toml` |
-| `check` | 校验 pin 能否解析到已安装目录 |
+| `check` | 校验 pin 能否解析到已安装目录；支持 `--github-annotations` 输出 CI 注释 |
 | `status` | `st`：项目根、pin、当前目录下各运行时激活版本 |
 | `project` | `add` / `sync` / `validate` 管理 pin |
 | `hook` | `bash` / `zsh` / `prompt` 等 shell 集成 |
@@ -45,7 +45,7 @@
 |------|------|
 | `exec` | 单语言子进程 + 可选 `--install-if-missing` |
 | `run` | 合并多语言 PATH / `env`；支持 `[scripts]` 别名 |
-| `env` | 打印 `export` / `set` / PowerShell 形式环境片段 |
+| `env` | 打印 `export` / `set` / PowerShell 形式环境片段；支持 `--diff` |
 | `template` | 按合并环境替换模板中的 `${VAR}` |
 | `import` / `export` | 项目 TOML 合并与导出；支持 `--config-format tool-versions` 迁移 `.tool-versions` |
 | `profile` | 查看 `[profiles.*]` |
@@ -58,7 +58,7 @@
 | `cache` | `c` | 清理下载缓存；`cache index sync|status` 离线索引 |
 | `bundle` | — | 便携离线包 `create` / `apply` |
 | `debug` | — | `info` 等排障快照 |
-| `diagnostics` | — | 导出诊断 zip |
+| `diagnostics` | — | 导出诊断 zip，包含 doctor / system / environment / provider-state 快照 |
 | `completion` | — | 生成 shell 补全脚本 |
 | `help` | — | `shortcuts`：内置 argv 简写（先于 clap 生效） |
 
