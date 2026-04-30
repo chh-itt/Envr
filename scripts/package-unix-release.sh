@@ -74,6 +74,12 @@ mkdir -p "${DEST}"
 
 echo "Building release (${PLATFORM} ${ARCH})..."
 if [[ -n "${TARGET}" ]]; then
+  if [[ "${TARGET}" == "aarch64-unknown-linux-gnu" ]]; then
+    export CC_aarch64_unknown_linux_gnu="aarch64-linux-gnu-gcc"
+    export CXX_aarch64_unknown_linux_gnu="aarch64-linux-gnu-g++"
+    export AR_aarch64_unknown_linux_gnu="aarch64-linux-gnu-ar"
+    export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="aarch64-linux-gnu-gcc"
+  fi
   cargo build --release --target "${TARGET}" -p envr-cli -p envr-shim
   BIN_DIR="target/${TARGET}/release"
 else

@@ -4,8 +4,10 @@
 param(
     [string]$Version = "0.1.0",
     [string]$OutRoot = "dist",
+    [ValidateSet("x64", "arm64")]
+    [string]$Arch = "x64",
     [string]$Manufacturer = "envr",
-    [string]$VcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+    [string]$VcRedistUrl = "",
     [string]$VcRedistPath = ""
 )
 
@@ -14,6 +16,13 @@ $ErrorActionPreference = "Stop"
 if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
     throw "Version must be Bundle-compatible: Major.Minor.Build[.Revision], got '$Version'."
 }
+
+if ($Arch -eq 'arm64' -and -not $VcRedistUrl) {
+    $VcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.arm64.exe'
+}
+
+$target = if ($Arch -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { '' }
+$runtimeKeyArch = if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }
 
 $wixCmd = Get-Command wix -ErrorAction SilentlyContinue
 if (-not $wixCmd) {
@@ -40,21 +49,21 @@ if ($extList -notmatch "WixToolset\.Util\.wixext") {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$msiPath = Join-Path $OutRoot "envr-windows-x64-$Version.msi"
+$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$Version.msi"
 if (-not (Test-Path -LiteralPath $msiPath)) {
     Write-Host "MSI not found. Building MSI first..."
-    & (Join-Path $PSScriptRoot "package-windows-msi.ps1") -Version $Version -OutRoot $OutRoot -Manufacturer $Manufacturer
+    & (Join-Path $PSScriptRoot "package-windows-msi.ps1") -Version $Version -OutRoot $OutRoot -Arch $Arch -Manufacturer $Manufacturer
 }
 
 if (-not (Test-Path -LiteralPath $msiPath)) {
     throw "MSI is still missing after build: $msiPath"
 }
 
-$stageName = "envr-windows-setup-x64-$Version"
+$stageName = "envr-windows-setup-$Arch-$Version"
 $stage = Join-Path $OutRoot $stageName
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
-$vcRedistExe = Join-Path $stage "vc_redist.x64.exe"
+$vcRedistExe = Join-Path $stage "vc_redist.$Arch.exe"
 if ($VcRedistPath -and (Test-Path -LiteralPath $VcRedistPath)) {
     Copy-Item -LiteralPath $VcRedistPath -Destination $vcRedistExe -Force
 }
@@ -64,11 +73,11 @@ else {
 }
 
 if (-not (Test-Path -LiteralPath $vcRedistExe)) {
-    throw "vc_redist.x64.exe is missing: $vcRedistExe"
+    throw "vc_redist.$Arch.exe is missing: $vcRedistExe"
 }
 
 $bundleWxs = Join-Path $stage "envr-setup.wxs"
-$setupExe = Join-Path $OutRoot "envr-setup-x64-$Version.exe"
+$setupExe = Join-Path $OutRoot "envr-setup-$Arch-$Version.exe"
 $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
 
 @"
@@ -87,12 +96,12 @@ $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
     <util:RegistrySearch Id="VcRuntimeInstalled"
                          Variable="VCREDIST_INSTALLED"
                          Root="HKLM"
-                         Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+                         Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$runtimeKeyArch"
                          Value="Installed"
                          Result="value" />
 
     <Chain>
-      <ExePackage Id="VcRedistX64"
+      <ExePackage Id="VcRedist"
                   SourceFile="$vcRedistExe"
                   PerMachine="yes"
                   Permanent="yes"
@@ -105,7 +114,8 @@ $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
       <MsiPackage Id="EnvrMsi"
                   SourceFile="$msiPath"
                   Visible="no"
-                  Vital="yes" />
+                  Vital="yes"
+                  Platform="$Arch" />
     </Chain>
   </Bundle>
 </Wix>

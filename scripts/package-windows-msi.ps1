@@ -4,14 +4,33 @@
 param(
     [string]$Version = "0.1.0",
     [string]$OutRoot = "dist",
+    [ValidateSet("x64", "arm64")]
+    [string]$Arch = "x64",
+    [string]$Target = "",
     [string]$Manufacturer = "envr"
 )
 
 $ErrorActionPreference = "Stop"
 
-if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
-    throw "Version must be MSI-compatible: Major.Minor.Build[.Revision], got '$Version'."
+function Normalize-MsiVersion {
+    param([string]$InputVersion)
+
+    $clean = $InputVersion.TrimStart('v')
+    if ($clean -match '^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        $patch = [int]$Matches[3]
+        return "$major.$minor.$patch.0"
+    }
+
+    if ($clean -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
+        return $clean
+    }
+
+    throw "Version must be MSI-compatible: Major.Minor.Build[.Revision], got '$InputVersion'."
 }
+
+$Version = Normalize-MsiVersion -InputVersion $Version
 
 $wixCmd = Get-Command wix -ErrorAction SilentlyContinue
 if (-not $wixCmd) {
@@ -21,14 +40,18 @@ if (-not $wixCmd) {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$destName = "envr-windows-x64-$Version"
+$destName = "envr-windows-$Arch-$Version"
 $dest = Join-Path $OutRoot $destName
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
 Write-Host "Building release (envr, er, envr-gui, envr-shim)..."
-cargo build --release -p envr-cli -p envr-gui -p envr-shim
+if ($Target) {
+    cargo build --release --target $Target -p envr-cli -p envr-gui -p envr-shim
+} else {
+    cargo build --release -p envr-cli -p envr-gui -p envr-shim
+}
 
-$bin = Join-Path $root "target\release"
+$bin = if ($Target) { Join-Path $root "target\$Target\release" } else { Join-Path $root "target\release" }
 $exes = @("envr.exe", "er.exe", "envr-gui.exe", "envr-shim.exe")
 foreach ($e in $exes) {
     $p = Join-Path $bin $e
@@ -92,7 +115,7 @@ if (Test-Path -LiteralPath $msiPath) {
 }
 
 Write-Host "Building MSI via WiX..."
-wix build $wxsPath -arch x64 -o $msiPath
+wix build $wxsPath -arch $Arch -o $msiPath
 if ($LASTEXITCODE -ne 0) {
     throw "WiX build failed with exit code $LASTEXITCODE."
 }
