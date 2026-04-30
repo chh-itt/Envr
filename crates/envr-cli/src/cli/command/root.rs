@@ -207,6 +207,9 @@ pub enum Command {
         /// Directory or file to start config search from
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
+        /// Emit GitHub Actions annotations for findings
+        #[arg(long)]
+        github_annotations: bool,
     },
     /// Show project root (if any), pins, and active runtime versions for this directory
     #[command(visible_alias = "st")]

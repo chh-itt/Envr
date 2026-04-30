@@ -44,7 +44,7 @@ fn next_steps_for_check_failure() -> Vec<(&'static str, String)> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
+pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let Some((cfg, loc)) = session.project.as_ref() else {
         return Err(EnvrError::Validation(fmt_template(
@@ -89,8 +89,22 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
         let mut data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "issues": problems,
+            "github_annotations": github_annotations,
         });
-        data = output::with_next_steps(data, next_steps_for_check_failure());
+        if github_annotations {
+            let ann = problems
+                .iter()
+                .map(|p| format!("::warning file=.envr.toml,line=1,col=1::{p}"))
+                .collect::<Vec<_>>();
+            data = output::with_next_steps(data, next_steps_for_check_failure());
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                for line in ann {
+                    eprintln!("{line}");
+                }
+            }
+        } else {
+            data = output::with_next_steps(data, next_steps_for_check_failure());
+        }
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_CHECK_FAILED,

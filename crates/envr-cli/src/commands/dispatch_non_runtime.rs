@@ -36,7 +36,9 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
             full,
             interactive,
         } => ok!(init::run_inner(global, path, force, full, interactive)),
-        Command::Check { path } => ok!(check::run_inner(global, path)),
+        Command::Check { path, github_annotations } => {
+            ok!(check::run_inner(global, path, github_annotations))
+        },
         Command::Status { project } => {
             ok!(status_cmd::run_inner(global, project))
         },
