@@ -44,24 +44,32 @@ fn blocking_index_job_waits_until_global_permit_released() {
     set_global_download_concurrency_limit(None).expect("clear limit");
 }
 
-#[tokio::test]
-async fn async_prefetch_download_waits_then_completes_under_global_gate() {
+#[test]
+fn async_prefetch_download_waits_then_completes_under_global_gate() {
+    let _guard = global_test_lock().lock().expect("test lock");
+    set_global_download_concurrency_limit(Some(1)).expect("set limit");
     let holder = {
-        let _guard = global_test_lock().lock().expect("test lock");
-        set_global_download_concurrency_limit(Some(1)).expect("set limit");
         let lim = global_download_concurrency_limiter().expect("limiter");
         lim.acquire_blocking(DownloadPriority::Artifact)
     };
 
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-length", "5")
-                .set_body_bytes(b"hello"),
-        )
-        .mount(&server)
-        .await;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let server = rt.block_on(async {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-length", "5")
+                    .set_body_bytes(b"hello"),
+            )
+            .mount(&server)
+            .await;
+        server
+    });
 
     let tmp = TempDir::new().expect("tmp");
     let dest = tmp.path().join("prefetch.bin");
@@ -72,26 +80,30 @@ async fn async_prefetch_download_waits_then_completes_under_global_gate() {
         ..DownloadOptions::default()
     };
 
-    let handle = tokio::spawn(async move {
-        engine
-            .download_to_file(
-                url,
-                &dest,
-                &envr_download::task::CancelToken::new(),
-                &opts,
-                None,
-                None,
-                None,
-            )
-            .await
+    let handle = rt.spawn({
+        let engine = engine.clone();
+        let dest = dest.clone();
+        async move {
+            engine
+                .download_to_file(
+                    url,
+                    &dest,
+                    &envr_download::task::CancelToken::new(),
+                    &opts,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+        }
     });
 
-    tokio::time::sleep(Duration::from_millis(120)).await;
+    std::thread::sleep(Duration::from_millis(120));
     assert!(!handle.is_finished(), "prefetch should wait on gate");
 
     drop(holder);
-    let out = tokio::time::timeout(Duration::from_secs(5), handle)
-        .await
+    let out = rt
+        .block_on(async { tokio::time::timeout(Duration::from_secs(5), handle).await })
         .expect("join timeout")
         .expect("join")
         .expect("download");
