@@ -211,19 +211,29 @@ pub enum Command {
     /// Manage `.envr.toml` pins (add, install sync, validate)
     #[command(subcommand)]
     Project(ProjectCmd),
-    /// Merge a TOML file into the project `.envr.toml` (imported keys win on conflict)
+    /// Merge a TOML file or supported external format into `.envr.toml` (imported keys win on conflict)
     Import {
+        /// Source file. For `--format tool-versions`, defaults to `.tool-versions`.
         #[arg(value_name = "FILE")]
-        file: PathBuf,
+        file: Option<PathBuf>,
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
+        /// Input config format (`envr-toml` or `tool-versions`). Defaults to inferring from the file name.
+        #[arg(long = "config-format", value_name = "FORMAT", default_value = "auto")]
+        format: String,
+        /// Print what would be written without modifying `.envr.toml`.
+        #[arg(long)]
+        dry_run: bool,
     },
-    /// Print merged on-disk project config (base + local, no profile overlay) as TOML
+    /// Print merged on-disk project config (base + local, no profile overlay) as TOML or supported external format
     Export {
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
         #[arg(long, value_name = "FILE")]
         output: Option<PathBuf>,
+        /// Output config format (`envr-toml` or `tool-versions`). Defaults to `envr-toml`.
+        #[arg(long = "config-format", value_name = "FORMAT", default_value = "envr-toml")]
+        format: String,
     },
     /// Inspect `[profiles.*]` blocks (use `ENVR_PROFILE` or `exec`/`run` `--profile` to activate)
     #[command(subcommand)]

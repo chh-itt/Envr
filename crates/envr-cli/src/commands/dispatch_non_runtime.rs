@@ -80,12 +80,21 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
             ok!(shell_cmd::run_inner(global, project, shell))
         },
         Command::Hook(sub) => route_hook(sub, global),
-        Command::Import { file, path } => {
-            ok!(import_export::import_run_inner(global, file, path))
-        },
-        Command::Export { path, output } => {
-            ok!(import_export::export_run_inner(global, path, output))
-        },
+        Command::Import {
+            file,
+            path,
+            format,
+            dry_run,
+        } => ok!(import_export::import_run_inner(
+            global, file, path, format, dry_run,
+        )),
+        Command::Export {
+            path,
+            output,
+            format,
+        } => ok!(import_export::export_run_inner(
+            global, path, output, format,
+        )),
         Command::Profile(sub) => route_profile(sub, global),
         Command::Config(sub) => ok!(config_cmd::run_inner(global, sub)),
         Command::Alias(sub) => ok!(alias_cmd::run_inner(global, sub)),

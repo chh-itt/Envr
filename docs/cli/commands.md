@@ -47,7 +47,7 @@
 | `run` | 合并多语言 PATH / `env`；支持 `[scripts]` 别名 |
 | `env` | 打印 `export` / `set` / PowerShell 形式环境片段 |
 | `template` | 按合并环境替换模板中的 `${VAR}` |
-| `import` / `export` | 项目 TOML 合并与导出 |
+| `import` / `export` | 项目 TOML 合并与导出；支持 `--config-format tool-versions` 迁移 `.tool-versions` |
 | `profile` | 查看 `[profiles.*]` |
 
 ## 平台、数据与工具（实现扩展）

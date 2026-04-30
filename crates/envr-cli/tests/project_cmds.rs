@@ -89,3 +89,61 @@ fn check_fails_when_no_config() {
         .assert()
         .failure();
 }
+
+#[test]
+fn import_tool_versions_writes_envr_toml() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tmp.path().join(".tool-versions"),
+        "nodejs 22.11.0\npython 3.12.7\ngolang 1.23.2\n",
+    )
+    .expect("write tool versions");
+
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args(["import", "--config-format", "tool-versions"])
+        .assert()
+        .success();
+
+    let text = fs::read_to_string(tmp.path().join(DOT_ENVR_TOML)).expect("read envr toml");
+    assert!(text.contains("[runtimes.node]"), "unexpected toml:\n{text}");
+    assert!(text.contains("version = \"22.11.0\""), "unexpected toml:\n{text}");
+    assert!(text.contains("[runtimes.python]"), "unexpected toml:\n{text}");
+    assert!(text.contains("[runtimes.go]"), "unexpected toml:\n{text}");
+}
+
+#[test]
+fn export_tool_versions_uses_asdf_names() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tmp.path().join(DOT_ENVR_TOML),
+        r#"
+[runtimes.node]
+version = "22.11.0"
+
+[runtimes.go]
+version = "1.23.2"
+"#,
+    )
+    .expect("write envr toml");
+
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args([
+            "export",
+            "--config-format",
+            "tool-versions",
+            "--output",
+            ".tool-versions",
+        ])
+        .assert()
+        .success();
+
+    let text = fs::read_to_string(tmp.path().join(".tool-versions")).expect("read tool versions");
+    assert!(text.contains("nodejs 22.11.0\n"), "unexpected export:\n{text}");
+    assert!(text.contains("golang 1.23.2\n"), "unexpected export:\n{text}");
+}

@@ -4,20 +4,32 @@ use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::{
-    PROJECT_CONFIG_FILE, ProjectConfig, load_project_config_disk_only, parse_project_config,
-    save_project_config,
+    PROJECT_CONFIG_FILE, ProjectConfig, RuntimeConfig, load_project_config_disk_only,
+    parse_project_config, save_project_config,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::json;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+const TOOL_VERSIONS_FILE: &str = ".tool-versions";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportExportFormat {
+    EnvrToml,
+    ToolVersions,
+}
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn import_run_inner(
     g: &GlobalArgs,
-    file: PathBuf,
+    file: Option<PathBuf>,
     path: PathBuf,
+    format: String,
+    dry_run: bool,
 ) -> EnvrResult<CliExit> {
+    let format = parse_import_format(&format, file.as_deref())?;
+    let file = file.unwrap_or_else(|| default_import_file(format));
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -28,22 +40,36 @@ pub(crate) fn import_run_inner(
             &[("path", &file.display().to_string())],
         )));
     }
+
     let dest = path.join(PROJECT_CONFIG_FILE);
     let mut merged = if dest.is_file() {
         parse_project_config(&dest)?
     } else {
         ProjectConfig::default()
     };
-    let imported = parse_project_config(&file)?;
+    let imported = match format {
+        ImportExportFormat::EnvrToml => parse_project_config(&file)?,
+        ImportExportFormat::ToolVersions => parse_tool_versions_file(&file)?,
+    };
     merged.runtimes.extend(imported.runtimes);
     merged.env.extend(imported.env);
+    merged.scripts.extend(imported.scripts);
     merged.profiles.extend(imported.profiles);
 
-    save_project_config(&dest, &merged)?;
+    let rendered = toml::to_string_pretty(&merged).map_err(|e| {
+        EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
+    })?;
+
+    if !dry_run {
+        save_project_config(&dest, &merged)?;
+    }
 
     let data = json!({
         "dest": dest.to_string_lossy(),
         "source": file.to_string_lossy(),
+        "format": format.label(),
+        "dry_run": dry_run,
+        "toml": rendered,
     });
     Ok(output::emit_ok(
         g,
@@ -51,17 +77,24 @@ pub(crate) fn import_run_inner(
         data,
         || {
             if CliUxPolicy::from_global(g).human_text_primary() {
-                println!(
-                    "{}",
-                    fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.import.merged",
-                            "已合并到 {path}",
-                            "merged into {path}",
-                        ),
-                        &[("path", &dest.display().to_string())],
-                    )
-                );
+                if dry_run {
+                    print!("{rendered}");
+                    if !rendered.ends_with('\n') {
+                        println!();
+                    }
+                } else {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.import.merged",
+                                "已合并到 {path}",
+                                "merged into {path}",
+                            ),
+                            &[("path", &dest.display().to_string())],
+                        )
+                    );
+                }
             }
         },
     ))
@@ -72,7 +105,9 @@ pub(crate) fn export_run_inner(
     g: &GlobalArgs,
     path: PathBuf,
     output: Option<PathBuf>,
+    format: String,
 ) -> EnvrResult<CliExit> {
+    let format = parse_export_format(&format)?;
     let loaded = load_project_config_disk_only(&path)?;
     let Some((cfg, loc)) = loaded else {
         return Err(EnvrError::Validation(fmt_template(
@@ -85,16 +120,20 @@ pub(crate) fn export_run_inner(
         )));
     };
 
-    let toml = toml::to_string_pretty(&cfg).map_err(|e| {
-        EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
-    })?;
+    let rendered = match format {
+        ImportExportFormat::EnvrToml => toml::to_string_pretty(&cfg).map_err(|e| {
+            EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
+        })?,
+        ImportExportFormat::ToolVersions => render_tool_versions(&cfg),
+    };
 
     if let Some(out_path) = output {
-        fs::write(&out_path, &toml)?;
+        fs::write(&out_path, &rendered)?;
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "written": out_path.to_string_lossy(),
-            "toml": toml,
+            "format": format.label(),
+            "content": rendered,
         });
         Ok(output::emit_ok(
             g,
@@ -119,7 +158,8 @@ pub(crate) fn export_run_inner(
     } else {
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
-            "toml": toml,
+            "format": format.label(),
+            "content": rendered,
         });
         Ok(output::emit_ok(
             g,
@@ -127,12 +167,194 @@ pub(crate) fn export_run_inner(
             data,
             || {
                 if CliUxPolicy::from_global(g).human_text_primary() {
-                    print!("{toml}");
-                    if !toml.ends_with('\n') {
+                    print!("{rendered}");
+                    if !rendered.ends_with('\n') {
                         println!();
                     }
                 }
             },
         ))
+    }
+}
+
+impl ImportExportFormat {
+    fn label(self) -> &'static str {
+        match self {
+            ImportExportFormat::EnvrToml => "envr-toml",
+            ImportExportFormat::ToolVersions => "tool-versions",
+        }
+    }
+}
+
+fn parse_import_format(raw: &str, file: Option<&Path>) -> EnvrResult<ImportExportFormat> {
+    let trimmed = raw.trim();
+    if trimmed.eq_ignore_ascii_case("auto") {
+        if file
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .is_some_and(|name| name == TOOL_VERSIONS_FILE)
+        {
+            return Ok(ImportExportFormat::ToolVersions);
+        }
+        return Ok(ImportExportFormat::EnvrToml);
+    }
+    parse_named_format(trimmed)
+}
+
+fn parse_export_format(raw: &str) -> EnvrResult<ImportExportFormat> {
+    parse_named_format(raw.trim())
+}
+
+fn parse_named_format(raw: &str) -> EnvrResult<ImportExportFormat> {
+    match raw {
+        "envr-toml" | "toml" => Ok(ImportExportFormat::EnvrToml),
+        "tool-versions" | "asdf" => Ok(ImportExportFormat::ToolVersions),
+        other => Err(EnvrError::Validation(format!(
+            "unsupported import/export format `{other}`; expected `envr-toml` or `tool-versions`"
+        ))),
+    }
+}
+
+fn default_import_file(format: ImportExportFormat) -> PathBuf {
+    match format {
+        ImportExportFormat::EnvrToml => PathBuf::from(PROJECT_CONFIG_FILE),
+        ImportExportFormat::ToolVersions => PathBuf::from(TOOL_VERSIONS_FILE),
+    }
+}
+
+fn parse_tool_versions_file(path: &Path) -> EnvrResult<ProjectConfig> {
+    let content = fs::read_to_string(path)?;
+    parse_tool_versions_str(&content)
+}
+
+fn parse_tool_versions_str(content: &str) -> EnvrResult<ProjectConfig> {
+    let mut cfg = ProjectConfig::default();
+    for (idx, raw_line) in content.lines().enumerate() {
+        let without_comment = raw_line.split_once('#').map_or(raw_line, |(head, _)| head);
+        let line = without_comment.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let Some(tool) = parts.next() else {
+            continue;
+        };
+        let versions = parts.collect::<Vec<_>>();
+        if versions.is_empty() {
+            return Err(EnvrError::Validation(format!(
+                "invalid .tool-versions line {}: missing version for `{tool}`",
+                idx + 1
+            )));
+        }
+        let runtime = map_asdf_runtime_name(tool);
+        cfg.runtimes.insert(
+            runtime.to_string(),
+            RuntimeConfig {
+                version: Some(versions.join(" ")),
+                ..RuntimeConfig::default()
+            },
+        );
+    }
+    Ok(cfg)
+}
+
+fn render_tool_versions(cfg: &ProjectConfig) -> String {
+    let mut rows = cfg
+        .runtimes
+        .iter()
+        .filter_map(|(runtime, rc)| {
+            rc.version
+                .as_ref()
+                .map(|version| (map_envr_runtime_to_asdf_name(runtime), version.as_str()))
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut out = String::new();
+    for (runtime, version) in rows {
+        out.push_str(runtime);
+        out.push(' ');
+        out.push_str(version);
+        out.push('\n');
+    }
+    out
+}
+
+fn map_asdf_runtime_name(name: &str) -> &str {
+    match name {
+        "nodejs" => "node",
+        "golang" => "go",
+        "dotnet-core" => "dotnet",
+        other => other,
+    }
+}
+
+fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
+    match name {
+        "node" => "nodejs",
+        "go" => "golang",
+        "dotnet" => "dotnet-core",
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_tool_versions_with_name_mapping() {
+        let cfg = parse_tool_versions_str(
+            r#"
+# comment
+nodejs 22.11.0
+python 3.12.7 # inline comment
+golang 1.23.2
+dotnet-core 8.0.100
+"#,
+        )
+        .expect("parse");
+
+        assert_eq!(
+            cfg.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            Some("22.11.0")
+        );
+        assert_eq!(
+            cfg.runtimes.get("go").and_then(|r| r.version.as_deref()),
+            Some("1.23.2")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("dotnet")
+                .and_then(|r| r.version.as_deref()),
+            Some("8.0.100")
+        );
+        assert_eq!(
+            cfg.runtimes.get("python").and_then(|r| r.version.as_deref()),
+            Some("3.12.7")
+        );
+    }
+
+    #[test]
+    fn renders_tool_versions_with_asdf_names() {
+        let mut cfg = ProjectConfig::default();
+        cfg.runtimes.insert(
+            "node".into(),
+            RuntimeConfig {
+                version: Some("22.11.0".into()),
+                ..RuntimeConfig::default()
+            },
+        );
+        cfg.runtimes.insert(
+            "go".into(),
+            RuntimeConfig {
+                version: Some("1.23.2".into()),
+                ..RuntimeConfig::default()
+            },
+        );
+
+        let rendered = render_tool_versions(&cfg);
+        assert!(rendered.contains("nodejs 22.11.0\n"));
+        assert!(rendered.contains("golang 1.23.2\n"));
     }
 }
