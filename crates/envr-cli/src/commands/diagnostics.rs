@@ -61,8 +61,15 @@ pub(crate) fn export_zip_inner(
 
     let system_txt = build_system_txt();
     let environment_txt = build_environment_txt(&report);
+    let provider_state_json = build_provider_state_json(&report);
 
-    match write_diagnostic_zip(&zip_path, &doctor_json, &system_txt, &environment_txt) {
+    match write_diagnostic_zip(
+        &zip_path,
+        &doctor_json,
+        &system_txt,
+        &environment_txt,
+        &provider_state_json,
+    ) {
         Ok(()) => Ok(emit_export_ok(g, &zip_path)),
         Err(e) => Ok(emit_export_error(g, e, zip_path.as_path())),
     }
@@ -157,11 +164,37 @@ fn build_environment_txt(report: &DoctorReport) -> String {
     out
 }
 
+fn build_provider_state_json(report: &DoctorReport) -> String {
+    let state = json!({
+        "runtime_root": report.root.to_string_lossy(),
+        "path_shadowing": report.path_shadowing.as_ref().map(|p| json!({
+            "tool": p.tool,
+            "executable": p.executable,
+            "first_path_directory": p.first_path_directory,
+            "shims_directory": p.shims_directory,
+        })),
+        "path_conflicts": report.path_conflicts.iter().map(|p| json!({
+            "tool": p.tool,
+            "executable": p.executable,
+            "first_path_directory": p.first_path_directory,
+            "shims_directory": p.shims_directory,
+        })).collect::<Vec<_>>(),
+        "shims_dir_writable": report.shims_dir_writable,
+        "kinds": report.kinds.iter().map(|(k, n, cur)| json!({
+            "kind": k,
+            "installed_count": n,
+            "current_version": cur,
+        })).collect::<Vec<_>>(),
+    });
+    serde_json::to_string_pretty(&state).unwrap_or_else(|_| "{}".to_string())
+}
+
 fn write_diagnostic_zip(
     zip_path: &Path,
     doctor_json: &str,
     system_txt: &str,
     environment_txt: &str,
+    provider_state_json: &str,
 ) -> Result<(), EnvrError> {
     let file = File::create(zip_path).map_err(EnvrError::from)?;
     let mut zip = ZipWriter::new(file);
@@ -180,6 +213,11 @@ fn write_diagnostic_zip(
     zip.start_file("environment.txt", opts)
         .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip environment.txt", e))?;
     zip.write_all(environment_txt.as_bytes())
+        .map_err(EnvrError::from)?;
+
+    zip.start_file("provider-state.json", opts)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "zip provider-state.json", e))?;
+    zip.write_all(provider_state_json.as_bytes())
         .map_err(EnvrError::from)?;
 
     append_recent_logs(&mut zip, opts)?;

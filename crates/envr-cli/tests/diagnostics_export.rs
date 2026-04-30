@@ -32,4 +32,8 @@ fn diagnostics_export_writes_zip_with_doctor_json() {
         names.iter().any(|n| n == "system.txt"),
         "expected system.txt in zip, got {names:?}"
     );
+    assert!(
+        names.iter().any(|n| n == "provider-state.json"),
+        "expected provider-state.json in zip, got {names:?}"
+    );
 }
