@@ -1,6 +1,12 @@
 # Build setup bootstrapper (setup.exe) via WiX Burn.
 # Usage (from repo root):
-#   .\scripts\package-windows-setup.ps1 -Version 0.1.0 -OutRoot dist
+#   .\scripts\package-windows-setup.ps1 -Version 0.1.0 -OutRoot dist [-Arch x64|arm64]
+#   .\scripts\package-windows-setup.ps1 -Version 0.1.0 -InstallScope user -PathScope user
+#
+# setup.exe is the user-facing bundle layer. It keeps MSI as the execution
+# layer, handles VC++ runtime setup, and forwards INSTALLSCOPE/PATHSCOPE.
+# Example silent install:
+#   .\envr-setup-x64-0.1.0.0.exe /quiet INSTALLSCOPE=user PATHSCOPE=user
 param(
     [string]$Version = "0.1.0",
     [string]$OutRoot = "dist",
@@ -8,7 +14,11 @@ param(
     [string]$Arch = "x64",
     [string]$Manufacturer = "envr",
     [string]$VcRedistUrl = "",
-    [string]$VcRedistPath = ""
+    [string]$VcRedistPath = "",
+    [ValidateSet("machine", "user")]
+    [string]$InstallScope = "machine",
+    [ValidateSet("machine", "user", "none")]
+    [string]$PathScope = "machine"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,12 +43,16 @@ function Normalize-BundleVersion {
 
 $Version = Normalize-BundleVersion -InputVersion $Version
 
-if ($Arch -eq 'arm64' -and -not $VcRedistUrl) {
-    $VcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.arm64.exe'
+if (-not $VcRedistUrl) {
+    $VcRedistUrl = if ($Arch -eq 'arm64') {
+        'https://aka.ms/vs/17/release/vc_redist.arm64.exe'
+    } else {
+        'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+    }
 }
 
-$target = if ($Arch -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { '' }
 $runtimeKeyArch = if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }
+$bundleBuildArch = if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }
 
 $wixCmd = Get-Command wix -ErrorAction SilentlyContinue
 if (-not $wixCmd) {
@@ -64,7 +78,7 @@ Set-Location $root
 $msiPath = Join-Path $OutRoot "envr-windows-$Arch-$Version.msi"
 if (-not (Test-Path -LiteralPath $msiPath)) {
     Write-Host "MSI not found. Building MSI first..."
-    & (Join-Path $PSScriptRoot "package-windows-msi.ps1") -Version $Version -OutRoot $OutRoot -Arch $Arch -Manufacturer $Manufacturer
+    & (Join-Path $PSScriptRoot "package-windows-msi.ps1") -Version $Version -OutRoot $OutRoot -Arch $Arch -Manufacturer $Manufacturer -AcceptEula -InstallScope $InstallScope -PathScope $PathScope
 }
 
 if (-not (Test-Path -LiteralPath $msiPath)) {
@@ -126,7 +140,10 @@ $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
       <MsiPackage Id="EnvrMsi"
                   SourceFile="$msiPath"
                   Visible="no"
-                  Vital="yes" />
+                  Vital="yes">
+        <MsiProperty Name="INSTALLSCOPE" Value="$InstallScope" />
+        <MsiProperty Name="PATHSCOPE" Value="$PathScope" />
+      </MsiPackage>
     </Chain>
   </Bundle>
 </Wix>
@@ -137,7 +154,7 @@ if (Test-Path -LiteralPath $setupExe) {
 }
 
 Write-Host "Building setup bootstrapper via WiX..."
-wix build -acceptEula wix7 -ext WixToolset.BootstrapperApplications.wixext -ext WixToolset.Util.wixext $bundleWxs -arch x64 -o $setupExe
+wix build -acceptEula wix7 -ext WixToolset.BootstrapperApplications.wixext -ext WixToolset.Util.wixext $bundleWxs -arch $bundleBuildArch -o $setupExe
 if ($LASTEXITCODE -ne 0) {
     throw "WiX bundle build failed with exit code $LASTEXITCODE."
 }

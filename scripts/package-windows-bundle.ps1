@@ -1,6 +1,13 @@
 # Build both MSI and setup.exe in one command.
 # Usage (from repo root):
 #   .\scripts\package-windows-bundle.ps1 -Version 0.1.0 -OutRoot dist -Arch x64|arm64
+#   .\scripts\package-windows-bundle.ps1 -Version 0.1.0 -InstallScope user -PathScope user
+#
+# Bundle is the user-facing installer entry point. It embeds the MSI execution
+# layer, handles VC++ runtime dependency setup, and forwards INSTALLSCOPE and
+# PATHSCOPE to MSI. Generated setup.exe supports standard Burn switches such as
+# /quiet, /passive, /repair, /uninstall, and MSI properties, for example:
+#   .\envr-setup-x64-0.1.0.0.exe /quiet INSTALLSCOPE=user PATHSCOPE=user
 param(
     [string]$Version = "0.1.0",
     [string]$OutRoot = "dist",
@@ -8,7 +15,11 @@ param(
     [string]$Arch = "x64",
     [string]$Manufacturer = "envr",
     [string]$VcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe",
-    [string]$VcRedistPath = ""
+    [string]$VcRedistPath = "",
+    [ValidateSet("machine", "user")]
+    [string]$InstallScope = "machine",
+    [ValidateSet("machine", "user", "none")]
+    [string]$PathScope = "machine"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,8 +42,9 @@ Write-Host "Step 1/2: Building MSI..."
     -Arch $Arch `
     -Manufacturer $Manufacturer `
     -Target $target `
-    -AcceptEula
-
+    -AcceptEula `
+    -InstallScope $InstallScope `
+    -PathScope $PathScope
 
 Write-Host "Step 2/2: Building setup.exe..."
 & (Join-Path $scriptRoot "package-windows-setup.ps1") `
@@ -41,7 +53,9 @@ Write-Host "Step 2/2: Building setup.exe..."
     -Arch $Arch `
     -Manufacturer $Manufacturer `
     -VcRedistUrl $VcRedistUrl `
-    -VcRedistPath $VcRedistPath
+    -VcRedistPath $VcRedistPath `
+    -InstallScope $InstallScope `
+    -PathScope $PathScope
 
 Write-Host "All done."
 Write-Host "  MSI:   $(Join-Path $OutRoot "envr-windows-$Arch-$Version.msi")"

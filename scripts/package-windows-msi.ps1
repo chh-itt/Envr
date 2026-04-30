@@ -1,6 +1,14 @@
 # Build release binaries and produce a Windows MSI via WiX v4.
 # Usage (from repo root):
-#   .\scripts\package-windows-msi.ps1 -Version 0.1.0 -OutRoot dist
+#   .\scripts\package-windows-msi.ps1 -Version 0.1.0 -OutRoot dist [-Arch x64|arm64]
+#   .\scripts\package-windows-msi.ps1 -Version 0.1.0 -InstallScope user -PathScope user
+#
+# Installer layering:
+#   MSI is the stable execution layer. It defaults to a per-machine install in
+#   Program Files and appends envr to the machine PATH. Advanced callers can
+#   override INSTALLSCOPE=machine|user and PATHSCOPE=machine|user|none.
+#   Example silent install:
+#     msiexec /i envr-windows-x64-0.1.0.0.msi /qn INSTALLSCOPE=user PATHSCOPE=user
 param(
     [string]$Version = "0.1.0",
     [string]$OutRoot = "dist",
@@ -8,7 +16,11 @@ param(
     [string]$Arch = "x64",
     [string]$Target = "",
     [string]$Manufacturer = "envr",
-    [switch]$AcceptEula
+    [switch]$AcceptEula,
+    [ValidateSet("machine", "user")]
+    [string]$InstallScope = "machine",
+    [ValidateSet("machine", "user", "none")]
+    [string]$PathScope = "machine"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +44,17 @@ function Normalize-MsiVersion {
 }
 
 $Version = Normalize-MsiVersion -InputVersion $Version
+$installScopeUpper = $InstallScope.ToUpperInvariant()
+$pathScopeUpper = $PathScope.ToUpperInvariant()
+$scopeValue = if ($InstallScope -eq "user") { "perUser" } else { "perMachine" }
+$installRootDirectory = if ($InstallScope -eq "user") { "LocalAppDataFolder" } else { "ProgramFiles64Folder" }
+$pathFeatureLevel = if ($PathScope -eq "none") { "0" } else { "1" }
+$pathSystemValue = if ($PathScope -eq "machine") { "yes" } else { "no" }
+$pathScopeDescription = switch ($PathScope) {
+    "machine" { "machine PATH (requires elevation when installed directly)" }
+    "user" { "current-user PATH" }
+    default { "PATH unchanged" }
+}
 
 $wixCmd = Get-Command wix -ErrorAction SilentlyContinue
 if (-not $wixCmd) {
@@ -45,6 +68,7 @@ $destName = "envr-windows-$Arch-$Version"
 $dest = Join-Path $OutRoot $destName
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
+Write-Host "Installer defaults: install scope=$InstallScope, PATH scope=$PathScope"
 Write-Host "Building release (envr, er, envr-gui, envr-shim)..."
 if ($Target) {
     cargo build --release --target $Target -p envr-cli -p envr-gui -p envr-shim
@@ -74,12 +98,14 @@ $cmpPathCode = "3E936F40-E47B-4A5E-BBD6-33E9A7D50328"
 
 @"
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="envr" Manufacturer="$Manufacturer" Version="$Version" UpgradeCode="$upgradeCode" Language="1033" Scope="perMachine">
+  <Package Name="envr" Manufacturer="$Manufacturer" Version="$Version" UpgradeCode="$upgradeCode" Language="1033" Scope="$scopeValue">
+    <Property Id="INSTALLSCOPE" Value="$installScopeUpper" />
+    <Property Id="PATHSCOPE" Value="$pathScopeUpper" />
     <SummaryInformation Description="envr runtime manager" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of envr is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <StandardDirectory Id="ProgramFiles64Folder">
+    <StandardDirectory Id="$installRootDirectory">
       <Directory Id="INSTALLFOLDER" Name="envr">
         <Component Id="cmp_envr_exe" Guid="$cmpMainCode">
           <File Id="fil_envr_exe" Source="$dest\envr.exe" KeyPath="yes" />
@@ -95,7 +121,7 @@ $cmpPathCode = "3E936F40-E47B-4A5E-BBD6-33E9A7D50328"
         </Component>
         <Component Id="cmp_path_env" Guid="$cmpPathCode">
           <CreateFolder />
-          <Environment Id="envr_path_machine" Name="PATH" System="yes" Action="set" Part="last" Value="[INSTALLFOLDER]" />
+          <Environment Id="envr_path" Name="PATH" System="$pathSystemValue" Action="set" Part="last" Value="[INSTALLFOLDER]" />
         </Component>
       </Directory>
     </StandardDirectory>
@@ -105,6 +131,8 @@ $cmpPathCode = "3E936F40-E47B-4A5E-BBD6-33E9A7D50328"
       <ComponentRef Id="cmp_er_exe" />
       <ComponentRef Id="cmp_envr_gui_exe" />
       <ComponentRef Id="cmp_envr_shim_exe" />
+    </Feature>
+    <Feature Id="PathFeature" Title="Add envr to PATH" Description="$pathScopeDescription" Level="$pathFeatureLevel">
       <ComponentRef Id="cmp_path_env" />
     </Feature>
   </Package>
