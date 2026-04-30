@@ -30,6 +30,10 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub runtimes: HashMap<String, RuntimeConfig>,
 
+    /// Compatibility helpers for migrating from `.tool-versions` and similar file formats.
+    #[serde(default)]
+    pub compat: ProjectCompatConfig,
+
     /// Named command aliases for `envr run <name>` (shell one-liners).
     #[serde(default)]
     pub scripts: HashMap<String, String>,
@@ -37,6 +41,18 @@ pub struct ProjectConfig {
     /// Named overlays (e.g. CI vs local). Activated via `ENVR_PROFILE` or `envr exec --profile`.
     #[serde(default)]
     pub profiles: HashMap<String, ProjectProfile>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectCompatConfig {
+    #[serde(default)]
+    pub asdf: AsdfCompatConfig,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AsdfCompatConfig {
+    #[serde(default)]
+    pub names: HashMap<String, String>,
 }
 
 /// Pins + env for a single named profile (`[profiles.name]` in TOML).
@@ -81,6 +97,7 @@ impl ProjectConfig {
         merged.extends.append(&mut self.extends);
         merged.env.extend(self.env.drain());
         merged.runtimes.extend(self.runtimes.drain());
+        merged.compat.asdf.names.extend(self.compat.asdf.names.drain());
         merged.scripts.extend(self.scripts.drain());
         merged.profiles.extend(self.profiles.drain());
         merged
@@ -252,6 +269,14 @@ fn load_project_config_inner_uncached(
                 }
                 for (k, v) in &p.scripts {
                     merged.scripts.insert(k.clone(), v.clone());
+                }
+            }
+
+            for (asdf_name, envr_name) in merged.compat.asdf.names.clone() {
+                if let Some(runtime) = merged.runtimes.remove(&asdf_name)
+                    && !merged.runtimes.contains_key(&envr_name)
+                {
+                    merged.runtimes.insert(envr_name, runtime);
                 }
             }
 

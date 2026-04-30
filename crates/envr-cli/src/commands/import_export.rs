@@ -52,6 +52,7 @@ pub(crate) fn import_run_inner(
         ImportExportFormat::ToolVersions => parse_tool_versions_file(&file)?,
     };
     merged.runtimes.extend(imported.runtimes);
+    merged.compat.asdf.names.extend(imported.compat.asdf.names);
     merged.env.extend(imported.env);
     merged.scripts.extend(imported.scripts);
     merged.profiles.extend(imported.profiles);
@@ -247,6 +248,13 @@ fn parse_tool_versions_str(content: &str) -> EnvrResult<ProjectConfig> {
             )));
         }
         let runtime = map_asdf_runtime_name(tool);
+        if runtime != tool {
+            cfg.compat
+                .asdf
+                .names
+                .entry(tool.to_string())
+                .or_insert_with(|| runtime.to_string());
+        }
         cfg.runtimes.insert(
             runtime.to_string(),
             RuntimeConfig {
@@ -263,9 +271,19 @@ fn render_tool_versions(cfg: &ProjectConfig) -> String {
         .runtimes
         .iter()
         .filter_map(|(runtime, rc)| {
-            rc.version
-                .as_ref()
-                .map(|version| (map_envr_runtime_to_asdf_name(runtime), version.as_str()))
+            rc.version.as_ref().map(|version| {
+                (
+                    cfg.compat
+                        .asdf
+                        .names
+                        .iter()
+                        .find_map(|(asdf_name, envr_name)| {
+                            (envr_name == runtime).then_some(asdf_name.as_str())
+                        })
+                        .unwrap_or_else(|| map_envr_runtime_to_asdf_name(runtime)),
+                    version.as_str(),
+                )
+            })
         })
         .collect::<Vec<_>>();
     rows.sort_by(|a, b| a.0.cmp(b.0));
