@@ -46,11 +46,11 @@ if (-not $wixCmd) {
 }
 
 Write-Host "Ensuring WiX extensions (BootstrapperApplications, Util) are available..."
-wix extension add -g WixToolset.BootstrapperApplications.wixext
+wix extension add -g WixToolset.BootstrapperApplications.wixext -acceptEula wix7
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install WiX extension: WixToolset.BootstrapperApplications.wixext"
 }
-wix extension add -g WixToolset.Util.wixext
+wix extension add -g WixToolset.Util.wixext -acceptEula wix7
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install WiX extension: WixToolset.Util.wixext"
 }

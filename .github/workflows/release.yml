@@ -201,7 +201,7 @@ jobs:
 
   build-macos-intel:
     name: Build macOS x86_64 archive
-    runs-on: macos-13
+    runs-on: macos-15
     needs: verify
     env:
       REL_VER: ${{ github.ref_name }}
@@ -213,6 +213,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88
         with:
           targets: x86_64-apple-darwin
+
+      - name: Setup Rosetta for x86_64 toolchain/runtime
+        run: sudo softwareupdate --install-rosetta --agree-to-license
+
+      - name: Setup x64 macOS Rust target on Apple Silicon runners
+        run: rustup target add x86_64-apple-darwin
 
       - name: Package tar.gz
         shell: bash
