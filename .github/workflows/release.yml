@@ -282,13 +282,30 @@ jobs:
         with:
           path: release-assets
 
-      - name: Show collected assets
+      - name: Prepare release assets
         shell: bash
-        run: find release-assets -type f | sort
+        run: |
+          set -euo pipefail
+          rm -rf upload-assets
+          mkdir -p upload-assets
+
+          # Upload only distributable binaries. Artifact-local checksum files have
+          # repeated names such as SHA256SUMS.txt/SHA256SUMS-archive.txt across
+          # jobs, which can race or collide in GitHub Release assets.
+          while IFS= read -r file; do
+            cp "$file" "upload-assets/$(basename "$file")"
+          done < <(find release-assets -type f \( -name '*.zip' -o -name '*.msi' -o -name '*.exe' -o -name '*.tar.gz' \) | sort)
+
+          (
+            cd upload-assets
+            sha256sum * > SHA256SUMS.txt
+          )
+
+          find upload-assets -type f | sort
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
-          files: release-assets/**/*
+          files: upload-assets/*
