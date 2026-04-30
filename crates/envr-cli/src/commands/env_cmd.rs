@@ -31,10 +31,23 @@ pub(crate) fn run_inner(
     g: &GlobalArgs,
     project: ProjectPathProfileArgs,
     shell: EnvShellKind,
+    diff: bool,
 ) -> EnvrResult<CliExit> {
     let ProjectPathProfileArgs { path, profile } = project;
     let session = CliPathProfile::new(path, profile).load_project()?;
     let env_map = child_env::collect_run_env(&session.ctx, false, session.project_config())?;
+    let diff_map = if diff {
+        let mut out = Map::new();
+        let current: std::collections::HashMap<String, String> = std::env::vars().collect();
+        for (k, v) in &env_map {
+            if current.get(k) != Some(v) {
+                out.insert(k.clone(), Value::String(v.clone()));
+            }
+        }
+        out
+    } else {
+        Map::new()
+    };
 
     let mut keys: Vec<_> = env_map.keys().cloned().collect();
     keys.sort();
@@ -54,7 +67,8 @@ pub(crate) fn run_inner(
 
     let data = json!({
         "shell": shell_str,
-        "vars": vars,
+        "vars": if diff { Value::Object(diff_map) } else { Value::Object(vars) },
+        "diff": diff,
     });
     Ok(output::emit_ok(
         g,

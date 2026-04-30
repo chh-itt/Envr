@@ -150,6 +150,9 @@ pub enum Command {
         project: ProjectPathProfileArgs,
         #[arg(long, value_enum, default_value_t = EnvShellKind::Posix)]
         shell: EnvShellKind,
+        /// Show env changes relative to the current process environment
+        #[arg(long)]
+        diff: bool,
     },
     /// Render a template file with `${VAR}` placeholders using the merged `envr run` environment
     Template {
