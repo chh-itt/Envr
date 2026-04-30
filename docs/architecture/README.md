@@ -14,6 +14,7 @@ These files are primarily for maintainers, not end users.
 
 | Document | Purpose |
 |---|---|
+| [`post-v1-enhancement-roadmap.md`](post-v1-enhancement-roadmap.md) | Post-v1 enhancement backlog comparing `envr` with mature managers such as `asdf`/`mise` and outlining differentiation opportunities. |
 | [`new-runtime-playbook.md`](new-runtime-playbook.md) | Operational guide for adding a new runtime provider. |
 | [`runtime-descriptor-refactor.md`](runtime-descriptor-refactor.md) | Runtime descriptor structure and refactor notes. |
 | [`download-control-plane-blueprint.md`](download-control-plane-blueprint.md) | Download architecture blueprint. |
