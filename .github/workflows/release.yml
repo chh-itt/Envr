@@ -106,13 +106,13 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
-        with:
-          targets: aarch64-pc-windows-msvc
 
-      - name: Setup x64 Windows Rust target for MSI/setup
-        uses: dtolnay/rust-toolchain@1.88
-        with:
-          targets: x86_64-pc-windows-msvc
+      - name: Install Windows Rust targets
+        shell: pwsh
+        run: |
+          rustup target add aarch64-pc-windows-msvc
+          rustup target add x86_64-pc-windows-msvc
+          rustup target list --installed
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -179,8 +179,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
-        with:
-          targets: aarch64-unknown-linux-gnu
+
+      - name: Install Linux ARM64 Rust target
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          rustup target list --installed
 
       - name: Install ARM64 cross toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross

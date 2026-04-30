@@ -54,13 +54,9 @@ wix extension add -g WixToolset.Util.wixext -acceptEula wix7
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install WiX extension: WixToolset.Util.wixext"
 }
-$extList = wix extension list -g | Out-String
-if ($extList -notmatch "WixToolset\.BootstrapperApplications\.wixext") {
-    throw "WiX extension WixToolset.BootstrapperApplications.wixext is missing after install."
-}
-if ($extList -notmatch "WixToolset\.Util\.wixext") {
-    throw "WiX extension WixToolset.Util.wixext is missing after install."
-}
+# WiX v7 may print extension identifiers with version/source details that do not
+# match the package id verbatim, so do not gate on parsing `wix extension list`.
+# The later `wix build -ext ...` invocation is the authoritative validation.
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
