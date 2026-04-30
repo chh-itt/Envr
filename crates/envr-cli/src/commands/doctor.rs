@@ -137,6 +137,7 @@ impl DoctorReport {
             "warnings": self.warnings,
             "notes": self.notes,
             "recommendations": rec,
+            "next_steps": next_steps_for_doctor(self),
             "onboarding_checklist": onboarding_checklist_lines(),
             "path_shadowing": path_shadowing,
             "path_conflicts": path_conflicts,
@@ -228,11 +229,8 @@ fn merge_path_fix_json(data: &mut Value, fix_path: bool, report: &DoctorReport) 
     }
 }
 
-fn next_steps_for_doctor(
-    report: &DoctorReport,
-    fix: bool,
-    fix_path: bool,
-) -> Vec<(&'static str, String)> {
+fn next_steps_for_doctor(report: &DoctorReport) -> Vec<(&'static str, String)> {
+    let mut steps: Vec<(&'static str, String)> = Vec::new();
     let mut steps = Vec::new();
     if report.ok() {
         steps.push((
@@ -244,26 +242,22 @@ fn next_steps_for_doctor(
             ),
         ));
     } else {
-        if !fix {
-            steps.push((
-                "run_doctor_fix",
-                envr_core::i18n::tr_key(
-                    "cli.next_step.doctor.run_fix",
-                    "可执行 `envr doctor --fix` 自动修复可修复问题。",
-                    "Run `envr doctor --fix` to auto-fix recoverable issues.",
-                ),
-            ));
-        }
-        if !fix_path {
-            steps.push((
-                "show_path_fix_suggestions",
-                envr_core::i18n::tr_key(
-                    "cli.next_step.doctor.show_path_fix",
-                    "可执行 `envr doctor --fix-path` 查看 PATH 修复建议。",
-                    "Run `envr doctor --fix-path` to view PATH repair suggestions.",
-                ),
-            ));
-        }
+        steps.push((
+            "run_doctor_fix",
+            envr_core::i18n::tr_key(
+                "cli.next_step.doctor.run_fix",
+                "可执行 `envr doctor --fix` 自动修复可修复问题。",
+                "Run `envr doctor --fix` to auto-fix recoverable issues.",
+            ),
+        ));
+        steps.push((
+            "show_path_fix_suggestions",
+            envr_core::i18n::tr_key(
+                "cli.next_step.doctor.show_path_fix",
+                "可执行 `envr doctor --fix-path` 查看 PATH 修复建议。",
+                "Run `envr doctor --fix-path` to view PATH repair suggestions.",
+            ),
+        ));
     }
     steps
 }
@@ -295,7 +289,7 @@ pub(crate) fn run_inner(
             serde_json::to_value(&fixes_applied).unwrap_or_else(|_| json!([])),
         );
     }
-    data = output::with_next_steps(data, next_steps_for_doctor(&report, fix, fix_path));
+    data = output::with_next_steps(data, next_steps_for_doctor(&report));
     merge_path_fix_json(&mut data, fix_path, &report);
     let ok = report.ok();
     let fixes_for_text = fixes_applied.clone();
