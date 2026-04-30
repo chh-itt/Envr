@@ -13,9 +13,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
-    throw "Version must be Bundle-compatible: Major.Minor.Build[.Revision], got '$Version'."
+function Normalize-BundleVersion {
+    param([string]$InputVersion)
+
+    $clean = $InputVersion.TrimStart('v')
+    if ($clean -match '^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        $patch = [int]$Matches[3]
+        return "$major.$minor.$patch.0"
+    }
+
+    if ($clean -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
+        return $clean
+    }
+
+    throw "Version must be Bundle-compatible: Major.Minor.Build[.Revision], got '$InputVersion'."
 }
+
+$Version = Normalize-BundleVersion -InputVersion $Version
 
 if ($Arch -eq 'arm64' -and -not $VcRedistUrl) {
     $VcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.arm64.exe'

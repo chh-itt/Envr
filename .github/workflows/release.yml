@@ -109,6 +109,11 @@ jobs:
         with:
           targets: aarch64-pc-windows-msvc
 
+      - name: Setup x64 Windows Rust target for MSI/setup
+        uses: dtolnay/rust-toolchain@1.88
+        with:
+          targets: x86_64-pc-windows-msvc
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:

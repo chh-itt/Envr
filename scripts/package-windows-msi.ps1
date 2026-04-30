@@ -63,7 +63,7 @@ foreach ($e in $exes) {
 }
 
 $wxsPath = Join-Path $dest "envr-installer.wxs"
-$msiPath = Join-Path $OutRoot "envr-windows-x64-$Version.msi"
+$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$Version.msi"
 
 $upgradeCode = "9A3D6A5A-41AF-4F1D-9A57-0E37D08D0B9F"
 $cmpMainCode = "A31C22B6-6CC9-42E1-B37C-6FFFA36A5E20"
