@@ -7,7 +7,8 @@ param(
     [ValidateSet("x64", "arm64")]
     [string]$Arch = "x64",
     [string]$Target = "",
-    [string]$Manufacturer = "envr"
+    [string]$Manufacturer = "envr",
+    [switch]$AcceptEula
 )
 
 $ErrorActionPreference = "Stop"
@@ -115,7 +116,12 @@ if (Test-Path -LiteralPath $msiPath) {
 }
 
 Write-Host "Building MSI via WiX..."
-wix build $wxsPath -arch $Arch -o $msiPath
+$wixArgs = @("build")
+if ($AcceptEula) {
+    $wixArgs += @("-acceptEula", "wix7")
+}
+$wixArgs += @($wxsPath, "-arch", $Arch, "-o", $msiPath)
+& wix @wixArgs
 if ($LASTEXITCODE -ne 0) {
     throw "WiX build failed with exit code $LASTEXITCODE."
 }

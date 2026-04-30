@@ -30,7 +30,8 @@ Write-Host "Step 1/2: Building MSI..."
     -OutRoot $OutRoot `
     -Arch $Arch `
     -Manufacturer $Manufacturer `
-    -Target $target
+    -Target $target `
+    -AcceptEula
 
 Write-Host "Step 2/2: Building setup.exe..."
 & (Join-Path $scriptRoot "package-windows-setup.ps1") `

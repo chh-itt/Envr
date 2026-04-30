@@ -60,6 +60,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
+        with:
+          targets: x86_64-pc-windows-msvc
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -104,6 +106,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88
+        with:
+          targets: aarch64-pc-windows-msvc
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
