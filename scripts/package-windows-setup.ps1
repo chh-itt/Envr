@@ -126,8 +126,7 @@ $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
       <MsiPackage Id="EnvrMsi"
                   SourceFile="$msiPath"
                   Visible="no"
-                  Vital="yes"
-                  Platform="$Arch" />
+                  Vital="yes" />
     </Chain>
   </Bundle>
 </Wix>
