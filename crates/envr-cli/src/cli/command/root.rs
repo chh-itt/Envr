@@ -132,8 +132,11 @@ pub enum Command {
     Run {
         #[command(flatten)]
         shared: ExecRunSharedArgs,
-        #[arg(value_name = "COMMAND", required = true)]
-        command: String,
+        /// List detected scripts instead of running one.
+        #[arg(long)]
+        list: bool,
+        #[arg(value_name = "COMMAND")]
+        command: Option<String>,
         #[arg(
             trailing_var_arg = true,
             allow_hyphen_values = true,

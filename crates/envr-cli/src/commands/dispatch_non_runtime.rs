@@ -62,9 +62,10 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         )),
         Command::Run {
             shared,
+            list,
             command,
             args,
-        } => ok!(run_cmd::run_inner(global, shared, command, args)),
+        } => ok!(run_cmd::run_inner(global, shared, list, command, args)),
         Command::Env { project, shell } => {
             ok!(env_cmd::run_inner(global, project, shell))
         },

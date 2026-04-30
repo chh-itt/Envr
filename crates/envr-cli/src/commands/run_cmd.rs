@@ -234,9 +234,15 @@ fn script_shell_invocation(script: &str, tail_args: &[String]) -> (String, Vec<S
 pub(crate) fn run_inner(
     g: &GlobalArgs,
     shared: ExecRunSharedArgs,
-    command: String,
+    list_only: bool,
+    command: Option<String>,
     args: Vec<String>,
 ) -> EnvrResult<CliExit> {
+    if list_only && command.is_none() {
+        let ExecRunSharedArgs { path, profile, .. } = shared;
+        return list_scripts_inner(g, path, profile, list_only);
+    }
+
     let ExecRunSharedArgs {
         install_if_missing,
         dry_run,
@@ -253,6 +259,9 @@ pub(crate) fn run_inner(
     let pc = rex.project_config();
 
     let text_out = matches!(g.effective_output_format(), OutputFormat::Text);
+    let Some(command) = command else {
+        return list_scripts_inner(g, ctx.working_dir.clone(), None, list_only);
+    };
 
     let mut auto_installed: Vec<serde_json::Value> = Vec::new();
     if install_if_missing && !dry_run && !dry_run_diff {
@@ -404,6 +413,31 @@ fn install_missing_in_parallel(uniq: Vec<(String, String)>) -> EnvrResult<Vec<(S
         return Err(err);
     }
     Ok(results.lock().map(|v| v.clone()).unwrap_or_default())
+}
+
+fn list_scripts_inner(
+    g: &GlobalArgs,
+    path: std::path::PathBuf,
+    profile: Option<String>,
+    list_only: bool,
+) -> EnvrResult<CliExit> {
+    let rex = CliPathProfile::new(path, profile).load_run_exec()?;
+    let pc = rex.project_config();
+    let scripts = pc
+        .map(|cfg| {
+            cfg.scripts
+                .iter()
+                .map(|(name, cmd)| (name.clone(), cmd.clone()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let data = json!({
+        "scripts": scripts,
+        "list_only": list_only,
+    });
+
+    Ok(crate::commands::common::emit_child_process_outcome(g, data, 0))
 }
 
 fn read_max_download_workers() -> u32 {
