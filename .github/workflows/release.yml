@@ -298,7 +298,7 @@ jobs:
 
           (
             cd upload-assets
-            sha256sum * > SHA256SUMS.txt
+            sha256sum envr-* > SHA256SUMS.txt
           )
 
           find upload-assets -type f | sort

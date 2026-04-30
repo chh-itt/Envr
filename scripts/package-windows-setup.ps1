@@ -41,6 +41,7 @@ function Normalize-BundleVersion {
     throw "Version must be Bundle-compatible: Major.Minor.Build[.Revision], got '$InputVersion'."
 }
 
+$releaseVersion = $Version
 $Version = Normalize-BundleVersion -InputVersion $Version
 
 if (-not $VcRedistUrl) {
@@ -75,9 +76,10 @@ if ($LASTEXITCODE -ne 0) {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$Version.msi"
+$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$releaseVersion.msi"
 if (-not (Test-Path -LiteralPath $msiPath)) {
     Write-Host "MSI not found. Building MSI first..."
+    $env:ENVR_RELEASE_VERSION = $releaseVersion
     & (Join-Path $PSScriptRoot "package-windows-msi.ps1") -Version $Version -OutRoot $OutRoot -Arch $Arch -Manufacturer $Manufacturer -AcceptEula -InstallScope $InstallScope -PathScope $PathScope
 }
 
@@ -85,7 +87,7 @@ if (-not (Test-Path -LiteralPath $msiPath)) {
     throw "MSI is still missing after build: $msiPath"
 }
 
-$stageName = "envr-windows-setup-$Arch-$Version"
+$stageName = "envr-windows-setup-$Arch-$releaseVersion"
 $stage = Join-Path $OutRoot $stageName
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
@@ -103,7 +105,7 @@ if (-not (Test-Path -LiteralPath $vcRedistExe)) {
 }
 
 $bundleWxs = Join-Path $stage "envr-setup.wxs"
-$setupExe = Join-Path $OutRoot "envr-setup-$Arch-$Version.exe"
+$setupExe = Join-Path $OutRoot "envr-windows-$Arch-$releaseVersion-setup.exe"
 $bundleUpgradeCode = "2A9B6C0D-B2A0-4E91-B4BF-04EAF172A7A8"
 
 @"

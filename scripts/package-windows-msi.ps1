@@ -64,7 +64,8 @@ if (-not $wixCmd) {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$destName = "envr-windows-$Arch-$Version"
+$releaseVersion = if ($env:ENVR_RELEASE_VERSION) { $env:ENVR_RELEASE_VERSION } else { $Version }
+$destName = "envr-windows-$Arch-$releaseVersion"
 $dest = Join-Path $OutRoot $destName
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
@@ -87,7 +88,7 @@ foreach ($e in $exes) {
 }
 
 $wxsPath = Join-Path $dest "envr-installer.wxs"
-$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$Version.msi"
+$msiPath = Join-Path $OutRoot "envr-windows-$Arch-$releaseVersion.msi"
 
 $upgradeCode = "9A3D6A5A-41AF-4F1D-9A57-0E37D08D0B9F"
 $cmpMainCode = "A31C22B6-6CC9-42E1-B37C-6FFFA36A5E20"

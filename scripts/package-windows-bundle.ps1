@@ -25,6 +25,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$env:ENVR_RELEASE_VERSION = $Version
 
 if ($Arch -eq "arm64") {
     $VcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.arm64.exe"
@@ -59,4 +60,4 @@ Write-Host "Step 2/2: Building setup.exe..."
 
 Write-Host "All done."
 Write-Host "  MSI:   $(Join-Path $OutRoot "envr-windows-$Arch-$Version.msi")"
-Write-Host "  Setup: $(Join-Path $OutRoot "envr-setup-$Arch-$Version.exe")"
+Write-Host "  Setup: $(Join-Path $OutRoot "envr-windows-$Arch-$Version-setup.exe")"
