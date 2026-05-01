@@ -231,7 +231,6 @@ fn merge_path_fix_json(data: &mut Value, fix_path: bool, report: &DoctorReport) 
 
 fn next_steps_for_doctor(report: &DoctorReport) -> Vec<(&'static str, String)> {
     let mut steps: Vec<(&'static str, String)> = Vec::new();
-    let mut steps = Vec::new();
     if report.ok() {
         steps.push((
             "verify_project_status",

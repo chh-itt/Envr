@@ -214,12 +214,23 @@ pub enum ProjectCmd {
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
     },
+    /// Read or write the lockfile snapshot for the project config
+    Lock {
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        /// Print the lockfile content instead of writing it
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Ensure pinned runtimes exist; with `--install`, download missing pins
     Sync {
         #[arg(long, value_name = "DIR", default_value = ".")]
         path: PathBuf,
         #[arg(long)]
         install: bool,
+        /// Respect `.envr.lock.toml` and refuse to install when it is stale
+        #[arg(long)]
+        locked: bool,
     },
     /// Verify pins resolve under the runtime root; optional remote index check
     Validate {
@@ -228,6 +239,9 @@ pub enum ProjectCmd {
         /// Compare pins against remote indexes (may use network / local cache)
         #[arg(long)]
         check_remote: bool,
+        /// Respect `.envr.lock.toml` and verify it matches `.envr.toml`
+        #[arg(long)]
+        locked: bool,
     },
 }
 

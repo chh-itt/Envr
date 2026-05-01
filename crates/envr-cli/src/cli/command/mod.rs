@@ -51,6 +51,7 @@ impl Command {
             Command::Check { .. } => CommandKey::Check,
             Command::Status { .. } => CommandKey::Status,
             Command::Project(ProjectCmd::Add { .. }) => CommandKey::ProjectAdd,
+            Command::Project(ProjectCmd::Lock { .. }) => CommandKey::ProjectSync,
             Command::Project(ProjectCmd::Sync { .. }) => CommandKey::ProjectSync,
             Command::Project(ProjectCmd::Validate { .. }) => CommandKey::ProjectValidate,
             Command::Import { .. } => CommandKey::Import,

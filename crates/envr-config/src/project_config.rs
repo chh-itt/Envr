@@ -10,6 +10,7 @@ use std::{
 
 pub const PROJECT_CONFIG_FILE: &str = ".envr.toml";
 pub const PROJECT_CONFIG_LOCAL_FILE: &str = ".envr.local.toml";
+pub const PROJECT_LOCK_FILE: &str = ".envr.lock.toml";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectConfigLocation {
@@ -324,6 +325,18 @@ pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrR
         .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode project config", e))?;
     fs::write(path, content).map_err(EnvrError::from)?;
     Ok(())
+}
+
+pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectConfig>> {
+    let path = path.as_ref();
+    if !path.is_file() {
+        return Ok(None);
+    }
+    parse_project_config(path).map(Some)
+}
+
+pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
+    save_project_config(path, cfg)
 }
 
 fn expand_env_map(

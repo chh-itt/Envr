@@ -7,7 +7,10 @@ use crate::commands::common;
 use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
-use envr_config::project_config::{load_project_config_profile, reset_project_config_load_cache};
+use envr_config::project_config::{
+    PROJECT_LOCK_FILE, load_project_lock,
+    reset_project_config_load_cache, save_project_lock,
+};
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
@@ -69,10 +72,15 @@ pub(crate) fn run_inner(
 ) -> EnvrResult<CliExit> {
     match cmd {
         ProjectCmd::Add { spec, path } => add_inner(g, spec, path),
-        ProjectCmd::Sync { path, install } => sync_inner(g, service, path, install),
-        ProjectCmd::Validate { path, check_remote } => {
-            validate_inner(g, service, path, check_remote)
+        ProjectCmd::Lock { path, dry_run } => lock_inner(g, path, dry_run),
+        ProjectCmd::Sync { path, install, locked } => {
+            sync_inner(g, service, path, install, locked)
         }
+        ProjectCmd::Validate {
+            path,
+            check_remote,
+            locked,
+        } => validate_inner(g, service, path, check_remote, locked),
     }
 }
 
@@ -135,14 +143,46 @@ fn add_inner(g: &GlobalArgs, spec: String, path: PathBuf) -> EnvrResult<CliExit>
     ))
 }
 
+fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExit> {
+    let session = CliPathProfile::new(path.clone(), None).load_project()?;
+    let Some((cfg, loc)) = session.project.as_ref() else {
+        return Err(EnvrError::Validation("no project config found".into()));
+    };
+    let lock_path = loc.dir.join(PROJECT_LOCK_FILE);
+    let rendered = toml::to_string_pretty(cfg).map_err(|e| {
+        EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
+    })?;
+    if !dry_run {
+        save_project_lock(&lock_path, cfg)?;
+        reset_project_config_load_cache();
+    }
+    let data = json!({
+        "lock_path": lock_path.to_string_lossy(),
+        "dry_run": dry_run,
+        "content": rendered,
+    });
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {}))
+}
+
 fn sync_inner(
     g: &GlobalArgs,
     _service: &RuntimeService,
     path: PathBuf,
     install: bool,
+    locked: bool,
 ) -> EnvrResult<CliExit> {
-    let session = CliPathProfile::new(path, None).load_project()?;
+    let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
+    if locked {
+        let lock_path = session.ctx.working_dir.join(PROJECT_LOCK_FILE);
+        let lock_cfg = load_project_lock(&lock_path)?;
+        if lock_cfg.as_ref() != session.project_config() {
+            return Err(EnvrError::Validation(format!(
+                "lockfile {} is stale; run `envr project lock`",
+                lock_path.display()
+            )));
+        }
+    }
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
         let data = json!({
@@ -330,10 +370,10 @@ fn validate_inner(
     service: &RuntimeService,
     path: PathBuf,
     check_remote: bool,
+    locked: bool,
 ) -> EnvrResult<CliExit> {
-    let runtime_root = common::session_runtime_root()?;
-    let loaded = load_project_config_profile(&path, None)?;
-    let Some((cfg, loc)) = loaded else {
+    let session = CliPathProfile::new(path.clone(), None).load_project()?;
+    let Some((cfg, loc)) = session.project.as_ref() else {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
                 "cli.err.no_project_config",
@@ -343,6 +383,18 @@ fn validate_inner(
             &[("path", &path.display().to_string())],
         )));
     };
+    if locked {
+        let lock_path = session.ctx.working_dir.join(PROJECT_LOCK_FILE);
+        let lock_cfg = load_project_lock(&lock_path)?;
+        if lock_cfg.as_ref() != Some(cfg) {
+            return Err(EnvrError::Validation(format!(
+                "lockfile {} is stale; run `envr project lock`",
+                lock_path.display()
+            )));
+        }
+    }
+
+    let runtime_root = common::session_runtime_root()?;
 
     let mut issues = Vec::new();
     let mut remote_warnings = Vec::new();
