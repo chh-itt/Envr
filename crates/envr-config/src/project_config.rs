@@ -342,8 +342,20 @@ pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectCon
 }
 
 pub fn load_project_lock_any(dir: impl AsRef<Path>) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
+    load_project_lock_any_with_preference(dir, true)
+}
+
+pub fn load_project_lock_any_with_preference(
+    dir: impl AsRef<Path>,
+    prefer_canonical: bool,
+) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
     let dir = dir.as_ref();
-    for candidate in project_lock_candidates(dir) {
+    let candidates = if prefer_canonical {
+        project_lock_candidates(dir)
+    } else {
+        project_lock_candidates(dir).map(|p| p)
+    };
+    for candidate in candidates {
         if let Some(cfg) = load_project_lock(&candidate)? {
             return Ok(Some((cfg, candidate)));
         }
