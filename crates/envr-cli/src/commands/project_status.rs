@@ -152,7 +152,7 @@ pub fn build_project_status_from_loaded(
         working_dir: ctx.working_dir.clone(),
         project_dir,
         profile: ctx.profile.clone(),
-        lock_file,
+        lock_file: loaded.as_ref().and_then(|(_, loc)| loc.lock_file.clone()),
         rows,
     })
 }
