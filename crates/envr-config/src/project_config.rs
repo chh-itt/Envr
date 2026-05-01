@@ -10,8 +10,8 @@ use std::{
 
 pub const PROJECT_CONFIG_FILE: &str = ".envr.toml";
 pub const PROJECT_CONFIG_LOCAL_FILE: &str = ".envr.local.toml";
-pub const PROJECT_LOCK_FILE: &str = ".envr.lock.toml";
-pub const PROJECT_LOCK_FILE_ALT: &str = ".envr.lock";
+pub const PROJECT_LOCK_FILE: &str = ".envr.lock";
+pub const PROJECT_LOCK_FILE_ALT: &str = ".envr.lock.toml";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectConfigLocation {
