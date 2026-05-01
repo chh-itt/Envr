@@ -13,18 +13,19 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> (RequestKin
     let Some(raw) = raw else {
         return (RequestKind::Unknown, None);
     };
-    let kind = if matches!(raw, "latest" | "stable" | "lts" | "system") {
+    let normalized = raw.strip_prefix('v').unwrap_or(raw);
+    let kind = if matches!(normalized, "latest" | "stable" | "lts" | "system") {
         RequestKind::Alias
-    } else if raw.contains('<') || raw.contains('>') || raw.starts_with("~>") {
+    } else if normalized.contains('<') || normalized.contains('>') || normalized.starts_with("~>") {
         RequestKind::Range
-    } else if raw.contains('-')
-        && raw.chars().any(|c| c.is_ascii_digit())
-        && raw.chars().any(|c| c.is_ascii_alphabetic())
+    } else if normalized.contains('-')
+        && normalized.chars().any(|c| c.is_ascii_digit())
+        && normalized.chars().any(|c| c.is_ascii_alphabetic())
     {
         RequestKind::Channel
-    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) && raw.split('.').count() < 3 {
+    } else if normalized.chars().next().is_some_and(|c| c.is_ascii_digit()) && normalized.split('.').count() < 3 {
         RequestKind::Prefix
-    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    } else if normalized.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         RequestKind::Exact
     } else if has_pin {
         RequestKind::Exact
@@ -54,9 +55,11 @@ mod tests {
         assert_eq!(classify_request(Some("latest"), false).0, RequestKind::Alias);
         assert_eq!(classify_request(Some("stable"), false).0, RequestKind::Alias);
         assert_eq!(classify_request(Some("lts"), false).0, RequestKind::Alias);
+        assert_eq!(classify_request(Some("v22"), false).0, RequestKind::Prefix);
         assert_eq!(classify_request(Some("22"), false).0, RequestKind::Prefix);
         assert_eq!(classify_request(Some("22.11"), false).0, RequestKind::Prefix);
         assert_eq!(classify_request(Some("22.11.0"), false).0, RequestKind::Exact);
+        assert_eq!(classify_request(Some("v22.11.0"), false).0, RequestKind::Exact);
     }
 
     #[test]
