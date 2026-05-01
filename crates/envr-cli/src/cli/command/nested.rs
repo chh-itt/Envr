@@ -173,6 +173,21 @@ pub enum HookCmd {
     Zsh,
     /// powershell: add to your PowerShell profile as `Invoke-Expression (& envr hook powershell)`
     Powershell,
+    /// Print whether a shell hook is currently active and which profile files are relevant
+    Status {
+        /// Profile directory to inspect (defaults to current directory)
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
+    /// Print hook diagnostics and next-step guidance for the selected shell
+    Doctor {
+        /// Shell to diagnose
+        #[arg(value_enum)]
+        shell: HookShell,
+        /// Profile directory to inspect (defaults to current directory)
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+    },
     /// Print env var names that hooks save/restore (one per line; internal / debugging)
     Keys {
         #[arg(long, value_name = "DIR", default_value = ".")]
@@ -183,6 +198,13 @@ pub enum HookCmd {
         #[command(flatten)]
         project: ProjectPathProfileArgs,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum HookShell {
+    Bash,
+    Zsh,
+    Powershell,
 }
 
 #[derive(Subcommand, Debug)]

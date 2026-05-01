@@ -5,8 +5,8 @@ mod root;
 
 pub use nested::{
     AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, CacheRuntimeCmd, ConfigCmd, ConfigValueType,
-    DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd, ProjectCmd, RustCmd,
-    ShimCmd, ToolCmd,
+    DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, HookShell, ProfileCmd, ProjectCmd,
+    RustCmd, ShimCmd, ToolCmd,
 };
 pub use root::Command;
 

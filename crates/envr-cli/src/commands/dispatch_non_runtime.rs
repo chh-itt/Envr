@@ -140,6 +140,12 @@ fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
             "powershell",
             hook_cmd::HOOK_POWERSHELL,
         )),
+        crate::cli::HookCmd::Status { path } => {
+            ok!(hook_cmd::status_inner(global, path))
+        },
+        crate::cli::HookCmd::Doctor { shell, path } => {
+            ok!(hook_cmd::doctor_inner(global, shell, path))
+        },
         crate::cli::HookCmd::Keys { path } => {
             ok!(hook_cmd::run_keys_inner(global, path))
         },
