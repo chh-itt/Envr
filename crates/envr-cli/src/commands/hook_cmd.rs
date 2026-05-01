@@ -12,6 +12,7 @@ use envr_error::EnvrResult;
 
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::env;
 
 pub(crate) const HOOK_BASH: &str = include_str!("../../shell/hook.bash.inc");
 pub(crate) const HOOK_ZSH: &str = include_str!("../../shell/hook.zsh.inc");
@@ -46,10 +47,12 @@ pub(crate) fn status_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit>
 
 pub(crate) fn doctor_inner(g: &GlobalArgs, shell: HookShell, path: PathBuf) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
-    let body = hook_doctor(shell, &path, &session.ctx.working_dir);
+    let profile_state = shell_profile_state(shell);
+    let body = hook_doctor(shell, &path, &session.ctx.working_dir, profile_state.as_deref());
     let data = json!({
         "shell": format!("{shell:?}").to_lowercase(),
         "path": session.ctx.working_dir.to_string_lossy(),
+        "profile_state": profile_state,
         "recommendations": body,
     });
     Ok(output::emit_ok(g, crate::codes::ok::HOOK_KEYS, data, || {
@@ -97,10 +100,13 @@ fn hook_status(path: &Path, root: &Path) -> Vec<String> {
     lines
 }
 
-fn hook_doctor(shell: HookShell, path: &Path, root: &Path) -> Vec<String> {
+fn hook_doctor(shell: HookShell, path: &Path, root: &Path, profile_state: Option<&str>) -> Vec<String> {
     let mut lines = vec![format!("hook shell: {shell:?}")];
     lines.push(format!("profile root: {}", root.display()));
     lines.push(format!("cwd: {}", path.display()));
+    if let Some(state) = profile_state {
+        lines.push(state.to_string());
+    }
     lines.push(match shell {
         HookShell::Bash => "next step: eval \"$(envr hook bash)\" in bash".to_string(),
         HookShell::Zsh => "next step: eval \"$(envr hook zsh)\" in zsh".to_string(),
@@ -109,4 +115,24 @@ fn hook_doctor(shell: HookShell, path: &Path, root: &Path) -> Vec<String> {
         }
     });
     lines
+}
+
+fn shell_profile_state(shell: HookShell) -> Option<String> {
+    match shell {
+        HookShell::Powershell => {
+            let profile = env::var_os("PROFILE").or_else(|| env::var_os("PSPROFILE"));
+            Some(match profile {
+                Some(path) => format!("powershell profile: {}", PathBuf::from(path).display()),
+                None => "powershell profile: not detected; run `echo $PROFILE` to inspect it".to_string(),
+            })
+        }
+        HookShell::Bash => Some(match env::var_os("BASH_VERSION") {
+            Some(_) => "bash shell detected: yes".to_string(),
+            None => "bash shell detected: not confirmed".to_string(),
+        }),
+        HookShell::Zsh => Some(match env::var_os("ZSH_VERSION") {
+            Some(_) => "zsh shell detected: yes".to_string(),
+            None => "zsh shell detected: not confirmed".to_string(),
+        }),
+    }
 }
