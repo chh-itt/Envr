@@ -129,6 +129,7 @@ impl DoctorReport {
             })
             .collect();
 
+        let total_kinds: usize = self.kinds.iter().map(|(_, count, _)| *count).sum();
         serde_json::json!({
             "runtime_root": self.root.to_string_lossy(),
             "envr_runtime_root_env": self.env_override,
@@ -144,6 +145,14 @@ impl DoctorReport {
             "path_analysis": path_analysis,
             "findings": findings,
             "shims_dir_writable": self.shims_dir_writable,
+            "summary": {
+                "kind_count": self.kinds.len(),
+                "installed_version_count": total_kinds,
+                "issue_count": self.issues.len(),
+                "warning_count": self.warnings.len(),
+                "note_count": self.notes.len(),
+                "path_conflict_count": self.path_conflicts.len(),
+            },
         })
     }
 }
