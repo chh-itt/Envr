@@ -303,14 +303,22 @@ fn map_asdf_runtime_name(name: &str) -> &str {
         "nodejs" => "node",
         "golang" => "go",
         "dotnet-core" => "dotnet",
-        "rust" => "rust",
-        "ruby" => "ruby",
         "python" => "python",
         "java" => "java",
-        "terraform" => "terraform",
+        "ruby" => "ruby",
+        "rust" => "rust",
         "deno" => "deno",
         "bun" => "bun",
         "php" => "php",
+        "elixir" => "elixir",
+        "erlang" => "erlang",
+        "kotlin" => "kotlin",
+        "scala" => "scala",
+        "clojure" => "clojure",
+        "groovy" => "groovy",
+        "terraform" => "terraform",
+        "dart" => "dart",
+        "flutter" => "flutter",
         other => other,
     }
 }
@@ -320,14 +328,22 @@ fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
         "node" => "nodejs",
         "go" => "golang",
         "dotnet" => "dotnet-core",
-        "rust" => "rust",
-        "ruby" => "ruby",
         "python" => "python",
         "java" => "java",
-        "terraform" => "terraform",
+        "ruby" => "ruby",
+        "rust" => "rust",
         "deno" => "deno",
         "bun" => "bun",
         "php" => "php",
+        "elixir" => "elixir",
+        "erlang" => "erlang",
+        "kotlin" => "kotlin",
+        "scala" => "scala",
+        "clojure" => "clojure",
+        "groovy" => "groovy",
+        "terraform" => "terraform",
+        "dart" => "dart",
+        "flutter" => "flutter",
         other => other,
     }
 }
@@ -454,6 +470,14 @@ rust 1.78.0
 deno 2.0.0
 bun 1.1.30
 php 8.3.12
+elixir 1.17.3
+erlang 27.1
+kotlin 2.0.21
+scala 3.5.1
+clojure 1.12.0
+groovy 4.0.23
+dart 3.5.4
+flutter 3.24.3
 "#,
         )
         .expect("parse");
@@ -462,11 +486,27 @@ php 8.3.12
         assert_eq!(cfg.runtimes.get("deno").and_then(|r| r.version.as_deref()), Some("2.0.0"));
         assert_eq!(cfg.runtimes.get("bun").and_then(|r| r.version.as_deref()), Some("1.1.30"));
         assert_eq!(cfg.runtimes.get("php").and_then(|r| r.version.as_deref()), Some("8.3.12"));
+        assert_eq!(cfg.runtimes.get("elixir").and_then(|r| r.version.as_deref()), Some("1.17.3"));
+        assert_eq!(cfg.runtimes.get("erlang").and_then(|r| r.version.as_deref()), Some("27.1"));
+        assert_eq!(cfg.runtimes.get("kotlin").and_then(|r| r.version.as_deref()), Some("2.0.21"));
+        assert_eq!(cfg.runtimes.get("scala").and_then(|r| r.version.as_deref()), Some("3.5.1"));
+        assert_eq!(cfg.runtimes.get("clojure").and_then(|r| r.version.as_deref()), Some("1.12.0"));
+        assert_eq!(cfg.runtimes.get("groovy").and_then(|r| r.version.as_deref()), Some("4.0.23"));
+        assert_eq!(cfg.runtimes.get("dart").and_then(|r| r.version.as_deref()), Some("3.5.4"));
+        assert_eq!(cfg.runtimes.get("flutter").and_then(|r| r.version.as_deref()), Some("3.24.3"));
 
         let rendered = render_tool_versions(&cfg);
         assert!(rendered.contains("rust 1.78.0\n"));
         assert!(rendered.contains("deno 2.0.0\n"));
         assert!(rendered.contains("bun 1.1.30\n"));
         assert!(rendered.contains("php 8.3.12\n"));
+        assert!(rendered.contains("elixir 1.17.3\n"));
+        assert!(rendered.contains("erlang 27.1\n"));
+        assert!(rendered.contains("kotlin 2.0.21\n"));
+        assert!(rendered.contains("scala 3.5.1\n"));
+        assert!(rendered.contains("clojure 1.12.0\n"));
+        assert!(rendered.contains("groovy 4.0.23\n"));
+        assert!(rendered.contains("dart 3.5.4\n"));
+        assert!(rendered.contains("flutter 3.24.3\n"));
     }
 }
