@@ -1,91 +1,112 @@
-# envr: directory hook for PowerShell — install by adding the snippet returned from `envr hook powershell` to your PowerShell profile.
-# It watches the current location, applies `.envr.toml`-based environment changes on directory transitions, and restores prior values when leaving.
-# Tip: run `envr hook status` / `envr hook doctor` for diagnostics when the profile snippet is installed but activation does not happen.
+# envr: directory hook for PowerShell — install with: Invoke-Expression (& envr hook powershell)
+# Applies merged project env when you cd into a tree with .envr.toml; restores when you leave.
+# Optional prompt: function global:prompt { "$(& envr hook prompt)$(& $function:prompt)" }
 
-function global:Test-EnvrHookRoot {
-    param([string]$Path)
-    if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
-    $current = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
-    if (-not $current) { return $null }
-    $dir = $current.Path
-    while ($dir) {
-        if (Test-Path -LiteralPath (Join-Path $dir '.envr.toml') -PathType Leaf -ErrorAction SilentlyContinue) { return $dir }
-        if (Test-Path -LiteralPath (Join-Path $dir '.envr.local.toml') -PathType Leaf -ErrorAction SilentlyContinue) { return $dir }
+$script:_envrHookRoot = $null
+$script:_envrHookKeys = @()
+$script:_envrHookHad = @{}
+$script:_envrHookVal = @{}
+
+function global:_envrHookFindRoot {
+    $dir = (Get-Location).Path
+    while ($true) {
+        if ((Test-Path (Join-Path $dir '.envr.toml')) -or (Test-Path (Join-Path $dir '.envr.local.toml'))) {
+            return $dir
+        }
         $parent = Split-Path -Parent $dir
-        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $dir) { break }
+        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $dir) {
+            return $null
+        }
         $dir = $parent
     }
-    return $null
 }
 
-function global:Get-EnvrHookState {
-    if (-not $script:EnvrHookState) {
-        $script:EnvrHookState = [ordered]@{
-            Root = $null
-            Vars = @{}
-            Had = @{}
-        }
-    }
-    return $script:EnvrHookState
-}
+function global:_envrHookCapture {
+    param([string]$Root)
 
-function global:Save-EnvrHookEnv {
-    param([string[]]$Keys)
-    $state = Get-EnvrHookState
-    $state.Vars = @{}
-    $state.Had = @{}
-    foreach ($k in $Keys) {
+    $script:_envrHookKeys = @()
+    $script:_envrHookHad = @{}
+    $script:_envrHookVal = @{}
+
+    $keys = & envr hook keys --path $Root 2>$null
+    foreach ($k in $keys) {
         if ([string]::IsNullOrWhiteSpace($k)) { continue }
-        $had = [System.Environment]::GetEnvironmentVariable($k, 'Process') -ne $null
-        $state.Had[$k] = $had
-        if ($had) {
-            $state.Vars[$k] = [System.Environment]::GetEnvironmentVariable($k, 'Process')
-        }
-    }
-}
-
-function global:Restore-EnvrHookEnv {
-    $state = Get-EnvrHookState
-    foreach ($k in @($state.Vars.Keys)) {
-        if ($state.Had.ContainsKey($k) -and $state.Had[$k]) {
-            [System.Environment]::SetEnvironmentVariable($k, $state.Vars[$k], 'Process')
+        $script:_envrHookKeys += $k
+        if (Test-Path "Env:$k") {
+            $script:_envrHookHad[$k] = $true
+            $script:_envrHookVal[$k] = (Get-Item "Env:$k").Value
         } else {
-            [System.Environment]::SetEnvironmentVariable($k, $null, 'Process')
+            $script:_envrHookHad[$k] = $false
         }
     }
-    $state.Root = $null
-    $state.Vars = @{}
-    $state.Had = @{}
 }
 
-function global:Invoke-EnvrHookRefresh {
-    $state = Get-EnvrHookState
-    $nextRoot = Test-EnvrHookRoot (Get-Location).Path
-    if ($state.Root -eq $nextRoot) { return }
-    if ($state.Root) { Restore-EnvrHookEnv }
-    if (-not $nextRoot) { return }
-    $keys = @(envr hook keys --path $nextRoot 2>$null)
-    Save-EnvrHookEnv -Keys $keys
-    $envScript = @(envr env --shell powershell --path $nextRoot 2>$null) -join "`n"
-    if ([string]::IsNullOrWhiteSpace($envScript)) {
-        Restore-EnvrHookEnv
+function global:_envrHookRestore {
+    foreach ($k in $script:_envrHookKeys) {
+        if ($script:_envrHookHad[$k]) {
+            Set-Item -Path "Env:$k" -Value $script:_envrHookVal[$k]
+        } else {
+            Remove-Item -Path "Env:$k" -ErrorAction SilentlyContinue
+        }
+    }
+    $script:_envrHookKeys = @()
+    $script:_envrHookHad = @{}
+    $script:_envrHookVal = @{}
+}
+
+function global:_envrHookMain {
+    $nextRoot = _envrHookFindRoot
+    if ($nextRoot -eq $script:_envrHookRoot) {
         return
     }
-    $state.Root = $nextRoot
-    Invoke-Expression $envScript
-}
 
-Set-Alias -Scope Global envr command envr
-if (-not (Get-Command -Name global:Prompt-EnvrHook -ErrorAction SilentlyContinue)) {
-    function global:Prompt-EnvrHook {
-        Invoke-EnvrHookRefresh
-        if (Get-Command -Name prompt -ErrorAction SilentlyContinue) {
-            Microsoft.PowerShell.Core\Invoke-Expression (prompt)
-        }
+    if ($null -ne $script:_envrHookRoot) {
+        _envrHookRestore
+    }
+
+    if ([string]::IsNullOrWhiteSpace($nextRoot)) {
+        $script:_envrHookRoot = $null
+        return
+    }
+
+    _envrHookCapture -Root $nextRoot
+    if ($env:ENVR_HOOK_VERBOSE) {
+        Write-Host "envr hook: applying $nextRoot" -ForegroundColor DarkGray
+    }
+
+    $out = & envr env --shell posix --path $nextRoot 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out) {
+        $script:_envrHookRoot = $nextRoot
+        Invoke-Expression $out
+    } else {
+        _envrHookRestore
+        $script:_envrHookRoot = $null
     }
 }
 
-if (-not $global:__envr_hook_powershell_initialized) {
-    $global:__envr_hook_powershell_initialized = $true
-    Invoke-EnvrHookRefresh
+function global:envr {
+    param([Parameter(ValueFromRemainingArguments = $true)]$Args)
+    if ($Args.Count -gt 0 -and ($Args[0] -eq 'deactivate' -or $Args[0] -eq 'off')) {
+        _envrHookRestore
+        $script:_envrHookRoot = $null
+        return
+    }
+    & envr @Args
+}
+
+function global:_envrPromptSegment {
+    (& envr hook prompt 2>$null) -join ''
+}
+
+if (-not (Test-Path Function:\global:prompt)) {
+    function global:prompt { "PS $($executionContext.SessionState.Path.CurrentLocation)> " }
+}
+
+if (-not $script:_envrHookInstalled) {
+    $script:_envrHookInstalled = $true
+    $function:prompt = @"
+`$(_envrPromptSegment)$(prompt)
+"@
+    Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action { _envrHookMain } | Out-Null
+    _envrHookMain
 }

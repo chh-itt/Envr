@@ -111,7 +111,7 @@ fn hook_doctor(shell: HookShell, path: &Path, root: &Path, profile_state: Option
         HookShell::Bash => "next step: eval \"$(envr hook bash)\" in bash".to_string(),
         HookShell::Zsh => "next step: eval \"$(envr hook zsh)\" in zsh".to_string(),
         HookShell::Powershell => {
-            "next step: add `envr hook powershell` snippet to your PowerShell profile".to_string()
+            "next step: invoke `envr hook powershell` from your PowerShell profile".to_string()
         }
     });
     lines
