@@ -44,3 +44,30 @@ pub(crate) fn request_kind_str(kind: RequestKind) -> &'static str {
         RequestKind::Unknown => "unknown",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_request, request_kind_str, RequestKind};
+
+    #[test]
+    fn classifies_aliases_and_prefixes() {
+        assert_eq!(classify_request(Some("latest"), false).0, RequestKind::Alias);
+        assert_eq!(classify_request(Some("stable"), false).0, RequestKind::Alias);
+        assert_eq!(classify_request(Some("lts"), false).0, RequestKind::Alias);
+        assert_eq!(classify_request(Some("22"), false).0, RequestKind::Prefix);
+        assert_eq!(classify_request(Some("22.11"), false).0, RequestKind::Prefix);
+        assert_eq!(classify_request(Some("22.11.0"), false).0, RequestKind::Exact);
+    }
+
+    #[test]
+    fn classifies_ranges_and_channels() {
+        assert_eq!(classify_request(Some(">=1.20 <1.23"), false).0, RequestKind::Range);
+        assert_eq!(classify_request(Some("temurin-21"), false).0, RequestKind::Channel);
+    }
+
+    #[test]
+    fn request_kind_str_matches_kind() {
+        assert_eq!(request_kind_str(RequestKind::Exact), "exact");
+        assert_eq!(request_kind_str(RequestKind::Unknown), "unknown");
+    }
+}
