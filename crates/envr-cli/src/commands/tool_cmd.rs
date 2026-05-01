@@ -31,8 +31,25 @@ fn list_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
             })
         })
         .collect();
-    let data = json!({ "tools": tools, "count": tools.len() });
-    Ok(output::emit_ok(g, "tool_listed", data, || {}))
+    let remote_latest_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_remote_latest).count();
+    let path_proxy_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_path_proxy).count();
+    let host_bound_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.host_runtime.is_some()).count();
+    let data = json!({
+        "tools": tools,
+        "count": tools.len(),
+        "summary": {
+            "remote_latest_supported_count": remote_latest_count,
+            "path_proxy_supported_count": path_proxy_count,
+            "host_bound_count": host_bound_count,
+        }
+    });
+    Ok(output::emit_ok(g, "tool_listed", data, || {
+        if crate::CliUxPolicy::from_global(g).human_text_primary() {
+            println!("managed tools: {}", tools.len());
+            println!("remote latest capable: {}", remote_latest_count);
+            println!("path proxy capable: {}", path_proxy_count);
+        }
+    }))
 }
 
 fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
