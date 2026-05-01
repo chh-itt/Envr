@@ -303,6 +303,10 @@ fn map_asdf_runtime_name(name: &str) -> &str {
         "nodejs" => "node",
         "golang" => "go",
         "dotnet-core" => "dotnet",
+        "ruby" => "ruby",
+        "python" => "python",
+        "java" => "java",
+        "terraform" => "terraform",
         other => other,
     }
 }
@@ -312,6 +316,10 @@ fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
         "node" => "nodejs",
         "go" => "golang",
         "dotnet" => "dotnet-core",
+        "ruby" => "ruby",
+        "python" => "python",
+        "java" => "java",
+        "terraform" => "terraform",
         other => other,
     }
 }
@@ -329,6 +337,9 @@ nodejs 22.11.0
 python 3.12.7 # inline comment
 golang 1.23.2
 dotnet-core 8.0.100
+java temurin-21.0.4+7
+ruby 3.3.5
+terraform 1.9.8
 "#,
         )
         .expect("parse");
@@ -351,6 +362,20 @@ dotnet-core 8.0.100
             cfg.runtimes.get("python").and_then(|r| r.version.as_deref()),
             Some("3.12.7")
         );
+        assert_eq!(
+            cfg.runtimes.get("java").and_then(|r| r.version.as_deref()),
+            Some("temurin-21.0.4+7")
+        );
+        assert_eq!(
+            cfg.runtimes.get("ruby").and_then(|r| r.version.as_deref()),
+            Some("3.3.5")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("terraform")
+                .and_then(|r| r.version.as_deref()),
+            Some("1.9.8")
+        );
     }
 
     #[test]
@@ -370,9 +395,17 @@ dotnet-core 8.0.100
                 ..RuntimeConfig::default()
             },
         );
+        cfg.runtimes.insert(
+            "java".into(),
+            RuntimeConfig {
+                version: Some("temurin-21.0.4+7".into()),
+                ..RuntimeConfig::default()
+            },
+        );
 
         let rendered = render_tool_versions(&cfg);
         assert!(rendered.contains("nodejs 22.11.0\n"));
         assert!(rendered.contains("golang 1.23.2\n"));
+        assert!(rendered.contains("java temurin-21.0.4+7\n"));
     }
 }
