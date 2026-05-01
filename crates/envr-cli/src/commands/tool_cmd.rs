@@ -2,8 +2,8 @@ use crate::CliExit;
 use crate::cli::{GlobalArgs, ToolCmd};
 use crate::output;
 
-use envr_domain::runtime::RUNTIME_DESCRIPTORS;
-use envr_error::EnvrResult;
+use envr_domain::runtime::{RUNTIME_DESCRIPTORS, runtime_descriptor};
+use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::json;
 
 pub(crate) fn run_inner(g: &GlobalArgs, cmd: ToolCmd) -> EnvrResult<CliExit> {
@@ -48,20 +48,40 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
 }
 
 fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
-    let data = if let Some(desc) = RUNTIME_DESCRIPTORS.iter().find(|d| d.key == name) {
-        json!({
-            "name": desc.key,
-            "label": desc.label_en,
-            "runtime_kind": format!("{:?}", desc.kind),
-            "supports_remote_latest": desc.supports_remote_latest,
-            "supports_path_proxy": desc.supports_path_proxy,
-            "host_runtime": desc.host_runtime.map(|k| format!("{:?}", k)),
-        })
-    } else {
-        json!({
+    let Some(desc) = RUNTIME_DESCRIPTORS.iter().find(|d| d.key == name) else {
+        let data = json!({
             "name": name,
             "found": false,
-        })
+            "next_steps": ["envr tool list", "envr tool which <name>"],
+        });
+        return Err(EnvrError::new(
+            ErrorCode::NotFound,
+            format!("managed tool `{}` not found", name),
+        )
+        .context(data.to_string()));
     };
-    Ok(output::emit_ok(g, "tool_status", data, || {}))
+
+    let runtime = runtime_descriptor(desc.kind);
+    let data = json!({
+        "name": desc.key,
+        "label": desc.label_en,
+        "runtime_kind": format!("{:?}", desc.kind),
+        "supports_remote_latest": desc.supports_remote_latest,
+        "supports_path_proxy": desc.supports_path_proxy,
+        "host_runtime": desc.host_runtime.map(|k| format!("{:?}", k)),
+        "descriptor_name": runtime.key,
+        "descriptor_label": runtime.label_en,
+    });
+    Ok(output::emit_ok(g, "tool_status", data, || {
+        if crate::CliUxPolicy::from_global(g).human_text_primary() {
+            println!("managed tool: {}", desc.key);
+            println!("label: {}", desc.label_en);
+            println!("runtime kind: {:?}", desc.kind);
+            println!("remote latest: {}", desc.supports_remote_latest);
+            println!("path proxy: {}", desc.supports_path_proxy);
+            if let Some(host) = desc.host_runtime {
+                println!("host runtime: {:?}", host);
+            }
+        }
+    }))
 }
