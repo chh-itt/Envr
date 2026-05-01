@@ -47,6 +47,8 @@ impl Command {
             Command::Hook(HookCmd::Powershell) => CommandKey::HookPowershell,
             Command::Hook(HookCmd::Keys { .. }) => CommandKey::HookKeys,
             Command::Hook(HookCmd::Prompt { .. }) => CommandKey::HookPrompt,
+            Command::Hook(HookCmd::Status { .. }) => CommandKey::HookKeys,
+            Command::Hook(HookCmd::Doctor { .. }) => CommandKey::HookKeys,
             Command::Prune { .. } => CommandKey::Prune,
             Command::Init { .. } => CommandKey::Init,
             Command::Check { .. } => CommandKey::Check,

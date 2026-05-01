@@ -77,8 +77,8 @@ pub(crate) fn run_inner(
     let mut data = serde_json::json!({
         "kind": lang,
         "resolution_source": source,
-        "request_kind": request_kind_str(request.0),
-        "request_value": request.1,
+        "request_kind": request_kind_str(request.kind),
+        "request_value": request.raw,
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
@@ -132,7 +132,7 @@ pub(crate) fn run_inner(
                         "请求类型：",
                         "Request kind:",
                     ),
-                    request_kind_str(request.0)
+                    request_kind_str(request.kind)
                 );
             }
         },

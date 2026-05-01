@@ -3,7 +3,7 @@ use crate::CliExit;
 
 use crate::CliPathProfile;
 use crate::cli::GlobalArgs;
-use crate::cli::command::HookShell;
+use crate::cli::HookShell;
 use crate::commands::child_env;
 use crate::output;
 use crate::CliUxPolicy;

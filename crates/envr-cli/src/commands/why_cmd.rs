@@ -52,7 +52,7 @@ pub(crate) fn run_inner(
             .filter(|s| !s.is_empty())
     });
 
-    let request = classify_request(spec_deref, pin.as_deref());
+    let request = classify_request(spec_deref, pin.is_some());
     let resolution = if request.raw.is_some() {
         if spec_deref.is_some() {
             "spec_override"
@@ -63,6 +63,13 @@ pub(crate) fn run_inner(
         }
     } else {
         "global_current"
+    };
+    let request_source = if spec_deref.is_some() {
+        "cli"
+    } else if pin.is_some() {
+        "project"
+    } else {
+        "global"
     };
 
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, spec_deref, cfg)?;
@@ -84,6 +91,7 @@ pub(crate) fn run_inner(
         "spec_override": spec_trim.clone(),
         "project": project_json,
         "resolution": resolution,
+        "request_source": request_source,
         "request_kind": request.kind_str(),
         "request_value": request.raw,
         "request_normalized": request.normalized,
@@ -227,3 +235,4 @@ pub(crate) fn run_inner(
             }
         },
     ))
+}

@@ -54,11 +54,10 @@ fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
             "found": false,
             "next_steps": ["envr tool list", "envr tool which <name>"],
         });
-        return Err(EnvrError::new(
-            ErrorCode::NotFound,
-            format!("managed tool `{}` not found", name),
-        )
-        .context(data.to_string()));
+        return Err(EnvrError::Validation(format!(
+            "managed tool `{}` not found",
+            name
+        )));
     };
 
     let runtime = runtime_descriptor(desc.kind);

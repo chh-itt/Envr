@@ -92,16 +92,16 @@ mod tests {
 
     #[test]
     fn classifies_ranges_and_channels() {
-        assert_eq!(classify_request(Some(">=1.20 <1.23"), false).0, RequestKind::Range);
-        assert_eq!(classify_request(Some("~> 1.9"), false).0, RequestKind::Range);
-        assert_eq!(classify_request(Some("temurin-21"), false).0, RequestKind::Channel);
-        assert_eq!(classify_request(Some("graalvm-21.0.2"), false).0, RequestKind::Channel);
+        assert_eq!(classify_request(Some(">=1.20 <1.23"), false).kind, RequestKind::Range);
+        assert_eq!(classify_request(Some("~> 1.9"), false).kind, RequestKind::Range);
+        assert_eq!(classify_request(Some("temurin-21"), false).kind, RequestKind::Channel);
+        assert_eq!(classify_request(Some("graalvm-21.0.2"), false).kind, RequestKind::Channel);
     }
 
     #[test]
     fn classifies_unknown_when_empty_and_no_pin() {
-        assert_eq!(classify_request(None, false).0, RequestKind::Unknown);
-        assert_eq!(classify_request(Some("   "), false).0, RequestKind::Unknown);
+        assert_eq!(classify_request(None, false).kind, RequestKind::Unknown);
+        assert_eq!(classify_request(Some("   "), false).kind, RequestKind::Unknown);
     }
 
     #[test]

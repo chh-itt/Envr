@@ -51,6 +51,7 @@ mod tool_cmd;
 mod uninstall;
 mod update;
 mod use_cmd;
+mod version_request;
 mod which;
 mod why_cmd;
 

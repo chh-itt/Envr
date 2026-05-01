@@ -194,7 +194,7 @@ fn sync_inner(
                 session.ctx.working_dir.display()
             )));
         };
-        if lock_cfg.as_ref() != session.project_config() {
+        if session.project_config() != Some(&lock_cfg) {
             return Err(EnvrError::Validation(format!(
                 "lockfile {} is stale; run `envr project lock`",
                 lock_path.display()
@@ -414,7 +414,7 @@ fn validate_inner(
                 session.ctx.working_dir.display()
             )));
         };
-        if lock_cfg.as_ref() != Some(cfg) {
+        if cfg != &lock_cfg {
             return Err(EnvrError::Validation(format!(
                 "lockfile {} is stale; run `envr project lock`",
                 lock_path.display()
