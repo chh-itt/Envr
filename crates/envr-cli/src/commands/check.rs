@@ -88,6 +88,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
         );
         let mut data = json!({
             "config_dir": loc.dir.to_string_lossy(),
+            "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "issues": problems,
             "github_annotations": github_annotations,
         });
@@ -125,6 +126,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
         "config_dir": loc.dir.to_string_lossy(),
         "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+        "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "pinned_runtimes": cfg.runtimes.len(),
     });
     data = output::with_next_steps(data, next_steps_for_check_ok());
