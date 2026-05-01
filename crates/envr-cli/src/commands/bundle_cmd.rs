@@ -220,7 +220,18 @@ fn create_inner(
         &manifest_json,
     )?;
 
-    let data = serde_json::json!({ "path": bundle_zip.to_string_lossy() });
+    let data = serde_json::json!({
+        "path": bundle_zip.to_string_lossy(),
+        "summary": {
+            "project_pin_count": pinned_specs.len(),
+            "included_version_count": included_versions.len(),
+            "global_current_count": global_current.len(),
+            "include_indexes": include_indexes,
+            "include_shims": include_shims,
+            "full": full,
+            "no_current": no_current,
+        }
+    });
     Ok(output::emit_ok(
         g,
         crate::codes::ok::BUNDLE_CREATED,
