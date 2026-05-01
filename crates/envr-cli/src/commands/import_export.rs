@@ -402,10 +402,39 @@ terraform 1.9.8
                 ..RuntimeConfig::default()
             },
         );
+        cfg.runtimes.insert(
+            "custom-runtime".into(),
+            RuntimeConfig {
+                version: Some("latest".into()),
+                ..RuntimeConfig::default()
+            },
+        );
 
         let rendered = render_tool_versions(&cfg);
         assert!(rendered.contains("nodejs 22.11.0\n"));
         assert!(rendered.contains("golang 1.23.2\n"));
         assert!(rendered.contains("java temurin-21.0.4+7\n"));
+        assert!(rendered.contains("custom-runtime latest\n"));
+    }
+
+    #[test]
+    fn import_export_roundtrip_preserves_common_aliases() {
+        let cfg = parse_tool_versions_str(
+            r#"
+nodejs 22.11.0
+golang 1.23.2
+java temurin-21.0.4+7
+ruby 3.3.5
+terraform 1.9.8
+"#,
+        )
+        .expect("parse");
+
+        let rendered = render_tool_versions(&cfg);
+        assert!(rendered.contains("nodejs 22.11.0\n"));
+        assert!(rendered.contains("golang 1.23.2\n"));
+        assert!(rendered.contains("java temurin-21.0.4+7\n"));
+        assert!(rendered.contains("ruby 3.3.5\n"));
+        assert!(rendered.contains("terraform 1.9.8\n"));
     }
 }
