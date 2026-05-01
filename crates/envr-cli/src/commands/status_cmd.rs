@@ -7,10 +7,24 @@ use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::project_status::{
     build_project_status_from_loaded, format_prompt_segment, status_to_json,
 };
+use envr_domain::runtime::RUNTIME_DESCRIPTORS;
 use crate::output::{self, fmt_template};
 
 use envr_error::EnvrResult;
 use serde_json::json;
+
+fn provider_health_summary() -> serde_json::Value {
+    let total = RUNTIME_DESCRIPTORS.len();
+    let remote_latest = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_remote_latest).count();
+    let path_proxy = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_path_proxy).count();
+    let host_bound = RUNTIME_DESCRIPTORS.iter().filter(|d| d.host_runtime.is_some()).count();
+    serde_json::json!({
+        "provider_count": total,
+        "remote_latest_supported_count": remote_latest,
+        "path_proxy_supported_count": path_proxy,
+        "host_bound_count": host_bound,
+    })
+}
 
 fn next_steps_for_status(
     st: &crate::commands::project_status::ProjectStatus,
@@ -53,6 +67,9 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
     let session = CliPathProfile::new(path, profile).load_project()?;
     let st = build_project_status_from_loaded(&session.ctx, &session.project)?;
     let mut data = status_to_json(&st);
+    if let Some(obj) = data.as_object_mut() {
+        obj.insert("provider_health".into(), provider_health_summary());
+    }
     data = output::with_next_steps(data, next_steps_for_status(&st));
     Ok(output::emit_ok(
         g,
