@@ -27,6 +27,7 @@ pub struct ProjectStatus {
     pub working_dir: PathBuf,
     pub project_dir: Option<PathBuf>,
     pub profile: Option<String>,
+    pub lock_file: Option<PathBuf>,
     pub rows: Vec<RuntimeStatusRow>,
 }
 
@@ -100,10 +101,10 @@ pub fn build_project_status_from_loaded(
     ctx: &ShimContext,
     loaded: &Option<(ProjectConfig, ProjectConfigLocation)>,
 ) -> EnvrResult<ProjectStatus> {
-    let (project_dir, cfg_ref) = loaded
+    let (project_dir, lock_file, cfg_ref) = loaded
         .as_ref()
-        .map(|(c, loc)| (Some(loc.dir.clone()), Some(c)))
-        .unwrap_or((None, None));
+        .map(|(c, loc)| (Some(loc.dir.clone()), loc.lock_file.clone(), Some(c)))
+        .unwrap_or((None, None, None));
 
     let mut rows = Vec::new();
     for key in collect_lang_keys(cfg_ref) {
@@ -151,6 +152,7 @@ pub fn build_project_status_from_loaded(
         working_dir: ctx.working_dir.clone(),
         project_dir,
         profile: ctx.profile.clone(),
+        lock_file,
         rows,
     })
 }
@@ -176,6 +178,11 @@ pub fn status_to_json(st: &ProjectStatus) -> Value {
             "dir": d.to_string_lossy(),
         })
     });
+    let lock = st.lock_file.as_ref().map(|p| {
+        json!({
+            "path": p.to_string_lossy(),
+        })
+    });
     let rows: Vec<Value> = st
         .rows
         .iter()
@@ -194,6 +201,7 @@ pub fn status_to_json(st: &ProjectStatus) -> Value {
         "working_dir": st.working_dir.to_string_lossy(),
         "profile": st.profile,
         "project": project,
+        "lock": lock,
         "runtimes": rows,
     })
 }
