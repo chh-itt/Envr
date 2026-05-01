@@ -3,7 +3,7 @@ use crate::cli::{GlobalArgs, ToolCmd};
 use crate::output;
 
 use envr_domain::runtime::{RUNTIME_DESCRIPTORS, runtime_descriptor};
-use envr_error::{EnvrError, EnvrResult, ErrorCode};
+use envr_error::{EnvrError, EnvrResult};
 use serde_json::json;
 
 pub(crate) fn run_inner(g: &GlobalArgs, cmd: ToolCmd) -> EnvrResult<CliExit> {
@@ -49,13 +49,8 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
 
 fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
     let Some(desc) = RUNTIME_DESCRIPTORS.iter().find(|d| d.key == name) else {
-        let data = json!({
-            "name": name,
-            "found": false,
-            "next_steps": ["envr tool list", "envr tool which <name>"],
-        });
         return Err(EnvrError::Validation(format!(
-            "managed tool `{}` not found",
+            "managed tool `{}` not found; run `envr tool list`",
             name
         )));
     };

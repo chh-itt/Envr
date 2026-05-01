@@ -8,8 +8,8 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    PROJECT_LOCK_FILE, PROJECT_LOCK_FILE_ALT, load_project_lock_any, project_lock_candidates,
-    reset_project_config_load_cache, save_project_lock,
+    load_project_lock_any, project_lock_candidates, reset_project_config_load_cache,
+    save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
