@@ -11,7 +11,7 @@ use envr_error::EnvrError;
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 use serde_json::json;
 
-use super::version_request::{classify_request, request_kind_str};
+use super::version_request::classify_request;
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
@@ -53,10 +53,14 @@ pub(crate) fn run_inner(
     });
 
     let request = classify_request(spec_deref, pin.as_deref());
-    let resolution = if spec_deref.is_some() {
-        "spec_override"
-    } else if pin.is_some() {
-        "project_pin"
+    let resolution = if request.raw.is_some() {
+        if spec_deref.is_some() {
+            "spec_override"
+        } else if pin.is_some() {
+            "project_pin"
+        } else {
+            "global_current"
+        }
     } else {
         "global_current"
     };
@@ -80,8 +84,9 @@ pub(crate) fn run_inner(
         "spec_override": spec_trim.clone(),
         "project": project_json,
         "resolution": resolution,
-        "request_kind": request_kind_str(request.0),
-        "request_value": request.1,
+        "request_kind": request.kind_str(),
+        "request_value": request.raw,
+        "request_normalized": request.normalized,
         "resolved_home": home.to_string_lossy(),
     });
 
@@ -206,8 +211,19 @@ pub(crate) fn run_inner(
                         "请求类型：",
                         "Request kind:",
                     ),
-                    request_kind_str(request.0)
+                    request.kind_str()
                 );
+                if let Some(normalized) = request.normalized.as_deref() {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.request_normalized",
+                            "规范化请求：",
+                            "Normalized request:",
+                        ),
+                        normalized
+                    );
+                }
             }
         },
     ))

@@ -5,34 +5,60 @@ pub(crate) enum RequestKind {
     Alias,
     Range,
     Channel,
+    System,
     Unknown,
 }
 
-pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> (RequestKind, Option<String>) {
-    let raw = spec.map(str::trim).filter(|s| !s.is_empty());
-    let Some(raw) = raw else {
-        return (RequestKind::Unknown, None);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ClassifiedRequest {
+    pub kind: RequestKind,
+    pub raw: Option<String>,
+    pub normalized: Option<String>,
+}
+
+impl ClassifiedRequest {
+    pub(crate) fn kind_str(&self) -> &'static str {
+        request_kind_str(self.kind)
+    }
+}
+
+pub(crate) fn normalize_request_spec(spec: Option<&str>) -> Option<String> {
+    spec.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|raw| raw.trim_start_matches('v').to_string())
+}
+
+pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedRequest {
+    let raw = spec.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let normalized = raw.as_deref().and_then(|s| normalize_request_spec(Some(s)));
+    let Some(normalized_ref) = normalized.as_deref() else {
+        return ClassifiedRequest {
+            kind: RequestKind::Unknown,
+            raw,
+            normalized,
+        };
     };
-    let normalized = raw.strip_prefix('v').unwrap_or(raw);
-    let kind = if matches!(normalized, "latest" | "stable" | "lts" | "system") {
+    let kind = if normalized_ref == "system" {
+        RequestKind::System
+    } else if matches!(normalized_ref, "latest" | "stable" | "lts") {
         RequestKind::Alias
-    } else if normalized.contains('<') || normalized.contains('>') || normalized.starts_with("~>") {
+    } else if normalized_ref.contains('<') || normalized_ref.contains('>') || normalized_ref.starts_with("~>") {
         RequestKind::Range
-    } else if normalized.contains('-')
-        && normalized.chars().any(|c| c.is_ascii_digit())
-        && normalized.chars().any(|c| c.is_ascii_alphabetic())
+    } else if normalized_ref.contains('-')
+        && normalized_ref.chars().any(|c| c.is_ascii_digit())
+        && normalized_ref.chars().any(|c| c.is_ascii_alphabetic())
     {
         RequestKind::Channel
-    } else if normalized.chars().next().is_some_and(|c| c.is_ascii_digit()) && normalized.split('.').count() < 3 {
+    } else if normalized_ref.chars().next().is_some_and(|c| c.is_ascii_digit()) && normalized_ref.split('.').count() < 3 {
         RequestKind::Prefix
-    } else if normalized.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    } else if normalized_ref.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         RequestKind::Exact
     } else if has_pin {
         RequestKind::Exact
     } else {
         RequestKind::Unknown
     };
-    (kind, Some(raw.to_string()))
+    ClassifiedRequest { kind, raw, normalized }
 }
 
 pub(crate) fn request_kind_str(kind: RequestKind) -> &'static str {
@@ -42,6 +68,7 @@ pub(crate) fn request_kind_str(kind: RequestKind) -> &'static str {
         RequestKind::Alias => "alias",
         RequestKind::Range => "range",
         RequestKind::Channel => "channel",
+        RequestKind::System => "system",
         RequestKind::Unknown => "unknown",
     }
 }
@@ -52,14 +79,15 @@ mod tests {
 
     #[test]
     fn classifies_aliases_and_prefixes() {
-        assert_eq!(classify_request(Some("latest"), false).0, RequestKind::Alias);
-        assert_eq!(classify_request(Some("stable"), false).0, RequestKind::Alias);
-        assert_eq!(classify_request(Some("lts"), false).0, RequestKind::Alias);
-        assert_eq!(classify_request(Some("v22"), false).0, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22"), false).0, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22.11"), false).0, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22.11.0"), false).0, RequestKind::Exact);
-        assert_eq!(classify_request(Some("v22.11.0"), false).0, RequestKind::Exact);
+        assert_eq!(classify_request(Some("latest"), false).kind, RequestKind::Alias);
+        assert_eq!(classify_request(Some("stable"), false).kind, RequestKind::Alias);
+        assert_eq!(classify_request(Some("lts"), false).kind, RequestKind::Alias);
+        assert_eq!(classify_request(Some("system"), false).kind, RequestKind::System);
+        assert_eq!(classify_request(Some("v22"), false).kind, RequestKind::Prefix);
+        assert_eq!(classify_request(Some("22"), false).kind, RequestKind::Prefix);
+        assert_eq!(classify_request(Some("22.11"), false).kind, RequestKind::Prefix);
+        assert_eq!(classify_request(Some("22.11.0"), false).kind, RequestKind::Exact);
+        assert_eq!(classify_request(Some("v22.11.0"), false).kind, RequestKind::Exact);
     }
 
     #[test]
