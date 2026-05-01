@@ -53,14 +53,10 @@ pub(crate) fn run_inner(
     });
 
     let request = classify_request(spec_deref, pin.is_some());
-    let resolution = if request.raw.is_some() {
-        if spec_deref.is_some() {
-            "spec_override"
-        } else if pin.is_some() {
-            "project_pin"
-        } else {
-            "global_current"
-        }
+    let resolution = if spec_deref.is_some() {
+        "spec_override"
+    } else if pin.is_some() {
+        "project_pin"
     } else {
         "global_current"
     };

@@ -398,6 +398,16 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         args: &[],
     },
     CmdHelpSpec {
+        path: &["project", "lock"],
+        about: I18n(
+            "cli.help.cmd.project.lock",
+            "把当前 project 配置解析成 lockfile",
+            "Resolve the current project config into a lockfile",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
         path: &["completion"],
         about: I18n(
             "cli.help.cmd.completion",
@@ -901,6 +911,36 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         args: &[],
     },
     CmdHelpSpec {
+        path: &["hook", "powershell"],
+        about: I18n(
+            "cli.help.cmd.hook.powershell",
+            "输出 PowerShell 钩子脚本（写入 $PROFILE：`Invoke-Expression (& envr hook powershell)`）",
+            "Emit PowerShell hook script (add to `$PROFILE`: `Invoke-Expression (& envr hook powershell)`)",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["hook", "status"],
+        about: I18n(
+            "cli.help.cmd.hook.status",
+            "显示 hook 状态",
+            "Show hook status",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["hook", "doctor"],
+        about: I18n(
+            "cli.help.cmd.hook.doctor",
+            "诊断 hook 安装与 shell 集成",
+            "Diagnose hook installation and shell integration",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
         path: &["hook", "keys"],
         about: I18n(
             "cli.help.cmd.hook.keys",
@@ -1296,6 +1336,46 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
             "cli.help.cmd.cache_topic",
             "管理 `{runtime_root}/cache` 下的下载缓存",
             "Manage envr download caches under `{runtime_root}/cache`",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["tool"],
+        about: I18n(
+            "cli.help.cmd.tool_topic",
+            "查看与管理 envr 识别的托管工具",
+            "Inspect and manage envr-recognized managed tools",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["tool", "list"],
+        about: I18n(
+            "cli.help.cmd.tool.list",
+            "列出可发现的托管工具",
+            "List discoverable managed tools",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["tool", "which"],
+        about: I18n(
+            "cli.help.cmd.tool.which",
+            "显示托管工具的解析来源",
+            "Show the resolution source for a managed tool",
+        ),
+        after_long_help: None,
+        args: &[],
+    },
+    CmdHelpSpec {
+        path: &["tool", "status"],
+        about: I18n(
+            "cli.help.cmd.tool.status",
+            "显示单个托管工具的发现状态",
+            "Show discovery status for a single managed tool",
         ),
         after_long_help: None,
         args: &[],

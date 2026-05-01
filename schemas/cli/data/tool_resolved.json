@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/tool_resolved.json",
+  "title": "envr tool which --format json → envelope.data (message: tool_resolved)",
+  "type": "object",
+  "additionalProperties": true
+}

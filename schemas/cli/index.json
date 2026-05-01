@@ -54,6 +54,9 @@
     "shims_synced",
     "show_current",
     "template_rendered",
+    "tool_listed",
+    "tool_resolved",
+    "tool_status",
     "uninstalled",
     "update_info",
     "why_runtime"

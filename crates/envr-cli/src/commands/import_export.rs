@@ -134,7 +134,7 @@ pub(crate) fn export_run_inner(
             "config_dir": loc.dir.to_string_lossy(),
             "written": out_path.to_string_lossy(),
             "format": format.label(),
-            "content": rendered,
+            "toml": rendered,
         });
         Ok(output::emit_ok(
             g,
@@ -160,7 +160,7 @@ pub(crate) fn export_run_inner(
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
             "format": format.label(),
-            "content": rendered,
+            "toml": rendered,
         });
         Ok(output::emit_ok(
             g,

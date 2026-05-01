@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/hook_powershell.json",
+  "title": "envr hook powershell --format json → envelope.data (message: shell_hook)",
+  "type": "object",
+  "additionalProperties": true
+}
