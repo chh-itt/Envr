@@ -162,10 +162,23 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
     let data = json!({
         "lock_path": lock_path.to_string_lossy(),
         "lock_path_alt": lock_alt_path.to_string_lossy(),
+        "lock_exists": lock_path.is_file() || lock_alt_path.is_file(),
         "dry_run": dry_run,
         "content": rendered,
+        "config_dir": loc.dir.to_string_lossy(),
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {}))
+    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
+        if CliUxPolicy::from_global(g).human_text_primary() {
+            println!("lock file: {}", lock_path.display());
+            if lock_alt_path != lock_path {
+                println!("lock file alt: {}", lock_alt_path.display());
+            }
+            println!("config dir: {}", loc.dir.display());
+            if dry_run {
+                println!("dry run: no files written");
+            }
+        }
+    }))
 }
 
 fn sync_inner(
@@ -210,6 +223,7 @@ fn sync_inner(
         let data = json!({
             "missing": Vec::<serde_json::Value>::new(),
             "installed": Vec::<serde_json::Value>::new(),
+            "lock_status": lock_status,
         });
         return Ok(output::emit_ok(
             g,
@@ -239,7 +253,7 @@ fn sync_inner(
             .iter()
             .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
             .collect();
-        let data = json!({ "missing": rows, "installed": [], "lock_status": lock_status });
+        let data = json!({ "missing": rows, "installed": [], "lock_status": lock_status, "config_dir": session.ctx.working_dir.to_string_lossy() });
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_SYNC_PENDING,
