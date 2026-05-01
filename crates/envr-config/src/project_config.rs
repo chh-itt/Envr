@@ -18,6 +18,7 @@ pub struct ProjectConfigLocation {
     pub dir: PathBuf,
     pub base_file: Option<PathBuf>,
     pub local_file: Option<PathBuf>,
+    pub lock_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -288,6 +289,7 @@ fn load_project_config_inner_uncached(
                 dir: current.clone(),
                 base_file: if base_exists { Some(base_path) } else { None },
                 local_file: if local_exists { Some(local_path) } else { None },
+                lock_file: None,
             };
 
             return Ok(Some((merged, loc)));
