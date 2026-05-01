@@ -42,6 +42,12 @@ fn prefix_depth(spec: &str) -> usize {
     spec.split('.').take_while(|part| !part.is_empty()).count()
 }
 
+fn is_numeric_prefix(spec: &str) -> bool {
+    spec.chars().next().is_some_and(|c| c.is_ascii_digit())
+        && prefix_depth(spec) < 3
+        && spec.chars().all(|c| c.is_ascii_digit() || c == '.')
+}
+
 pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedRequest {
     let raw = spec.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     let normalized = raw.as_deref().and_then(|s| normalize_request_spec(Some(s)));
@@ -60,10 +66,7 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
         RequestKind::Range
     } else if is_channel_request(normalized_ref) {
         RequestKind::Channel
-    } else if normalized_ref.chars().next().is_some_and(|c| c.is_ascii_digit())
-        && prefix_depth(normalized_ref) < 3
-        && normalized_ref.chars().all(|c| c.is_ascii_digit() || c == '.')
-    {
+    } else if is_numeric_prefix(normalized_ref) {
         RequestKind::Prefix
     } else if normalized_ref.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         RequestKind::Exact
@@ -115,6 +118,7 @@ mod tests {
         assert_eq!(classify_request(Some("22.11"), false).kind, RequestKind::Prefix);
         assert_eq!(classify_request(Some("22.11.0"), false).kind, RequestKind::Exact);
         assert_eq!(classify_request(Some("v22.11.0"), false).kind, RequestKind::Exact);
+        assert_eq!(classify_request(Some("22.11.0.1"), false).kind, RequestKind::Exact);
     }
 
     #[test]

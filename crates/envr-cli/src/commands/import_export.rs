@@ -47,8 +47,8 @@ pub(crate) fn import_run_inner(
     } else {
         ProjectConfig::default()
     };
-    let imported = match format {
-        ImportExportFormat::EnvrToml => parse_project_config(&file)?,
+    let (imported, import_warnings) = match format {
+        ImportExportFormat::EnvrToml => (parse_project_config(&file)?, Vec::new()),
         ImportExportFormat::ToolVersions => parse_tool_versions_file(&file)?,
     };
     merged.runtimes.extend(imported.runtimes);
@@ -70,6 +70,7 @@ pub(crate) fn import_run_inner(
         "source": file.to_string_lossy(),
         "format": format.label(),
         "dry_run": dry_run,
+        "warnings": import_warnings,
         "toml": rendered,
     });
     Ok(output::emit_ok(
@@ -95,6 +96,9 @@ pub(crate) fn import_run_inner(
                             &[("path", &dest.display().to_string())],
                         )
                     );
+                    for warning in &import_warnings {
+                        println!("{}", warning);
+                    }
                 }
             }
         },
@@ -223,13 +227,14 @@ fn default_import_file(format: ImportExportFormat) -> PathBuf {
     }
 }
 
-fn parse_tool_versions_file(path: &Path) -> EnvrResult<ProjectConfig> {
+fn parse_tool_versions_file(path: &Path) -> EnvrResult<(ProjectConfig, Vec<String>)> {
     let content = fs::read_to_string(path)?;
     parse_tool_versions_str(&content)
 }
 
-fn parse_tool_versions_str(content: &str) -> EnvrResult<ProjectConfig> {
+fn parse_tool_versions_str(content: &str) -> EnvrResult<(ProjectConfig, Vec<String>)> {
     let mut cfg = ProjectConfig::default();
+    let mut warnings = Vec::new();
     for (idx, raw_line) in content.lines().enumerate() {
         let without_comment = raw_line.split_once('#').map_or(raw_line, |(head, _)| head);
         let line = without_comment.trim();
@@ -248,6 +253,12 @@ fn parse_tool_versions_str(content: &str) -> EnvrResult<ProjectConfig> {
             )));
         }
         let runtime = map_asdf_runtime_name(tool);
+        if runtime == tool && !is_known_envr_runtime(tool) {
+            warnings.push(format!(
+                "line {}: unknown asdf plugin `{tool}` preserved as runtime `{runtime}`",
+                idx + 1
+            ));
+        }
         if runtime != tool {
             cfg.compat
                 .asdf
@@ -263,7 +274,7 @@ fn parse_tool_versions_str(content: &str) -> EnvrResult<ProjectConfig> {
             },
         );
     }
-    Ok(cfg)
+    Ok((cfg, warnings))
 }
 
 fn render_tool_versions(cfg: &ProjectConfig) -> String {
@@ -321,6 +332,31 @@ fn map_asdf_runtime_name(name: &str) -> &str {
         "flutter" => "flutter",
         other => other,
     }
+}
+
+fn is_known_envr_runtime(name: &str) -> bool {
+    matches!(
+        name,
+        "node"
+            | "go"
+            | "dotnet"
+            | "python"
+            | "java"
+            | "ruby"
+            | "rust"
+            | "deno"
+            | "bun"
+            | "php"
+            | "elixir"
+            | "erlang"
+            | "kotlin"
+            | "scala"
+            | "clojure"
+            | "groovy"
+            | "terraform"
+            | "dart"
+            | "flutter"
+    )
 }
 
 fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
