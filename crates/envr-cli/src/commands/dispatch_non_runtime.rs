@@ -135,6 +135,11 @@ fn route_hook(sub: crate::cli::HookCmd, global: &GlobalArgs) -> CommandOutcome {
             "zsh",
             hook_cmd::HOOK_ZSH,
         )),
+        crate::cli::HookCmd::Powershell => cli!(hook_cmd::emit_hook_script(
+            global,
+            "powershell",
+            hook_cmd::HOOK_POWERSHELL,
+        )),
         crate::cli::HookCmd::Keys { path } => {
             ok!(hook_cmd::run_keys_inner(global, path))
         },

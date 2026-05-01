@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 pub(crate) const HOOK_BASH: &str = include_str!("../../shell/hook.bash.inc");
 pub(crate) const HOOK_ZSH: &str = include_str!("../../shell/hook.zsh.inc");
+pub(crate) const HOOK_POWERSHELL: &str = include_str!("../../shell/hook.powershell.inc");
 
 pub(crate) fn emit_hook_script(g: &GlobalArgs, shell: &str, body: &str) -> CliExit {
     let data = json!({

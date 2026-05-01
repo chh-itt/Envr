@@ -171,6 +171,8 @@ pub enum HookCmd {
     Bash,
     /// zsh: add to `~/.zshrc` as `eval "$(envr hook zsh)"` (uses `chpwd`)
     Zsh,
+    /// powershell: add to your PowerShell profile as `Invoke-Expression (& envr hook powershell)`
+    Powershell,
     /// Print env var names that hooks save/restore (one per line; internal / debugging)
     Keys {
         #[arg(long, value_name = "DIR", default_value = ".")]

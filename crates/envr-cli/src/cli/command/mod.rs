@@ -44,6 +44,7 @@ impl Command {
             Command::Shell { .. } => CommandKey::Shell,
             Command::Hook(HookCmd::Bash) => CommandKey::HookBash,
             Command::Hook(HookCmd::Zsh) => CommandKey::HookZsh,
+            Command::Hook(HookCmd::Powershell) => CommandKey::HookPowershell,
             Command::Hook(HookCmd::Keys { .. }) => CommandKey::HookKeys,
             Command::Hook(HookCmd::Prompt { .. }) => CommandKey::HookPrompt,
             Command::Prune { .. } => CommandKey::Prune,
