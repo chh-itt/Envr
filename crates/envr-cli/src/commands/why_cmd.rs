@@ -76,6 +76,7 @@ pub(crate) fn run_inner(
             "config_dir": loc.dir.to_string_lossy(),
             "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+            "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "pin": pin.clone(),
         })
     });
@@ -187,17 +188,42 @@ pub(crate) fn run_inner(
                         );
                     }
                 } else if spec_trim.is_none() {
-                    println!(
-                        "{}",
-                        fmt_template(
-                            &envr_core::i18n::tr_key(
-                                "cli.why.global_current",
-                                "无项目 pin：使用全局 `runtimes/{lang}/current` 指向的安装目录。",
-                                "No project pin: using global `runtimes/{lang}/current`.",
-                            ),
-                            &[("lang", lang.as_str())],
-                        )
-                    );
+                    if let Some((_, loc)) = loaded {
+                        if loc.lock_file.is_some() {
+                            println!(
+                                "{}",
+                                envr_core::i18n::tr_key(
+                                    "cli.why.lock_present",
+                                    "未找到项目 pin：当前目录已发现 lockfile，可执行 `envr project sync --locked`。",
+                                    "No project pin: a lockfile is present; run `envr project sync --locked`.",
+                                )
+                            );
+                        } else {
+                            println!(
+                                "{}",
+                                fmt_template(
+                                    &envr_core::i18n::tr_key(
+                                        "cli.why.global_current",
+                                        "无项目 pin：使用全局 `runtimes/{lang}/current` 指向的安装目录。",
+                                        "No project pin: using global `runtimes/{lang}/current`.",
+                                    ),
+                                    &[("lang", lang.as_str())],
+                                )
+                            );
+                        }
+                    } else {
+                        println!(
+                            "{}",
+                            fmt_template(
+                                &envr_core::i18n::tr_key(
+                                    "cli.why.global_current",
+                                    "无项目 pin：使用全局 `runtimes/{lang}/current` 指向的安装目录。",
+                                    "No project pin: using global `runtimes/{lang}/current`.",
+                                ),
+                                &[("lang", lang.as_str())],
+                            )
+                        );
+                    }
                 }
                 println!(
                     "{} {}",
