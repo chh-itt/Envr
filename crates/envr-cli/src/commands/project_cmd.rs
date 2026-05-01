@@ -8,8 +8,7 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    load_project_lock_any, project_lock_candidates, reset_project_config_load_cache,
-    save_project_lock,
+    project_lock_candidates, reset_project_config_load_cache, save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -192,19 +191,21 @@ fn sync_inner(
     let ctx = &session.ctx;
     let mut lock_status = None;
     if locked {
-        let lock_result = if let Some(path) = session
+        let lock_result = session
             .project
             .as_ref()
             .and_then(|(_, loc)| loc.lock_file.clone())
-        {
-            envr_config::project_config::load_project_lock(&path)?.map(|cfg| (cfg, path))
-        } else {
-            load_project_lock_any(&session.ctx.working_dir)?
-        };
-        let Some((lock_cfg, lock_path)) = lock_result else {
+            .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+        let Some(lock_path) = lock_result else {
             return Err(EnvrError::Validation(format!(
                 "no lockfile found under {}; run `envr project lock`",
                 session.ctx.working_dir.display()
+            )));
+        };
+        let Some(lock_cfg) = envr_config::project_config::load_project_lock(&lock_path)? else {
+            return Err(EnvrError::Validation(format!(
+                "lockfile {} is unreadable; run `envr project lock`",
+                lock_path.display()
             )));
         };
         if session.project_config() != Some(&lock_cfg) {
@@ -421,11 +422,21 @@ fn validate_inner(
         )));
     };
     if locked {
-        let lock_result = load_project_lock_any(&session.ctx.working_dir)?;
-        let Some((lock_cfg, lock_path)) = lock_result else {
+        let lock_result = session
+            .project
+            .as_ref()
+            .and_then(|(_, loc)| loc.lock_file.clone())
+            .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+        let Some(lock_path) = lock_result else {
             return Err(EnvrError::Validation(format!(
                 "no lockfile found under {}; run `envr project lock`",
                 session.ctx.working_dir.display()
+            )));
+        };
+        let Some(lock_cfg) = envr_config::project_config::load_project_lock(&lock_path)? else {
+            return Err(EnvrError::Validation(format!(
+                "lockfile {} is unreadable; run `envr project lock`",
+                lock_path.display()
             )));
         };
         if cfg != &lock_cfg {
