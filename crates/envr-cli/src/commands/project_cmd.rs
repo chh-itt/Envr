@@ -195,6 +195,7 @@ fn sync_inner(
                 lock_path.display()
             )));
         }
+        // lock path is already tracked by `load_project_config`; no mutation needed here.
     }
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
