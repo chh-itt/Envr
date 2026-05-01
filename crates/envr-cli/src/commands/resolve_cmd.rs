@@ -8,7 +8,7 @@ use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 
-use super::version_request::{classify_request, request_kind_str};
+use super::version_request::classify_request;
 
 fn next_steps_for_resolve(lang: &str, source: &str) -> Vec<(&'static str, String)> {
     let mut steps = Vec::new();
@@ -77,8 +77,9 @@ pub(crate) fn run_inner(
     let mut data = serde_json::json!({
         "kind": lang,
         "resolution_source": source,
-        "request_kind": request_kind_str(request.kind),
+        "request_kind": request.kind_str(),
         "request_value": request.raw,
+        "request_normalized": request.normalized,
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
@@ -132,7 +133,7 @@ pub(crate) fn run_inner(
                         "请求类型：",
                         "Request kind:",
                     ),
-                    request_kind_str(request.kind)
+                    request.kind_str()
                 );
             }
         },
