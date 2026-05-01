@@ -8,7 +8,7 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    PROJECT_LOCK_FILE, load_project_lock,
+    PROJECT_LOCK_FILE, load_project_lock_any,
     reset_project_config_load_cache, save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
@@ -174,8 +174,13 @@ fn sync_inner(
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
     if locked {
-        let lock_path = session.ctx.working_dir.join(PROJECT_LOCK_FILE);
-        let lock_cfg = load_project_lock(&lock_path)?;
+        let lock_result = load_project_lock_any(&session.ctx.working_dir)?;
+        let Some((lock_cfg, lock_path)) = lock_result else {
+            return Err(EnvrError::Validation(format!(
+                "no lockfile found under {}; run `envr project lock`",
+                session.ctx.working_dir.display()
+            )));
+        };
         if lock_cfg.as_ref() != session.project_config() {
             return Err(EnvrError::Validation(format!(
                 "lockfile {} is stale; run `envr project lock`",
@@ -384,8 +389,13 @@ fn validate_inner(
         )));
     };
     if locked {
-        let lock_path = session.ctx.working_dir.join(PROJECT_LOCK_FILE);
-        let lock_cfg = load_project_lock(&lock_path)?;
+        let lock_result = load_project_lock_any(&session.ctx.working_dir)?;
+        let Some((lock_cfg, lock_path)) = lock_result else {
+            return Err(EnvrError::Validation(format!(
+                "no lockfile found under {}; run `envr project lock`",
+                session.ctx.working_dir.display()
+            )));
+        };
         if lock_cfg.as_ref() != Some(cfg) {
             return Err(EnvrError::Validation(format!(
                 "lockfile {} is stale; run `envr project lock`",

@@ -11,6 +11,7 @@ use std::{
 pub const PROJECT_CONFIG_FILE: &str = ".envr.toml";
 pub const PROJECT_CONFIG_LOCAL_FILE: &str = ".envr.local.toml";
 pub const PROJECT_LOCK_FILE: &str = ".envr.lock.toml";
+pub const PROJECT_LOCK_FILE_ALT: &str = ".envr.lock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectConfigLocation {
@@ -333,6 +334,17 @@ pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectCon
         return Ok(None);
     }
     parse_project_config(path).map(Some)
+}
+
+pub fn load_project_lock_any(dir: impl AsRef<Path>) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
+    let dir = dir.as_ref();
+    let candidates = [dir.join(PROJECT_LOCK_FILE), dir.join(PROJECT_LOCK_FILE_ALT)];
+    for candidate in candidates {
+        if let Some(cfg) = load_project_lock(&candidate)? {
+            return Ok(Some((cfg, candidate)));
+        }
+    }
+    Ok(None)
 }
 
 pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
