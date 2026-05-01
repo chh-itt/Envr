@@ -9,7 +9,6 @@ use crate::output::{self, fmt_template};
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
     project_lock_candidates, project_lock_exists, reset_project_config_load_cache,
-    save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -149,15 +148,18 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         return Err(EnvrError::Validation("no project config found".into()));
     };
     let [lock_path, lock_alt_path] = project_lock_candidates(&loc.dir);
-    let rendered = toml::to_string_pretty(&envr_config::project_config::ProjectLockFile {
+    let lock_file = envr_config::project_config::ProjectLockFile {
         version: 1,
         project: cfg.clone(),
-    })
-    .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
+    };
+    let rendered = toml::to_string_pretty(&lock_file)
+        .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
     if !dry_run {
-        save_project_lock(&lock_path, cfg)?;
+        let lock_content = toml::to_string_pretty(&lock_file)
+            .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
+        std::fs::write(&lock_path, &lock_content)?;
         if lock_alt_path != lock_path {
-            save_project_lock(&lock_alt_path, cfg)?;
+            std::fs::write(&lock_alt_path, &lock_content)?;
         }
         reset_project_config_load_cache();
     }
