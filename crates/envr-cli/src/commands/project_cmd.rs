@@ -177,8 +177,13 @@ fn sync_inner(
 ) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
+    let mut lock_status = None;
     if locked {
-        let lock_result = if let Some(path) = session.project.as_ref().and_then(|(_, loc)| loc.lock_file.clone()) {
+        let lock_result = if let Some(path) = session
+            .project
+            .as_ref()
+            .and_then(|(_, loc)| loc.lock_file.clone())
+        {
             envr_config::project_config::load_project_lock(&path)?.map(|cfg| (cfg, path))
         } else {
             load_project_lock_any(&session.ctx.working_dir)?
@@ -195,7 +200,10 @@ fn sync_inner(
                 lock_path.display()
             )));
         }
-        // lock path is already tracked by `load_project_config`; no mutation needed here.
+        lock_status = Some(json!({
+            "path": lock_path.to_string_lossy(),
+            "matched": true,
+        }));
     }
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
@@ -231,7 +239,7 @@ fn sync_inner(
             .iter()
             .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
             .collect();
-        let data = json!({ "missing": rows, "installed": [] });
+        let data = json!({ "missing": rows, "installed": [], "lock_status": lock_status });
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_SYNC_PENDING,
@@ -279,6 +287,7 @@ fn sync_inner(
             .map(|(a, b)| json!({ "kind": a, "version_spec": b }))
             .collect::<Vec<_>>(),
         "installed": installed,
+        "lock_status": lock_status,
     });
     Ok(output::emit_ok(
         g,
