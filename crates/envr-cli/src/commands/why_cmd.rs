@@ -13,6 +13,14 @@ use serde_json::json;
 
 use super::version_request::classify_request;
 
+fn project_lock_notice(lock_file_present: bool) -> Option<&'static str> {
+    if lock_file_present {
+        Some("No project pin: a lockfile is present; run `envr project sync --locked`.")
+    } else {
+        None
+    }
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -189,13 +197,13 @@ pub(crate) fn run_inner(
                     }
                 } else if spec_trim.is_none() {
                     if let Some((_, loc)) = loaded {
-                        if loc.lock_file.is_some() {
+                        if let Some(msg) = project_lock_notice(loc.lock_file.is_some()) {
                             println!(
                                 "{}",
                                 envr_core::i18n::tr_key(
                                     "cli.why.lock_present",
                                     "未找到项目 pin：当前目录已发现 lockfile，可执行 `envr project sync --locked`。",
-                                    "No project pin: a lockfile is present; run `envr project sync --locked`.",
+                                    msg,
                                 )
                             );
                         } else {
