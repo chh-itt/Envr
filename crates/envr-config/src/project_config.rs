@@ -368,6 +368,12 @@ pub fn project_lock_candidates(dir: impl AsRef<Path>) -> [PathBuf; 2] {
     [dir.join(PROJECT_LOCK_FILE), dir.join(PROJECT_LOCK_FILE_ALT)]
 }
 
+pub fn project_lock_exists(dir: impl AsRef<Path>) -> bool {
+    project_lock_candidates(dir)
+        .into_iter()
+        .any(|candidate| candidate.is_file())
+}
+
 pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
     save_project_config(path, cfg)
 }

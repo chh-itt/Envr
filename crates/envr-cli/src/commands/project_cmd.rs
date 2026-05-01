@@ -8,7 +8,8 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    project_lock_candidates, reset_project_config_load_cache, save_project_lock,
+    project_lock_candidates, project_lock_exists, reset_project_config_load_cache,
+    save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -195,7 +196,11 @@ fn sync_inner(
             .project
             .as_ref()
             .and_then(|(_, loc)| loc.lock_file.clone())
-            .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+            .or_else(|| {
+                project_lock_candidates(&session.ctx.working_dir)
+                    .into_iter()
+                    .find(|p| p.is_file())
+            });
         let Some(lock_path) = lock_result else {
             return Err(EnvrError::Validation(format!(
                 "no lockfile found under {}; run `envr project lock`",
@@ -218,6 +223,11 @@ fn sync_inner(
             "path": lock_path.to_string_lossy(),
             "matched": true,
         }));
+    } else if project_lock_exists(&session.ctx.working_dir) {
+        lock_status = Some(json!({
+            "matched": false,
+        }));
+    }
     }
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
