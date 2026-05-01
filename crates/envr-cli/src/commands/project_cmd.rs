@@ -8,7 +8,7 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    PROJECT_LOCK_FILE, load_project_lock_any,
+    PROJECT_LOCK_FILE, PROJECT_LOCK_FILE_ALT, load_project_lock_any,
     reset_project_config_load_cache, save_project_lock,
 };
 use envr_core::runtime::service::RuntimeService;
@@ -149,15 +149,20 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         return Err(EnvrError::Validation("no project config found".into()));
     };
     let lock_path = loc.dir.join(PROJECT_LOCK_FILE);
+    let lock_alt_path = loc.dir.join(PROJECT_LOCK_FILE_ALT);
     let rendered = toml::to_string_pretty(cfg).map_err(|e| {
         EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
     })?;
     if !dry_run {
         save_project_lock(&lock_path, cfg)?;
+        if lock_alt_path != lock_path {
+            save_project_lock(&lock_alt_path, cfg)?;
+        }
         reset_project_config_load_cache();
     }
     let data = json!({
         "lock_path": lock_path.to_string_lossy(),
+        "lock_path_alt": lock_alt_path.to_string_lossy(),
         "dry_run": dry_run,
         "content": rendered,
     });
