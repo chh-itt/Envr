@@ -303,10 +303,14 @@ fn map_asdf_runtime_name(name: &str) -> &str {
         "nodejs" => "node",
         "golang" => "go",
         "dotnet-core" => "dotnet",
+        "rust" => "rust",
         "ruby" => "ruby",
         "python" => "python",
         "java" => "java",
         "terraform" => "terraform",
+        "deno" => "deno",
+        "bun" => "bun",
+        "php" => "php",
         other => other,
     }
 }
@@ -316,10 +320,14 @@ fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
         "node" => "nodejs",
         "go" => "golang",
         "dotnet" => "dotnet-core",
+        "rust" => "rust",
         "ruby" => "ruby",
         "python" => "python",
         "java" => "java",
         "terraform" => "terraform",
+        "deno" => "deno",
+        "bun" => "bun",
+        "php" => "php",
         other => other,
     }
 }
@@ -436,5 +444,29 @@ terraform 1.9.8
         assert!(rendered.contains("java temurin-21.0.4+7\n"));
         assert!(rendered.contains("ruby 3.3.5\n"));
         assert!(rendered.contains("terraform 1.9.8\n"));
+    }
+
+    #[test]
+    fn import_export_roundtrip_supports_more_aliases() {
+        let cfg = parse_tool_versions_str(
+            r#"
+rust 1.78.0
+deno 2.0.0
+bun 1.1.30
+php 8.3.12
+"#,
+        )
+        .expect("parse");
+
+        assert_eq!(cfg.runtimes.get("rust").and_then(|r| r.version.as_deref()), Some("1.78.0"));
+        assert_eq!(cfg.runtimes.get("deno").and_then(|r| r.version.as_deref()), Some("2.0.0"));
+        assert_eq!(cfg.runtimes.get("bun").and_then(|r| r.version.as_deref()), Some("1.1.30"));
+        assert_eq!(cfg.runtimes.get("php").and_then(|r| r.version.as_deref()), Some("8.3.12"));
+
+        let rendered = render_tool_versions(&cfg);
+        assert!(rendered.contains("rust 1.78.0\n"));
+        assert!(rendered.contains("deno 2.0.0\n"));
+        assert!(rendered.contains("bun 1.1.30\n"));
+        assert!(rendered.contains("php 8.3.12\n"));
     }
 }
