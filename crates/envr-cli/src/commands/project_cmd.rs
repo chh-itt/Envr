@@ -149,9 +149,11 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         return Err(EnvrError::Validation("no project config found".into()));
     };
     let [lock_path, lock_alt_path] = project_lock_candidates(&loc.dir);
-    let rendered = toml::to_string_pretty(cfg).map_err(|e| {
-        EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
-    })?;
+    let rendered = toml::to_string_pretty(&envr_config::project_config::ProjectLockFile {
+        version: 1,
+        project: cfg.clone(),
+    })
+    .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
     if !dry_run {
         save_project_lock(&lock_path, cfg)?;
         if lock_alt_path != lock_path {
@@ -227,7 +229,6 @@ fn sync_inner(
         lock_status = Some(json!({
             "matched": false,
         }));
-    }
     }
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
