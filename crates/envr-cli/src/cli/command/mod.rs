@@ -6,7 +6,7 @@ mod root;
 pub use nested::{
     AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, CacheRuntimeCmd, ConfigCmd, ConfigValueType,
     DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd, ProjectCmd, RustCmd,
-    ShimCmd,
+    ShimCmd, ToolCmd,
 };
 pub use root::Command;
 
@@ -70,6 +70,8 @@ impl Command {
             Command::Alias(AliasCmd::Add { .. }) => CommandKey::AliasAdd,
             Command::Alias(AliasCmd::Remove { .. }) => CommandKey::AliasRemove,
             Command::Shim(ShimCmd::Sync { .. }) => CommandKey::ShimSync,
+            Command::Tool(ToolCmd::List) => CommandKey::ToolList,
+            Command::Tool(ToolCmd::Which { .. }) => CommandKey::ToolWhich,
             Command::Cache(CacheCmd::Clean { .. }) => CommandKey::CacheClean,
             Command::Cache(CacheCmd::Index(CacheIndexCmd::Sync { .. })) => CommandKey::CacheIndexSync,
             Command::Cache(CacheCmd::Index(CacheIndexCmd::Status { .. })) => CommandKey::CacheIndexStatus,

@@ -2,7 +2,7 @@ use super::dispatch_macros::dispatch_match;
 use super::{
     alias_cmd, bundle_cmd, cache_cmd, check, completion_cmd, config_cmd, deactivate_cmd, debug_cmd,
     env_cmd, exec, help_cmd, hook_cmd, import_export, init, profile_cmd, resolve_cmd, run_cmd,
-    rust_cmd, shell_cmd, shim_cmd, status_cmd, template_cmd, update, which, why_cmd,
+    rust_cmd, shell_cmd, shim_cmd, status_cmd, template_cmd, tool_cmd, update, which, why_cmd,
 };
 use crate::CommandOutcome;
 use crate::cli::{Command, GlobalArgs};
@@ -103,6 +103,7 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
         Command::Alias(sub) => ok!(alias_cmd::run_inner(global, sub)),
         Command::Update { check } => ok!(update::run_inner(global, check)),
         Command::Shim(sub) => route_shim(sub, global),
+        Command::Tool(sub) => ok!(tool_cmd::run_inner(global, sub)),
         Command::Cache(sub) => route_cache(sub, global),
         Command::Bundle(sub) => ok!(bundle_cmd::run_inner(global, sub)),
         Command::Rust(sub) => route_rust(sub, global),

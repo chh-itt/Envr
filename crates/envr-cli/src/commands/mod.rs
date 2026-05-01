@@ -47,6 +47,7 @@ mod shell_cmd;
 mod shim_cmd;
 mod status_cmd;
 mod template_cmd;
+mod tool_cmd;
 mod uninstall;
 mod update;
 mod use_cmd;

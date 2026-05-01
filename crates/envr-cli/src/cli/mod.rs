@@ -13,7 +13,7 @@ mod metadata;
 pub use command::{
     AliasCmd, BundleCmd, CacheCmd, CacheIndexCmd, CacheRuntimeCmd, Command, ConfigCmd,
     ConfigValueType, DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd, HookCmd, ProfileCmd,
-    ProjectCmd, RustCmd, ShimCmd,
+    ProjectCmd, RustCmd, ShimCmd, ToolCmd,
 };
 pub use global::{ExecRunSharedArgs, GlobalArgs, OutputFormat, ProjectPathProfileArgs};
 

@@ -2,7 +2,7 @@
 
 use super::nested::{
     AliasCmd, BundleCmd, CacheCmd, ConfigCmd, DebugCmd, DiagnosticsCmd, EnvShellKind, HelpCmd,
-    HookCmd, ProfileCmd, ProjectCmd, RustCmd, ShimCmd,
+    HookCmd, ProfileCmd, ProjectCmd, RustCmd, ShimCmd, ToolCmd,
 };
 use crate::cli::global::{ExecRunSharedArgs, ProjectPathProfileArgs};
 
@@ -256,6 +256,9 @@ pub enum Command {
     /// Manage shims under `{runtime_root}/shims`
     #[command(visible_alias = "sh", subcommand)]
     Shim(ShimCmd),
+    /// Inspect managed tools discovery state
+    #[command(subcommand)]
+    Tool(ToolCmd),
     /// Manage envr download caches under `{runtime_root}/cache`
     #[command(visible_alias = "c", subcommand)]
     Cache(CacheCmd),

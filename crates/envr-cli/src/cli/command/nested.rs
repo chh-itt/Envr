@@ -190,6 +190,17 @@ pub enum DebugCmd {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum ToolCmd {
+    /// List managed tool placeholders available to envr (read-only discovery)
+    List,
+    /// Show where a managed tool would resolve from (currently runtime-key based)
+    Which {
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 pub enum DiagnosticsCmd {
     /// Write `doctor.json`, `system.txt`, `environment.txt`, and recent `*.log` files into a zip
     Export {
