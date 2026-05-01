@@ -333,10 +333,42 @@ pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrR
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectLockFile {
+    #[serde(default = "project_lock_file_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub project: ProjectConfig,
+}
+
+fn project_lock_file_version() -> u32 {
+    1
+}
+
+impl Default for ProjectLockFile {
+    fn default() -> Self {
+        Self {
+            version: project_lock_file_version(),
+            project: ProjectConfig::default(),
+        }
+    }
+}
+
 pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectConfig>> {
     let path = path.as_ref();
     if !path.is_file() {
         return Ok(None);
+    }
+    let content = fs::read_to_string(path).map_err(EnvrError::from)?;
+    if let Ok(lock) = toml::from_str::<ProjectLockFile>(&content) {
+        if lock.version != project_lock_file_version() {
+            return Err(EnvrError::Config(format!(
+                "unsupported project lock version {} in {}",
+                lock.version,
+                path.display()
+            )));
+        }
+        return Ok(Some(lock.project));
     }
     parse_project_config(path).map(Some)
 }
@@ -375,7 +407,17 @@ pub fn project_lock_exists(dir: impl AsRef<Path>) -> bool {
 }
 
 pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrResult<()> {
-    save_project_config(path, cfg)
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
+    }
+    let content = toml::to_string_pretty(&ProjectLockFile {
+        version: project_lock_file_version(),
+        project: cfg.clone(),
+    })
+    .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode project lock", e))?;
+    fs::write(path, content).map_err(EnvrError::from)?;
+    Ok(())
 }
 
 fn expand_env_map(
