@@ -167,6 +167,7 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         "lock_path": lock_path.to_string_lossy(),
         "lock_path_alt": lock_alt_path.to_string_lossy(),
         "lock_exists": lock_path.is_file() || lock_alt_path.is_file(),
+        "lock_version": lock_file.version,
         "dry_run": dry_run,
         "content": rendered,
         "config_dir": loc.dir.to_string_lossy(),
@@ -226,6 +227,7 @@ fn sync_inner(
         lock_status = Some(json!({
             "path": lock_path.to_string_lossy(),
             "matched": true,
+            "version": 1,
         }));
     } else if project_lock_exists(&session.ctx.working_dir) {
         lock_status = Some(json!({
