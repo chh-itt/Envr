@@ -75,7 +75,7 @@ impl Command {
             Command::Shim(ShimCmd::Sync { .. }) => CommandKey::ShimSync,
             Command::Tool(ToolCmd::List) => CommandKey::ToolList,
             Command::Tool(ToolCmd::Which { .. }) => CommandKey::ToolWhich,
-            Command::Tool(ToolCmd::Status { .. }) => CommandKey::ToolList,
+            Command::Tool(ToolCmd::Status { .. }) => CommandKey::ToolStatus,
             Command::Cache(CacheCmd::Clean { .. }) => CommandKey::CacheClean,
             Command::Cache(CacheCmd::Index(CacheIndexCmd::Sync { .. })) => CommandKey::CacheIndexSync,
             Command::Cache(CacheCmd::Index(CacheIndexCmd::Status { .. })) => CommandKey::CacheIndexStatus,

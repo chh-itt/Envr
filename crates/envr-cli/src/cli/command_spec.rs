@@ -123,6 +123,7 @@ pub(crate) enum CommandKey {
     ShimSync,
     ToolList,
     ToolWhich,
+    ToolStatus,
     CacheClean,
     CacheIndexSync,
     CacheIndexStatus,
@@ -722,6 +723,19 @@ const COMMAND_SPEC_REGISTRY: &[(CommandKey, CommandSpec)] = &[
             CommandCapabilities::new(false, true, ContractSurface::Both),
             &["tool", "which"],
             &["tool_resolved"],
+        ),
+    ),
+    (
+        CommandKey::ToolStatus,
+        CommandSpec::new(
+            "tool_status",
+            None,
+            false,
+            false,
+            None,
+            CommandCapabilities::new(false, true, ContractSurface::Json),
+            &["tool", "status"],
+            &["tool_status"],
         ),
     ),
     (

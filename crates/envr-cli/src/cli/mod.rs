@@ -730,6 +730,7 @@ mod command_trace_tests {
             (CommandKey::Shell, &["envr", "shell"]),
             (CommandKey::HookBash, &["envr", "hook", "bash"]),
             (CommandKey::HookZsh, &["envr", "hook", "zsh"]),
+            (CommandKey::HookPowershell, &["envr", "hook", "powershell"]),
             (CommandKey::HookKeys, &["envr", "hook", "keys"]),
             (CommandKey::HookPrompt, &["envr", "hook", "prompt"]),
             (CommandKey::Prune, &["envr", "prune"]),
@@ -767,6 +768,9 @@ mod command_trace_tests {
             (CommandKey::AliasAdd, &["envr", "alias", "add", "n", "node"]),
             (CommandKey::AliasRemove, &["envr", "alias", "remove", "n"]),
             (CommandKey::ShimSync, &["envr", "shim", "sync"]),
+            (CommandKey::ToolList, &["envr", "tool", "list"]),
+            (CommandKey::ToolWhich, &["envr", "tool", "which", "ruff"]),
+            (CommandKey::ToolStatus, &["envr", "tool", "status", "ruff"]),
             (CommandKey::CacheClean, &["envr", "cache", "clean"]),
             (
                 CommandKey::CacheIndexSync,
