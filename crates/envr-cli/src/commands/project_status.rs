@@ -23,11 +23,18 @@ pub struct RuntimeStatusRow {
 }
 
 #[derive(Debug, Clone)]
+pub struct ProjectLockStatus {
+    pub path: PathBuf,
+    pub version: u32,
+    pub matched: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct ProjectStatus {
     pub working_dir: PathBuf,
     pub project_dir: Option<PathBuf>,
     pub profile: Option<String>,
-    pub lock_file: Option<PathBuf>,
+    pub lock: Option<ProjectLockStatus>,
     pub rows: Vec<RuntimeStatusRow>,
 }
 
@@ -101,9 +108,19 @@ pub fn build_project_status_from_loaded(
     ctx: &ShimContext,
     loaded: &Option<(ProjectConfig, ProjectConfigLocation)>,
 ) -> EnvrResult<ProjectStatus> {
-    let (project_dir, lock_file, cfg_ref) = loaded
+    let (project_dir, lock, cfg_ref) = loaded
         .as_ref()
-        .map(|(c, loc)| (Some(loc.dir.clone()), loc.lock_file.clone(), Some(c)))
+        .map(|(c, loc)| {
+            (
+                Some(loc.dir.clone()),
+                loc.lock_file.clone().map(|path| ProjectLockStatus {
+                    path,
+                    version: 1,
+                    matched: true,
+                }),
+                Some(c),
+            )
+        })
         .unwrap_or((None, None, None));
 
     let mut rows = Vec::new();
@@ -152,7 +169,7 @@ pub fn build_project_status_from_loaded(
         working_dir: ctx.working_dir.clone(),
         project_dir,
         profile: ctx.profile.clone(),
-        lock_file: loaded.as_ref().and_then(|(_, loc)| loc.lock_file.clone()),
+        lock,
         rows,
     })
 }
@@ -178,9 +195,11 @@ pub fn status_to_json(st: &ProjectStatus) -> Value {
             "dir": d.to_string_lossy(),
         })
     });
-    let lock = st.lock_file.as_ref().map(|p| {
+    let lock = st.lock.as_ref().map(|l| {
         json!({
-            "path": p.to_string_lossy(),
+            "path": l.path.to_string_lossy(),
+            "version": l.version,
+            "matched": l.matched,
         })
     });
     let rows: Vec<Value> = st
