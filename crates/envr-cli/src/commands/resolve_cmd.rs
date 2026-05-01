@@ -8,6 +8,39 @@ use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestKind {
+    Exact,
+    Prefix,
+    Alias,
+    Range,
+    Channel,
+    Unknown,
+}
+
+fn classify_request(spec: Option<&str>, has_pin: bool) -> (RequestKind, Option<String>) {
+    let raw = spec.map(str::trim).filter(|s| !s.is_empty());
+    let Some(raw) = raw else {
+        return (RequestKind::Unknown, None);
+    };
+    let kind = if matches!(raw, "latest" | "stable" | "lts" | "system") {
+        RequestKind::Alias
+    } else if raw.contains('<') || raw.contains('>') || raw.starts_with("~>") {
+        RequestKind::Range
+    } else if raw.contains('-') && raw.chars().any(|c| c.is_ascii_digit()) && raw.chars().any(|c| c.is_ascii_alphabetic()) {
+        RequestKind::Channel
+    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) && raw.split('.').count() < 3 {
+        RequestKind::Prefix
+    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        RequestKind::Exact
+    } else if has_pin {
+        RequestKind::Exact
+    } else {
+        RequestKind::Unknown
+    };
+    (kind, Some(raw.to_string()))
+}
+
 fn next_steps_for_resolve(lang: &str, source: &str) -> Vec<(&'static str, String)> {
     let mut steps = Vec::new();
     steps.push((
@@ -62,6 +95,7 @@ pub(crate) fn run_inner(
     };
 
     let trimmed = spec.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let request = classify_request(trimmed, has_pin);
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, trimmed, cfg)?;
     let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
 
@@ -74,6 +108,15 @@ pub(crate) fn run_inner(
     let mut data = serde_json::json!({
         "kind": lang,
         "resolution_source": source,
+        "request_kind": match request.0 {
+            RequestKind::Exact => "exact",
+            RequestKind::Prefix => "prefix",
+            RequestKind::Alias => "alias",
+            RequestKind::Range => "range",
+            RequestKind::Channel => "channel",
+            RequestKind::Unknown => "unknown",
+        },
+        "request_value": request.1,
         "home": home.to_string_lossy(),
         "version_dir": version_label,
     });
@@ -119,6 +162,22 @@ pub(crate) fn run_inner(
                             ("source", &source_label),
                         ],
                     )
+                );
+                println!(
+                    "{} {}",
+                    envr_core::i18n::tr_key(
+                        "cli.resolve.request_kind",
+                        "请求类型：",
+                        "Request kind:",
+                    ),
+                    match request.0 {
+                        RequestKind::Exact => "exact",
+                        RequestKind::Prefix => "prefix",
+                        RequestKind::Alias => "alias",
+                        RequestKind::Range => "range",
+                        RequestKind::Channel => "channel",
+                        RequestKind::Unknown => "unknown",
+                    }
                 );
             }
         },
