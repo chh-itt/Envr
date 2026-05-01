@@ -178,7 +178,11 @@ fn sync_inner(
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
     if locked {
-        let lock_result = load_project_lock_any(&session.ctx.working_dir)?;
+        let lock_result = if let Some(path) = session.project.as_ref().and_then(|(_, loc)| loc.lock_file.clone()) {
+            envr_config::project_config::load_project_lock(&path)?.map(|cfg| (cfg, path))
+        } else {
+            load_project_lock_any(&session.ctx.working_dir)?
+        };
         let Some((lock_cfg, lock_path)) = lock_result else {
             return Err(EnvrError::Validation(format!(
                 "no lockfile found under {}; run `envr project lock`",

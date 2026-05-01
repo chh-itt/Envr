@@ -285,11 +285,14 @@ fn load_project_config_inner_uncached(
 
             let merged = merged.expand_vars()?;
 
+            let lock_file = project_lock_candidates(&current)
+                .into_iter()
+                .find(|candidate| candidate.is_file());
             let loc = ProjectConfigLocation {
                 dir: current.clone(),
                 base_file: if base_exists { Some(base_path) } else { None },
                 local_file: if local_exists { Some(local_path) } else { None },
-                lock_file: None,
+                lock_file,
             };
 
             return Ok(Some((merged, loc)));
