@@ -17,13 +17,21 @@ pub(crate) fn run_inner(g: &GlobalArgs, cmd: ToolCmd) -> EnvrResult<CliExit> {
 fn list_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
     let tools: Vec<_> = RUNTIME_DESCRIPTORS
         .iter()
-        .map(|d| json!({
-            "name": d.key,
-            "label": d.label_en,
-            "runtime_kind": format!("{:?}", d.kind),
-        }))
+        .map(|d| {
+            let runtime = runtime_descriptor(d.kind);
+            json!({
+                "name": d.key,
+                "label": d.label_en,
+                "runtime_kind": format!("{:?}", d.kind),
+                "supports_remote_latest": d.supports_remote_latest,
+                "supports_path_proxy": d.supports_path_proxy,
+                "host_runtime": d.host_runtime.map(|k| format!("{:?}", k)),
+                "descriptor_name": runtime.key,
+                "descriptor_label": runtime.label_en,
+            })
+        })
         .collect();
-    let data = json!({ "tools": tools });
+    let data = json!({ "tools": tools, "count": tools.len() });
     Ok(output::emit_ok(g, "tool_listed", data, || {}))
 }
 
@@ -39,10 +47,16 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
             1,
         ));
     };
+    let runtime = runtime_descriptor(desc.kind);
     let data = json!({
         "name": desc.key,
         "resolved": desc.key,
         "runtime_kind": format!("{:?}", desc.kind),
+        "supports_remote_latest": desc.supports_remote_latest,
+        "supports_path_proxy": desc.supports_path_proxy,
+        "host_runtime": desc.host_runtime.map(|k| format!("{:?}", k)),
+        "descriptor_name": runtime.key,
+        "descriptor_label": runtime.label_en,
     });
     Ok(output::emit_ok(g, "tool_resolved", data, || {}))
 }
@@ -76,6 +90,7 @@ fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
             if let Some(host) = desc.host_runtime {
                 println!("host runtime: {:?}", host);
             }
+            println!("descriptor name: {}", runtime.key);
         }
     }))
 }
