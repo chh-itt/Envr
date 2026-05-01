@@ -11,36 +11,7 @@ use envr_error::EnvrError;
 use envr_shim_core::resolve_runtime_home_for_lang_with_project;
 use serde_json::json;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RequestKind {
-    Exact,
-    Prefix,
-    Alias,
-    Range,
-    Channel,
-    Unknown,
-}
-
-fn classify_request(spec: Option<&str>, pinned: Option<&str>) -> (RequestKind, Option<String>) {
-    let raw = spec.or(pinned).map(str::trim).filter(|s| !s.is_empty());
-    let Some(raw) = raw else {
-        return (RequestKind::Unknown, None);
-    };
-    let kind = if matches!(raw, "latest" | "stable" | "lts" | "system") {
-        RequestKind::Alias
-    } else if raw.contains("<") || raw.contains(">") || raw.starts_with("~>") {
-        RequestKind::Range
-    } else if raw.contains('-') && raw.chars().any(|c| c.is_ascii_digit()) && raw.chars().any(|c| c.is_ascii_alphabetic()) {
-        RequestKind::Channel
-    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) && raw.split('.').count() < 3 {
-        RequestKind::Prefix
-    } else if raw.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        RequestKind::Exact
-    } else {
-        RequestKind::Unknown
-    };
-    (kind, Some(raw.to_string()))
-}
+use super::version_request::{classify_request, request_kind_str};
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
@@ -109,14 +80,7 @@ pub(crate) fn run_inner(
         "spec_override": spec_trim.clone(),
         "project": project_json,
         "resolution": resolution,
-        "request_kind": match request.0 {
-            RequestKind::Exact => "exact",
-            RequestKind::Prefix => "prefix",
-            RequestKind::Alias => "alias",
-            RequestKind::Range => "range",
-            RequestKind::Channel => "channel",
-            RequestKind::Unknown => "unknown",
-        },
+        "request_kind": request_kind_str(request.0),
         "request_value": request.1,
         "resolved_home": home.to_string_lossy(),
     });
@@ -242,14 +206,7 @@ pub(crate) fn run_inner(
                         "请求类型：",
                         "Request kind:",
                     ),
-                    match request.0 {
-                        RequestKind::Exact => "exact",
-                        RequestKind::Prefix => "prefix",
-                        RequestKind::Alias => "alias",
-                        RequestKind::Range => "range",
-                        RequestKind::Channel => "channel",
-                        RequestKind::Unknown => "unknown",
-                    }
+                    request_kind_str(request.0)
                 );
             }
         },
