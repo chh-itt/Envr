@@ -10,6 +10,7 @@ pub(crate) fn run_inner(g: &GlobalArgs, cmd: ToolCmd) -> EnvrResult<CliExit> {
     match cmd {
         ToolCmd::List => list_inner(g),
         ToolCmd::Which { name } => which_inner(g, name),
+        ToolCmd::Status { name } => status_inner(g, name),
     }
 }
 
@@ -44,4 +45,23 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
         "runtime_kind": format!("{:?}", desc.kind),
     });
     Ok(output::emit_ok(g, "tool_resolved", data, || {}))
+}
+
+fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
+    let data = if let Some(desc) = RUNTIME_DESCRIPTORS.iter().find(|d| d.key == name) {
+        json!({
+            "name": desc.key,
+            "label": desc.label_en,
+            "runtime_kind": format!("{:?}", desc.kind),
+            "supports_remote_latest": desc.supports_remote_latest,
+            "supports_path_proxy": desc.supports_path_proxy,
+            "host_runtime": desc.host_runtime.map(|k| format!("{:?}", k)),
+        })
+    } else {
+        json!({
+            "name": name,
+            "found": false,
+        })
+    };
+    Ok(output::emit_ok(g, "tool_status", data, || {}))
 }

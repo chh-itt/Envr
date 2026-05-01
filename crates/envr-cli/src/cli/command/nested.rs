@@ -222,6 +222,11 @@ pub enum ToolCmd {
         #[arg(value_name = "NAME")]
         name: String,
     },
+    /// Show detailed discovery metadata for one managed tool or runtime placeholder
+    Status {
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
