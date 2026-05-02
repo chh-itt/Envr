@@ -8,8 +8,8 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    EnvLockFile, RuntimeLockEntry, load_project_lock, project_lock_candidates,
-    project_lock_exists, reset_project_config_load_cache,
+    EnvLockFile, ProjectConfigLocation, RuntimeLockEntry, load_project_lock,
+    project_lock_candidates, project_lock_exists, reset_project_config_load_cache,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -253,6 +253,71 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
     ))
 }
 
+fn lock_status_json(
+    session: &crate::runtime_session::RuntimeSession,
+    locked: bool,
+) -> EnvrResult<Option<serde_json::Value>> {
+    if !locked {
+        return Ok(session.project.as_ref().and_then(|(_, loc)| {
+            loc.lock_file.as_ref().map(|p| json!({
+                "path": p.to_string_lossy(),
+                "version": 1,
+                "matched": false,
+                "fresh": false,
+            }))
+        }));
+    }
+
+    let Some((_, loc)) = session.project.as_ref() else {
+        return Err(EnvrError::Validation("no project config found".into()));
+    };
+
+    let lock_result = loc
+        .lock_file
+        .clone()
+        .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+    let Some(lock_path) = lock_result else {
+        return Err(EnvrError::Validation(format!(
+            "no lockfile found under {}; run `envr project lock`",
+            session.ctx.working_dir.display()
+        )));
+    };
+
+    let Some(lock_cfg) = load_project_lock(&lock_path)? else {
+        return Err(EnvrError::Validation(format!(
+            "lockfile {} is unreadable; run `envr project lock`",
+            lock_path.display()
+        )));
+    };
+    let fresh = session.project_config() == Some(&lock_cfg);
+    if !fresh {
+        return Err(EnvrError::Validation(format!(
+            "lockfile {} is stale; run `envr project lock`",
+            lock_path.display()
+        )));
+    }
+
+    let lock_entries = match std::fs::read_to_string(&lock_path)
+        .ok()
+        .and_then(|content| toml::from_str::<EnvLockFile>(&content).ok()) {
+        Some(lock) => lock.runtime,
+        None => Vec::new(),
+    };
+    Ok(Some(json!({
+        "path": lock_path.to_string_lossy(),
+        "matched": true,
+        "version": 1,
+        "fresh": fresh,
+        "entries": lock_entries.iter().map(|entry| json!({
+            "name": entry.name,
+            "request": entry.request,
+            "resolved": entry.resolved,
+            "source": entry.source,
+            "candidate_count": entry.candidate_count,
+        })).collect::<Vec<_>>(),
+    })))
+}
+
 fn sync_inner(
     g: &GlobalArgs,
     _service: &RuntimeService,
@@ -262,58 +327,7 @@ fn sync_inner(
 ) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
-    let mut lock_status = None;
-    if locked {
-        let lock_result = session
-            .project
-            .as_ref()
-            .and_then(|(_, loc)| loc.lock_file.clone())
-            .or_else(|| {
-                project_lock_candidates(&session.ctx.working_dir)
-                    .into_iter()
-                    .find(|p| p.is_file())
-            });
-        let Some(lock_path) = lock_result else {
-            return Err(EnvrError::Validation(format!(
-                "no lockfile found under {}; run `envr project lock`",
-                session.ctx.working_dir.display()
-            )));
-        };
-        let Some(lock_cfg) = load_project_lock(&lock_path)? else {
-            return Err(EnvrError::Validation(format!(
-                "lockfile {} is unreadable; run `envr project lock`",
-                lock_path.display()
-            )));
-        };
-        if session.project_config() != Some(&lock_cfg) {
-            return Err(EnvrError::Validation(format!(
-                "lockfile {} is stale; run `envr project lock`",
-                lock_path.display()
-            )));
-        }
-        let lock_entries = match std::fs::read_to_string(&lock_path)
-            .ok()
-            .and_then(|content| toml::from_str::<EnvLockFile>(&content).ok()) {
-            Some(lock) => lock.runtime,
-            None => Vec::new(),
-        };
-        lock_status = Some(json!({
-            "path": lock_path.to_string_lossy(),
-            "matched": true,
-            "version": 1,
-            "entries": lock_entries.iter().map(|entry| json!({
-                "name": entry.name,
-                "request": entry.request,
-                "resolved": entry.resolved,
-                "source": entry.source,
-                "candidate_count": entry.candidate_count,
-            })).collect::<Vec<_>>(),
-        }));
-    } else if project_lock_exists(&session.ctx.working_dir) {
-        lock_status = Some(json!({
-            "matched": false,
-        }));
-    }
+    let mut lock_status = lock_status_json(&session, locked)?;
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
         let data = json!({
