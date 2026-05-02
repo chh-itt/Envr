@@ -233,7 +233,7 @@ pub enum Command {
         /// Print what would be written without modifying `.envr.toml`.
         #[arg(long)]
         dry_run: bool,
-        /// Overwrite an existing `.envr.toml` instead of merging into it.
+        /// Overwrite the target `.envr.toml` instead of merging into it.
         #[arg(long)]
         force: bool,
     },

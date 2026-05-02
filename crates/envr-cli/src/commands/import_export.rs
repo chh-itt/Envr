@@ -64,6 +64,7 @@ pub(crate) fn import_run_inner(
         merged.extends.extend(imported.extends);
         merged
     };
+    let merged_mode = existing.is_some() && !force;
 
     let rendered = toml::to_string_pretty(&merged).map_err(|e| {
         EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
@@ -79,6 +80,7 @@ pub(crate) fn import_run_inner(
         "format": format.label(),
         "dry_run": dry_run,
         "force": force,
+        "merged": merged_mode,
         "warnings": import_warnings,
         "toml": rendered,
     });
