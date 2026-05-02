@@ -258,3 +258,38 @@ candidate_count = 1
         .assert()
         .failure();
 }
++
++#[test]
++fn project_lock_alt_file_is_accepted() {
++    let tmp = tempfile::tempdir().expect("tempdir");
++    fs::write(
++        tmp.path().join(DOT_ENVR_TOML),
++        r#"
+[runtimes.node]
+version = "22.11.0"
+"#,
++    )
++    .expect("write envr toml");
++    fs::write(
++        tmp.path().join(".envr.lock.toml"),
++        r#"
+version = 1
+
+[[runtime]]
+name = "node"
+request = "22.11.0"
+resolved = "22.11.0"
+source = "resolved"
+candidate_count = 1
+"#,
++    )
++    .expect("write alt lock");
++
++    Command::cargo_bin("envr")
++        .expect("envr")
++        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
++        .current_dir(tmp.path())
++        .args(["project", "sync", "--locked"])
++        .assert()
++        .success();
++}
