@@ -293,3 +293,27 @@ candidate_count = 1
         .assert()
         .success();
 }
++
++#[test]
++fn project_lock_dry_run_does_not_write_files() {
++    let tmp = tempfile::tempdir().expect("tempdir");
++    fs::write(
++        tmp.path().join(DOT_ENVR_TOML),
++        r#"
++[runtimes.node]
++version = "22.11.0"
++"#,
++    )
++    .expect("write envr toml");
++
++    Command::cargo_bin("envr")
++        .expect("envr")
++        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
++        .current_dir(tmp.path())
++        .args(["project", "lock", "--dry-run"])
++        .assert()
++        .success();
++
++    assert!(!tmp.path().join(".envr.lock").exists(), "dry run should not create lockfile");
++    assert!(!tmp.path().join(".envr.lock.toml").exists(), "dry run should not create alt lockfile");
++}
