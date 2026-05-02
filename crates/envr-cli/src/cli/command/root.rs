@@ -241,7 +241,11 @@ pub enum Command {
         #[arg(long, value_name = "FILE")]
         output: Option<PathBuf>,
         /// Output config format (`envr-toml` or `tool-versions`). Defaults to `envr-toml`.
-        #[arg(long = "config-format", value_name = "FORMAT", default_value = "envr-toml")]
+        #[arg(
+            long = "config-format",
+            value_name = "FORMAT",
+            default_value = "envr-toml"
+        )]
         format: String,
     },
     /// Inspect `[profiles.*]` blocks (use `ENVR_PROFILE` or `exec`/`run` `--profile` to activate)

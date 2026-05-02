@@ -1,14 +1,19 @@
 # CLI Config Management
 
-`envr config` provides a declarative interface for reading and writing `settings.toml`.
+`envr config` provides a declarative interface for reading and writing user settings in `settings.toml`.
+
+Project configuration is separate: use `envr init`, `envr status`, `envr project validate`, `envr project sync`, `envr why`, and `envr profile` for `.envr.toml`, `.envr.local.toml`, lockfiles, profiles, and runtime pins.
 
 ## Commands
 
 - `envr config path`
 - `envr config show`
+- `envr config validate`
 - `envr config keys`
 - `envr config get <KEY>`
 - `envr config set <KEY> <VALUE> [--type <TYPE>]`
+- `envr config edit`
+- `envr config schema`
 
 ## Key Format
 
@@ -22,6 +27,8 @@ Use dotted paths, for example:
 You can list all writable keys with:
 
 `envr config keys`
+
+These keys belong to `settings.toml`, not `.envr.toml`.
 
 ## Value Parsing
 
@@ -53,9 +60,11 @@ Writes are validated before saving. If a key/value combination violates schema r
 
 Example: `mirror.mode = manual` requires `mirror.manual_id`.
 
+`envr config validate` checks only the user settings file. Use `envr status` or `envr project validate` to inspect project config, profiles, pins, and lockfiles.
+
 ## Migration and Backup
 
-Before handling any `envr config` subcommand, CLI attempts a lightweight migration for known legacy fields in `settings.toml`.
+Before handling any `envr config` subcommand, the CLI attempts a lightweight migration for known legacy fields in `settings.toml`.
 
 If migration changes are applied:
 

@@ -27,6 +27,7 @@ pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
     let data = json!({
         "config_dir": loc.dir.to_string_lossy(),
         "profiles": names,
+        "profile_count": cfg.profiles.len(),
     });
     Ok(output::emit_ok(
         g,
@@ -47,9 +48,28 @@ pub(crate) fn list_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit> {
                         )
                     );
                 } else {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.profile.list_header",
+                                "可用 profile：",
+                                "Available profiles:"
+                            ),
+                            &[]
+                        )
+                    );
                     for n in names {
-                        println!("{n}");
+                        println!("  {n}");
                     }
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.profile.list_hint",
+                            "使用 `ENVR_PROFILE=<name>` 或 `envr run --profile <name>` 激活。",
+                            "Activate with `ENVR_PROFILE=<name>` or `envr run --profile <name>`.",
+                        )
+                    );
                 }
             }
         },
@@ -89,6 +109,7 @@ pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrRes
         "name": name,
         "runtimes": p.runtimes,
         "env": p.env,
+        "scripts": p.scripts,
     });
     Ok(output::emit_ok(
         g,
@@ -110,7 +131,44 @@ pub(crate) fn show_inner(g: &GlobalArgs, path: PathBuf, name: String) -> EnvrRes
                         ],
                     )
                 );
-                println!("{}", serde_json::to_string_pretty(p).unwrap_or_default());
+                if !p.runtimes.is_empty() {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.profile.show_runtimes",
+                            "运行时：",
+                            "Runtimes:"
+                        )
+                    );
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&p.runtimes).unwrap_or_default()
+                    );
+                }
+                if !p.env.is_empty() {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.profile.show_env",
+                            "环境变量：",
+                            "Environment:"
+                        )
+                    );
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&p.env).unwrap_or_default()
+                    );
+                }
+                if !p.scripts.is_empty() {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key("cli.profile.show_scripts", "脚本：", "Scripts:")
+                    );
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&p.scripts).unwrap_or_default()
+                    );
+                }
             }
         },
     ))

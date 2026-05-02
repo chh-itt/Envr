@@ -109,8 +109,14 @@ fn import_tool_versions_writes_envr_toml() {
 
     let text = fs::read_to_string(tmp.path().join(DOT_ENVR_TOML)).expect("read envr toml");
     assert!(text.contains("[runtimes.node]"), "unexpected toml:\n{text}");
-    assert!(text.contains("version = \"22.11.0\""), "unexpected toml:\n{text}");
-    assert!(text.contains("[runtimes.python]"), "unexpected toml:\n{text}");
+    assert!(
+        text.contains("version = \"22.11.0\""),
+        "unexpected toml:\n{text}"
+    );
+    assert!(
+        text.contains("[runtimes.python]"),
+        "unexpected toml:\n{text}"
+    );
     assert!(text.contains("[runtimes.go]"), "unexpected toml:\n{text}");
 }
 
@@ -144,8 +150,14 @@ version = "1.23.2"
         .success();
 
     let text = fs::read_to_string(tmp.path().join(".tool-versions")).expect("read tool versions");
-    assert!(text.contains("nodejs 22.11.0\n"), "unexpected export:\n{text}");
-    assert!(text.contains("golang 1.23.2\n"), "unexpected export:\n{text}");
+    assert!(
+        text.contains("nodejs 22.11.0\n"),
+        "unexpected export:\n{text}"
+    );
+    assert!(
+        text.contains("golang 1.23.2\n"),
+        "unexpected export:\n{text}"
+    );
 }
 
 #[test]
@@ -166,7 +178,13 @@ fn import_tool_versions_records_compat_names() {
         .success();
 
     let text = fs::read_to_string(tmp.path().join(DOT_ENVR_TOML)).expect("read envr toml");
-    assert!(text.contains("[compat.asdf.names]"), "unexpected toml:\n{text}");
-    assert!(text.contains("nodejs = \"node\""), "unexpected toml:\n{text}");
+    assert!(
+        text.contains("[compat.asdf.names]"),
+        "unexpected toml:\n{text}"
+    );
+    assert!(
+        text.contains("nodejs = \"node\""),
+        "unexpected toml:\n{text}"
+    );
     assert!(!text.contains("custom-tool ="), "unexpected toml:\n{text}");
 }

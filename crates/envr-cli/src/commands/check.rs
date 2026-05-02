@@ -44,7 +44,11 @@ fn next_steps_for_check_failure() -> Vec<(&'static str, String)> {
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
-pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool) -> EnvrResult<CliExit> {
+pub(crate) fn run_inner(
+    g: &GlobalArgs,
+    path: PathBuf,
+    github_annotations: bool,
+) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path, None).load_project()?;
     let Some((cfg, loc)) = session.project.as_ref() else {
         return Err(EnvrError::Validation(fmt_template(
@@ -88,6 +92,9 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
         );
         let mut data = json!({
             "config_dir": loc.dir.to_string_lossy(),
+            "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+            "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+            "compat_file": loc.compat_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "lock": loc.lock_file.as_ref().map(|p| json!({
                 "path": p.to_string_lossy(),
                 "version": 1,
@@ -95,6 +102,8 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
             })),
             "issues": problems,
             "github_annotations": github_annotations,
+            "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+            "compat_asdf_names": cfg.compat.asdf.names.clone(),
         });
         if github_annotations {
             let ann = problems
@@ -130,12 +139,15 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
         "config_dir": loc.dir.to_string_lossy(),
         "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+        "compat_file": loc.compat_file.as_ref().map(|p| p.to_string_lossy().to_string()),
         "lock": loc.lock_file.as_ref().map(|p| serde_json::json!({
             "path": p.to_string_lossy(),
             "version": 1,
             "matched": true,
         })),
         "pinned_runtimes": cfg.runtimes.len(),
+        "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+        "compat_asdf_names": cfg.compat.asdf.names.clone(),
     });
     data = output::with_next_steps(data, next_steps_for_check_ok());
     Ok(output::emit_ok(
@@ -155,6 +167,25 @@ pub(crate) fn run_inner(g: &GlobalArgs, path: PathBuf, github_annotations: bool)
                         &[("path", &loc.dir.display().to_string())],
                     )
                 );
+                if loc.lock_file.is_some() {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.check.lock_present",
+                            "检测到 lockfile，建议在锁定模式下再跑一次 `envr project validate --locked`。",
+                            "A lockfile was detected; consider running `envr project validate --locked` once more.",
+                        )
+                    );
+                } else {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.check.lock_absent",
+                            "未检测到 lockfile；如需锁定项目可执行 `envr project lock`。",
+                            "No lockfile detected; run `envr project lock` if you want to lock the project.",
+                        )
+                    );
+                }
             }
         },
     ))

@@ -60,6 +60,14 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                                 )
                             );
                             println!("{}", settings_path.display());
+                            println!(
+                                "{}",
+                                envr_core::i18n::tr_key(
+                                    "cli.config.validate_scope",
+                                    "仅验证用户设置文件；项目配置请使用 `envr status` / `envr project validate`。",
+                                    "This only validates user settings; use `envr status` / `envr project validate` for project config.",
+                                )
+                            );
                         }
                     },
                 ))
@@ -87,6 +95,14 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 data,
                 || {
                     println!("{}", settings_path.display());
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.config.path_hint",
+                            "提示：这是用户设置文件；项目配置通常在当前目录附近的 `.envr.toml`。",
+                            "Tip: this is the user settings file; project config usually lives near the current directory as `.envr.toml`.",
+                        )
+                    );
                 },
             ))
         }
@@ -102,8 +118,28 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                 crate::codes::ok::CONFIG_KEYS,
                 data,
                 || {
+                    if CliUxPolicy::from_global(g).human_text_primary() {
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.config.keys_header",
+                                "可写设置键：",
+                                "Writable settings keys:"
+                            )
+                        );
+                    }
                     for k in keys {
                         println!("{k}");
+                    }
+                    if CliUxPolicy::from_global(g).human_text_primary() {
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.config.keys_hint",
+                                "项目配置键请查看 `.envr.toml` / `envr status` / `envr project validate`。",
+                                "Project config keys are in `.envr.toml` / `envr status` / `envr project validate`.",
+                            )
+                        );
                     }
                 },
             ))
@@ -132,6 +168,15 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                                 } else {
                                     println!("{val}");
                                 }
+                            } else if CliUxPolicy::from_global(g).human_text_primary() {
+                                println!(
+                                    "{}",
+                                    envr_core::i18n::tr_key(
+                                        "cli.config.get_missing",
+                                        "未找到该键，已返回空值。",
+                                        "That key was not found; returning an empty value.",
+                                    )
+                                );
                             }
                         },
                     ))
@@ -200,6 +245,17 @@ pub(crate) fn run_inner(g: &GlobalArgs, sub: crate::cli::ConfigCmd) -> EnvrResul
                     println!("{}", settings_path.display());
                     println!();
                     print!("{pretty}");
+                    if CliUxPolicy::from_global(g).human_text_primary() {
+                        println!();
+                        println!(
+                            "{}",
+                            envr_core::i18n::tr_key(
+                                "cli.config.show_hint",
+                                "提示：这是 `settings.toml`；项目配置请用 `envr status` 或 `envr project validate` 查看。",
+                                "Tip: this is `settings.toml`; use `envr status` or `envr project validate` for project config.",
+                            )
+                        );
+                    }
                 },
             ))
         }

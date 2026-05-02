@@ -18,6 +18,7 @@ pub struct ProjectConfigLocation {
     pub dir: PathBuf,
     pub base_file: Option<PathBuf>,
     pub local_file: Option<PathBuf>,
+    pub compat_file: Option<PathBuf>,
     pub lock_file: Option<PathBuf>,
 }
 
@@ -100,7 +101,11 @@ impl ProjectConfig {
         merged.extends.append(&mut self.extends);
         merged.env.extend(self.env.drain());
         merged.runtimes.extend(self.runtimes.drain());
-        merged.compat.asdf.names.extend(self.compat.asdf.names.drain());
+        merged
+            .compat
+            .asdf
+            .names
+            .extend(self.compat.asdf.names.drain());
         merged.scripts.extend(self.scripts.drain());
         merged.profiles.extend(self.profiles.drain());
         merged
@@ -234,11 +239,13 @@ fn load_project_config_inner_uncached(
     loop {
         let base_path = current.join(PROJECT_CONFIG_FILE);
         let local_path = current.join(PROJECT_CONFIG_LOCAL_FILE);
+        let compat_path = current.join(".tool-versions");
 
         let base_exists = base_path.is_file();
         let local_exists = local_path.is_file();
+        let compat_exists = compat_path.is_file();
 
-        if base_exists || local_exists {
+        if base_exists || local_exists || compat_exists {
             let base_cfg = if base_exists {
                 Some(crate::project_extends::resolve_extends(
                     parse_project_config(&base_path)?,
@@ -253,6 +260,11 @@ fn load_project_config_inner_uncached(
             } else {
                 None
             };
+            let compat_cfg = if compat_exists {
+                Some(parse_tool_versions_compat(&compat_path)?)
+            } else {
+                None
+            };
 
             let mut merged = match (base_cfg, local_cfg) {
                 (Some(base), Some(local)) => local.merge_over(base),
@@ -260,6 +272,10 @@ fn load_project_config_inner_uncached(
                 (None, Some(local)) => local,
                 (None, None) => ProjectConfig::default(),
             };
+
+            if let Some(compat_cfg) = compat_cfg {
+                merged = compat_cfg.merge_over(merged);
+            }
 
             if let Some(ref pname) = effective_profile
                 && let Some(p) = merged.profiles.get(pname)
@@ -292,6 +308,11 @@ fn load_project_config_inner_uncached(
                 dir: current.clone(),
                 base_file: if base_exists { Some(base_path) } else { None },
                 local_file: if local_exists { Some(local_path) } else { None },
+                compat_file: if compat_exists {
+                    Some(compat_path)
+                } else {
+                    None
+                },
                 lock_file,
             };
 
@@ -373,21 +394,18 @@ pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectCon
     parse_project_config(path).map(Some)
 }
 
-pub fn load_project_lock_any(dir: impl AsRef<Path>) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
+pub fn load_project_lock_any(
+    dir: impl AsRef<Path>,
+) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
     load_project_lock_any_with_preference(dir, true)
 }
 
 pub fn load_project_lock_any_with_preference(
     dir: impl AsRef<Path>,
-    prefer_canonical: bool,
+    _prefer_canonical: bool,
 ) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {
     let dir = dir.as_ref();
-    let candidates = if prefer_canonical {
-        project_lock_candidates(dir)
-    } else {
-        project_lock_candidates(dir).map(|p| p)
-    };
-    for candidate in candidates {
+    for candidate in project_lock_candidates(dir) {
         if let Some(cfg) = load_project_lock(&candidate)? {
             return Ok(Some((cfg, candidate)));
         }
@@ -418,6 +436,171 @@ pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrRes
     .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode project lock", e))?;
     fs::write(path, content).map_err(EnvrError::from)?;
     Ok(())
+}
+
+fn parse_tool_versions_compat(path: &Path) -> EnvrResult<ProjectConfig> {
+    let content = fs::read_to_string(path).map_err(EnvrError::from)?;
+    let (cfg, warnings) = crate::project_config::parse_tool_versions_compat_str(&content)?;
+    if !warnings.is_empty() {
+        return Err(EnvrError::Validation(format!(
+            "unsupported entries in {}: {}",
+            path.display(),
+            warnings.join("; ")
+        )));
+    }
+    Ok(cfg)
+}
+
+pub fn parse_tool_versions_compat_str(content: &str) -> EnvrResult<(ProjectConfig, Vec<String>)> {
+    let mut cfg = ProjectConfig::default();
+    let mut warnings = Vec::new();
+    for (idx, raw_line) in content.lines().enumerate() {
+        let without_comment = raw_line.split_once('#').map_or(raw_line, |(head, _)| head);
+        let line = without_comment.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let Some(tool) = parts.next() else {
+            continue;
+        };
+        let versions = parts.collect::<Vec<_>>();
+        if versions.is_empty() {
+            return Err(EnvrError::Validation(format!(
+                "invalid .tool-versions line {}: missing version for `{tool}`",
+                idx + 1
+            )));
+        }
+        let runtime = map_asdf_runtime_name(tool);
+        if runtime == tool && !is_known_envr_runtime(tool) {
+            warnings.push(format!(
+                "line {}: unknown asdf plugin `{tool}` preserved as runtime `{runtime}`",
+                idx + 1
+            ));
+        }
+        if runtime != tool {
+            cfg.compat
+                .asdf
+                .names
+                .entry(tool.to_string())
+                .or_insert_with(|| runtime.to_string());
+        }
+        cfg.runtimes.insert(
+            runtime.to_string(),
+            RuntimeConfig {
+                version: Some(versions.join(" ")),
+                ..RuntimeConfig::default()
+            },
+        );
+    }
+    Ok((cfg, warnings))
+}
+
+pub fn render_tool_versions(cfg: &ProjectConfig) -> String {
+    let mut rows = cfg
+        .runtimes
+        .iter()
+        .filter_map(|(runtime, rc)| {
+            rc.version.as_ref().map(|version| {
+                (
+                    cfg.compat
+                        .asdf
+                        .names
+                        .iter()
+                        .find_map(|(asdf_name, envr_name)| {
+                            (envr_name == runtime).then_some(asdf_name.as_str())
+                        })
+                        .unwrap_or_else(|| map_envr_runtime_to_asdf_name(runtime)),
+                    version.as_str(),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut out = String::new();
+    for (runtime, version) in rows {
+        out.push_str(runtime);
+        out.push(' ');
+        out.push_str(version);
+        out.push('\n');
+    }
+    out
+}
+
+fn map_asdf_runtime_name(name: &str) -> &str {
+    match name {
+        "nodejs" => "node",
+        "golang" => "go",
+        "dotnet-core" => "dotnet",
+        "python" => "python",
+        "java" => "java",
+        "ruby" => "ruby",
+        "rust" => "rust",
+        "deno" => "deno",
+        "bun" => "bun",
+        "php" => "php",
+        "elixir" => "elixir",
+        "erlang" => "erlang",
+        "kotlin" => "kotlin",
+        "scala" => "scala",
+        "clojure" => "clojure",
+        "groovy" => "groovy",
+        "terraform" => "terraform",
+        "dart" => "dart",
+        "flutter" => "flutter",
+        other => other,
+    }
+}
+
+fn is_known_envr_runtime(name: &str) -> bool {
+    matches!(
+        name,
+        "node"
+            | "go"
+            | "dotnet"
+            | "python"
+            | "java"
+            | "ruby"
+            | "rust"
+            | "deno"
+            | "bun"
+            | "php"
+            | "elixir"
+            | "erlang"
+            | "kotlin"
+            | "scala"
+            | "clojure"
+            | "groovy"
+            | "terraform"
+            | "dart"
+            | "flutter"
+    )
+}
+
+fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
+    match name {
+        "node" => "nodejs",
+        "go" => "golang",
+        "dotnet" => "dotnet-core",
+        "python" => "python",
+        "java" => "java",
+        "ruby" => "ruby",
+        "rust" => "rust",
+        "deno" => "deno",
+        "bun" => "bun",
+        "php" => "php",
+        "elixir" => "elixir",
+        "erlang" => "erlang",
+        "kotlin" => "kotlin",
+        "scala" => "scala",
+        "clojure" => "clojure",
+        "groovy" => "groovy",
+        "terraform" => "terraform",
+        "dart" => "dart",
+        "flutter" => "flutter",
+        other => other,
+    }
 }
 
 fn expand_env_map(

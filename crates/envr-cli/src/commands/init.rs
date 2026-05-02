@@ -235,6 +235,14 @@ pub(crate) fn run_inner(
     let data = serde_json::json!({
         "path": target.to_string_lossy(),
         "interactive": interactive,
+        "full": full,
+        "template": if interactive {
+            "interactive"
+        } else if full {
+            "full"
+        } else {
+            "default"
+        },
     });
     Ok(output::emit_ok(
         g,
@@ -249,6 +257,24 @@ pub(crate) fn run_inner(
                         &[("path", &target.display().to_string())],
                     )
                 );
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.init.next_step",
+                        "接下来可用 `envr status` / `envr project validate` 查看与校验项目配置。",
+                        "Next use `envr status` / `envr project validate` to inspect and validate the project config.",
+                    )
+                );
+                if interactive {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.init.interactive_done",
+                            "交互模板已生成，建议先确认 pin 与 [env] 示例内容。",
+                            "Interactive template generated; review the pins and [env] examples before proceeding.",
+                        )
+                    );
+                }
             }
         },
     ))

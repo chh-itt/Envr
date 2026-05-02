@@ -31,9 +31,18 @@ fn list_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
             })
         })
         .collect();
-    let remote_latest_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_remote_latest).count();
-    let path_proxy_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_path_proxy).count();
-    let host_bound_count = RUNTIME_DESCRIPTORS.iter().filter(|d| d.host_runtime.is_some()).count();
+    let remote_latest_count = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.supports_remote_latest)
+        .count();
+    let path_proxy_count = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.supports_path_proxy)
+        .count();
+    let host_bound_count = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.host_runtime.is_some())
+        .count();
     let data = json!({
         "tools": tools,
         "count": tools.len(),

@@ -437,7 +437,9 @@ fn list_scripts_inner(
         "list_only": list_only,
     });
 
-    Ok(crate::commands::common::emit_child_process_outcome(g, data, 0))
+    Ok(crate::commands::common::emit_child_process_outcome(
+        g, data, 0,
+    ))
 }
 
 fn read_max_download_workers() -> u32 {

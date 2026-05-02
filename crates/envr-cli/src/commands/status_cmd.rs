@@ -7,17 +7,26 @@ use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::commands::project_status::{
     build_project_status_from_loaded, format_prompt_segment, status_to_json,
 };
-use envr_domain::runtime::RUNTIME_DESCRIPTORS;
 use crate::output::{self, fmt_template};
+use envr_domain::runtime::RUNTIME_DESCRIPTORS;
 
 use envr_error::EnvrResult;
 use serde_json::json;
 
 fn provider_health_summary() -> serde_json::Value {
     let total = RUNTIME_DESCRIPTORS.len();
-    let remote_latest = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_remote_latest).count();
-    let path_proxy = RUNTIME_DESCRIPTORS.iter().filter(|d| d.supports_path_proxy).count();
-    let host_bound = RUNTIME_DESCRIPTORS.iter().filter(|d| d.host_runtime.is_some()).count();
+    let remote_latest = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.supports_remote_latest)
+        .count();
+    let path_proxy = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.supports_path_proxy)
+        .count();
+    let host_bound = RUNTIME_DESCRIPTORS
+        .iter()
+        .filter(|d| d.host_runtime.is_some())
+        .count();
     serde_json::json!({
         "provider_count": total,
         "remote_latest_supported_count": remote_latest,
@@ -140,6 +149,30 @@ pub(crate) fn run_inner(g: &GlobalArgs, project: ProjectPathProfileArgs) -> Envr
                         &[("name", prof.as_str())],
                     )
                 );
+            }
+            if !st.compat_asdf_names.is_empty() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.status.compat",
+                        "兼容别名：",
+                        "Compatibility aliases:"
+                    )
+                );
+                for (asdf_name, envr_name) in &st.compat_asdf_names {
+                    println!("  {asdf_name} -> {envr_name}");
+                }
+            }
+            if !st.project_runtimes.is_empty() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.status.project_runtimes",
+                        "项目运行时键：",
+                        "Project runtime keys:"
+                    )
+                );
+                println!("  {}", st.project_runtimes.join(", "));
             }
             println!();
             for r in &st.rows {

@@ -4,8 +4,8 @@ use crate::cli::GlobalArgs;
 use crate::output::{self, fmt_template};
 
 use envr_config::project_config::{
-    PROJECT_CONFIG_FILE, ProjectConfig, RuntimeConfig, load_project_config_disk_only,
-    parse_project_config, save_project_config,
+    PROJECT_CONFIG_FILE, ProjectConfig, load_project_config_disk_only, parse_project_config,
+    parse_tool_versions_compat_str, render_tool_versions, save_project_config,
 };
 use envr_error::{EnvrError, EnvrResult, ErrorCode};
 use serde_json::json;
@@ -233,160 +233,13 @@ fn parse_tool_versions_file(path: &Path) -> EnvrResult<(ProjectConfig, Vec<Strin
 }
 
 fn parse_tool_versions_str(content: &str) -> EnvrResult<(ProjectConfig, Vec<String>)> {
-    let mut cfg = ProjectConfig::default();
-    let mut warnings = Vec::new();
-    for (idx, raw_line) in content.lines().enumerate() {
-        let without_comment = raw_line.split_once('#').map_or(raw_line, |(head, _)| head);
-        let line = without_comment.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut parts = line.split_whitespace();
-        let Some(tool) = parts.next() else {
-            continue;
-        };
-        let versions = parts.collect::<Vec<_>>();
-        if versions.is_empty() {
-            return Err(EnvrError::Validation(format!(
-                "invalid .tool-versions line {}: missing version for `{tool}`",
-                idx + 1
-            )));
-        }
-        let runtime = map_asdf_runtime_name(tool);
-        if runtime == tool && !is_known_envr_runtime(tool) {
-            warnings.push(format!(
-                "line {}: unknown asdf plugin `{tool}` preserved as runtime `{runtime}`",
-                idx + 1
-            ));
-        }
-        if runtime != tool {
-            cfg.compat
-                .asdf
-                .names
-                .entry(tool.to_string())
-                .or_insert_with(|| runtime.to_string());
-        }
-        cfg.runtimes.insert(
-            runtime.to_string(),
-            RuntimeConfig {
-                version: Some(versions.join(" ")),
-                ..RuntimeConfig::default()
-            },
-        );
-    }
-    Ok((cfg, warnings))
-}
-
-fn render_tool_versions(cfg: &ProjectConfig) -> String {
-    let mut rows = cfg
-        .runtimes
-        .iter()
-        .filter_map(|(runtime, rc)| {
-            rc.version.as_ref().map(|version| {
-                (
-                    cfg.compat
-                        .asdf
-                        .names
-                        .iter()
-                        .find_map(|(asdf_name, envr_name)| {
-                            (envr_name == runtime).then_some(asdf_name.as_str())
-                        })
-                        .unwrap_or_else(|| map_envr_runtime_to_asdf_name(runtime)),
-                    version.as_str(),
-                )
-            })
-        })
-        .collect::<Vec<_>>();
-    rows.sort_by(|a, b| a.0.cmp(b.0));
-
-    let mut out = String::new();
-    for (runtime, version) in rows {
-        out.push_str(runtime);
-        out.push(' ');
-        out.push_str(version);
-        out.push('\n');
-    }
-    out
-}
-
-fn map_asdf_runtime_name(name: &str) -> &str {
-    match name {
-        "nodejs" => "node",
-        "golang" => "go",
-        "dotnet-core" => "dotnet",
-        "python" => "python",
-        "java" => "java",
-        "ruby" => "ruby",
-        "rust" => "rust",
-        "deno" => "deno",
-        "bun" => "bun",
-        "php" => "php",
-        "elixir" => "elixir",
-        "erlang" => "erlang",
-        "kotlin" => "kotlin",
-        "scala" => "scala",
-        "clojure" => "clojure",
-        "groovy" => "groovy",
-        "terraform" => "terraform",
-        "dart" => "dart",
-        "flutter" => "flutter",
-        other => other,
-    }
-}
-
-fn is_known_envr_runtime(name: &str) -> bool {
-    matches!(
-        name,
-        "node"
-            | "go"
-            | "dotnet"
-            | "python"
-            | "java"
-            | "ruby"
-            | "rust"
-            | "deno"
-            | "bun"
-            | "php"
-            | "elixir"
-            | "erlang"
-            | "kotlin"
-            | "scala"
-            | "clojure"
-            | "groovy"
-            | "terraform"
-            | "dart"
-            | "flutter"
-    )
-}
-
-fn map_envr_runtime_to_asdf_name(name: &str) -> &str {
-    match name {
-        "node" => "nodejs",
-        "go" => "golang",
-        "dotnet" => "dotnet-core",
-        "python" => "python",
-        "java" => "java",
-        "ruby" => "ruby",
-        "rust" => "rust",
-        "deno" => "deno",
-        "bun" => "bun",
-        "php" => "php",
-        "elixir" => "elixir",
-        "erlang" => "erlang",
-        "kotlin" => "kotlin",
-        "scala" => "scala",
-        "clojure" => "clojure",
-        "groovy" => "groovy",
-        "terraform" => "terraform",
-        "dart" => "dart",
-        "flutter" => "flutter",
-        other => other,
-    }
+    parse_tool_versions_compat_str(content)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use envr_config::project_config::RuntimeConfig;
 
     #[test]
     fn parses_tool_versions_with_name_mapping() {
@@ -403,6 +256,8 @@ terraform 1.9.8
 "#,
         )
         .expect("parse");
+        assert!(cfg.1.is_empty());
+        let cfg = cfg.0;
 
         assert_eq!(
             cfg.runtimes.get("node").and_then(|r| r.version.as_deref()),
@@ -419,7 +274,9 @@ terraform 1.9.8
             Some("8.0.100")
         );
         assert_eq!(
-            cfg.runtimes.get("python").and_then(|r| r.version.as_deref()),
+            cfg.runtimes
+                .get("python")
+                .and_then(|r| r.version.as_deref()),
             Some("3.12.7")
         );
         assert_eq!(
@@ -489,6 +346,8 @@ terraform 1.9.8
 "#,
         )
         .expect("parse");
+        assert!(cfg.1.is_empty());
+        let cfg = cfg.0;
 
         let rendered = render_tool_versions(&cfg);
         assert!(rendered.contains("nodejs 22.11.0\n"));
@@ -517,19 +376,69 @@ flutter 3.24.3
 "#,
         )
         .expect("parse");
+        assert!(cfg.1.is_empty());
+        let cfg = cfg.0;
 
-        assert_eq!(cfg.runtimes.get("rust").and_then(|r| r.version.as_deref()), Some("1.78.0"));
-        assert_eq!(cfg.runtimes.get("deno").and_then(|r| r.version.as_deref()), Some("2.0.0"));
-        assert_eq!(cfg.runtimes.get("bun").and_then(|r| r.version.as_deref()), Some("1.1.30"));
-        assert_eq!(cfg.runtimes.get("php").and_then(|r| r.version.as_deref()), Some("8.3.12"));
-        assert_eq!(cfg.runtimes.get("elixir").and_then(|r| r.version.as_deref()), Some("1.17.3"));
-        assert_eq!(cfg.runtimes.get("erlang").and_then(|r| r.version.as_deref()), Some("27.1"));
-        assert_eq!(cfg.runtimes.get("kotlin").and_then(|r| r.version.as_deref()), Some("2.0.21"));
-        assert_eq!(cfg.runtimes.get("scala").and_then(|r| r.version.as_deref()), Some("3.5.1"));
-        assert_eq!(cfg.runtimes.get("clojure").and_then(|r| r.version.as_deref()), Some("1.12.0"));
-        assert_eq!(cfg.runtimes.get("groovy").and_then(|r| r.version.as_deref()), Some("4.0.23"));
-        assert_eq!(cfg.runtimes.get("dart").and_then(|r| r.version.as_deref()), Some("3.5.4"));
-        assert_eq!(cfg.runtimes.get("flutter").and_then(|r| r.version.as_deref()), Some("3.24.3"));
+        assert_eq!(
+            cfg.runtimes.get("rust").and_then(|r| r.version.as_deref()),
+            Some("1.78.0")
+        );
+        assert_eq!(
+            cfg.runtimes.get("deno").and_then(|r| r.version.as_deref()),
+            Some("2.0.0")
+        );
+        assert_eq!(
+            cfg.runtimes.get("bun").and_then(|r| r.version.as_deref()),
+            Some("1.1.30")
+        );
+        assert_eq!(
+            cfg.runtimes.get("php").and_then(|r| r.version.as_deref()),
+            Some("8.3.12")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("elixir")
+                .and_then(|r| r.version.as_deref()),
+            Some("1.17.3")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("erlang")
+                .and_then(|r| r.version.as_deref()),
+            Some("27.1")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("kotlin")
+                .and_then(|r| r.version.as_deref()),
+            Some("2.0.21")
+        );
+        assert_eq!(
+            cfg.runtimes.get("scala").and_then(|r| r.version.as_deref()),
+            Some("3.5.1")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("clojure")
+                .and_then(|r| r.version.as_deref()),
+            Some("1.12.0")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("groovy")
+                .and_then(|r| r.version.as_deref()),
+            Some("4.0.23")
+        );
+        assert_eq!(
+            cfg.runtimes.get("dart").and_then(|r| r.version.as_deref()),
+            Some("3.5.4")
+        );
+        assert_eq!(
+            cfg.runtimes
+                .get("flutter")
+                .and_then(|r| r.version.as_deref()),
+            Some("3.24.3")
+        );
 
         let rendered = render_tool_versions(&cfg);
         assert!(rendered.contains("rust 1.78.0\n"));

@@ -49,7 +49,10 @@ fn is_numeric_prefix(spec: &str) -> bool {
 }
 
 pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedRequest {
-    let raw = spec.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let raw = spec
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     let normalized = raw.as_deref().and_then(|s| normalize_request_spec(Some(s)));
     let Some(normalized_ref) = normalized.as_deref() else {
         return ClassifiedRequest {
@@ -68,7 +71,11 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
         RequestKind::Channel
     } else if is_numeric_prefix(normalized_ref) {
         RequestKind::Prefix
-    } else if normalized_ref.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    } else if normalized_ref
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_digit())
+    {
         RequestKind::Exact
     } else if has_pin {
         RequestKind::Exact
@@ -96,50 +103,113 @@ pub(crate) fn request_kind_str(kind: RequestKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_request, normalize_request_spec, request_kind_str, RequestKind};
+    use super::{RequestKind, classify_request, normalize_request_spec, request_kind_str};
 
     #[test]
     fn normalize_request_strips_whitespace_and_single_v_prefix() {
-        assert_eq!(normalize_request_spec(Some("  v22.11.0  ")), Some("22.11.0".to_string()));
-        assert_eq!(normalize_request_spec(Some("22.11.0")), Some("22.11.0".to_string()));
-        assert_eq!(normalize_request_spec(Some("vv22")), Some("v22".to_string()));
+        assert_eq!(
+            normalize_request_spec(Some("  v22.11.0  ")),
+            Some("22.11.0".to_string())
+        );
+        assert_eq!(
+            normalize_request_spec(Some("22.11.0")),
+            Some("22.11.0".to_string())
+        );
+        assert_eq!(
+            normalize_request_spec(Some("vv22")),
+            Some("v22".to_string())
+        );
         assert_eq!(normalize_request_spec(Some("   ")), None);
         assert_eq!(normalize_request_spec(None), None);
     }
 
     #[test]
     fn classifies_aliases_and_prefixes() {
-        assert_eq!(classify_request(Some("latest"), false).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("stable"), false).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("lts"), false).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("system"), false).kind, RequestKind::System);
-        assert_eq!(classify_request(Some("v22"), false).kind, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22"), false).kind, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22.11"), false).kind, RequestKind::Prefix);
-        assert_eq!(classify_request(Some("22.11.0"), false).kind, RequestKind::Exact);
-        assert_eq!(classify_request(Some("v22.11.0"), false).kind, RequestKind::Exact);
-        assert_eq!(classify_request(Some("22.11.0.1"), false).kind, RequestKind::Exact);
+        assert_eq!(
+            classify_request(Some("latest"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("stable"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("lts"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("system"), false).kind,
+            RequestKind::System
+        );
+        assert_eq!(
+            classify_request(Some("v22"), false).kind,
+            RequestKind::Prefix
+        );
+        assert_eq!(
+            classify_request(Some("22"), false).kind,
+            RequestKind::Prefix
+        );
+        assert_eq!(
+            classify_request(Some("22.11"), false).kind,
+            RequestKind::Prefix
+        );
+        assert_eq!(
+            classify_request(Some("22.11.0"), false).kind,
+            RequestKind::Exact
+        );
+        assert_eq!(
+            classify_request(Some("v22.11.0"), false).kind,
+            RequestKind::Exact
+        );
+        assert_eq!(
+            classify_request(Some("22.11.0.1"), false).kind,
+            RequestKind::Exact
+        );
     }
 
     #[test]
     fn classifies_ranges_and_channels() {
-        assert_eq!(classify_request(Some(">=1.20 <1.23"), false).kind, RequestKind::Range);
-        assert_eq!(classify_request(Some("~> 1.9"), false).kind, RequestKind::Range);
-        assert_eq!(classify_request(Some("temurin-21"), false).kind, RequestKind::Channel);
-        assert_eq!(classify_request(Some("graalvm-21.0.2"), false).kind, RequestKind::Channel);
+        assert_eq!(
+            classify_request(Some(">=1.20 <1.23"), false).kind,
+            RequestKind::Range
+        );
+        assert_eq!(
+            classify_request(Some("~> 1.9"), false).kind,
+            RequestKind::Range
+        );
+        assert_eq!(
+            classify_request(Some("temurin-21"), false).kind,
+            RequestKind::Channel
+        );
+        assert_eq!(
+            classify_request(Some("graalvm-21.0.2"), false).kind,
+            RequestKind::Channel
+        );
     }
 
     #[test]
     fn classifies_unknown_when_empty_and_no_pin() {
         assert_eq!(classify_request(None, false).kind, RequestKind::Unknown);
-        assert_eq!(classify_request(Some("   "), false).kind, RequestKind::Unknown);
+        assert_eq!(
+            classify_request(Some("   "), false).kind,
+            RequestKind::Unknown
+        );
     }
 
     #[test]
     fn classifies_pinned_unknown_as_exact() {
-        assert_eq!(classify_request(Some("latest"), true).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("custom"), true).kind, RequestKind::Exact);
-        assert_eq!(classify_request(Some("   "), true).kind, RequestKind::Unknown);
+        assert_eq!(
+            classify_request(Some("latest"), true).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("custom"), true).kind,
+            RequestKind::Exact
+        );
+        assert_eq!(
+            classify_request(Some("   "), true).kind,
+            RequestKind::Unknown
+        );
     }
 
     #[test]

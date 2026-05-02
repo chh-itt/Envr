@@ -72,9 +72,11 @@ pub(crate) fn run_inner(
     match cmd {
         ProjectCmd::Add { spec, path } => add_inner(g, spec, path),
         ProjectCmd::Lock { path, dry_run } => lock_inner(g, path, dry_run),
-        ProjectCmd::Sync { path, install, locked } => {
-            sync_inner(g, service, path, install, locked)
-        }
+        ProjectCmd::Sync {
+            path,
+            install,
+            locked,
+        } => sync_inner(g, service, path, install, locked),
         ProjectCmd::Validate {
             path,
             check_remote,
@@ -152,11 +154,13 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         version: 1,
         project: cfg.clone(),
     };
-    let rendered = toml::to_string_pretty(&lock_file)
-        .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
+    let rendered = toml::to_string_pretty(&lock_file).map_err(|e| {
+        EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
+    })?;
     if !dry_run {
-        let lock_content = toml::to_string_pretty(&lock_file)
-            .map_err(|e| EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e))?;
+        let lock_content = toml::to_string_pretty(&lock_file).map_err(|e| {
+            EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
+        })?;
         std::fs::write(&lock_path, &lock_content)?;
         if lock_alt_path != lock_path {
             std::fs::write(&lock_alt_path, &lock_content)?;
@@ -171,19 +175,63 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         "dry_run": dry_run,
         "content": rendered,
         "config_dir": loc.dir.to_string_lossy(),
+        "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+        "compat_asdf_names": cfg.compat.asdf.names.clone(),
     });
-    Ok(output::emit_ok(g, crate::codes::ok::PROJECT_SYNCED, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!("lock file: {}", lock_path.display());
-            if lock_alt_path != lock_path {
-                println!("lock file alt: {}", lock_alt_path.display());
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::PROJECT_SYNCED,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.project.lock_ok",
+                            "已写入 lockfile：{path}",
+                            "Wrote lockfile: {path}",
+                        ),
+                        &[("path", &lock_path.display().to_string())],
+                    )
+                );
+                if lock_alt_path != lock_path {
+                    println!(
+                        "{}",
+                        fmt_template(
+                            &envr_core::i18n::tr_key(
+                                "cli.project.lock_alt",
+                                "兼容 lockfile：{path}",
+                                "Compatibility lockfile: {path}",
+                            ),
+                            &[("path", &lock_alt_path.display().to_string())],
+                        )
+                    );
+                }
+                println!(
+                    "{}",
+                    fmt_template(
+                        &envr_core::i18n::tr_key(
+                            "cli.project.lock_config_dir",
+                            "项目目录：{path}",
+                            "Project dir: {path}",
+                        ),
+                        &[("path", &loc.dir.display().to_string())],
+                    )
+                );
+                if dry_run {
+                    println!(
+                        "{}",
+                        envr_core::i18n::tr_key(
+                            "cli.project.lock_dry_run",
+                            "dry run：未写入任何文件",
+                            "dry run: no files written",
+                        )
+                    );
+                }
             }
-            println!("config dir: {}", loc.dir.display());
-            if dry_run {
-                println!("dry run: no files written");
-            }
-        }
-    }))
+        },
+    ))
 }
 
 fn sync_inner(
@@ -255,6 +303,13 @@ fn sync_inner(
                             "All pinned runtimes are already available.",
                         )
                     );
+                    if let Some(path) = lock_status
+                        .as_ref()
+                        .and_then(|v| v.get("path"))
+                        .and_then(|v| v.as_str())
+                    {
+                        println!("lockfile: {path}");
+                    }
                 }
             },
         ));
@@ -269,7 +324,16 @@ fn sync_inner(
             .iter()
             .map(|(k, v)| json!({ "kind": k, "version_spec": v }))
             .collect();
-        let data = json!({ "missing": rows, "installed": [], "lock_status": lock_status, "config_dir": session.ctx.working_dir.to_string_lossy() });
+        let data = json!({
+            "missing": rows,
+            "installed": [],
+            "lock_status": lock_status,
+            "config_dir": session.ctx.working_dir.to_string_lossy(),
+            "project_runtimes": session
+                .project_config()
+                .map(|cfg| cfg.runtimes.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default(),
+        });
         let code = output::emit_failure_envelope(
             g,
             crate::codes::err::PROJECT_SYNC_PENDING,
@@ -282,6 +346,17 @@ fn sync_inner(
             for (k, v) in &pending {
                 eprintln!("envr:   - {k} {v}");
             }
+            println!(
+                "{}",
+                fmt_template(
+                    &envr_core::i18n::tr_key(
+                        "cli.project.sync_pending_hint",
+                        "提示：可运行 `envr project sync --install` 自动安装这些 pin。",
+                        "Tip: run `envr project sync --install` to install these pins automatically.",
+                    ),
+                    &[],
+                )
+            );
         }
         return Ok(code);
     }
@@ -318,6 +393,10 @@ fn sync_inner(
             .collect::<Vec<_>>(),
         "installed": installed,
         "lock_status": lock_status,
+        "project_runtimes": session
+            .project_config()
+            .map(|cfg| cfg.runtimes.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default(),
     });
     Ok(output::emit_ok(
         g,
@@ -441,7 +520,11 @@ fn validate_inner(
             .project
             .as_ref()
             .and_then(|(_, loc)| loc.lock_file.clone())
-            .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+            .or_else(|| {
+                project_lock_candidates(&session.ctx.working_dir)
+                    .into_iter()
+                    .find(|p| p.is_file())
+            });
         let Some(lock_path) = lock_result else {
             return Err(EnvrError::Validation(format!(
                 "no lockfile found under {}; run `envr project lock`",
@@ -544,6 +627,8 @@ fn validate_inner(
             "config_dir": loc.dir.to_string_lossy(),
             "issues": issues,
             "remote_warnings": remote_warnings,
+            "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+            "compat_asdf_names": cfg.compat.asdf.names.clone(),
         });
         data = output::with_next_steps(data, next_steps_for_project_validate_failure());
         let code = output::emit_failure_envelope(
@@ -558,6 +643,16 @@ fn validate_inner(
             for p in &issues {
                 eprintln!("envr:   - {p}");
             }
+            if !remote_warnings.is_empty() {
+                println!(
+                    "{}",
+                    envr_core::i18n::tr_key(
+                        "cli.project.validate_remote_warn",
+                        "远端校验有警告，建议检查网络或远端索引。",
+                        "Remote validation reported warnings; check network or remote index availability.",
+                    )
+                );
+            }
         }
         return Ok(code);
     }
@@ -567,6 +662,8 @@ fn validate_inner(
         "issues": issues,
         "remote_warnings": remote_warnings,
         "check_remote": check_remote,
+        "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+        "compat_asdf_names": cfg.compat.asdf.names.clone(),
     });
     data = output::with_next_steps(data, next_steps_for_project_validate_ok(check_remote));
     let root_s = loc.dir.display().to_string();

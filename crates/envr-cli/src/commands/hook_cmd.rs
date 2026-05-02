@@ -2,17 +2,17 @@
 use crate::CliExit;
 
 use crate::CliPathProfile;
+use crate::CliUxPolicy;
 use crate::cli::GlobalArgs;
 use crate::cli::HookShell;
 use crate::commands::child_env;
 use crate::output;
-use crate::CliUxPolicy;
 
 use envr_error::EnvrResult;
 
 use serde_json::json;
-use std::path::{Path, PathBuf};
 use std::env;
+use std::path::{Path, PathBuf};
 
 pub(crate) const HOOK_BASH: &str = include_str!("../../shell/hook.bash.inc");
 pub(crate) const HOOK_ZSH: &str = include_str!("../../shell/hook.zsh.inc");
@@ -35,33 +35,48 @@ pub(crate) fn status_inner(g: &GlobalArgs, path: PathBuf) -> EnvrResult<CliExit>
         "path": session.ctx.working_dir.to_string_lossy(),
         "hooks": hooks,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::HOOK_KEYS, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            println!("hook path: {}", session.ctx.working_dir.display());
-            for line in hooks {
-                println!("{line}");
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::HOOK_KEYS,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                println!("hook path: {}", session.ctx.working_dir.display());
+                for line in hooks {
+                    println!("{line}");
+                }
             }
-        }
-    }))
+        },
+    ))
 }
 
 pub(crate) fn doctor_inner(g: &GlobalArgs, shell: HookShell, path: PathBuf) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let profile_state = shell_profile_state(shell);
-    let body = hook_doctor(shell, &path, &session.ctx.working_dir, profile_state.as_deref());
+    let body = hook_doctor(
+        shell,
+        &path,
+        &session.ctx.working_dir,
+        profile_state.as_deref(),
+    );
     let data = json!({
         "shell": format!("{shell:?}").to_lowercase(),
         "path": session.ctx.working_dir.to_string_lossy(),
         "profile_state": profile_state,
         "recommendations": body,
     });
-    Ok(output::emit_ok(g, crate::codes::ok::HOOK_KEYS, data, || {
-        if CliUxPolicy::from_global(g).human_text_primary() {
-            for line in body {
-                println!("{line}");
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::HOOK_KEYS,
+        data,
+        || {
+            if CliUxPolicy::from_global(g).human_text_primary() {
+                for line in body {
+                    println!("{line}");
+                }
             }
-        }
-    }))
+        },
+    ))
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
@@ -100,7 +115,12 @@ fn hook_status(path: &Path, root: &Path) -> Vec<String> {
     lines
 }
 
-fn hook_doctor(shell: HookShell, path: &Path, root: &Path, profile_state: Option<&str>) -> Vec<String> {
+fn hook_doctor(
+    shell: HookShell,
+    path: &Path,
+    root: &Path,
+    profile_state: Option<&str>,
+) -> Vec<String> {
     let mut lines = vec![format!("hook shell: {shell:?}")];
     lines.push(format!("profile root: {}", root.display()));
     lines.push(format!("cwd: {}", path.display()));
@@ -123,7 +143,8 @@ fn shell_profile_state(shell: HookShell) -> Option<String> {
             let profile = env::var_os("PROFILE").or_else(|| env::var_os("PSPROFILE"));
             Some(match profile {
                 Some(path) => format!("powershell profile: {}", PathBuf::from(path).display()),
-                None => "powershell profile: not detected; run `echo $PROFILE` to inspect it".to_string(),
+                None => "powershell profile: not detected; run `echo $PROFILE` to inspect it"
+                    .to_string(),
             })
         }
         HookShell::Bash => Some(match env::var_os("BASH_VERSION") {

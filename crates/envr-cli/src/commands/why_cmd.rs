@@ -21,6 +21,14 @@ fn project_lock_notice(lock_file_present: bool) -> Option<&'static str> {
     }
 }
 
+fn request_source_label(source: &str) -> &'static str {
+    match source {
+        "cli" => "cli",
+        "project" => "project",
+        _ => "global",
+    }
+}
+
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
 pub(crate) fn run_inner(
     g: &GlobalArgs,
@@ -61,6 +69,10 @@ pub(crate) fn run_inner(
     });
 
     let request = classify_request(spec_deref, pin.is_some());
+    let has_lock = loaded
+        .as_ref()
+        .map(|(_, loc)| loc.lock_file.is_some())
+        .unwrap_or(false);
     let resolution = if spec_deref.is_some() {
         "spec_override"
     } else if pin.is_some() {
@@ -79,13 +91,16 @@ pub(crate) fn run_inner(
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, spec_deref, cfg)?;
     let home = std::fs::canonicalize(&home).unwrap_or(home);
 
-    let project_json = loaded.as_ref().map(|(_, loc)| {
+    let project_json = loaded.as_ref().map(|(cfg, loc)| {
         json!({
             "config_dir": loc.dir.to_string_lossy(),
             "base_file": loc.base_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+            "compat_file": loc.compat_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "pin": pin.clone(),
+            "runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
+            "compat_asdf_names": cfg.compat.asdf.names.clone(),
         })
     });
 
@@ -146,6 +161,20 @@ pub(crate) fn run_inner(
                             p.display()
                         );
                     }
+                    if let Some(p) = &loc.compat_file {
+                        println!(
+                            "{} {}",
+                            envr_core::i18n::tr_key("cli.why.compat_file", "  compat", "  compat"),
+                            p.display()
+                        );
+                    }
+                    if let Some(p) = &loc.lock_file {
+                        println!(
+                            "{} {}",
+                            envr_core::i18n::tr_key("cli.why.lock_file", "  lock", "  lock"),
+                            p.display()
+                        );
+                    }
                 } else {
                     println!(
                         "{}",
@@ -196,8 +225,8 @@ pub(crate) fn run_inner(
                         );
                     }
                 } else if spec_trim.is_none() {
-                    if let Some((_, loc)) = loaded {
-                        if let Some(msg) = project_lock_notice(loc.lock_file.is_some()) {
+                    if loaded.is_some() {
+                        if let Some(msg) = project_lock_notice(has_lock) {
                             println!(
                                 "{}",
                                 envr_core::i18n::tr_key(
@@ -244,12 +273,17 @@ pub(crate) fn run_inner(
                 );
                 println!(
                     "{} {}",
-                    envr_core::i18n::tr_key(
-                        "cli.why.request_kind",
-                        "请求类型：",
-                        "Request kind:",
-                    ),
+                    envr_core::i18n::tr_key("cli.why.request_kind", "请求类型：", "Request kind:",),
                     request.kind_str()
+                );
+                println!(
+                    "{} {}",
+                    envr_core::i18n::tr_key(
+                        "cli.why.request_source",
+                        "请求来源：",
+                        "Request source:",
+                    ),
+                    request_source_label(request_source)
                 );
                 if let Some(normalized) = request.normalized.as_deref() {
                     println!(
@@ -261,6 +295,25 @@ pub(crate) fn run_inner(
                         ),
                         normalized
                     );
+                }
+                if let Some(project) = &project_json {
+                    if let Some(runtimes) = project.get("runtimes").and_then(|v| v.as_array()) {
+                        if !runtimes.is_empty() {
+                            println!(
+                                "{} {}",
+                                envr_core::i18n::tr_key(
+                                    "cli.why.project_runtimes",
+                                    "项目运行时键：",
+                                    "Project runtime keys:",
+                                ),
+                                runtimes
+                                    .iter()
+                                    .filter_map(|v| v.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
+                        }
+                    }
                 }
             }
         },

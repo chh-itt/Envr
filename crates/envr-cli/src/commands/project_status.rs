@@ -35,6 +35,8 @@ pub struct ProjectStatus {
     pub project_dir: Option<PathBuf>,
     pub profile: Option<String>,
     pub lock: Option<ProjectLockStatus>,
+    pub compat_asdf_names: Vec<(String, String)>,
+    pub project_runtimes: Vec<String>,
     pub rows: Vec<RuntimeStatusRow>,
 }
 
@@ -108,7 +110,7 @@ pub fn build_project_status_from_loaded(
     ctx: &ShimContext,
     loaded: &Option<(ProjectConfig, ProjectConfigLocation)>,
 ) -> EnvrResult<ProjectStatus> {
-    let (project_dir, lock, cfg_ref) = loaded
+    let (project_dir, lock, cfg_ref, compat_asdf_names, project_runtimes) = loaded
         .as_ref()
         .map(|(c, loc)| {
             (
@@ -119,9 +121,16 @@ pub fn build_project_status_from_loaded(
                     matched: true,
                 }),
                 Some(c),
+                c.compat
+                    .asdf
+                    .names
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<Vec<_>>(),
+                c.runtimes.keys().cloned().collect::<Vec<_>>(),
             )
         })
-        .unwrap_or((None, None, None));
+        .unwrap_or((None, None, None, Vec::new(), Vec::new()));
 
     let mut rows = Vec::new();
     for key in collect_lang_keys(cfg_ref) {
@@ -170,6 +179,8 @@ pub fn build_project_status_from_loaded(
         project_dir,
         profile: ctx.profile.clone(),
         lock,
+        compat_asdf_names,
+        project_runtimes,
         rows,
     })
 }
@@ -221,6 +232,8 @@ pub fn status_to_json(st: &ProjectStatus) -> Value {
         "profile": st.profile,
         "project": project,
         "lock": lock,
+        "compat_asdf_names": st.compat_asdf_names,
+        "project_runtimes": st.project_runtimes,
         "runtimes": rows,
     })
 }
