@@ -12,6 +12,7 @@ pub const PROJECT_CONFIG_FILE: &str = ".envr.toml";
 pub const PROJECT_CONFIG_LOCAL_FILE: &str = ".envr.local.toml";
 pub const PROJECT_LOCK_FILE: &str = ".envr.lock";
 pub const PROJECT_LOCK_FILE_ALT: &str = ".envr.lock.toml";
+pub const PROJECT_LOCK_FILE_DOTENVR: &str = ".envr.lock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectConfigLocation {
@@ -362,6 +363,38 @@ pub struct ProjectLockFile {
     pub project: ProjectConfig,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RuntimeLockEntry {
+    pub name: String,
+    pub request: String,
+    pub resolved: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub candidate_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnvLockFile {
+    #[serde(default = "env_lock_file_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub runtime: Vec<RuntimeLockEntry>,
+}
+
+fn env_lock_file_version() -> u32 {
+    1
+}
+
+impl Default for EnvLockFile {
+    fn default() -> Self {
+        Self {
+            version: env_lock_file_version(),
+            runtime: Vec::new(),
+        }
+    }
+}
+
 fn project_lock_file_version() -> u32 {
     1
 }
@@ -390,6 +423,26 @@ pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectCon
             )));
         }
         return Ok(Some(lock.project));
+    }
+    if let Ok(lock) = toml::from_str::<EnvLockFile>(&content) {
+        if lock.version != env_lock_file_version() {
+            return Err(EnvrError::Config(format!(
+                "unsupported env lock version {} in {}",
+                lock.version,
+                path.display()
+            )));
+        }
+        let mut cfg = ProjectConfig::default();
+        for entry in lock.runtime {
+            cfg.runtimes.insert(
+                entry.name,
+                RuntimeConfig {
+                    version: Some(entry.resolved),
+                    ..Default::default()
+                },
+            );
+        }
+        return Ok(Some(cfg));
     }
     parse_project_config(path).map(Some)
 }
@@ -434,6 +487,35 @@ pub fn save_project_lock(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrRes
         project: cfg.clone(),
     })
     .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode project lock", e))?;
+    fs::write(path, content).map_err(EnvrError::from)?;
+    Ok(())
+}
+
+pub fn load_env_lock(path: impl AsRef<Path>) -> EnvrResult<Option<EnvLockFile>> {
+    let path = path.as_ref();
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path).map_err(EnvrError::from)?;
+    let lock = toml::from_str::<EnvLockFile>(&content)
+        .map_err(|e| EnvrError::Config(format!("failed to parse env lock {}: {e}", path.display())))?;
+    if lock.version != env_lock_file_version() {
+        return Err(EnvrError::Config(format!(
+            "unsupported env lock version {} in {}",
+            lock.version,
+            path.display()
+        )));
+    }
+    Ok(Some(lock))
+}
+
+pub fn save_env_lock(path: impl AsRef<Path>, lock: &EnvLockFile) -> EnvrResult<()> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(EnvrError::from)?;
+    }
+    let content = toml::to_string_pretty(lock)
+        .map_err(|e| EnvrError::with_source(ErrorCode::Runtime, "toml encode env lock", e))?;
     fs::write(path, content).map_err(EnvrError::from)?;
     Ok(())
 }

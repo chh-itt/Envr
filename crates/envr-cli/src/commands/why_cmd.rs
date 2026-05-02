@@ -8,10 +8,10 @@ use crate::output::{self, fmt_template};
 
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 use envr_error::EnvrError;
-use envr_shim_core::resolve_runtime_home_for_lang_with_project;
+use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 use serde_json::json;
 
-use super::version_request::classify_request;
+use super::version_request::{classify_request, explain_request};
 
 fn project_lock_notice(lock_file_present: bool) -> Option<&'static str> {
     if lock_file_present {
@@ -25,6 +25,7 @@ fn request_source_label(source: &str) -> &'static str {
     match source {
         "cli" => "cli",
         "project" => "project",
+        "tool_versions_compat" => ".tool-versions",
         _ => "global",
     }
 }
@@ -73,10 +74,19 @@ pub(crate) fn run_inner(
         .as_ref()
         .map(|(_, loc)| loc.lock_file.is_some())
         .unwrap_or(false);
+    let compat_name = loaded.as_ref().and_then(|(c, _)| {
+        c.compat
+            .asdf
+            .names
+            .iter()
+            .find_map(|(asdf_name, envr_name)| (envr_name == &lang).then_some(asdf_name.clone()))
+    });
     let resolution = if spec_deref.is_some() {
         "spec_override"
     } else if pin.is_some() {
         "project_pin"
+    } else if compat_name.is_some() {
+        "tool_versions_compat"
     } else {
         "global_current"
     };
@@ -84,12 +94,39 @@ pub(crate) fn run_inner(
         "cli"
     } else if pin.is_some() {
         "project"
+    } else if compat_name.is_some() {
+        "tool_versions_compat"
     } else {
         "global"
     };
 
+    let resolution = if let Some(spec) = spec_deref {
+        let versions_dir = session
+            .ctx
+            .runtime_root
+            .join("runtimes")
+            .join(&lang)
+            .join("versions");
+        resolve_version_home(&versions_dir, spec).ok()
+    } else {
+        None
+    };
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, spec_deref, cfg)?;
     let home = std::fs::canonicalize(&home).unwrap_or(home);
+    let resolved_version = resolution
+        .as_ref()
+        .and_then(|r| r.resolved_version.clone())
+        .or_else(|| home.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .unwrap_or_default();
+    let candidate_note = if spec_deref.is_some() {
+        Some("candidate selection was handled by the runtime-specific resolver")
+    } else if pin.is_some() {
+        Some("project pin selected the resolved runtime directory")
+    } else if compat_name.is_some() {
+        Some(".tool-versions compatibility mapping selected the resolved runtime directory")
+    } else {
+        Some("global current selected the resolved runtime directory")
+    };
 
     let project_json = loaded.as_ref().map(|(cfg, loc)| {
         json!({
@@ -110,12 +147,26 @@ pub(crate) fn run_inner(
         "profile": session.ctx.profile,
         "spec_override": spec_trim.clone(),
         "project": project_json,
+        "compat_source": compat_name,
         "resolution": resolution,
         "request_source": request_source,
         "request_kind": request.kind_str(),
         "request_value": request.raw,
         "request_normalized": request.normalized,
+        "resolution_reason": if spec_deref.is_some() {
+            explain_request(&request)
+        } else if pin.is_some() {
+            "resolved from project runtime pin"
+        } else if compat_name.is_some() {
+            "resolved via .tool-versions compatibility mapping"
+        } else {
+            "resolved from global current runtime"
+        },
         "resolved_home": home.to_string_lossy(),
+        "resolved_version": resolved_version,
+        "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
+        "selection_reason": resolution.as_ref().map(|r| r.selection_reason()),
+        "candidate_note": candidate_note,
     });
 
     Ok(output::emit_ok(
@@ -235,6 +286,18 @@ pub(crate) fn run_inner(
                                     msg,
                                 )
                             );
+                        } else if compat_name.is_some() {
+                            println!(
+                                "{}",
+                                fmt_template(
+                                    &envr_core::i18n::tr_key(
+                                        "cli.why.compat_source",
+                                        "未找到项目 pin：使用 `.tool-versions` 兼容映射。",
+                                        "No project pin: using `.tool-versions` compatibility mapping.",
+                                    ),
+                                    &[("lang", lang.as_str())],
+                                )
+                            );
                         } else {
                             println!(
                                 "{}",
@@ -273,9 +336,51 @@ pub(crate) fn run_inner(
                 );
                 println!(
                     "{} {}",
+                    envr_core::i18n::tr_key(
+                        "cli.why.resolved_version",
+                        "解析版本：",
+                        "Resolved version:"
+                    ),
+                    resolved_version
+                );
+                if let Some(note) = candidate_note {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.candidate_note",
+                            "候选说明：",
+                            "Candidate note:"
+                        ),
+                        note
+                    );
+                }
+                println!(
+                    "{} {}",
                     envr_core::i18n::tr_key("cli.why.request_kind", "请求类型：", "Request kind:",),
                     request.kind_str()
                 );
+                if let Some(count) = resolution.as_ref().map(|r| r.candidate_count) {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.candidate_count",
+                            "候选数量：",
+                            "Candidate count:"
+                        ),
+                        count
+                    );
+                }
+                if let Some(reason) = resolution.as_ref().map(|r| r.selection_reason()) {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.selection_reason",
+                            "选择理由：",
+                            "Selection reason:"
+                        ),
+                        reason
+                    );
+                }
                 println!(
                     "{} {}",
                     envr_core::i18n::tr_key(

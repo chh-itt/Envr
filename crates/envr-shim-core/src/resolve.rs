@@ -557,6 +557,52 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
 
 /// Picks `versions_dir/<name>` for an installed tree matching `spec` (exact dir name or semver selection).
 pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf> {
+    let result = resolve_version_home(versions_dir, spec)?;
+    result
+        .path
+        .ok_or_else(|| EnvrError::Runtime(result.message(versions_dir)))
+}
+
+#[derive(Debug, Clone)]
+pub struct VersionResolution {
+    pub path: Option<PathBuf>,
+    pub best_triple: Option<VersionTriple>,
+    pub spec: String,
+    request: SpecConstraint,
+    pub candidate_count: usize,
+    pub resolved_version: Option<String>,
+}
+
+impl VersionResolution {
+    pub fn message(&self, versions_dir: &Path) -> String {
+        match self.request {
+            SpecConstraint::Latest | SpecConstraint::Stable | SpecConstraint::Lts => format!(
+                "no installed version available for {spec:?} under {}",
+                versions_dir.display(),
+                spec = self.spec
+            ),
+            _ => format!(
+                "no installed version matches project pin {spec:?} under {}",
+                versions_dir.display(),
+                spec = self.spec
+            ),
+        }
+    }
+
+    pub fn selection_reason(&self) -> &'static str {
+        match self.request {
+            SpecConstraint::Triple(_, _, _) => "exact version match",
+            SpecConstraint::Major(_) | SpecConstraint::MajorMinor(_, _) => {
+                "highest installed version matching prefix"
+            }
+            SpecConstraint::Latest => "highest installed version (latest)",
+            SpecConstraint::Stable => "highest installed version (stable)",
+            SpecConstraint::Lts => "highest installed version (lts)",
+        }
+    }
+}
+
+pub fn resolve_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<VersionResolution> {
     let spec = spec.trim();
     if spec.is_empty() {
         return Err(EnvrError::Validation(
@@ -571,14 +617,21 @@ pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf>
         )));
     }
 
+    let constraint = SpecConstraint::parse(spec)?;
     let exact = versions_dir.join(spec);
-    if exact.is_dir() {
-        return Ok(exact);
+    if exact.is_dir() && constraint.is_direct_match() {
+        return Ok(VersionResolution {
+            path: Some(exact.clone()),
+            best_triple: None,
+            spec: spec.to_string(),
+            request: constraint,
+            candidate_count: 1,
+            resolved_version: exact.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()),
+        });
     }
 
-    let constraint = SpecConstraint::parse(spec)?;
-
     let mut best: Option<((u32, u32, u32), PathBuf)> = None;
+    let mut candidate_count = 0usize;
     for e in std::fs::read_dir(versions_dir).map_err(EnvrError::from)? {
         let e = e.map_err(EnvrError::from)?;
         if !e.file_type().map_err(EnvrError::from)?.is_dir() {
@@ -591,19 +644,24 @@ pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf>
         let Some(triple) = parse_dir_version_triplet(name) else {
             continue;
         };
-        if constraint.matches(triple) && best.as_ref().is_none_or(|(v, _)| triple > *v) {
-            best = Some((triple, d));
+        if constraint.matches(triple) {
+            candidate_count += 1;
+            if best.as_ref().is_none_or(|(v, _)| triple > *v) {
+                best = Some((triple, d));
+            }
         }
     }
 
-    let Some((_, path)) = best else {
-        return Err(EnvrError::Runtime(format!(
-            "no installed version matches project pin {spec:?} under {}",
-            versions_dir.display()
-        )));
-    };
-
-    Ok(path)
+    Ok(VersionResolution {
+        path: best.as_ref().map(|(_, p)| p.clone()),
+        best_triple: best.as_ref().map(|(t, _)| *t),
+        spec: spec.to_string(),
+        request: constraint,
+        candidate_count,
+        resolved_version: best
+            .as_ref()
+            .map(|(_, p)| p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string()),
+    })
 }
 
 /// Like [`pick_version_home`] but respects PHP Windows NTS vs TS install directories (`*-nts` / `*-ts`).
@@ -685,11 +743,21 @@ enum SpecConstraint {
     Major(u32),
     MajorMinor(u32, u32),
     Triple(u32, u32, u32),
+    Latest,
+    Stable,
+    Lts,
 }
 
 impl SpecConstraint {
     fn parse(spec: &str) -> EnvrResult<Self> {
         let s = spec.trim().trim_start_matches('v');
+        let normalized = s.to_ascii_lowercase();
+        match normalized.as_str() {
+            "latest" => return Ok(Self::Latest),
+            "stable" => return Ok(Self::Stable),
+            "lts" => return Ok(Self::Lts),
+            _ => {}
+        }
         let s = s.split('-').next().unwrap_or(s);
         let parts: Vec<&str> = s.split('.').collect();
         match (&parts[..], parts.len()) {
@@ -726,7 +794,12 @@ impl SpecConstraint {
             SpecConstraint::Major(m) => triple.0 == m,
             SpecConstraint::MajorMinor(m, n) => triple.0 == m && triple.1 == n,
             SpecConstraint::Triple(m, n, s) => triple == (m, n, s),
+            SpecConstraint::Latest | SpecConstraint::Stable | SpecConstraint::Lts => true,
         }
+    }
+
+    fn is_direct_match(self) -> bool {
+        matches!(self, SpecConstraint::Triple(_, _, _))
     }
 }
 

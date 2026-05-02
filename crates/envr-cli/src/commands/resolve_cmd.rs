@@ -6,9 +6,9 @@ use crate::output::{self, fmt_template};
 
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
-use envr_shim_core::resolve_runtime_home_for_lang_with_project;
+use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 
-use super::version_request::classify_request;
+use super::version_request::{classify_request, explain_request};
 
 fn next_steps_for_resolve(lang: &str, source: &str) -> Vec<(&'static str, String)> {
     let mut steps = Vec::new();
@@ -54,34 +54,61 @@ pub(crate) fn run_inner(
         .and_then(|c| c.runtimes.get(&lang))
         .and_then(|r| r.version.as_deref())
         .is_some();
+    let compat_name = cfg
+        .and_then(|c| c.compat.asdf.names.iter().find_map(|(asdf, envr)| (envr == &lang).then_some(asdf.clone())));
     let override_nonempty = spec.as_ref().is_some_and(|s| !s.trim().is_empty());
     let source = if override_nonempty {
         "cli_override"
     } else if has_pin {
         "project"
+    } else if compat_name.is_some() {
+        "tool_versions_compat"
     } else {
         "global_current"
     };
 
     let trimmed = spec.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let request = classify_request(trimmed, has_pin);
+    let resolution = if let Some(spec) = trimmed {
+        let versions_dir = session
+            .ctx
+            .runtime_root
+            .join("runtimes")
+            .join(&lang)
+            .join("versions");
+        resolve_version_home(&versions_dir, spec).ok()
+    } else {
+        None
+    };
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, trimmed, cfg)?;
     let home = std::fs::canonicalize(&home).map_err(EnvrError::from)?;
 
-    let version_label = home
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_string();
+    let resolved_version = resolution
+        .as_ref()
+        .and_then(|r| r.resolved_version.clone())
+        .or_else(|| home.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .unwrap_or_default();
 
     let mut data = serde_json::json!({
         "kind": lang,
         "resolution_source": source,
+        "compat_source": compat_name,
         "request_kind": request.kind_str(),
         "request_value": request.raw,
         "request_normalized": request.normalized,
+        "resolved_version": resolved_version,
+        "resolution_reason": if override_nonempty {
+            explain_request(&request)
+        } else if has_pin {
+            "resolved from project runtime pin"
+        } else if compat_name.is_some() {
+            "resolved via .tool-versions compatibility mapping"
+        } else {
+            "resolved from global current runtime"
+        },
+        "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
+        "selection_reason": resolution.as_ref().map(|r| r.selection_reason()),
         "home": home.to_string_lossy(),
-        "version_dir": version_label,
     });
     data = output::with_next_steps(data, next_steps_for_resolve(&lang, source));
     Ok(output::emit_ok(
@@ -135,6 +162,28 @@ pub(crate) fn run_inner(
                     ),
                     request.kind_str()
                 );
+                if let Some(count) = resolution.as_ref().map(|r| r.candidate_count) {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.resolve.candidate_count",
+                            "候选数量：",
+                            "Candidate count:"
+                        ),
+                        count
+                    );
+                }
+                if let Some(reason) = resolution.as_ref().map(|r| r.selection_reason()) {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.resolve.selection_reason",
+                            "选择理由：",
+                            "Selection reason:"
+                        ),
+                        reason
+                    );
+                }
             }
         },
     ))

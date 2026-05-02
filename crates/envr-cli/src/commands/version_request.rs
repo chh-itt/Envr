@@ -14,6 +14,7 @@ pub(crate) struct ClassifiedRequest {
     pub kind: RequestKind,
     pub raw: Option<String>,
     pub normalized: Option<String>,
+    pub alias: Option<String>,
 }
 
 impl ClassifiedRequest {
@@ -61,9 +62,11 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
             normalized,
         };
     };
+    let alias = matches!(normalized_ref, "latest" | "stable" | "lts")
+        .then_some(normalized_ref.to_string());
     let kind = if normalized_ref == "system" {
         RequestKind::System
-    } else if matches!(normalized_ref, "latest" | "stable" | "lts") {
+    } else if alias.is_some() {
         RequestKind::Alias
     } else if is_range_request(normalized_ref) {
         RequestKind::Range
@@ -86,6 +89,7 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
         kind,
         raw,
         normalized,
+        alias,
     }
 }
 
@@ -101,9 +105,26 @@ pub(crate) fn request_kind_str(kind: RequestKind) -> &'static str {
     }
 }
 
+pub(crate) fn explain_request(request: &ClassifiedRequest) -> &'static str {
+    match request.kind {
+        RequestKind::Exact => "exact version requested",
+        RequestKind::Prefix => "prefix request resolved to the newest matching installed version",
+        RequestKind::Alias => match request.alias.as_deref() {
+            Some("latest") => "latest alias resolved by runtime policy",
+            Some("stable") => "stable alias resolved by runtime policy",
+            Some("lts") => "lts alias resolved by runtime policy",
+            _ => "alias request resolved by runtime policy",
+        },
+        RequestKind::Range => "version range resolved by runtime policy",
+        RequestKind::Channel => "channel request resolved by runtime policy",
+        RequestKind::System => "system runtime requested",
+        RequestKind::Unknown => "unclassified request",
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RequestKind, classify_request, normalize_request_spec, request_kind_str};
+    use super::{RequestKind, classify_request, explain_request, normalize_request_spec, request_kind_str};
 
     #[test]
     fn normalize_request_strips_whitespace_and_single_v_prefix() {
@@ -216,5 +237,15 @@ mod tests {
     fn request_kind_str_matches_kind() {
         assert_eq!(request_kind_str(RequestKind::Exact), "exact");
         assert_eq!(request_kind_str(RequestKind::Unknown), "unknown");
+    }
+
+    #[test]
+    fn explains_aliases_by_name() {
+        let latest = classify_request(Some("latest"), false);
+        assert_eq!(explain_request(&latest), "latest alias resolved by runtime policy");
+        let stable = classify_request(Some("stable"), false);
+        assert_eq!(explain_request(&stable), "stable alias resolved by runtime policy");
+        let lts = classify_request(Some("lts"), false);
+        assert_eq!(explain_request(&lts), "lts alias resolved by runtime policy");
     }
 }

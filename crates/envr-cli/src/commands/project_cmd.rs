@@ -8,13 +8,14 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    project_lock_candidates, project_lock_exists, reset_project_config_load_cache,
+    EnvLockFile, RuntimeLockEntry, load_project_lock, project_lock_candidates,
+    project_lock_exists, reset_project_config_load_cache,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
 use envr_error::{EnvrError, EnvrResult};
 use envr_resolver::{parse_runtime_pin_spec, runtime_kind_toml_key, upsert_runtime_pin};
-use envr_shim_core::pick_version_home;
+use envr_shim_core::{pick_version_home, resolve_version_home};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -150,16 +151,34 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
         return Err(EnvrError::Validation("no project config found".into()));
     };
     let [lock_path, lock_alt_path] = project_lock_candidates(&loc.dir);
-    let lock_file = envr_config::project_config::ProjectLockFile {
-        version: 1,
-        project: cfg.clone(),
-    };
+    let mut runtime = Vec::new();
+    for (name, rt) in &cfg.runtimes {
+        let Some(request) = rt.version.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        let versions_dir = session
+            .ctx
+            .runtime_root
+            .join("runtimes")
+            .join(name)
+            .join("versions");
+        let resolved = resolve_version_home(&versions_dir, request)?;
+        let resolved_version = resolved.resolved_version.unwrap_or_default();
+        runtime.push(RuntimeLockEntry {
+            name: name.clone(),
+            request: request.to_string(),
+            resolved: resolved_version,
+            source: if resolved.candidate_count > 0 { "resolved".into() } else { "direct".into() },
+            candidate_count: resolved.candidate_count,
+        });
+    }
+    let lock_file = EnvLockFile { version: 1, runtime };
     let rendered = toml::to_string_pretty(&lock_file).map_err(|e| {
-        EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
+        EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize env lock", e)
     })?;
     if !dry_run {
         let lock_content = toml::to_string_pretty(&lock_file).map_err(|e| {
-            EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize project lock", e)
+            EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize env lock", e)
         })?;
         std::fs::write(&lock_path, &lock_content)?;
         if lock_alt_path != lock_path {
@@ -260,7 +279,7 @@ fn sync_inner(
                 session.ctx.working_dir.display()
             )));
         };
-        let Some(lock_cfg) = envr_config::project_config::load_project_lock(&lock_path)? else {
+        let Some(lock_cfg) = load_project_lock(&lock_path)? else {
             return Err(EnvrError::Validation(format!(
                 "lockfile {} is unreadable; run `envr project lock`",
                 lock_path.display()
@@ -272,10 +291,23 @@ fn sync_inner(
                 lock_path.display()
             )));
         }
+        let lock_entries = match std::fs::read_to_string(&lock_path)
+            .ok()
+            .and_then(|content| toml::from_str::<EnvLockFile>(&content).ok()) {
+            Some(lock) => lock.runtime,
+            None => Vec::new(),
+        };
         lock_status = Some(json!({
             "path": lock_path.to_string_lossy(),
             "matched": true,
             "version": 1,
+            "entries": lock_entries.iter().map(|entry| json!({
+                "name": entry.name,
+                "request": entry.request,
+                "resolved": entry.resolved,
+                "source": entry.source,
+                "candidate_count": entry.candidate_count,
+            })).collect::<Vec<_>>(),
         }));
     } else if project_lock_exists(&session.ctx.working_dir) {
         lock_status = Some(json!({
