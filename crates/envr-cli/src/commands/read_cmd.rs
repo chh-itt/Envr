@@ -120,3 +120,20 @@ fn default_file(format: ImportExportFormat) -> PathBuf {
         ImportExportFormat::ToolVersions => PathBuf::from(TOOL_VERSIONS_FILE),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_format_prefers_tool_versions_name() {
+        assert!(matches!(parse_format("auto", Some(Path::new(".tool-versions"))), Ok(ImportExportFormat::ToolVersions)));
+        assert!(matches!(parse_format("auto", Some(Path::new(".envr.toml"))), Ok(ImportExportFormat::EnvrToml)));
+    }
+
+    #[test]
+    fn named_formats_accept_asdf_alias() {
+        assert!(matches!(parse_format("asdf", None), Ok(ImportExportFormat::ToolVersions)));
+        assert!(matches!(parse_format("toml", None), Ok(ImportExportFormat::EnvrToml)));
+    }
+}
