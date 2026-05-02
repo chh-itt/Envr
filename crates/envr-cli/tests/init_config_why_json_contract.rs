@@ -172,6 +172,8 @@ fn why_json_reports_tool_versions_compat_resolution() {
     assert_eq!(v["data"]["compat_source"], "nodejs", "{v}");
     assert_eq!(v["data"]["request_source"], "tool_versions_compat", "{v}");
     assert_eq!(v["data"]["resolution"], "tool_versions_compat", "{v}");
+    assert_eq!(v["data"]["request_kind"], "exact", "{v}");
+    assert_eq!(v["data"]["request_normalized"], Value::Null, "{v}");
     assert!(
         v["data"]["project"]["compat_asdf_names"]
             .as_array()
@@ -179,3 +181,32 @@ fn why_json_reports_tool_versions_compat_resolution() {
         "compat mapping should be present: {v}"
     );
 }
+
+#[test]
+fn why_json_reports_version_request_normalization() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"v22.11.0\"\n").expect("envr.toml");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .args(["--format", "json", "why", "node"])
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+
+    let v = parse_json_line(&out.stdout);
+    assert_eq!(v["success"], true, "{v}");
+    assert_eq!(v["data"]["request_source"], "project", "{v}");
+    assert_eq!(v["data"]["request_kind"], "exact", "{v}");
+    assert_eq!(v["data"]["request_normalized"], "22.11.0", "{v}");
+    assert_eq!(v["data"]["resolved_version"], "22.11.0", "{v}");
+}
+*** End Patch
