@@ -259,4 +259,14 @@ mod tests {
         assert_eq!(r.kind, RequestKind::Exact);
         assert_eq!(r.normalized.as_deref(), Some("22.11.0"));
     }
+
+    #[test]
+    fn explains_range_channel_and_system_requests() {
+        let range = classify_request(Some(">=1.20 <1.23"), false);
+        assert_eq!(explain_request(&range), "version range resolved by runtime policy");
+        let channel = classify_request(Some("temurin-21"), false);
+        assert_eq!(explain_request(&channel), "channel request resolved by runtime policy");
+        let system = classify_request(Some("system"), false);
+        assert_eq!(explain_request(&system), "system runtime requested");
+    }
 }
