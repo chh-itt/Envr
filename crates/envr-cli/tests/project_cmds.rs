@@ -188,3 +188,38 @@ fn import_tool_versions_records_compat_names() {
     );
     assert!(!text.contains("custom-tool ="), "unexpected toml:\n{text}");
 }
+
+#[test]
+fn project_lock_creates_locked_file_and_sync_accepts_it() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        tmp.path().join(DOT_ENVR_TOML),
+        r#"
+[runtimes.node]
+version = "22.11.0"
+"#,
+    )
+    .expect("write envr toml");
+
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args(["project", "lock"])
+        .assert()
+        .success();
+
+    let lock_path = tmp.path().join(".envr.lock");
+    assert!(lock_path.is_file(), "lockfile should exist");
+    let lock_text = fs::read_to_string(&lock_path).expect("read lockfile");
+    assert!(lock_text.contains("[project.runtimes.node]"), "unexpected lockfile:\n{lock_text}");
+    assert!(lock_text.contains("version = \"22.11.0\""), "unexpected lockfile:\n{lock_text}");
+
+    Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
+        .current_dir(tmp.path())
+        .args(["project", "sync", "--locked"])
+        .assert()
+        .success();
+}
