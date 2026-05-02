@@ -356,6 +356,7 @@ pub fn save_project_config(path: impl AsRef<Path>, cfg: &ProjectConfig) -> EnvrR
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectLockFile {
     #[serde(default = "project_lock_file_version")]
     pub version: u32,
@@ -1007,6 +1008,7 @@ B = "${A}"
                 name: "node".into(),
                 request: "latest".into(),
                 resolved: "22.11.0".into(),
+                resolved_home: root.join("runtimes/node/versions/22.11.0").to_string_lossy().to_string(),
                 source: "resolved".into(),
                 candidate_count: 3,
             }],
