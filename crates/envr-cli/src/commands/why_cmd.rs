@@ -7,6 +7,7 @@ use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
 
 use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
+use envr_config::project_config::load_project_lock;
 use envr_error::EnvrError;
 use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 use serde_json::json;
@@ -28,6 +29,21 @@ fn request_source_label(source: &str) -> &'static str {
         "tool_versions_compat" => ".tool-versions",
         _ => "global",
     }
+}
+
+fn project_lock_state_json(
+    session: &crate::runtime_session::RuntimeSession,
+) -> Option<serde_json::Value> {
+    let (_, loc) = session.project.as_ref()?;
+    let lock_path = loc.lock_file.as_ref()?;
+    let fresh = load_project_lock(lock_path)
+        .ok()
+        .flatten()
+        .is_some_and(|lock_cfg| session.project_config() == Some(&lock_cfg));
+    Some(json!({
+        "path": lock_path.to_string_lossy(),
+        "fresh": fresh,
+    }))
 }
 
 /// Body for [`crate::commands::dispatch`]; errors are finished at the dispatch boundary.
@@ -70,10 +86,8 @@ pub(crate) fn run_inner(
     });
 
     let request = classify_request(spec_deref, pin.is_some());
-    let has_lock = loaded
-        .as_ref()
-        .map(|(_, loc)| loc.lock_file.is_some())
-        .unwrap_or(false);
+    let lock_state = project_lock_state_json(&session);
+    let has_lock = lock_state.is_some();
     let compat_name = loaded.as_ref().and_then(|(c, _)| {
         c.compat
             .asdf
@@ -135,6 +149,7 @@ pub(crate) fn run_inner(
             "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "compat_file": loc.compat_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
+            "lock": lock_state,
             "pin": pin.clone(),
             "runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
             "compat_asdf_names": cfg.compat.asdf.names.clone(),
@@ -283,7 +298,11 @@ pub(crate) fn run_inner(
                                 envr_core::i18n::tr_key(
                                     "cli.why.lock_present",
                                     "未找到项目 pin：当前目录已发现 lockfile，可执行 `envr project sync --locked`。",
-                                    msg,
+                                    if lock_state.as_ref().and_then(|v| v.get("fresh")).and_then(|v| v.as_bool()).unwrap_or(false) {
+                                        "No project pin: a fresh lockfile is present; run `envr project sync --locked`."
+                                    } else {
+                                        msg
+                                    },
                                 )
                             );
                         } else if compat_name.is_some() {
