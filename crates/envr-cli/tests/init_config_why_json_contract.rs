@@ -237,45 +237,45 @@ fn why_human_reports_request_alias() {
     assert!(text.contains("请求类型： alias") || text.contains("Request kind: alias"), "{text}");
     assert!(text.contains("请求别名： latest") || text.contains("Request alias: latest"), "{text}");
 }
-+
-+#[test]
-+fn why_human_reports_range_and_channel_explanations() {
-+    let root = tempfile::tempdir().expect("tmp");
-+    write_settings(root.path());
-+    let runtime_root = root.path().join("runtime-root");
-+    let project = root.path().join("project");
-+    fs::create_dir_all(&project).expect("project");
-+    write_node_layout(&runtime_root, "22.11.0");
-+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"~> 22.0\"\n").expect("envr.toml");
-+
-+    let out = Command::cargo_bin("envr")
-+        .expect("envr")
-+        .env("ENVR_ROOT", root.path())
-+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-+        .current_dir(&project)
-+        .arg("why")
-+        .arg("node")
-+        .output()
-+        .expect("run");
-+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
-+
-+    let text = String::from_utf8_lossy(&out.stdout);
-+    assert!(text.contains("请求类型： range") || text.contains("Request kind: range"), "{text}");
-+    assert!(text.contains("选择理由： version range resolved by runtime policy") || text.contains("Selection reason: version range resolved by runtime policy"), "{text}");
-+
-+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"temurin-21\"\n").expect("envr.toml");
-+    let out = Command::cargo_bin("envr")
-+        .expect("envr")
-+        .env("ENVR_ROOT", root.path())
-+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-+        .current_dir(&project)
-+        .arg("why")
-+        .arg("node")
-+        .output()
-+        .expect("run");
-+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
-+    let text = String::from_utf8_lossy(&out.stdout);
-+    assert!(text.contains("请求类型： channel") || text.contains("Request kind: channel"), "{text}");
-+    assert!(text.contains("选择理由： channel request resolved by runtime policy") || text.contains("Selection reason: channel request resolved by runtime policy"), "{text}");
-+}
+
+#[test]
+fn why_human_reports_range_and_channel_explanations() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"~> 22.0\"\n").expect("envr.toml");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .arg("why")
+        .arg("node")
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("请求类型： range") || text.contains("Request kind: range"), "{text}");
+    assert!(text.contains("选择理由： version range resolved by runtime policy") || text.contains("Selection reason: version range resolved by runtime policy"), "{text}");
+
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"temurin-21\"\n").expect("envr.toml");
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .arg("why")
+        .arg("node")
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("请求类型： channel") || text.contains("Request kind: channel"), "{text}");
+    assert!(text.contains("选择理由： channel request resolved by runtime policy") || text.contains("Selection reason: channel request resolved by runtime policy"), "{text}");
+}
 *** End Patch
