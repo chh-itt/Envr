@@ -127,3 +127,19 @@ fn exec_and_run_help_mention_install_if_missing() {
         );
     }
 }
++
++#[test]
++fn hook_status_and_doctor_report_profile_details() {
++    let dir = tempdir().expect("tempdir");
++    let cfg = dir.path().join("config");
++    fs::create_dir_all(&cfg).expect("mkdir config");
++    fs::write(cfg.join("settings.toml"), "[i18n]\nlocale = \"en_us\"\n").expect("write settings");
++    fs::write(dir.path().join(".envr.toml"), "[env]\nFOO = \"bar\"\n").expect("write project");
++
++    for args in [["hook", "status"], ["hook", "doctor", "powershell"]] {
++        let mut cmd = Command::cargo_bin("envr").expect("envr binary");
++        let assert = cmd.env("ENVR_ROOT", dir.path()).args(args).assert().success();
++        let out = String::from_utf8_lossy(&assert.get_output().stdout);
++        assert!(out.contains("profile root") || out.contains("selected profile root"), "expected hook output to mention profile root:\n{out}");
++    }
++}
