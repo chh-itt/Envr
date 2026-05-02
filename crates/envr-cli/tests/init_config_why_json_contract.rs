@@ -132,10 +132,50 @@ fn why_json_reports_project_pin_resolution() {
     assert_eq!(v["data"]["lang"], "node", "{v}");
     assert_eq!(v["data"]["resolution"], "project_pin", "{v}");
     assert_eq!(v["data"]["project"]["pin"], "20.10.0", "{v}");
+    assert_eq!(v["data"]["request_source"], "project", "{v}");
+    assert_eq!(v["data"]["request_kind"], "exact", "{v}");
     assert!(
         v["data"]["resolved_home"]
             .as_str()
             .is_some_and(|s| s.contains("20.10.0")),
         "resolved_home should point to pinned version: {v}"
+    );
+}
+
+#[test]
+fn why_json_reports_tool_versions_compat_resolution() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+    fs::write(project.join(".tool-versions"), "nodejs 22.11.0\n").expect("tool-versions");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .args(["--format", "json", "why", "node"])
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let v = parse_json_line(&out.stdout);
+    assert_eq!(v["success"], true, "{v}");
+    assert_eq!(v["code"], "why_runtime", "{v}");
+    assert_eq!(v["data"]["compat_source"], "nodejs", "{v}");
+    assert_eq!(v["data"]["request_source"], "tool_versions_compat", "{v}");
+    assert_eq!(v["data"]["resolution"], "tool_versions_compat", "{v}");
+    assert!(
+        v["data"]["project"]["compat_asdf_names"]
+            .as_array()
+            .is_some_and(|a| !a.is_empty()),
+        "compat mapping should be present: {v}"
     );
 }
