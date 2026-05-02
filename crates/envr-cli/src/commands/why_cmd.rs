@@ -179,7 +179,6 @@ pub(crate) fn run_inner(
             "resolved from global current runtime"
         },
         "request_explanation": explain_request(&request),
-        "request_explanation": explain_request(&request),
         "resolved_home": home.to_string_lossy(),
         "resolved_version": resolved_version,
         "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
@@ -432,17 +431,6 @@ pub(crate) fn run_inner(
                             "Normalized request:",
                         ),
                         normalized
-                    );
-                }
-                if let Some(alias) = request.alias.as_deref() {
-                    println!(
-                        "{} {}",
-                        envr_core::i18n::tr_key(
-                            "cli.why.request_alias",
-                            "请求别名：",
-                            "Request alias:",
-                        ),
-                        alias
                     );
                 }
                 if let Some(project) = &project_json {
