@@ -212,6 +212,37 @@ fn why_json_reports_version_request_normalization() {
     assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
     assert_eq!(v["data"]["request_explanation"], "exact version requested", "{v}");
 }
++
++#[test]
++fn why_json_reports_range_channel_and_alias_explanations() {
++    let root = tempfile::tempdir().expect("tmp");
++    write_settings(root.path());
++    let runtime_root = root.path().join("runtime-root");
++    let project = root.path().join("project");
++    fs::create_dir_all(&project).expect("project");
++    write_node_layout(&runtime_root, "22.11.0");
++
++    for (spec, kind, explanation) in [
++        ("latest", "alias", "latest alias resolved by runtime policy"),
++        ("~> 22.0", "range", "version range resolved by runtime policy"),
++        ("temurin-21", "channel", "channel request resolved by runtime policy"),
++    ] {
++        fs::write(project.join(".envr.toml"), format!("[runtimes.node]\nversion = \"{spec}\"\n")).expect("envr.toml");
++        let out = Command::cargo_bin("envr")
++            .expect("envr")
++            .env("ENVR_ROOT", root.path())
++            .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
++            .current_dir(&project)
++            .args(["--format", "json", "why", "node"])
++            .output()
++            .expect("run");
++        assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
++
++        let v = parse_json_line(&out.stdout);
++        assert_eq!(v["data"]["request_kind"], kind, "{v}");
++        assert_eq!(v["data"]["request_explanation"], explanation, "{v}");
++    }
++}
 
 #[test]
 fn why_human_reports_request_alias() {
