@@ -31,6 +31,7 @@ pub(crate) fn import_run_inner(
 ) -> EnvrResult<CliExit> {
     let format = parse_import_format(&format, file.as_deref())?;
     let file = file.unwrap_or_else(|| default_import_file(format));
+    let file = if file.is_absolute() { file } else { path.join(file) };
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -465,5 +466,27 @@ flutter 3.24.3
         assert!(rendered.contains("groovy 4.0.23\n"));
         assert!(rendered.contains("dart 3.5.4\n"));
         assert!(rendered.contains("flutter 3.24.3\n"));
+    }
+
+    #[test]
+    fn import_tool_versions_reports_unknown_plugin_warning() {
+        let (cfg, warnings) = parse_tool_versions_str(
+            r#"
+custom-tool 1.0.0
+nodejs 22.11.0
+"#,
+        )
+        .expect("parse");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("unknown asdf plugin"));
+        assert_eq!(cfg.runtimes.get("custom-tool").and_then(|r| r.version.as_deref()), Some("1.0.0"));
+        assert_eq!(cfg.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("22.11.0"));
+    }
+
+    #[test]
+    fn import_joins_relative_source_file_with_target_path() {
+        let format = parse_import_format("auto", Some(Path::new(".tool-versions"))).expect("format");
+        assert!(matches!(format, ImportExportFormat::ToolVersions));
+        assert_eq!(default_import_file(ImportExportFormat::ToolVersions), PathBuf::from(".tool-versions"));
     }
 }
