@@ -209,4 +209,30 @@ fn why_json_reports_version_request_normalization() {
     assert_eq!(v["data"]["request_normalized"], "22.11.0", "{v}");
     assert_eq!(v["data"]["resolved_version"], "22.11.0", "{v}");
 }
++
++#[test]
++fn why_human_reports_request_alias() {
++    let root = tempfile::tempdir().expect("tmp");
++    write_settings(root.path());
++    let runtime_root = root.path().join("runtime-root");
++    let project = root.path().join("project");
++    fs::create_dir_all(&project).expect("project");
++    write_node_layout(&runtime_root, "22.11.0");
++    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"latest\"\n").expect("envr.toml");
++
++    let out = Command::cargo_bin("envr")
++        .expect("envr")
++        .env("ENVR_ROOT", root.path())
++        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
++        .current_dir(&project)
++        .arg("why")
++        .arg("node")
++        .output()
++        .expect("run");
++    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
++
++    let text = String::from_utf8_lossy(&out.stdout);
++    assert!(text.contains("请求类型： alias") || text.contains("Request kind: alias"), "{text}");
++    assert!(text.contains("请求别名： latest") || text.contains("Request alias: latest"), "{text}");
++}
 *** End Patch

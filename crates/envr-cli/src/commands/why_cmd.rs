@@ -409,6 +409,17 @@ pub(crate) fn run_inner(
                     ),
                     request_source_label(request_source)
                 );
+                if let Some(alias) = request.alias.as_deref() {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.request_alias",
+                            "请求别名：",
+                            "Request alias:",
+                        ),
+                        alias
+                    );
+                }
                 if let Some(normalized) = request.normalized.as_deref() {
                     println!(
                         "{} {}",
