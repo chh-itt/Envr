@@ -210,6 +210,7 @@ fn why_json_reports_version_request_normalization() {
     assert_eq!(v["data"]["request_normalized"], "22.11.0", "{v}");
     assert_eq!(v["data"]["resolved_version"], "22.11.0", "{v}");
     assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
+    assert_eq!(v["data"]["request_explanation"], "exact version requested", "{v}");
 }
 
 #[test]

@@ -178,6 +178,7 @@ pub(crate) fn run_inner(
         } else {
             "resolved from global current runtime"
         },
+        "request_explanation": explain_request(&request),
         "resolved_home": home.to_string_lossy(),
         "resolved_version": resolved_version,
         "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
