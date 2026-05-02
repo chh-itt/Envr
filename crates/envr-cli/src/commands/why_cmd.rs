@@ -1,8 +1,7 @@
 //! Explain runtime resolution for the current project directory (`envr why <runtime>`).
 use crate::CliExit;
-use crate::CliUxPolicy;
-
 use crate::CliPathProfile;
+use crate::CliUxPolicy;
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
 
@@ -32,7 +31,7 @@ fn request_source_label(source: &str) -> &'static str {
 }
 
 fn project_lock_state_json(
-    session: &crate::runtime_session::RuntimeSession,
+    session: &crate::run_context::CliProjectContext,
 ) -> Option<serde_json::Value> {
     let (_, loc) = session.project.as_ref()?;
     let lock_path = loc.lock_file.as_ref()?;
@@ -95,7 +94,7 @@ pub(crate) fn run_inner(
             .iter()
             .find_map(|(asdf_name, envr_name)| (envr_name == &lang).then_some(asdf_name.clone()))
     });
-    let resolution = if spec_deref.is_some() {
+    let resolution_source = if spec_deref.is_some() {
         "spec_override"
     } else if pin.is_some() {
         "project_pin"
@@ -114,7 +113,7 @@ pub(crate) fn run_inner(
         "global"
     };
 
-    let resolution = if let Some(spec) = spec_deref {
+    let version_resolution = if let Some(spec) = spec_deref {
         let versions_dir = session
             .ctx
             .runtime_root
@@ -127,7 +126,8 @@ pub(crate) fn run_inner(
     };
     let home = resolve_runtime_home_for_lang_with_project(&session.ctx, &lang, spec_deref, cfg)?;
     let home = std::fs::canonicalize(&home).unwrap_or(home);
-    let resolved_version = resolution
+    let request_value = request.request();
+    let resolved_version = version_resolution
         .as_ref()
         .and_then(|r| r.resolved_version.clone())
         .or_else(|| home.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
@@ -163,12 +163,27 @@ pub(crate) fn run_inner(
         "spec_override": spec_trim.clone(),
         "project": project_json,
         "compat_source": compat_name,
-        "resolution": resolution,
+        "resolution": version_resolution.as_ref().map(|r| {
+            json!({
+                "path": r.path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                "best_triple": r.best_triple,
+                "spec": r.spec,
+                "candidate_count": r.candidate_count,
+                "resolved_version": r.resolved_version,
+            })
+        }),
         "request_source": request_source,
         "request_kind": request.kind_str(),
         "request_value": request.raw,
         "request_normalized": request.normalized,
         "request_alias": request.alias,
+        "request": json!({
+            "kind": request.kind_str(),
+            "raw": request.raw,
+            "normalized": request.normalized,
+            "alias": request.alias,
+        }),
+        "request_value": format!("{:?}", request_value),
         "resolution_reason": if spec_deref.is_some() {
             explain_request(&request)
         } else if pin.is_some() {
@@ -179,10 +194,11 @@ pub(crate) fn run_inner(
             "resolved from global current runtime"
         },
         "request_explanation": explain_request(&request),
+        "resolution_source": resolution_source,
         "resolved_home": home.to_string_lossy(),
         "resolved_version": resolved_version,
-        "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
-        "selection_reason": resolution.as_ref().map(|r| r.selection_reason()),
+        "candidate_count": version_resolution.as_ref().map(|r| r.candidate_count),
+        "selection_reason": version_resolution.as_ref().map(|r| r.selection_reason().to_string()),
         "candidate_note": candidate_note,
     });
 
@@ -380,7 +396,7 @@ pub(crate) fn run_inner(
                     envr_core::i18n::tr_key("cli.why.request_kind", "请求类型：", "Request kind:",),
                     request.kind_str()
                 );
-                if let Some(count) = resolution.as_ref().map(|r| r.candidate_count) {
+                if let Some(count) = version_resolution.as_ref().map(|r| r.candidate_count) {
                     println!(
                         "{} {}",
                         envr_core::i18n::tr_key(
@@ -391,7 +407,7 @@ pub(crate) fn run_inner(
                         count
                     );
                 }
-                if let Some(reason) = resolution.as_ref().map(|r| r.selection_reason()) {
+                if let Some(reason) = version_resolution.as_ref().map(|r| r.selection_reason()) {
                     println!(
                         "{} {}",
                         envr_core::i18n::tr_key(

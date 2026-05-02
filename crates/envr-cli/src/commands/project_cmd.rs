@@ -8,8 +8,7 @@ use crate::output::{self, fmt_template};
 
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
-    EnvLockFile, ProjectConfigLocation, RuntimeLockEntry, load_project_lock,
-    project_lock_candidates, project_lock_exists, project_lock_is_fresh,
+    EnvLockFile, RuntimeLockEntry, project_lock_candidates, project_lock_is_fresh,
     reset_project_config_load_cache,
 };
 use envr_core::runtime::service::RuntimeService;
@@ -256,7 +255,7 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
 }
 
 fn lock_status_json(
-    session: &crate::runtime_session::RuntimeSession,
+    session: &crate::run_context::CliProjectContext,
     locked: bool,
 ) -> EnvrResult<Option<serde_json::Value>> {
     if !locked {
@@ -323,7 +322,7 @@ fn sync_inner(
 ) -> EnvrResult<CliExit> {
     let session = CliPathProfile::new(path.clone(), None).load_project()?;
     let ctx = &session.ctx;
-    let mut lock_status = lock_status_json(&session, locked)?;
+    let lock_status = lock_status_json(&session, locked)?;
     let pending = child_env::plan_missing_pinned_runtimes_for_run(ctx, session.project_config())?;
     if pending.is_empty() {
         let data = json!({
@@ -560,7 +559,7 @@ fn validate_inner(
     let lock_status = if locked {
         Some(lock_status_json(&session, true)?)
     } else {
-        lock_status_json(&session, false)?
+        Some(lock_status_json(&session, false)?)
     };
 
     let runtime_root = common::session_runtime_root()?;

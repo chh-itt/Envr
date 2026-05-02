@@ -17,9 +17,24 @@ pub(crate) struct ClassifiedRequest {
     pub alias: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VersionRequest {
+    Exact(String),
+    Prefix { major: u64, minor: Option<u64> },
+    Alias(String),
+    Range(String),
+    Channel(String),
+    System,
+    Unknown,
+}
+
 impl ClassifiedRequest {
     pub(crate) fn kind_str(&self) -> &'static str {
         request_kind_str(self.kind)
+    }
+
+    pub(crate) fn request(&self) -> VersionRequest {
+        classified_to_version_request(self)
     }
 }
 
@@ -60,6 +75,7 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
             kind: RequestKind::Unknown,
             raw,
             normalized,
+            alias: None,
         };
     };
     let alias = matches!(normalized_ref, "latest" | "stable" | "lts")
@@ -122,9 +138,56 @@ pub(crate) fn explain_request(request: &ClassifiedRequest) -> &'static str {
     }
 }
 
+pub(crate) fn classified_to_version_request(request: &ClassifiedRequest) -> VersionRequest {
+    match request.kind {
+        RequestKind::Exact => request
+            .normalized
+            .clone()
+            .map(VersionRequest::Exact)
+            .unwrap_or(VersionRequest::Unknown),
+        RequestKind::Prefix => request
+            .normalized
+            .as_deref()
+            .and_then(parse_prefix_request)
+            .map_or(VersionRequest::Unknown, |(major, minor)| {
+                VersionRequest::Prefix { major, minor }
+            }),
+        RequestKind::Alias => request
+            .alias
+            .clone()
+            .map(VersionRequest::Alias)
+            .unwrap_or(VersionRequest::Unknown),
+        RequestKind::Range => request
+            .normalized
+            .clone()
+            .map(VersionRequest::Range)
+            .unwrap_or(VersionRequest::Unknown),
+        RequestKind::Channel => request
+            .normalized
+            .clone()
+            .map(VersionRequest::Channel)
+            .unwrap_or(VersionRequest::Unknown),
+        RequestKind::System => VersionRequest::System,
+        RequestKind::Unknown => VersionRequest::Unknown,
+    }
+}
+
+fn parse_prefix_request(spec: &str) -> Option<(u64, Option<u64>)> {
+    let mut parts = spec.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = match parts.next() {
+        Some(part) if !part.is_empty() => Some(part.parse().ok()?),
+        _ => None,
+    };
+    Some((major, minor))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RequestKind, classify_request, explain_request, normalize_request_spec, request_kind_str};
+    use super::{
+        RequestKind, VersionRequest, classify_request, classified_to_version_request,
+        explain_request, normalize_request_spec, request_kind_str,
+    };
 
     #[test]
     fn normalize_request_strips_whitespace_and_single_v_prefix() {

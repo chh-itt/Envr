@@ -41,6 +41,7 @@ impl Command {
             Command::Run { .. } => CommandKey::Run,
             Command::Env { .. } => CommandKey::Env,
             Command::Template { .. } => CommandKey::Template,
+            Command::Read { .. } => CommandKey::Read,
             Command::Shell { .. } => CommandKey::Shell,
             Command::Hook(HookCmd::Bash) => CommandKey::HookBash,
             Command::Hook(HookCmd::Zsh) => CommandKey::HookZsh,

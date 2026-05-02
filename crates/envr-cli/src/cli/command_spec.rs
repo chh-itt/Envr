@@ -92,6 +92,7 @@ pub(crate) enum CommandKey {
     Run,
     Env,
     Template,
+    Read,
     Shell,
     HookBash,
     HookZsh,

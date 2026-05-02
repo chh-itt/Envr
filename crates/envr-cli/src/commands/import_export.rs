@@ -49,6 +49,7 @@ pub(crate) fn import_run_inner(
     } else {
         None
     };
+    let merged_mode = existing.is_some() && !force;
     let (imported, import_warnings) = match format {
         ImportExportFormat::EnvrToml => (parse_project_config(&file)?, Vec::new()),
         ImportExportFormat::ToolVersions => parse_tool_versions_file(&file)?,
@@ -65,7 +66,6 @@ pub(crate) fn import_run_inner(
         merged.extends.extend(imported.extends);
         merged
     };
-    let merged_mode = existing.is_some() && !force;
 
     let rendered = toml::to_string_pretty(&merged).map_err(|e| {
         EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)

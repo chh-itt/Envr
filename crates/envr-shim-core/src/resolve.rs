@@ -558,9 +558,8 @@ pub fn parse_core_command(basename: &str) -> Option<CoreCommand> {
 /// Picks `versions_dir/<name>` for an installed tree matching `spec` (exact dir name or semver selection).
 pub fn pick_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<PathBuf> {
     let result = resolve_version_home(versions_dir, spec)?;
-    result
-        .path
-        .ok_or_else(|| EnvrError::Runtime(result.message(versions_dir)))
+    let message = result.message(versions_dir);
+    result.path.ok_or_else(|| EnvrError::Runtime(message))
 }
 
 #[derive(Debug, Clone)]
