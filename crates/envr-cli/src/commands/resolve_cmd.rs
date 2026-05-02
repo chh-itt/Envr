@@ -6,7 +6,7 @@ use crate::output::{self, fmt_template};
 use serde_json::json;
 
 use envr_domain::runtime::parse_runtime_kind;
-use envr_config::project_config::load_project_lock;
+use envr_config::project_config::project_lock_is_fresh;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 
@@ -53,10 +53,7 @@ pub(crate) fn run_inner(
     let cfg = session.project_config();
     let lock_state = session.project.as_ref().and_then(|(_, loc)| {
         let lock_path = loc.lock_file.as_ref()?;
-        let fresh = load_project_lock(lock_path)
-            .ok()
-            .flatten()
-            .is_some_and(|lock_cfg| session.project_config() == Some(&lock_cfg));
+        let fresh = project_lock_is_fresh(session.project_config(), lock_path).ok()?;
         Some((lock_path.to_string_lossy().to_string(), fresh))
     });
 
