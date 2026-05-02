@@ -3,8 +3,10 @@ use crate::CliPathProfile;
 use crate::CliUxPolicy;
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
+use serde_json::json;
 
 use envr_domain::runtime::parse_runtime_kind;
+use envr_config::project_config::load_project_lock;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 
@@ -49,6 +51,14 @@ pub(crate) fn run_inner(
 
     let session = CliPathProfile::new(path, profile).load_project()?;
     let cfg = session.project_config();
+    let lock_state = session.project.as_ref().and_then(|(_, loc)| {
+        let lock_path = loc.lock_file.as_ref()?;
+        let fresh = load_project_lock(lock_path)
+            .ok()
+            .flatten()
+            .is_some_and(|lock_cfg| session.project_config() == Some(&lock_cfg));
+        Some((lock_path.to_string_lossy().to_string(), fresh))
+    });
 
     let has_pin = cfg
         .and_then(|c| c.runtimes.get(&lang))
@@ -109,6 +119,10 @@ pub(crate) fn run_inner(
         "candidate_count": resolution.as_ref().map(|r| r.candidate_count),
         "selection_reason": resolution.as_ref().map(|r| r.selection_reason()),
         "home": home.to_string_lossy(),
+        "lock": lock_state.as_ref().map(|(path, fresh)| json!({
+            "path": path,
+            "fresh": fresh,
+        })),
     });
     data = output::with_next_steps(data, next_steps_for_resolve(&lang, source));
     Ok(output::emit_ok(
