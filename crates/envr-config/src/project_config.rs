@@ -952,6 +952,49 @@ B = "${A}"
         );
     }
 
+    #[test]
+    fn project_lock_freshness_reflects_disk_contents() {
+        let tmp = TempDir::new().expect("tmp");
+        let root = tmp.path();
+        fs::write(
+            root.join(PROJECT_CONFIG_FILE),
+            "[runtimes.node]\nversion = \"18\"\n",
+        )
+        .expect("write config");
+        let fresh_lock = ProjectConfig {
+            runtimes: [(
+                "node".to_string(),
+                RuntimeConfig {
+                    version: Some("18".into()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        save_project_lock(root.join(PROJECT_LOCK_FILE), &fresh_lock).expect("save lock");
+        let loaded = load_project_config_profile(root, None)
+            .expect("load")
+            .expect("found");
+        assert!(project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE)).expect("fresh"));
+
+        let stale_lock = ProjectConfig {
+            runtimes: [(
+                "node".to_string(),
+                RuntimeConfig {
+                    version: Some("22".into()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        save_project_lock(root.join(PROJECT_LOCK_FILE_ALT), &stale_lock).expect("save alt");
+        assert!(!project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE_ALT)).expect("stale"));
+    }
+
     proptest! {
         #[test]
         fn merge_over_prefers_local_values(
