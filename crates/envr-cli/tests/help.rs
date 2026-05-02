@@ -67,6 +67,9 @@ fn help_is_readable_and_lists_l1_commands() {
         "shim",
         "cache",
         "bundle",
+        "hook status",
+        "hook doctor",
+        "hook powershell",
     ] {
         assert!(
             out.contains(sub),
