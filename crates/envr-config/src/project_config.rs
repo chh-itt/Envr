@@ -994,27 +994,27 @@ B = "${A}"
         save_project_lock(root.join(PROJECT_LOCK_FILE_ALT), &stale_lock).expect("save alt");
         assert!(!project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE_ALT)).expect("stale"));
     }
-+
-+    #[test]
-+    fn env_lock_roundtrip_loads_as_project_config() {
-+        let tmp = TempDir::new().expect("tmp");
-+        let root = tmp.path();
-+        let lock = EnvLockFile {
-+            version: 1,
-+            runtime: vec![RuntimeLockEntry {
-+                name: "node".into(),
-+                request: "latest".into(),
-+                resolved: "22.11.0".into(),
-+                source: "resolved".into(),
-+                candidate_count: 3,
-+            }],
-+        };
-+        save_env_lock(root.join(PROJECT_LOCK_FILE), &lock).expect("save env lock");
-+
-+        let loaded = load_project_lock(root.join(PROJECT_LOCK_FILE)).expect("load").expect("found");
-+        assert_eq!(loaded.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("22.11.0"));
-+    }
-*** End Patch
+
+    #[test]
+    fn env_lock_roundtrip_loads_as_project_config() {
+        let tmp = TempDir::new().expect("tmp");
+        let root = tmp.path();
+        let lock = EnvLockFile {
+            version: 1,
+            runtime: vec![RuntimeLockEntry {
+                name: "node".into(),
+                request: "latest".into(),
+                resolved: "22.11.0".into(),
+                source: "resolved".into(),
+                candidate_count: 3,
+            }],
+        };
+        save_env_lock(root.join(PROJECT_LOCK_FILE), &lock).expect("save env lock");
+
+        let loaded = load_project_lock(root.join(PROJECT_LOCK_FILE)).expect("load").expect("found");
+        assert_eq!(loaded.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("22.11.0"));
+    }
+
     proptest! {
         #[test]
         fn merge_over_prefers_local_values(
