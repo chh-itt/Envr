@@ -447,6 +447,19 @@ pub fn load_project_lock(path: impl AsRef<Path>) -> EnvrResult<Option<ProjectCon
     parse_project_config(path).map(Some)
 }
 
+pub fn project_lock_is_fresh(
+    project: Option<&ProjectConfig>,
+    lock_path: impl AsRef<Path>,
+) -> EnvrResult<bool> {
+    let Some(project) = project else {
+        return Ok(false);
+    };
+    let Some(lock_cfg) = load_project_lock(lock_path)? else {
+        return Ok(false);
+    };
+    Ok(project == &lock_cfg)
+}
+
 pub fn load_project_lock_any(
     dir: impl AsRef<Path>,
 ) -> EnvrResult<Option<(ProjectConfig, PathBuf)>> {

@@ -9,7 +9,8 @@ use crate::output::{self, fmt_template};
 use envr_config::env_context::load_settings_cached;
 use envr_config::project_config::{
     EnvLockFile, ProjectConfigLocation, RuntimeLockEntry, load_project_lock,
-    project_lock_candidates, project_lock_exists, reset_project_config_load_cache,
+    project_lock_candidates, project_lock_exists, project_lock_is_fresh,
+    reset_project_config_load_cache,
 };
 use envr_core::runtime::service::RuntimeService;
 use envr_domain::runtime::{RemoteFilter, RuntimeKind, VersionSpec, parse_runtime_kind};
@@ -283,13 +284,7 @@ fn lock_status_json(
         )));
     };
 
-    let Some(lock_cfg) = load_project_lock(&lock_path)? else {
-        return Err(EnvrError::Validation(format!(
-            "lockfile {} is unreadable; run `envr project lock`",
-            lock_path.display()
-        )));
-    };
-    let fresh = session.project_config() == Some(&lock_cfg);
+    let fresh = project_lock_is_fresh(session.project_config(), &lock_path)?;
     if !fresh {
         return Err(EnvrError::Validation(format!(
             "lockfile {} is stale; run `envr project lock`",
