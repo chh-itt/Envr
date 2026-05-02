@@ -169,6 +169,7 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
             name: name.clone(),
             request: request.to_string(),
             resolved: resolved_version,
+            resolved_home: resolved.path.map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
             source: if resolved.candidate_count > 0 { "resolved".into() } else { "direct".into() },
             candidate_count: resolved.candidate_count,
         });

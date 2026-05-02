@@ -369,6 +369,8 @@ pub struct RuntimeLockEntry {
     pub request: String,
     pub resolved: String,
     #[serde(default)]
+    pub resolved_home: String,
+    #[serde(default)]
     pub source: String,
     #[serde(default)]
     pub candidate_count: usize,
