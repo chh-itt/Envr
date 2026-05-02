@@ -2083,6 +2083,36 @@ mod tests {
     }
 
     #[test]
+    fn pick_version_latest_prefers_highest_triple() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let v = tmp.path().join("versions");
+        fs::create_dir_all(v.join("19.9.9")).expect("d");
+        fs::create_dir_all(v.join("20.1.0")).expect("d");
+        fs::create_dir_all(v.join("20.10.0")).expect("d");
+        let resolution = resolve_version_home(&v, "latest").expect("resolve");
+        assert_eq!(resolution.selection_reason(), "highest installed version (latest)");
+        assert_eq!(resolution.candidate_count, 3);
+        assert!(resolution.path.as_ref().is_some_and(|p| p.ends_with("20.10.0")));
+    }
+
+    #[test]
+    fn pick_version_stable_and_lts_match_highest_available() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let v = tmp.path().join("versions");
+        fs::create_dir_all(v.join("18.17.0")).expect("d");
+        fs::create_dir_all(v.join("20.11.1")).expect("d");
+        fs::create_dir_all(v.join("22.11.0")).expect("d");
+        let stable = resolve_version_home(&v, "stable").expect("resolve stable");
+        let lts = resolve_version_home(&v, "lts").expect("resolve lts");
+        assert_eq!(stable.selection_reason(), "highest installed version (stable)");
+        assert_eq!(lts.selection_reason(), "highest installed version (lts)");
+        assert_eq!(stable.candidate_count, 3);
+        assert_eq!(lts.candidate_count, 3);
+        assert!(stable.path.as_ref().is_some_and(|p| p.ends_with("22.11.0")));
+        assert!(lts.path.as_ref().is_some_and(|p| p.ends_with("22.11.0")));
+    }
+
+    #[test]
     fn pick_version_exact_dir_name() {
         let tmp = tempfile::TempDir::new().expect("tmp");
         let v = tmp.path().join("versions");
