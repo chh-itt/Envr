@@ -151,6 +151,10 @@ mod tests {
             RequestKind::Alias
         );
         assert_eq!(
+            classify_request(Some("vlatest"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
             classify_request(Some("stable"), false).kind,
             RequestKind::Alias
         );
@@ -247,5 +251,12 @@ mod tests {
         assert_eq!(explain_request(&stable), "stable alias resolved by runtime policy");
         let lts = classify_request(Some("lts"), false);
         assert_eq!(explain_request(&lts), "lts alias resolved by runtime policy");
+    }
+
+    #[test]
+    fn normalizes_and_classifies_version_requests() {
+        let r = classify_request(Some("v22.11.0"), false);
+        assert_eq!(r.kind, RequestKind::Exact);
+        assert_eq!(r.normalized.as_deref(), Some("22.11.0"));
     }
 }
