@@ -5,7 +5,7 @@ use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
-use envr_config::project_config::load_project_lock;
+use envr_config::project_config::project_lock_is_fresh;
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::pick_version_home;
@@ -67,12 +67,7 @@ pub(crate) fn run_inner(
         .project
         .as_ref()
         .and_then(|(_, loc)| loc.lock_file.as_ref())
-        .map(|lock_path| {
-            load_project_lock(lock_path)
-                .ok()
-                .flatten()
-                .is_some_and(|lock_cfg| lock_cfg == *cfg)
-        })
+        .map(|lock_path| project_lock_is_fresh(Some(cfg), lock_path).unwrap_or(false))
         .unwrap_or(false);
 
     let mut problems = Vec::new();
