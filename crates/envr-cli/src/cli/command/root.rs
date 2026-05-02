@@ -237,6 +237,17 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Read `.tool-versions` or `.envr.toml` and render a normalized `ProjectConfig` view
+    Read {
+        /// Source file. For `--format tool-versions`, defaults to `.tool-versions`.
+        #[arg(value_name = "FILE")]
+        file: Option<PathBuf>,
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        path: PathBuf,
+        /// Input config format (`envr-toml` or `tool-versions`). Defaults to inferring from the file name.
+        #[arg(long = "config-format", value_name = "FORMAT", default_value = "auto")]
+        format: String,
+    },
     /// Print merged on-disk project config (base + local, no profile overlay) as TOML or supported external format
     Export {
         #[arg(long, value_name = "DIR", default_value = ".")]

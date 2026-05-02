@@ -32,6 +32,7 @@ mod help_cmd;
 mod hook_cmd;
 mod import_export;
 mod init;
+mod read_cmd;
 mod install;
 mod list;
 mod profile_cmd;
