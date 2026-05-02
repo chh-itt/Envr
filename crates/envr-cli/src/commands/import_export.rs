@@ -146,6 +146,7 @@ pub(crate) fn export_run_inner(
     };
 
     if let Some(out_path) = output {
+        let out_path = if out_path.is_absolute() { out_path } else { path.join(out_path) };
         fs::write(&out_path, &rendered)?;
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
