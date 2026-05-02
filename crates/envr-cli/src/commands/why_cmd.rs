@@ -433,6 +433,15 @@ pub(crate) fn run_inner(
                         normalized
                     );
                 }
+                println!(
+                    "{} {}",
+                    envr_core::i18n::tr_key(
+                        "cli.why.request_explanation",
+                        "请求说明：",
+                        "Request explanation:",
+                    ),
+                    explain_request(&request)
+                );
                 if let Some(project) = &project_json {
                     if let Some(runtimes) = project.get("runtimes").and_then(|v| v.as_array()) {
                         if !runtimes.is_empty() {
