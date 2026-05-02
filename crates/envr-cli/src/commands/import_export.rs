@@ -489,4 +489,10 @@ nodejs 22.11.0
         assert!(matches!(format, ImportExportFormat::ToolVersions));
         assert_eq!(default_import_file(ImportExportFormat::ToolVersions), PathBuf::from(".tool-versions"));
     }
+
+    #[test]
+    fn parse_import_format_accepts_asdf_alias() {
+        assert!(matches!(parse_import_format("asdf", None), Ok(ImportExportFormat::ToolVersions)));
+        assert!(matches!(parse_export_format("asdf"), Ok(ImportExportFormat::ToolVersions)));
+    }
 }
