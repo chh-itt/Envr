@@ -2083,6 +2083,17 @@ mod tests {
     }
 
     #[test]
+    fn pick_version_major_minor_prefers_latest_patch() {
+        let tmp = tempfile::TempDir::new().expect("tmp");
+        let v = tmp.path().join("versions");
+        fs::create_dir_all(v.join("22.10.0")).expect("d");
+        fs::create_dir_all(v.join("22.10.1")).expect("d");
+        fs::create_dir_all(v.join("22.10.9")).expect("d");
+        let p = pick_version_home(&v, "22.10").expect("pick");
+        assert!(p.ends_with("22.10.9"));
+    }
+
+    #[test]
     fn pick_version_latest_prefers_highest_triple() {
         let tmp = tempfile::TempDir::new().expect("tmp");
         let v = tmp.path().join("versions");
