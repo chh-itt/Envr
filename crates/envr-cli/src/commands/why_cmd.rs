@@ -168,6 +168,7 @@ pub(crate) fn run_inner(
         "request_kind": request.kind_str(),
         "request_value": request.raw,
         "request_normalized": request.normalized,
+        "request_alias": request.alias,
         "resolution_reason": if spec_deref.is_some() {
             explain_request(&request)
         } else if pin.is_some() {
@@ -429,6 +430,17 @@ pub(crate) fn run_inner(
                             "Normalized request:",
                         ),
                         normalized
+                    );
+                }
+                if let Some(alias) = request.alias.as_deref() {
+                    println!(
+                        "{} {}",
+                        envr_core::i18n::tr_key(
+                            "cli.why.request_alias",
+                            "请求别名：",
+                            "Request alias:",
+                        ),
+                        alias
                     );
                 }
                 if let Some(project) = &project_json {

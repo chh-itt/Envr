@@ -174,6 +174,7 @@ fn why_json_reports_tool_versions_compat_resolution() {
     assert_eq!(v["data"]["resolution"], "tool_versions_compat", "{v}");
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
     assert_eq!(v["data"]["request_normalized"], Value::Null, "{v}");
+    assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
     assert!(
         v["data"]["project"]["compat_asdf_names"]
             .as_array()
@@ -208,6 +209,7 @@ fn why_json_reports_version_request_normalization() {
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
     assert_eq!(v["data"]["request_normalized"], "22.11.0", "{v}");
     assert_eq!(v["data"]["resolved_version"], "22.11.0", "{v}");
+    assert_eq!(v["data"]["request_alias"], "latest", "{v}");
 }
 
 #[test]
