@@ -214,6 +214,7 @@ version = "22.11.0"
     let lock_text = fs::read_to_string(&lock_path).expect("read lockfile");
     assert!(lock_text.contains("[project.runtimes.node]"), "unexpected lockfile:\n{lock_text}");
     assert!(lock_text.contains("version = \"22.11.0\""), "unexpected lockfile:\n{lock_text}");
+    assert!(lock_text.contains("resolved_home ="), "unexpected lockfile:\n{lock_text}");
 
     Command::cargo_bin("envr")
         .expect("envr")
