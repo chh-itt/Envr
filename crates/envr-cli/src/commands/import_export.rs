@@ -27,6 +27,7 @@ pub(crate) fn import_run_inner(
     path: PathBuf,
     format: String,
     dry_run: bool,
+    force: bool,
 ) -> EnvrResult<CliExit> {
     let format = parse_import_format(&format, file.as_deref())?;
     let file = file.unwrap_or_else(|| default_import_file(format));
@@ -42,20 +43,27 @@ pub(crate) fn import_run_inner(
     }
 
     let dest = path.join(PROJECT_CONFIG_FILE);
-    let mut merged = if dest.is_file() {
-        parse_project_config(&dest)?
+    let existing = if dest.is_file() {
+        Some(parse_project_config(&dest)?)
     } else {
-        ProjectConfig::default()
+        None
     };
     let (imported, import_warnings) = match format {
         ImportExportFormat::EnvrToml => (parse_project_config(&file)?, Vec::new()),
         ImportExportFormat::ToolVersions => parse_tool_versions_file(&file)?,
     };
-    merged.runtimes.extend(imported.runtimes);
-    merged.compat.asdf.names.extend(imported.compat.asdf.names);
-    merged.env.extend(imported.env);
-    merged.scripts.extend(imported.scripts);
-    merged.profiles.extend(imported.profiles);
+    let merged = if force || existing.is_none() {
+        imported
+    } else {
+        let mut merged = existing.expect("checked is_some");
+        merged.runtimes.extend(imported.runtimes);
+        merged.compat.asdf.names.extend(imported.compat.asdf.names);
+        merged.env.extend(imported.env);
+        merged.scripts.extend(imported.scripts);
+        merged.profiles.extend(imported.profiles);
+        merged.extends.extend(imported.extends);
+        merged
+    };
 
     let rendered = toml::to_string_pretty(&merged).map_err(|e| {
         EnvrError::with_source(ErrorCode::Config, "serialize project config toml", e)
@@ -70,6 +78,7 @@ pub(crate) fn import_run_inner(
         "source": file.to_string_lossy(),
         "format": format.label(),
         "dry_run": dry_run,
+        "force": force,
         "warnings": import_warnings,
         "toml": rendered,
     });
@@ -85,13 +94,14 @@ pub(crate) fn import_run_inner(
                         println!();
                     }
                 } else {
+                    let verb = if force { "已覆盖" } else { "已合并到" };
                     println!(
                         "{}",
                         fmt_template(
                             &envr_core::i18n::tr_key(
                                 "cli.import.merged",
-                                "已合并到 {path}",
-                                "merged into {path}",
+                                verb,
+                                if force { "overwritten at {path}" } else { "merged into {path}" },
                             ),
                             &[("path", &dest.display().to_string())],
                         )

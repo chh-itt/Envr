@@ -88,8 +88,9 @@ pub(super) fn route(command: Command, global: &GlobalArgs) -> CommandOutcome {
             path,
             format,
             dry_run,
+            force,
         } => ok!(import_export::import_run_inner(
-            global, file, path, format, dry_run,
+            global, file, path, format, dry_run, force,
         )),
         Command::Export {
             path,

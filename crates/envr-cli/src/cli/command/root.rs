@@ -233,6 +233,9 @@ pub enum Command {
         /// Print what would be written without modifying `.envr.toml`.
         #[arg(long)]
         dry_run: bool,
+        /// Overwrite an existing `.envr.toml` instead of merging into it.
+        #[arg(long)]
+        force: bool,
     },
     /// Print merged on-disk project config (base + local, no profile overlay) as TOML or supported external format
     Export {
