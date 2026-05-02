@@ -5,6 +5,7 @@ use crate::cli::GlobalArgs;
 use crate::commands::common;
 use crate::output::{self, fmt_template};
 
+use envr_config::project_config::load_project_lock;
 use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::pick_version_home;
@@ -62,6 +63,17 @@ pub(crate) fn run_inner(
     };
 
     let runtime_root = common::session_runtime_root()?;
+    let lock_is_fresh = session
+        .project
+        .as_ref()
+        .and_then(|(_, loc)| loc.lock_file.as_ref())
+        .map(|lock_path| {
+            load_project_lock(lock_path)
+                .ok()
+                .flatten()
+                .is_some_and(|lock_cfg| lock_cfg == *cfg)
+        })
+        .unwrap_or(false);
 
     let mut problems = Vec::new();
     for (key, rt) in &cfg.runtimes {
@@ -99,6 +111,7 @@ pub(crate) fn run_inner(
                 "path": p.to_string_lossy(),
                 "version": 1,
                 "matched": true,
+                "fresh": lock_is_fresh,
             })),
             "issues": problems,
             "github_annotations": github_annotations,
@@ -144,6 +157,7 @@ pub(crate) fn run_inner(
             "path": p.to_string_lossy(),
             "version": 1,
             "matched": true,
+            "fresh": lock_is_fresh,
         })),
         "pinned_runtimes": cfg.runtimes.len(),
         "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
