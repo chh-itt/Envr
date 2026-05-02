@@ -561,35 +561,11 @@ fn validate_inner(
             &[("path", &path.display().to_string())],
         )));
     };
-    if locked {
-        let lock_result = session
-            .project
-            .as_ref()
-            .and_then(|(_, loc)| loc.lock_file.clone())
-            .or_else(|| {
-                project_lock_candidates(&session.ctx.working_dir)
-                    .into_iter()
-                    .find(|p| p.is_file())
-            });
-        let Some(lock_path) = lock_result else {
-            return Err(EnvrError::Validation(format!(
-                "no lockfile found under {}; run `envr project lock`",
-                session.ctx.working_dir.display()
-            )));
-        };
-        let Some(lock_cfg) = envr_config::project_config::load_project_lock(&lock_path)? else {
-            return Err(EnvrError::Validation(format!(
-                "lockfile {} is unreadable; run `envr project lock`",
-                lock_path.display()
-            )));
-        };
-        if cfg != &lock_cfg {
-            return Err(EnvrError::Validation(format!(
-                "lockfile {} is stale; run `envr project lock`",
-                lock_path.display()
-            )));
-        }
-    }
+    let lock_status = if locked {
+        Some(lock_status_json(&session, true)?)
+    } else {
+        lock_status_json(&session, false)?
+    };
 
     let runtime_root = common::session_runtime_root()?;
 
@@ -675,6 +651,7 @@ fn validate_inner(
             "remote_warnings": remote_warnings,
             "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
             "compat_asdf_names": cfg.compat.asdf.names.clone(),
+            "lock_status": lock_status,
         });
         data = output::with_next_steps(data, next_steps_for_project_validate_failure());
         let code = output::emit_failure_envelope(
@@ -710,6 +687,7 @@ fn validate_inner(
         "check_remote": check_remote,
         "project_runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
         "compat_asdf_names": cfg.compat.asdf.names.clone(),
+        "lock_status": lock_status,
     });
     data = output::with_next_steps(data, next_steps_for_project_validate_ok(check_remote));
     let root_s = loc.dir.display().to_string();
