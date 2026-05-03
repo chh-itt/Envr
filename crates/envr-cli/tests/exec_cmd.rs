@@ -17,6 +17,14 @@ fn prepare_version_marker(root: &std::path::Path, lang: &str) {
         .expect("write current marker");
 }
 
+fn child_command_args() -> Vec<&'static str> {
+    if cfg!(windows) {
+        vec!["cmd", "/C", "echo", "ok"]
+    } else {
+        vec!["sh", "-c", "echo ok"]
+    }
+}
+
 #[test]
 fn exec_json_reports_exec_run_envelope_fields() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -34,9 +42,8 @@ version = "22.11.0"
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args([
-            "--format", "json", "exec", "--lang", "node", "--", "cmd", "/C", "echo", "ok",
-        ])
+        .args(["--format", "json", "exec", "--lang", "node", "--"])
+        .args(child_command_args())
         .output()
         .expect("run");
 
@@ -91,7 +98,8 @@ version = "22.11.0"
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args(["--format", "json", "run", "cmd", "/C", "echo", "ok"])
+        .args(["--format", "json", "run"])
+        .args(child_command_args())
         .output()
         .expect("run");
 
