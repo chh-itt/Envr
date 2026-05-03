@@ -1001,6 +1001,27 @@ static HELP_BY_PATH: &[CmdHelpSpec] = &[
         ],
     },
     CmdHelpSpec {
+        path: &["read"],
+        about: I18n(
+            "cli.help.cmd.read",
+            "读取 `.tool-versions` 或 `.envr.toml` 并输出规范化的 `ProjectConfig` 视图",
+            "Read `.tool-versions` or `.envr.toml` and render a normalized `ProjectConfig` view",
+        ),
+        after_long_help: None,
+        args: &[
+            ArgHelpSpec {
+                id: "file",
+                help: I18n("cli.help.arg.file", "源文件", "Source file"),
+                long_help: None,
+            },
+            ArgHelpSpec {
+                id: "path",
+                help: I18n("cli.help.arg.workdir", "工作目录", "Working directory"),
+                long_help: None,
+            },
+        ],
+    },
+    CmdHelpSpec {
         path: &["export"],
         about: I18n(
             "cli.help.cmd.export",

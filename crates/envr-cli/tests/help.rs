@@ -67,9 +67,6 @@ fn help_is_readable_and_lists_l1_commands() {
         "shim",
         "cache",
         "bundle",
-        "hook status",
-        "hook doctor",
-        "hook powershell",
     ] {
         assert!(
             out.contains(sub),
@@ -126,4 +123,32 @@ fn exec_and_run_help_mention_install_if_missing() {
             "{sub} help should list install flags:\n{out}"
         );
     }
+}
+
+#[test]
+fn hook_status_and_doctor_report_profile_details() {
+    let dir = tempdir().expect("tempdir");
+    let cfg = dir.path().join("config");
+    fs::create_dir_all(&cfg).expect("mkdir config");
+    fs::write(cfg.join("settings.toml"), "[i18n]\nlocale = \"en_us\"\n").expect("write settings");
+    fs::write(dir.path().join(".envr.toml"), "[env]\nFOO = \"bar\"\n").expect("write project");
+
+    let mut status = Command::cargo_bin("envr").expect("envr binary");
+    let status = status
+        .env("ENVR_ROOT", dir.path())
+        .args(["hook", "status"])
+        .assert()
+        .success();
+    let out = String::from_utf8_lossy(&status.get_output().stdout);
+    assert!(out.contains("selected profile root"), "expected hook status to mention selected profile root:\n{out}");
+
+    let mut doctor = Command::cargo_bin("envr").expect("envr binary");
+    let doctor = doctor
+        .env("ENVR_ROOT", dir.path())
+        .env("PROFILE", dir.path().join("PowerShell_profile.ps1"))
+        .args(["hook", "doctor", "powershell"])
+        .assert()
+        .success();
+    let out = String::from_utf8_lossy(&doctor.get_output().stdout);
+    assert!(out.contains("profile root") && out.contains("powershell profile"), "expected hook doctor to mention powershell profile:\n{out}");
 }
