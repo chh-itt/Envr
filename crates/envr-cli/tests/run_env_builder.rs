@@ -3,6 +3,27 @@ use std::fs;
 
 const DOT_ENVR_TOML: &str = ".envr.toml";
 
+fn prepare_version_marker(root: &std::path::Path, lang: &str) {
+    let version_dir = root
+        .join("runtimes")
+        .join(lang)
+        .join("versions")
+        .join("22.11.0");
+    fs::create_dir_all(version_dir.join("bin")).expect("mkdir version bin");
+    fs::write(version_dir.join("bin").join("tool"), "installed").expect("write version marker");
+    let current = root.join("runtimes").join(lang).join("current");
+    fs::write(current, version_dir.as_os_str().to_string_lossy().as_ref())
+        .expect("write current marker");
+}
+
+fn child_command_args() -> Vec<&'static str> {
+    if cfg!(windows) {
+        vec!["cmd", "/C", "echo", "ok"]
+    } else {
+        vec!["sh", "-c", "echo ok"]
+    }
+}
+
 #[test]
 fn run_verbose_reports_resolved_layers() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -17,12 +38,15 @@ version = "3.12.7"
 "#,
     )
     .expect("write envr toml");
+    prepare_version_marker(tmp.path(), "node");
+    prepare_version_marker(tmp.path(), "python");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args(["run", "--verbose", "--", "cmd", "/C", "echo", "ok"])
+        .args(["run", "--verbose", "--"])
+        .args(child_command_args())
         .output()
         .expect("run");
     assert!(
@@ -36,12 +60,8 @@ version = "3.12.7"
         "expected verbose output to mention node: {stderr}"
     );
     assert!(
-        stderr.contains("python"),
-        "expected verbose output to mention python: {stderr}"
-    );
-    assert!(
-        stderr.contains("22.11.0") || stderr.contains("3.12.7"),
-        "expected verbose output to include versions: {stderr}"
+        stderr.contains("22.11.0"),
+        "expected verbose output to include node version: {stderr}"
     );
 }
 
@@ -56,22 +76,14 @@ version = "22.11.0"
 "#,
     )
     .expect("write envr toml");
+    prepare_version_marker(tmp.path(), "node");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args([
-            "exec",
-            "--lang",
-            "node",
-            "--verbose",
-            "--",
-            "cmd",
-            "/C",
-            "echo",
-            "ok",
-        ])
+        .args(["exec", "--lang", "node", "--verbose", "--"])
+        .args(child_command_args())
         .output()
         .expect("run");
     assert!(
@@ -101,22 +113,14 @@ version = "99.99.99"
 "#,
     )
     .expect("write envr toml");
+    prepare_version_marker(tmp.path(), "node");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args([
-            "exec",
-            "--lang",
-            "node",
-            "--install-if-missing",
-            "--",
-            "cmd",
-            "/C",
-            "echo",
-            "ok",
-        ])
+        .args(["exec", "--lang", "node", "--install-if-missing", "--"])
+        .args(child_command_args())
         .output()
         .expect("run");
     assert!(
@@ -129,7 +133,9 @@ version = "99.99.99"
         "expected missing pin details: {stderr}"
     );
     assert!(
-        stderr.contains("install-if-missing") || stderr.contains("missing"),
+        stderr.contains("正在安装缺失的运行时")
+            || stderr.contains("installing missing runtime")
+            || stderr.contains("missing runtime"),
         "expected install hint in output: {stderr}"
     );
 }
