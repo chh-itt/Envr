@@ -315,11 +315,10 @@ fn hook_keys_reports_restore_keys() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let keys: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert!(keys.iter().any(|k| *k == "PATH"), "{stdout}");
-    assert!(keys.iter().any(|k| *k == "FOO"), "{stdout}");
+    assert!(keys.contains(&"PATH"), "{stdout}");
+    assert!(keys.contains(&"FOO"), "{stdout}");
     assert!(
-        keys.iter()
-            .any(|k| matches!(*k, "JAVA_HOME" | "ERLANG_HOME")),
+        keys.iter().any(|k| matches!(*k, "JAVA_HOME" | "ERLANG_HOME")),
         "expected common restore keys in output: {stdout}"
     );
 }
