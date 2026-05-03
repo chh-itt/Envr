@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://envr.dev/schemas/cli/data/failure_tool_not_found.json",
+  "title": "tool not found envelope.data (code: tool_not_found)",
+  "type": ["object", "null"],
+  "additionalProperties": true
+}

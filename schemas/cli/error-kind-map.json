@@ -24,6 +24,7 @@
     "aborted": "runtime",
     "config": "config",
     "project_sync_pending": "config",
+    "tool_not_found": "validation",
     "platform": "platform"
   }
 }

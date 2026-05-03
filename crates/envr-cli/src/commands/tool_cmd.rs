@@ -52,13 +52,18 @@ fn list_inner(g: &GlobalArgs) -> EnvrResult<CliExit> {
             "host_bound_count": host_bound_count,
         }
     });
-    Ok(output::emit_ok(g, "tool_listed", data, || {
-        if crate::CliUxPolicy::from_global(g).human_text_primary() {
-            println!("managed tools: {}", tools.len());
-            println!("remote latest capable: {}", remote_latest_count);
-            println!("path proxy capable: {}", path_proxy_count);
-        }
-    }))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::TOOL_LISTED,
+        data,
+        || {
+            if crate::CliUxPolicy::from_global(g).human_text_primary() {
+                println!("managed tools: {}", tools.len());
+                println!("remote latest capable: {}", remote_latest_count);
+                println!("path proxy capable: {}", path_proxy_count);
+            }
+        },
+    ))
 }
 
 fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
@@ -66,7 +71,7 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
         let data = json!({ "name": name, "resolved": null });
         return Ok(output::emit_failure_envelope(
             g,
-            "tool_not_found",
+            crate::codes::err::TOOL_NOT_FOUND,
             "managed tool not found",
             data,
             &[],
@@ -84,7 +89,12 @@ fn which_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
         "descriptor_name": runtime.key,
         "descriptor_label": runtime.label_en,
     });
-    Ok(output::emit_ok(g, "tool_resolved", data, || {}))
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::TOOL_RESOLVED,
+        data,
+        || {},
+    ))
 }
 
 fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
@@ -106,17 +116,22 @@ fn status_inner(g: &GlobalArgs, name: String) -> EnvrResult<CliExit> {
         "descriptor_name": runtime.key,
         "descriptor_label": runtime.label_en,
     });
-    Ok(output::emit_ok(g, "tool_status", data, || {
-        if crate::CliUxPolicy::from_global(g).human_text_primary() {
-            println!("managed tool: {}", desc.key);
-            println!("label: {}", desc.label_en);
-            println!("runtime kind: {:?}", desc.kind);
-            println!("remote latest: {}", desc.supports_remote_latest);
-            println!("path proxy: {}", desc.supports_path_proxy);
-            if let Some(host) = desc.host_runtime {
-                println!("host runtime: {:?}", host);
+    Ok(output::emit_ok(
+        g,
+        crate::codes::ok::TOOL_STATUS,
+        data,
+        || {
+            if crate::CliUxPolicy::from_global(g).human_text_primary() {
+                println!("managed tool: {}", desc.key);
+                println!("label: {}", desc.label_en);
+                println!("runtime kind: {:?}", desc.kind);
+                println!("remote latest: {}", desc.supports_remote_latest);
+                println!("path proxy: {}", desc.supports_path_proxy);
+                if let Some(host) = desc.host_runtime {
+                    println!("host runtime: {:?}", host);
+                }
+                println!("descriptor name: {}", runtime.key);
             }
-            println!("descriptor name: {}", runtime.key);
-        }
-    }))
+        },
+    ))
 }

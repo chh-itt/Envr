@@ -70,6 +70,7 @@
     "project_sync_pending",
     "project_validate_failed",
     "shell_exit",
+    "tool_not_found",
     "validation"
   ]
 }

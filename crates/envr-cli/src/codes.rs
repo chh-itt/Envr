@@ -30,6 +30,9 @@ pub mod ok {
     pub const PROJECT_PIN_ADDED: &str = "project_pin_added";
     pub const PROJECT_SYNCED: &str = "project_synced";
     pub const PROJECT_VALIDATED: &str = "project_validated";
+    pub const TOOL_LISTED: &str = "tool_listed";
+    pub const TOOL_RESOLVED: &str = "tool_resolved";
+    pub const TOOL_STATUS: &str = "tool_status";
     pub const CONFIG_IMPORTED: &str = "config_imported";
     pub const CONFIG_EXPORTED: &str = "config_exported";
     pub const PROFILES_LIST: &str = "profiles_list";
@@ -68,6 +71,7 @@ pub mod err {
     pub const CHILD_EXIT: &str = "child_exit";
     pub const DIAGNOSTICS_EXPORT_FAILED: &str = "diagnostics_export_failed";
     pub const PROJECT_CHECK_FAILED: &str = "project_check_failed";
+    pub const TOOL_NOT_FOUND: &str = "tool_not_found";
     pub const PROJECT_SYNC_PENDING: &str = "project_sync_pending";
     pub const PROJECT_VALIDATE_FAILED: &str = "project_validate_failed";
     pub const SHELL_EXIT: &str = "shell_exit";
