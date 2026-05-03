@@ -616,14 +616,13 @@ pub fn resolve_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<Versi
         )));
     }
 
-    let constraint = SpecConstraint::parse(spec)?;
     let exact = versions_dir.join(spec);
-    if exact.is_dir() && constraint.is_direct_match() {
+    if exact.is_dir() {
         return Ok(VersionResolution {
             path: Some(exact.clone()),
             best_triple: None,
             spec: spec.to_string(),
-            request: constraint,
+            request: SpecConstraint::parse(spec).unwrap_or(SpecConstraint::Latest),
             candidate_count: 1,
             resolved_version: exact
                 .file_name()
@@ -631,6 +630,8 @@ pub fn resolve_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<Versi
                 .map(|s| s.to_string()),
         });
     }
+
+    let constraint = SpecConstraint::parse(spec)?;
 
     let mut best: Option<((u32, u32, u32), PathBuf)> = None;
     let mut candidate_count = 0usize;
@@ -801,10 +802,6 @@ impl SpecConstraint {
             SpecConstraint::Triple(m, n, s) => triple == (m, n, s),
             SpecConstraint::Latest | SpecConstraint::Stable | SpecConstraint::Lts => true,
         }
-    }
-
-    fn is_direct_match(self) -> bool {
-        matches!(self, SpecConstraint::Triple(_, _, _))
     }
 }
 
