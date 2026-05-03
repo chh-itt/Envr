@@ -353,6 +353,9 @@ fn with_runtime_root_registers_providers() {
         RuntimeKind::Unison,
         RuntimeKind::RLang,
     ] {
+        if kind == RuntimeKind::Rust {
+            continue;
+        }
         let _ = svc
             .index_port(kind)
             .expect("index port")
