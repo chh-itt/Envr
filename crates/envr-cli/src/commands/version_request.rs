@@ -96,9 +96,8 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
         .chars()
         .next()
         .is_some_and(|c| c.is_ascii_digit())
+        || has_pin
     {
-        RequestKind::Exact
-    } else if has_pin {
         RequestKind::Exact
     } else {
         RequestKind::Unknown
