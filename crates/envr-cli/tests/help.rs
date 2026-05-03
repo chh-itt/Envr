@@ -68,10 +68,7 @@ fn help_is_readable_and_lists_l1_commands() {
         "cache",
         "bundle",
     ] {
-        assert!(
-            out.contains(sub),
-            "help output should mention `{sub}`:\n{out}"
-        );
+        assert!(out.contains(sub), "help output should mention `{sub}`:\n{out}");
     }
 }
 
@@ -91,10 +88,7 @@ fn completion_bash_writes_script() {
     let mut cmd = Command::cargo_bin("envr").expect("envr binary");
     let assert = cmd.args(["completion", "bash"]).assert().success();
     let out = String::from_utf8_lossy(&assert.get_output().stdout);
-    assert!(
-        out.contains("envr"),
-        "bash completion should reference envr:\n{out}"
-    );
+    assert!(out.contains("envr"), "bash completion should reference envr:\n{out}");
     assert!(
         out.contains("help shortcuts"),
         "completion script should point at argv shorthands:\n{out}"
@@ -106,10 +100,7 @@ fn help_shortcuts_lists_preprocess_tokens() {
     let mut cmd = Command::cargo_bin("envr").expect("envr binary");
     let assert = cmd.args(["help", "shortcuts"]).assert().success();
     let out = String::from_utf8_lossy(&assert.get_output().stdout);
-    assert!(
-        out.contains("add") && out.contains("project add"),
-        "expected shorthand table:\n{out}"
-    );
+    assert!(out.contains("add") && out.contains("project add"), "expected shorthand table:\n{out}");
 }
 
 #[test]
@@ -126,6 +117,16 @@ fn exec_and_run_help_mention_install_if_missing() {
 }
 
 #[test]
+fn hook_help_lists_status_doctor_and_keys() {
+    let mut cmd = Command::cargo_bin("envr").expect("envr binary");
+    let assert = cmd.args(["hook", "--help"]).assert().success();
+    let out = String::from_utf8_lossy(&assert.get_output().stdout);
+    assert!(out.contains("status"), "hook help should mention status:\n{out}");
+    assert!(out.contains("doctor"), "hook help should mention doctor:\n{out}");
+    assert!(out.contains("keys"), "hook help should mention keys:\n{out}");
+}
+
+#[test]
 fn hook_status_and_doctor_report_profile_details() {
     let dir = tempdir().expect("tempdir");
     let cfg = dir.path().join("config");
@@ -136,7 +137,7 @@ fn hook_status_and_doctor_report_profile_details() {
     let mut status = Command::cargo_bin("envr").expect("envr binary");
     let status = status
         .env("ENVR_ROOT", dir.path())
-        .args(["hook", "status"])
+        .args(["hook", "status", "--path", dir.path().to_string_lossy().as_ref()])
         .assert()
         .success();
     let out = String::from_utf8_lossy(&status.get_output().stdout);
@@ -146,7 +147,7 @@ fn hook_status_and_doctor_report_profile_details() {
     let doctor = doctor
         .env("ENVR_ROOT", dir.path())
         .env("PROFILE", dir.path().join("PowerShell_profile.ps1"))
-        .args(["hook", "doctor", "powershell"])
+        .args(["hook", "doctor", "powershell", "--path", dir.path().to_string_lossy().as_ref()])
         .assert()
         .success();
     let out = String::from_utf8_lossy(&doctor.get_output().stdout);

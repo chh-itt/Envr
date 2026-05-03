@@ -84,7 +84,6 @@ pub(crate) fn run_inner(
             .filter(|s| !s.is_empty())
     });
 
-    let request = classify_request(spec_deref, pin.is_some());
     let lock_state = project_lock_state_json(&session);
     let has_lock = lock_state.is_some();
     let compat_name = loaded.as_ref().and_then(|(c, _)| {
@@ -94,21 +93,23 @@ pub(crate) fn run_inner(
             .iter()
             .find_map(|(asdf_name, envr_name)| (envr_name == &lang).then_some(asdf_name.clone()))
     });
+    let request_spec = spec_deref.or(pin.as_deref());
+    let request = classify_request(request_spec, pin.is_some());
     let resolution_source = if spec_deref.is_some() {
         "spec_override"
-    } else if pin.is_some() {
-        "project_pin"
     } else if compat_name.is_some() {
         "tool_versions_compat"
+    } else if pin.is_some() {
+        "project_pin"
     } else {
         "global_current"
     };
     let request_source = if spec_deref.is_some() {
         "cli"
-    } else if pin.is_some() {
-        "project"
     } else if compat_name.is_some() {
         "tool_versions_compat"
+    } else if pin.is_some() {
+        "project"
     } else {
         "global"
     };
@@ -174,7 +175,7 @@ pub(crate) fn run_inner(
         }),
         "request_source": request_source,
         "request_kind": request.kind_str(),
-        "request_value": request.raw,
+        "request_raw": request.raw,
         "request_normalized": request.normalized,
         "request_alias": request.alias,
         "request": json!({
@@ -186,10 +187,10 @@ pub(crate) fn run_inner(
         "request_value": format!("{:?}", request_value),
         "resolution_reason": if spec_deref.is_some() {
             explain_request(&request)
-        } else if pin.is_some() {
-            "resolved from project runtime pin"
         } else if compat_name.is_some() {
             "resolved via .tool-versions compatibility mapping"
+        } else if pin.is_some() {
+            "resolved from project runtime pin"
         } else {
             "resolved from global current runtime"
         },

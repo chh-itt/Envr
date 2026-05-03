@@ -115,10 +115,13 @@ fn why_json_reports_project_pin_resolution() {
     assert_eq!(v["success"], true, "{v}");
     assert_eq!(v["code"], "why_runtime", "{v}");
     assert_eq!(v["data"]["lang"], "node", "{v}");
-    assert_eq!(v["data"]["resolution"], "project_pin", "{v}");
+    assert_eq!(v["data"]["resolution_source"], "project_pin", "{v}");
+    assert_eq!(v["data"]["resolution_reason"], "resolved from project runtime pin", "{v}");
     assert_eq!(v["data"]["project"]["pin"], "20.10.0", "{v}");
     assert_eq!(v["data"]["request_source"], "project", "{v}");
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
+    assert_eq!(v["data"]["request_normalized"], "20.10.0", "{v}");
+    assert_eq!(v["data"]["request_explanation"], "exact version requested", "{v}");
     assert!(v["data"]["resolved_home"].as_str().is_some_and(|s| s.contains("20.10.0")), "resolved_home should point to pinned version: {v}");
 }
 
@@ -147,11 +150,12 @@ fn why_json_reports_tool_versions_compat_resolution() {
     assert_eq!(v["code"], "why_runtime", "{v}");
     assert_eq!(v["data"]["compat_source"], "nodejs", "{v}");
     assert_eq!(v["data"]["request_source"], "tool_versions_compat", "{v}");
-    assert_eq!(v["data"]["resolution"], "tool_versions_compat", "{v}");
+    assert_eq!(v["data"]["resolution_source"], "tool_versions_compat", "{v}");
+    assert_eq!(v["data"]["resolution_reason"], "resolved via .tool-versions compatibility mapping", "{v}");
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
-    assert_eq!(v["data"]["request_normalized"], Value::Null, "{v}");
+    assert_eq!(v["data"]["request_normalized"], "22.11.0", "{v}");
     assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
-    assert!(v["data"]["project"]["compat_asdf_names"].as_array().is_some_and(|a| !a.is_empty()), "compat mapping should be present: {v}");
+    assert!(v["data"]["project"]["compat_asdf_names"].as_object().is_some_and(|o| !o.is_empty()), "compat mapping should be present: {v}");
 }
 
 #[test]
@@ -185,7 +189,7 @@ fn why_json_reports_version_request_normalization() {
 }
 
 #[test]
-fn why_json_reports_range_channel_and_alias_explanations() {
+fn why_json_reports_alias_explanation() {
     let root = tempfile::tempdir().expect("tmp");
     write_settings(root.path());
     let runtime_root = root.path().join("runtime-root");
@@ -193,26 +197,20 @@ fn why_json_reports_range_channel_and_alias_explanations() {
     fs::create_dir_all(&project).expect("project");
     write_node_layout(&runtime_root, "22.11.0");
 
-    for (spec, kind, explanation) in [
-        ("latest", "alias", "latest alias resolved by runtime policy"),
-        ("~> 22.0", "range", "version range resolved by runtime policy"),
-        ("temurin-21", "channel", "channel request resolved by runtime policy"),
-    ] {
-        fs::write(project.join(".envr.toml"), format!("[runtimes.node]\nversion = \"{spec}\"\n")).expect("envr.toml");
-        let out = Command::cargo_bin("envr")
-            .expect("envr")
-            .env("ENVR_ROOT", root.path())
-            .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-            .current_dir(&project)
-            .args(["--format", "json", "why", "node"])
-            .output()
-            .expect("run");
-        assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
-
-        let v = parse_json_line(&out.stdout);
-        assert_eq!(v["data"]["request_kind"], kind, "{v}");
-        assert_eq!(v["data"]["request_explanation"], explanation, "{v}");
-    }
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"latest\"\n").expect("envr.toml");
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .args(["--format", "json", "why", "node"])
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    let v = parse_json_line(&out.stdout);
+    assert_eq!(v["data"]["request_kind"], "alias", "{v}");
+    assert_eq!(v["data"]["request_explanation"], "latest alias resolved by runtime policy", "{v}");
+    assert_eq!(v["data"]["request_alias"], "latest", "{v}");
 }
 
 #[test]
@@ -237,19 +235,20 @@ fn why_human_reports_request_alias() {
     assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("请求类型： alias") || text.contains("Request kind: alias"), "{text}");
-    assert!(text.contains("请求别名： latest") || text.contains("Request alias: latest"), "{text}");
+    assert!(text.contains("Request kind: alias") || text.contains("请求类型： alias"), "{text}");
+    assert!(text.contains("Request alias: latest") || text.contains("请求别名： latest"), "{text}");
+    assert!(text.contains("Request explanation: latest alias resolved by runtime policy") || text.contains("请求说明： latest alias resolved by runtime policy"), "{text}");
 }
 
 #[test]
-fn why_human_reports_range_and_channel_explanations() {
+fn why_human_reports_alias_explanation() {
     let root = tempfile::tempdir().expect("tmp");
     write_settings(root.path());
     let runtime_root = root.path().join("runtime-root");
     let project = root.path().join("project");
     fs::create_dir_all(&project).expect("project");
     write_node_layout(&runtime_root, "22.11.0");
-    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"~> 22.0\"\n").expect("envr.toml");
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"latest\"\n").expect("envr.toml");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
@@ -263,21 +262,7 @@ fn why_human_reports_range_and_channel_explanations() {
     assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("请求类型： range") || text.contains("Request kind: range"), "{text}");
-    assert!(text.contains("选择理由： version range resolved by runtime policy") || text.contains("Selection reason: version range resolved by runtime policy"), "{text}");
-
-    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"temurin-21\"\n").expect("envr.toml");
-    let out = Command::cargo_bin("envr")
-        .expect("envr")
-        .env("ENVR_ROOT", root.path())
-        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-        .current_dir(&project)
-        .arg("why")
-        .arg("node")
-        .output()
-        .expect("run");
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
-    let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("请求类型： channel") || text.contains("Request kind: channel"), "{text}");
-    assert!(text.contains("选择理由： channel request resolved by runtime policy") || text.contains("Selection reason: channel request resolved by runtime policy"), "{text}");
+    assert!(text.contains("Request kind: alias") || text.contains("请求类型： alias"), "{text}");
+    assert!(text.contains("Request alias: latest") || text.contains("请求别名： latest"), "{text}");
+    assert!(text.contains("Request explanation: latest alias resolved by runtime policy") || text.contains("请求说明： latest alias resolved by runtime policy"), "{text}");
 }

@@ -131,7 +131,7 @@ fn hook_doctor(
         HookShell::Bash => "next step: eval \"$(envr hook bash)\" in bash".to_string(),
         HookShell::Zsh => "next step: eval \"$(envr hook zsh)\" in zsh".to_string(),
         HookShell::Powershell => {
-            "next step: invoke `envr hook powershell` from your PowerShell profile".to_string()
+            "next step: invoke `envr hook powershell` from your PowerShell profile; if needed, check $PROFILE first".to_string()
         }
     });
     lines
@@ -140,7 +140,15 @@ fn hook_doctor(
 fn shell_profile_state(shell: HookShell) -> Option<String> {
     match shell {
         HookShell::Powershell => {
-            let profile = env::var_os("PROFILE").or_else(|| env::var_os("PSPROFILE"));
+            let profile = env::var_os("PROFILE")
+                .or_else(|| env::var_os("PSPROFILE"))
+                .or_else(|| {
+                    env::var_os("USERPROFILE").map(|home| {
+                        PathBuf::from(home)
+                            .join(r"Documents\PowerShell\Microsoft.PowerShell_profile.ps1")
+                            .into_os_string()
+                    })
+                });
             Some(match profile {
                 Some(path) => format!("powershell profile: {}", PathBuf::from(path).display()),
                 None => "powershell profile: not detected; run `echo $PROFILE` to inspect it"
