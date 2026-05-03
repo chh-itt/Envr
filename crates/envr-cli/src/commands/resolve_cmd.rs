@@ -5,8 +5,8 @@ use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
 use serde_json::json;
 
-use envr_domain::runtime::parse_runtime_kind;
 use envr_config::project_config::project_lock_is_fresh;
+use envr_domain::runtime::parse_runtime_kind;
 use envr_error::{EnvrError, EnvrResult};
 use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 
@@ -61,8 +61,13 @@ pub(crate) fn run_inner(
         .and_then(|c| c.runtimes.get(&lang))
         .and_then(|r| r.version.as_deref())
         .is_some();
-    let compat_name = cfg
-        .and_then(|c| c.compat.asdf.names.iter().find_map(|(asdf, envr)| (envr == &lang).then_some(asdf.clone())));
+    let compat_name = cfg.and_then(|c| {
+        c.compat
+            .asdf
+            .names
+            .iter()
+            .find_map(|(asdf, envr)| (envr == &lang).then_some(asdf.clone()))
+    });
     let override_nonempty = spec.as_ref().is_some_and(|s| !s.trim().is_empty());
     let source = if override_nonempty {
         "cli_override"
@@ -93,7 +98,11 @@ pub(crate) fn run_inner(
     let resolved_version = resolution
         .as_ref()
         .and_then(|r| r.resolved_version.clone())
-        .or_else(|| home.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .or_else(|| {
+            home.file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_default();
 
     let mut data = serde_json::json!({

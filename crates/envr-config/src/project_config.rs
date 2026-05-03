@@ -513,8 +513,9 @@ pub fn load_env_lock(path: impl AsRef<Path>) -> EnvrResult<Option<EnvLockFile>> 
         return Ok(None);
     }
     let content = fs::read_to_string(path).map_err(EnvrError::from)?;
-    let lock = toml::from_str::<EnvLockFile>(&content)
-        .map_err(|e| EnvrError::Config(format!("failed to parse env lock {}: {e}", path.display())))?;
+    let lock = toml::from_str::<EnvLockFile>(&content).map_err(|e| {
+        EnvrError::Config(format!("failed to parse env lock {}: {e}", path.display()))
+    })?;
     if lock.version != env_lock_file_version() {
         return Err(EnvrError::Config(format!(
             "unsupported env lock version {} in {}",
@@ -980,7 +981,9 @@ B = "${A}"
         let loaded = load_project_config_profile(root, None)
             .expect("load")
             .expect("found");
-        assert!(project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE)).expect("fresh"));
+        assert!(
+            project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE)).expect("fresh")
+        );
 
         let stale_lock = ProjectConfig {
             runtimes: [(
@@ -995,7 +998,10 @@ B = "${A}"
             ..Default::default()
         };
         save_project_lock(root.join(PROJECT_LOCK_FILE_ALT), &stale_lock).expect("save alt");
-        assert!(!project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE_ALT)).expect("stale"));
+        assert!(
+            !project_lock_is_fresh(Some(&loaded.0), root.join(PROJECT_LOCK_FILE_ALT))
+                .expect("stale")
+        );
     }
 
     #[test]
@@ -1008,15 +1014,26 @@ B = "${A}"
                 name: "node".into(),
                 request: "latest".into(),
                 resolved: "22.11.0".into(),
-                resolved_home: root.join("runtimes/node/versions/22.11.0").to_string_lossy().to_string(),
+                resolved_home: root
+                    .join("runtimes/node/versions/22.11.0")
+                    .to_string_lossy()
+                    .to_string(),
                 source: "resolved".into(),
                 candidate_count: 3,
             }],
         };
         save_env_lock(root.join(PROJECT_LOCK_FILE), &lock).expect("save env lock");
 
-        let loaded = load_project_lock(root.join(PROJECT_LOCK_FILE)).expect("load").expect("found");
-        assert_eq!(loaded.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("22.11.0"));
+        let loaded = load_project_lock(root.join(PROJECT_LOCK_FILE))
+            .expect("load")
+            .expect("found");
+        assert_eq!(
+            loaded
+                .runtimes
+                .get("node")
+                .and_then(|r| r.version.as_deref()),
+            Some("22.11.0")
+        );
     }
 
     proptest! {

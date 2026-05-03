@@ -625,7 +625,10 @@ pub fn resolve_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<Versi
             spec: spec.to_string(),
             request: constraint,
             candidate_count: 1,
-            resolved_version: exact.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()),
+            resolved_version: exact
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string()),
         });
     }
 
@@ -657,9 +660,12 @@ pub fn resolve_version_home(versions_dir: &Path, spec: &str) -> EnvrResult<Versi
         spec: spec.to_string(),
         request: constraint,
         candidate_count,
-        resolved_version: best
-            .as_ref()
-            .map(|(_, p)| p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string()),
+        resolved_version: best.as_ref().map(|(_, p)| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string()
+        }),
     })
 }
 
@@ -2100,9 +2106,17 @@ mod tests {
         fs::create_dir_all(v.join("20.1.0")).expect("d");
         fs::create_dir_all(v.join("20.10.0")).expect("d");
         let resolution = resolve_version_home(&v, "latest").expect("resolve");
-        assert_eq!(resolution.selection_reason(), "highest installed version (latest)");
+        assert_eq!(
+            resolution.selection_reason(),
+            "highest installed version (latest)"
+        );
         assert_eq!(resolution.candidate_count, 3);
-        assert!(resolution.path.as_ref().is_some_and(|p| p.ends_with("20.10.0")));
+        assert!(
+            resolution
+                .path
+                .as_ref()
+                .is_some_and(|p| p.ends_with("20.10.0"))
+        );
     }
 
     #[test]
@@ -2114,7 +2128,10 @@ mod tests {
         fs::create_dir_all(v.join("22.11.0")).expect("d");
         let stable = resolve_version_home(&v, "stable").expect("resolve stable");
         let lts = resolve_version_home(&v, "lts").expect("resolve lts");
-        assert_eq!(stable.selection_reason(), "highest installed version (stable)");
+        assert_eq!(
+            stable.selection_reason(),
+            "highest installed version (stable)"
+        );
         assert_eq!(lts.selection_reason(), "highest installed version (lts)");
         assert_eq!(stable.candidate_count, 3);
         assert_eq!(lts.candidate_count, 3);

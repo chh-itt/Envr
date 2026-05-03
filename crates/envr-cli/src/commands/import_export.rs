@@ -31,7 +31,11 @@ pub(crate) fn import_run_inner(
 ) -> EnvrResult<CliExit> {
     let format = parse_import_format(&format, file.as_deref())?;
     let file = file.unwrap_or_else(|| default_import_file(format));
-    let file = if file.is_absolute() { file } else { path.join(file) };
+    let file = if file.is_absolute() {
+        file
+    } else {
+        path.join(file)
+    };
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -104,7 +108,11 @@ pub(crate) fn import_run_inner(
                             &envr_core::i18n::tr_key(
                                 "cli.import.merged",
                                 verb,
-                                if force { "overwritten at {path}" } else { "merged into {path}" },
+                                if force {
+                                    "overwritten at {path}"
+                                } else {
+                                    "merged into {path}"
+                                },
                             ),
                             &[("path", &dest.display().to_string())],
                         )
@@ -146,7 +154,11 @@ pub(crate) fn export_run_inner(
     };
 
     if let Some(out_path) = output {
-        let out_path = if out_path.is_absolute() { out_path } else { path.join(out_path) };
+        let out_path = if out_path.is_absolute() {
+            out_path
+        } else {
+            path.join(out_path)
+        };
         fs::write(&out_path, &rendered)?;
         let data = json!({
             "config_dir": loc.dir.to_string_lossy(),
@@ -480,20 +492,38 @@ nodejs 22.11.0
         .expect("parse");
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("unknown asdf plugin"));
-        assert_eq!(cfg.runtimes.get("custom-tool").and_then(|r| r.version.as_deref()), Some("1.0.0"));
-        assert_eq!(cfg.runtimes.get("node").and_then(|r| r.version.as_deref()), Some("22.11.0"));
+        assert_eq!(
+            cfg.runtimes
+                .get("custom-tool")
+                .and_then(|r| r.version.as_deref()),
+            Some("1.0.0")
+        );
+        assert_eq!(
+            cfg.runtimes.get("node").and_then(|r| r.version.as_deref()),
+            Some("22.11.0")
+        );
     }
 
     #[test]
     fn import_joins_relative_source_file_with_target_path() {
-        let format = parse_import_format("auto", Some(Path::new(".tool-versions"))).expect("format");
+        let format =
+            parse_import_format("auto", Some(Path::new(".tool-versions"))).expect("format");
         assert!(matches!(format, ImportExportFormat::ToolVersions));
-        assert_eq!(default_import_file(ImportExportFormat::ToolVersions), PathBuf::from(".tool-versions"));
+        assert_eq!(
+            default_import_file(ImportExportFormat::ToolVersions),
+            PathBuf::from(".tool-versions")
+        );
     }
 
     #[test]
     fn parse_import_format_accepts_asdf_alias() {
-        assert!(matches!(parse_import_format("asdf", None), Ok(ImportExportFormat::ToolVersions)));
-        assert!(matches!(parse_export_format("asdf"), Ok(ImportExportFormat::ToolVersions)));
+        assert!(matches!(
+            parse_import_format("asdf", None),
+            Ok(ImportExportFormat::ToolVersions)
+        ));
+        assert!(matches!(
+            parse_export_format("asdf"),
+            Ok(ImportExportFormat::ToolVersions)
+        ));
     }
 }

@@ -282,9 +282,18 @@ mod tests {
 
     #[test]
     fn classifies_aliases_case_insensitively() {
-        assert_eq!(classify_request(Some("LATEST"), false).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("StAbLe"), false).kind, RequestKind::Alias);
-        assert_eq!(classify_request(Some("LTS"), false).kind, RequestKind::Alias);
+        assert_eq!(
+            classify_request(Some("LATEST"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("StAbLe"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("LTS"), false).kind,
+            RequestKind::Alias
+        );
     }
 
     #[test]
@@ -321,11 +330,20 @@ mod tests {
     #[test]
     fn explains_aliases_by_name() {
         let latest = classify_request(Some("latest"), false);
-        assert_eq!(explain_request(&latest), "latest alias resolved by runtime policy");
+        assert_eq!(
+            explain_request(&latest),
+            "latest alias resolved by runtime policy"
+        );
         let stable = classify_request(Some("stable"), false);
-        assert_eq!(explain_request(&stable), "stable alias resolved by runtime policy");
+        assert_eq!(
+            explain_request(&stable),
+            "stable alias resolved by runtime policy"
+        );
         let lts = classify_request(Some("lts"), false);
-        assert_eq!(explain_request(&lts), "lts alias resolved by runtime policy");
+        assert_eq!(
+            explain_request(&lts),
+            "lts alias resolved by runtime policy"
+        );
     }
 
     #[test]
@@ -338,9 +356,15 @@ mod tests {
     #[test]
     fn explains_range_channel_and_system_requests() {
         let range = classify_request(Some(">=1.20 <1.23"), false);
-        assert_eq!(explain_request(&range), "version range resolved by runtime policy");
+        assert_eq!(
+            explain_request(&range),
+            "version range resolved by runtime policy"
+        );
         let channel = classify_request(Some("temurin-21"), false);
-        assert_eq!(explain_request(&channel), "channel request resolved by runtime policy");
+        assert_eq!(
+            explain_request(&channel),
+            "channel request resolved by runtime policy"
+        );
         let system = classify_request(Some("system"), false);
         assert_eq!(explain_request(&system), "system runtime requested");
     }

@@ -22,7 +22,11 @@ pub(crate) fn run_inner(
 ) -> EnvrResult<CliExit> {
     let format = parse_format(&format, file.as_deref())?;
     let file = file.unwrap_or_else(|| default_file(format));
-    let file = if file.is_absolute() { file } else { path.join(file) };
+    let file = if file.is_absolute() {
+        file
+    } else {
+        path.join(file)
+    };
     if !file.is_file() {
         return Err(EnvrError::Validation(fmt_template(
             &envr_core::i18n::tr_key(
@@ -65,11 +69,7 @@ pub(crate) fn run_inner(
                 println!(
                     "{}",
                     fmt_template(
-                        &envr_core::i18n::tr_key(
-                            "cli.read.done",
-                            "已读取 {path}",
-                            "read {path}",
-                        ),
+                        &envr_core::i18n::tr_key("cli.read.done", "已读取 {path}", "read {path}",),
                         &[("path", &file.display().to_string())],
                     )
                 );
@@ -127,13 +127,25 @@ mod tests {
 
     #[test]
     fn auto_format_prefers_tool_versions_name() {
-        assert!(matches!(parse_format("auto", Some(Path::new(".tool-versions"))), Ok(ImportExportFormat::ToolVersions)));
-        assert!(matches!(parse_format("auto", Some(Path::new(".envr.toml"))), Ok(ImportExportFormat::EnvrToml)));
+        assert!(matches!(
+            parse_format("auto", Some(Path::new(".tool-versions"))),
+            Ok(ImportExportFormat::ToolVersions)
+        ));
+        assert!(matches!(
+            parse_format("auto", Some(Path::new(".envr.toml"))),
+            Ok(ImportExportFormat::EnvrToml)
+        ));
     }
 
     #[test]
     fn named_formats_accept_asdf_alias() {
-        assert!(matches!(parse_format("asdf", None), Ok(ImportExportFormat::ToolVersions)));
-        assert!(matches!(parse_format("toml", None), Ok(ImportExportFormat::EnvrToml)));
+        assert!(matches!(
+            parse_format("asdf", None),
+            Ok(ImportExportFormat::ToolVersions)
+        ));
+        assert!(matches!(
+            parse_format("toml", None),
+            Ok(ImportExportFormat::EnvrToml)
+        ));
     }
 }

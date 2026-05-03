@@ -153,7 +153,12 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
     let [lock_path, lock_alt_path] = project_lock_candidates(&loc.dir);
     let mut runtime = Vec::new();
     for (name, rt) in &cfg.runtimes {
-        let Some(request) = rt.version.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+        let Some(request) = rt
+            .version
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        else {
             continue;
         };
         let versions_dir = session
@@ -168,12 +173,22 @@ fn lock_inner(g: &GlobalArgs, path: PathBuf, dry_run: bool) -> EnvrResult<CliExi
             name: name.clone(),
             request: request.to_string(),
             resolved: resolved_version,
-            resolved_home: resolved.path.map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
-            source: if resolved.candidate_count > 0 { "resolved".into() } else { "direct".into() },
+            resolved_home: resolved
+                .path
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            source: if resolved.candidate_count > 0 {
+                "resolved".into()
+            } else {
+                "direct".into()
+            },
             candidate_count: resolved.candidate_count,
         });
     }
-    let lock_file = EnvLockFile { version: 1, runtime };
+    let lock_file = EnvLockFile {
+        version: 1,
+        runtime,
+    };
     let rendered = toml::to_string_pretty(&lock_file).map_err(|e| {
         EnvrError::with_source(envr_error::ErrorCode::Runtime, "serialize env lock", e)
     })?;
@@ -260,12 +275,14 @@ fn lock_status_json(
 ) -> EnvrResult<Option<serde_json::Value>> {
     if !locked {
         return Ok(session.project.as_ref().and_then(|(_, loc)| {
-            loc.lock_file.as_ref().map(|p| json!({
-                "path": p.to_string_lossy(),
-                "version": 1,
-                "matched": false,
-                "fresh": false,
-            }))
+            loc.lock_file.as_ref().map(|p| {
+                json!({
+                    "path": p.to_string_lossy(),
+                    "version": 1,
+                    "matched": false,
+                    "fresh": false,
+                })
+            })
         }));
     }
 
@@ -273,10 +290,11 @@ fn lock_status_json(
         return Err(EnvrError::Validation("no project config found".into()));
     };
 
-    let lock_result = loc
-        .lock_file
-        .clone()
-        .or_else(|| project_lock_candidates(&session.ctx.working_dir).into_iter().find(|p| p.is_file()));
+    let lock_result = loc.lock_file.clone().or_else(|| {
+        project_lock_candidates(&session.ctx.working_dir)
+            .into_iter()
+            .find(|p| p.is_file())
+    });
     let Some(lock_path) = lock_result else {
         return Err(EnvrError::Validation(format!(
             "no lockfile found under {}; run `envr project lock`",
@@ -294,7 +312,8 @@ fn lock_status_json(
 
     let lock_entries = match std::fs::read_to_string(&lock_path)
         .ok()
-        .and_then(|content| toml::from_str::<EnvLockFile>(&content).ok()) {
+        .and_then(|content| toml::from_str::<EnvLockFile>(&content).ok())
+    {
         Some(lock) => lock.runtime,
         None => Vec::new(),
     };

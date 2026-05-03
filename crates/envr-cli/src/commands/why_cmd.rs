@@ -5,8 +5,8 @@ use crate::CliUxPolicy;
 use crate::cli::{GlobalArgs, ProjectPathProfileArgs};
 use crate::output::{self, fmt_template};
 
-use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 use envr_config::project_config::load_project_lock;
+use envr_domain::runtime::{RuntimeKind, parse_runtime_kind};
 use envr_error::EnvrError;
 use envr_shim_core::{resolve_runtime_home_for_lang_with_project, resolve_version_home};
 use serde_json::json;
@@ -131,7 +131,11 @@ pub(crate) fn run_inner(
     let resolved_version = version_resolution
         .as_ref()
         .and_then(|r| r.resolved_version.clone())
-        .or_else(|| home.file_name().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .or_else(|| {
+            home.file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_default();
     let candidate_note = if spec_deref.is_some() {
         Some("candidate selection was handled by the runtime-specific resolver")
@@ -317,7 +321,12 @@ pub(crate) fn run_inner(
                                 envr_core::i18n::tr_key(
                                     "cli.why.lock_present",
                                     "未找到项目 pin：当前目录已发现 lockfile，可执行 `envr project sync --locked`。",
-                                    if lock_state.as_ref().and_then(|v| v.get("fresh")).and_then(|v| v.as_bool()).unwrap_or(false) {
+                                    if lock_state
+                                        .as_ref()
+                                        .and_then(|v| v.get("fresh"))
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false)
+                                    {
                                         "No project pin: a fresh lockfile is present; run `envr project sync --locked`."
                                     } else {
                                         msg
