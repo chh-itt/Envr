@@ -14,24 +14,43 @@ fn prepare_version_marker(root: &std::path::Path, lang: &str) {
         .expect("write current marker");
 }
 
-fn run_command_args() -> [&'static str; 6] {
-    ["run", "--verbose", "cmd", "/C", "echo", "ok"]
+fn run_command_args() -> Vec<&'static str> {
+    if cfg!(windows) {
+        vec!["run", "--verbose", "cmd", "/C", "echo", "ok"]
+    } else {
+        vec!["run", "--verbose", "sh", "-c", "echo ok"]
+    }
 }
 
-fn exec_command_args() -> [&'static str; 11] {
-    [
-        "exec",
-        "--lang",
-        "node",
-        "--spec",
-        "22.11.0",
-        "--verbose",
-        "--",
-        "cmd",
-        "/C",
-        "echo",
-        "ok",
-    ]
+fn exec_command_args() -> Vec<&'static str> {
+    if cfg!(windows) {
+        vec![
+            "exec",
+            "--lang",
+            "node",
+            "--spec",
+            "22.11.0",
+            "--verbose",
+            "--",
+            "cmd",
+            "/C",
+            "echo",
+            "ok",
+        ]
+    } else {
+        vec![
+            "exec",
+            "--lang",
+            "node",
+            "--spec",
+            "22.11.0",
+            "--verbose",
+            "--",
+            "sh",
+            "-c",
+            "echo ok",
+        ]
+    }
 }
 
 #[test]
