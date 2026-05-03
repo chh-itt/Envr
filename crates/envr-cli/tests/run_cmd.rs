@@ -4,6 +4,27 @@ use std::fs;
 
 const DOT_ENVR_TOML: &str = ".envr.toml";
 
+fn prepare_version_marker(root: &std::path::Path, lang: &str) {
+    let version_dir = root
+        .join("runtimes")
+        .join(lang)
+        .join("versions")
+        .join("22.11.0");
+    fs::create_dir_all(version_dir.join("bin")).expect("mkdir version bin");
+    fs::write(version_dir.join("bin").join("tool"), "installed").expect("write version marker");
+    let current = root.join("runtimes").join(lang).join("current");
+    fs::write(current, version_dir.as_os_str().to_string_lossy().as_ref())
+        .expect("write current marker");
+}
+
+fn child_command_args() -> Vec<&'static str> {
+    if cfg!(windows) {
+        vec!["echo", "ok"]
+    } else {
+        vec!["sh", "-c", "echo ok"]
+    }
+}
+
 fn parse_json(stdout: &str) -> Value {
     let line = stdout
         .lines()
@@ -23,12 +44,14 @@ version = "22.11.0"
 "#,
     )
     .expect("write envr toml");
+    prepare_version_marker(tmp.path(), "node");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args(["run", "--install-if-missing", "echo", "ok"])
+        .args(["run", "--install-if-missing"])
+        .args(child_command_args())
         .output()
         .expect("run");
 
@@ -55,19 +78,14 @@ version = "22.11.0"
 "#,
     )
     .expect("write envr toml");
+    prepare_version_marker(tmp.path(), "node");
 
     let out = Command::cargo_bin("envr")
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args([
-            "--format",
-            "json",
-            "run",
-            "--install-if-missing",
-            "echo",
-            "ok",
-        ])
+        .args(["--format", "json", "run", "--install-if-missing"])
+        .args(child_command_args())
         .output()
         .expect("run");
 
@@ -79,8 +97,8 @@ version = "22.11.0"
     let stdout = String::from_utf8_lossy(&out.stdout);
     let v = parse_json(&stdout);
     assert!(
-        v["data"]["auto_installed"].is_boolean(),
-        "expected auto_installed boolean: {v}"
+        v["data"]["auto_installed"].is_array(),
+        "expected auto_installed array: {v}"
     );
     assert_eq!(v["data"]["install_if_missing"], true, "{v}");
     assert_eq!(v["data"]["dry_run"], false, "{v}");
