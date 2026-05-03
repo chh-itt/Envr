@@ -14,6 +14,26 @@ fn prepare_version_marker(root: &std::path::Path, lang: &str) {
         .expect("write current marker");
 }
 
+fn run_command_args() -> [&'static str; 6] {
+    ["run", "--verbose", "cmd", "/C", "echo", "ok"]
+}
+
+fn exec_command_args() -> [&'static str; 11] {
+    [
+        "exec",
+        "--lang",
+        "node",
+        "--spec",
+        "22.11.0",
+        "--verbose",
+        "--",
+        "cmd",
+        "/C",
+        "echo",
+        "ok",
+    ]
+}
+
 #[test]
 fn run_env_verbose_lists_runtime_layers() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -31,7 +51,7 @@ version = "22.11.0"
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args(["run", "--verbose", "cmd", "/C", "echo", "ok"])
+        .args(run_command_args())
         .output()
         .expect("run");
 
@@ -68,19 +88,7 @@ version = "22.11.0"
         .expect("envr")
         .env("ENVR_RUNTIME_ROOT", tmp.path().as_os_str())
         .current_dir(tmp.path())
-        .args([
-            "exec",
-            "--lang",
-            "node",
-            "--spec",
-            "22.11.0",
-            "--verbose",
-            "--",
-            "cmd",
-            "/C",
-            "echo",
-            "ok",
-        ])
+        .args(exec_command_args())
         .output()
         .expect("run");
 
