@@ -78,8 +78,10 @@ pub(crate) fn classify_request(spec: Option<&str>, has_pin: bool) -> ClassifiedR
             alias: None,
         };
     };
-    let alias = matches!(normalized_ref, "latest" | "stable" | "lts")
-        .then_some(normalized_ref.to_string());
+    let alias = match normalized_ref.to_ascii_lowercase().as_str() {
+        "latest" | "stable" | "lts" => Some(normalized_ref.to_string()),
+        _ => None,
+    };
     let kind = if normalized_ref == "system" {
         RequestKind::System
     } else if alias.is_some() {
@@ -185,8 +187,7 @@ fn parse_prefix_request(spec: &str) -> Option<(u64, Option<u64>)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        RequestKind, VersionRequest, classify_request, classified_to_version_request,
-        explain_request, normalize_request_spec, request_kind_str,
+        RequestKind, classify_request, explain_request, normalize_request_spec, request_kind_str,
     };
 
     #[test]
@@ -211,6 +212,10 @@ mod tests {
     fn classifies_aliases_and_prefixes() {
         assert_eq!(
             classify_request(Some("latest"), false).kind,
+            RequestKind::Alias
+        );
+        assert_eq!(
+            classify_request(Some("Latest"), false).kind,
             RequestKind::Alias
         );
         assert_eq!(
@@ -273,6 +278,13 @@ mod tests {
             classify_request(Some("graalvm-21.0.2"), false).kind,
             RequestKind::Channel
         );
+    }
+
+    #[test]
+    fn classifies_aliases_case_insensitively() {
+        assert_eq!(classify_request(Some("LATEST"), false).kind, RequestKind::Alias);
+        assert_eq!(classify_request(Some("StAbLe"), false).kind, RequestKind::Alias);
+        assert_eq!(classify_request(Some("LTS"), false).kind, RequestKind::Alias);
     }
 
     #[test]

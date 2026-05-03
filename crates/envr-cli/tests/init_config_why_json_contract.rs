@@ -57,21 +57,14 @@ fn init_json_emits_project_config_init_and_writes_file() {
         ])
         .output()
         .expect("run");
-    assert!(
-        out.status.success(),
-        "stderr={}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let v = parse_json_line(&out.stdout);
     assert_eq!(v["success"], true, "{v}");
     assert_eq!(v["code"], "project_config_init", "{v}");
     assert_eq!(v["data"]["interactive"], false, "{v}");
     assert!(v["data"]["path"].is_string(), "{v}");
-    assert!(
-        project.join(".envr.toml").is_file(),
-        "init should write .envr.toml"
-    );
+    assert!(project.join(".envr.toml").is_file(), "init should write .envr.toml");
 }
 
 #[test]
@@ -85,11 +78,7 @@ fn config_validate_json_emits_config_validate_ok_offline() {
         .args(["--format", "json", "config", "validate"])
         .output()
         .expect("run");
-    assert!(
-        out.status.success(),
-        "stderr={}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let v = parse_json_line(&out.stdout);
     assert_eq!(v["success"], true, "{v}");
@@ -120,11 +109,7 @@ fn why_json_reports_project_pin_resolution() {
         .args(["--format", "json", "why", "node"])
         .output()
         .expect("run");
-    assert!(
-        out.status.success(),
-        "stderr={}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let v = parse_json_line(&out.stdout);
     assert_eq!(v["success"], true, "{v}");
@@ -134,12 +119,7 @@ fn why_json_reports_project_pin_resolution() {
     assert_eq!(v["data"]["project"]["pin"], "20.10.0", "{v}");
     assert_eq!(v["data"]["request_source"], "project", "{v}");
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
-    assert!(
-        v["data"]["resolved_home"]
-            .as_str()
-            .is_some_and(|s| s.contains("20.10.0")),
-        "resolved_home should point to pinned version: {v}"
-    );
+    assert!(v["data"]["resolved_home"].as_str().is_some_and(|s| s.contains("20.10.0")), "resolved_home should point to pinned version: {v}");
 }
 
 #[test]
@@ -160,11 +140,7 @@ fn why_json_reports_tool_versions_compat_resolution() {
         .args(["--format", "json", "why", "node"])
         .output()
         .expect("run");
-    assert!(
-        out.status.success(),
-        "stderr={}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
 
     let v = parse_json_line(&out.stdout);
     assert_eq!(v["success"], true, "{v}");
@@ -175,12 +151,7 @@ fn why_json_reports_tool_versions_compat_resolution() {
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
     assert_eq!(v["data"]["request_normalized"], Value::Null, "{v}");
     assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
-    assert!(
-        v["data"]["project"]["compat_asdf_names"]
-            .as_array()
-            .is_some_and(|a| !a.is_empty()),
-        "compat mapping should be present: {v}"
-    );
+    assert!(v["data"]["project"]["compat_asdf_names"].as_array().is_some_and(|a| !a.is_empty()), "compat mapping should be present: {v}");
 }
 
 #[test]
@@ -212,37 +183,37 @@ fn why_json_reports_version_request_normalization() {
     assert_eq!(v["data"]["request_alias"], Value::Null, "{v}");
     assert_eq!(v["data"]["request_explanation"], "exact version requested", "{v}");
 }
-+
-+#[test]
-+fn why_json_reports_range_channel_and_alias_explanations() {
-+    let root = tempfile::tempdir().expect("tmp");
-+    write_settings(root.path());
-+    let runtime_root = root.path().join("runtime-root");
-+    let project = root.path().join("project");
-+    fs::create_dir_all(&project).expect("project");
-+    write_node_layout(&runtime_root, "22.11.0");
-+
-+    for (spec, kind, explanation) in [
-+        ("latest", "alias", "latest alias resolved by runtime policy"),
-+        ("~> 22.0", "range", "version range resolved by runtime policy"),
-+        ("temurin-21", "channel", "channel request resolved by runtime policy"),
-+    ] {
-+        fs::write(project.join(".envr.toml"), format!("[runtimes.node]\nversion = \"{spec}\"\n")).expect("envr.toml");
-+        let out = Command::cargo_bin("envr")
-+            .expect("envr")
-+            .env("ENVR_ROOT", root.path())
-+            .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
-+            .current_dir(&project)
-+            .args(["--format", "json", "why", "node"])
-+            .output()
-+            .expect("run");
-+        assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
-+
-+        let v = parse_json_line(&out.stdout);
-+        assert_eq!(v["data"]["request_kind"], kind, "{v}");
-+        assert_eq!(v["data"]["request_explanation"], explanation, "{v}");
-+    }
-+}
+
+#[test]
+fn why_json_reports_range_channel_and_alias_explanations() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+
+    for (spec, kind, explanation) in [
+        ("latest", "alias", "latest alias resolved by runtime policy"),
+        ("~> 22.0", "range", "version range resolved by runtime policy"),
+        ("temurin-21", "channel", "channel request resolved by runtime policy"),
+    ] {
+        fs::write(project.join(".envr.toml"), format!("[runtimes.node]\nversion = \"{spec}\"\n")).expect("envr.toml");
+        let out = Command::cargo_bin("envr")
+            .expect("envr")
+            .env("ENVR_ROOT", root.path())
+            .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+            .current_dir(&project)
+            .args(["--format", "json", "why", "node"])
+            .output()
+            .expect("run");
+        assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+
+        let v = parse_json_line(&out.stdout);
+        assert_eq!(v["data"]["request_kind"], kind, "{v}");
+        assert_eq!(v["data"]["request_explanation"], explanation, "{v}");
+    }
+}
 
 #[test]
 fn why_human_reports_request_alias() {
@@ -310,4 +281,3 @@ fn why_human_reports_range_and_channel_explanations() {
     assert!(text.contains("请求类型： channel") || text.contains("Request kind: channel"), "{text}");
     assert!(text.contains("选择理由： channel request resolved by runtime policy") || text.contains("Selection reason: channel request resolved by runtime policy"), "{text}");
 }
-*** End Patch
