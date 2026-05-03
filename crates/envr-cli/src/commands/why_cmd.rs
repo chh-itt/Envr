@@ -150,7 +150,7 @@ pub(crate) fn run_inner(
             "local_file": loc.local_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "compat_file": loc.compat_file.as_ref().map(|p| p.to_string_lossy().to_string()),
             "lock_file": loc.lock_file.as_ref().map(|p| p.to_string_lossy().to_string()),
-            "lock": lock_state,
+            "lock_status": lock_state,
             "pin": pin.clone(),
             "runtimes": cfg.runtimes.keys().cloned().collect::<Vec<_>>(),
             "compat_asdf_names": cfg.compat.asdf.names.clone(),

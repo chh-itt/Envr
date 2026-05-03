@@ -118,6 +118,7 @@ fn why_json_reports_project_pin_resolution() {
     assert_eq!(v["data"]["resolution_source"], "project_pin", "{v}");
     assert_eq!(v["data"]["resolution_reason"], "resolved from project runtime pin", "{v}");
     assert_eq!(v["data"]["project"]["pin"], "20.10.0", "{v}");
+    assert!(v["data"]["project"]["lock_status"].is_null(), "{v}");
     assert_eq!(v["data"]["request_source"], "project", "{v}");
     assert_eq!(v["data"]["request_kind"], "exact", "{v}");
     assert_eq!(v["data"]["request_normalized"], "20.10.0", "{v}");
@@ -265,4 +266,67 @@ fn why_human_reports_alias_explanation() {
     assert!(text.contains("Request kind: alias") || text.contains("请求类型： alias"), "{text}");
     assert!(text.contains("Request alias: latest") || text.contains("请求别名： latest"), "{text}");
     assert!(text.contains("Request explanation: latest alias resolved by runtime policy") || text.contains("请求说明： latest alias resolved by runtime policy"), "{text}");
+}
+
+#[test]
+fn why_json_reports_cli_spec_override_over_project_pin() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+    write_node_layout(&runtime_root, "20.10.0");
+    fs::write(project.join(".envr.toml"), "[runtimes.node]\nversion = \"20.10.0\"\n").expect("envr.toml");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .args(["--format", "json", "why", "node", "--spec", "22.11.0"])
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+
+    let v = parse_json_line(&out.stdout);
+    assert_eq!(v["success"], true, "{v}");
+    assert_eq!(v["data"]["request_source"], "cli", "{v}");
+    assert_eq!(v["data"]["resolution_source"], "spec_override", "{v}");
+    assert_eq!(v["data"]["spec_override"], "22.11.0", "{v}");
+    assert_eq!(v["data"]["project"]["pin"], "20.10.0", "{v}");
+    assert!(v["data"]["resolved_home"].as_str().is_some_and(|s| s.contains("22.11.0")), "resolved_home should follow cli spec override: {v}");
+    assert!(v["data"]["candidate_note"].as_str().is_some_and(|s| s.contains("runtime-specific resolver")), "{v}");
+}
+
+#[test]
+fn why_human_reports_lockfile_notice_without_project_pin() {
+    let root = tempfile::tempdir().expect("tmp");
+    write_settings(root.path());
+    let runtime_root = root.path().join("runtime-root");
+    let project = root.path().join("project");
+    fs::create_dir_all(&project).expect("project");
+    write_node_layout(&runtime_root, "22.11.0");
+    fs::create_dir_all(runtime_root.join("runtimes/node/current")).expect("create current dir");
+    fs::write(
+        runtime_root.join("runtimes/node/current").join("version"),
+        "22.11.0",
+    )
+    .expect("write current marker");
+    fs::write(project.join(".envr.toml"), "[runtimes.python]\nversion = \"3.12.7\"\n").expect("unrelated project pin");
+    fs::write(project.join(".envr.lock"), "version = 1\n\n[[runtime]]\nname = \"node\"\nrequest = \"22.11.0\"\nresolved = \"22.11.0\"\nsource = \"resolved\"\ncandidate_count = 1\n").expect("lockfile");
+
+    let out = Command::cargo_bin("envr")
+        .expect("envr")
+        .env("ENVR_ROOT", root.path())
+        .env("ENVR_RUNTIME_ROOT", runtime_root.as_os_str())
+        .current_dir(&project)
+        .args(["why", "node"])
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("lockfile") || text.contains("lock 文件") || text.contains("lock present") || text.contains("fresh lockfile") || text.contains("No project pin:"), "expected lockfile notice in human output: {text}");
+    assert!(text.contains("Resolved version:") || text.contains("解析版本："), "{text}");
 }
