@@ -318,7 +318,8 @@ fn hook_keys_reports_restore_keys() {
     assert!(keys.contains(&"PATH"), "{stdout}");
     assert!(keys.contains(&"FOO"), "{stdout}");
     assert!(
-        keys.iter().any(|k| matches!(*k, "JAVA_HOME" | "ERLANG_HOME")),
+        keys.iter()
+            .any(|k| matches!(*k, "JAVA_HOME" | "ERLANG_HOME")),
         "expected common restore keys in output: {stdout}"
     );
 }
