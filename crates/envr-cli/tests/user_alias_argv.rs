@@ -36,7 +36,7 @@ ci = "doctor"
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("environment checks"),
+        stdout.contains("environment checks") || stdout.contains("运行诊断与环境检查"),
         "expected doctor help; got:\n{stdout}"
     );
     assert!(
@@ -101,7 +101,7 @@ b = "doctor"
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("environment checks"),
+        stdout.contains("environment checks") || stdout.contains("运行诊断与环境检查"),
         "expected chained expansion to doctor; got:\n{stdout}"
     );
 }
@@ -131,7 +131,7 @@ ci = "doctor"
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("environment checks"),
+        stdout.contains("environment checks") || stdout.contains("运行诊断与环境检查"),
         "expected doctor help after globals; got:\n{stdout}"
     );
 }
